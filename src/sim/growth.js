@@ -15,10 +15,14 @@
 //
 // Buildings the player levelled by hand are `locked` and left alone.
 //
+// Now and then a church appears by itself on free land by a road in a
+// neighbourhood with enough homes and no church nearby (config.growth.church).
+//
 // Distances are plain grid distance (Chebyshev, footprint to footprint).
 // Later this is the place to swap in travel distance, land value, pollution…
 
 import { STRUCTURE_TYPES, maxLevel, levelOf, matches, nameOf, codeOf } from '../../structures/index.js';
+import { rotateQuarter } from '../core/grid.js';
 
 export class GrowthSystem {
   constructor(world, config) {
@@ -64,6 +68,47 @@ export class GrowthSystem {
         s.data.growth = g;
       }
     }
+    this.spawnChurch();
+  }
+
+  // Maybe build a church: on free land where its front (local -y) faces a
+  // road, with at least `minHomes` homes within `radius`, and no church
+  // within `spacing`. The spot with the most homes around wins.
+  spawnChurch() {
+    const rule = this.config.church;
+    if (!rule || Math.random() > rule.chance) return;
+    const { world } = this;
+    const { grid } = world;
+    const homes = [], churches = [];
+    for (const o of world.structures.values()) {
+      if (o.type === 'residential') homes.push(world.grid.xy(o.node));
+      else if (o.type === 'church') churches.push(world.centerOf(o));
+    }
+    if (homes.length < rule.minHomes) return;
+
+    let best = null;
+    for (let n = 0; n < grid.size; n++) {
+      const [x, y] = grid.xy(n);
+      const cx = x + 0.5, cy = y + 0.5;
+      if (churches.some(([px, py]) => Math.max(Math.abs(px - cx), Math.abs(py - cy)) <= rule.spacing)) continue;
+      const count = homes.filter(([hx, hy]) => Math.max(Math.abs(hx - cx), Math.abs(hy - cy)) <= rule.radius).length;
+      if (count < rule.minHomes || (best && count < best.count)) continue;
+      for (let rotation = 0; rotation < 4; rotation++) {
+        if (!world.canPlaceStructure('church', n, rotation).ok) continue;
+        // the front row must look onto a road
+        const [fx, fy] = rotateQuarter(0, -1, rotation);
+        const front = world.footprintNodes('church', n, rotation).some((m) => {
+          const f = grid.offset(m, fx, fy);
+          return f >= 0 && world.hasRoad(f);
+        });
+        if (!front) continue;
+        const score = count + Math.random();
+        if (!best || score > best.score) best = { n, rotation, count, score };
+      }
+    }
+    if (!best) return;
+    const s = world.placeStructure('church', best.n, { rotation: best.rotation });
+    if (s) this.log(`${codeOf(s)} consecrated · ${levelOf(STRUCTURE_TYPES.church, s).name}`, world.centerOf(s));
   }
 
   targetLevel(s) {

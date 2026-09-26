@@ -2,6 +2,7 @@
 // passes (hills, rivers, rock outcrops…) can be appended to generateWorld().
 
 import { mulberry32, valueNoise2D } from '../core/random.js';
+import { makeElevation } from './elevation.js';
 
 export function generateWorld(world, config) {
   const rng = mulberry32(world.seed);
@@ -17,13 +18,20 @@ function generatePonds(world, rng, opts) {
   const { grid, terrain } = world;
   const [mx, my] = mapCenter(grid);
   const wobble = valueNoise2D(world.seed + 11, 3);
+  const elevation = makeElevation(world.seed);
 
   for (let p = 0; p < opts.ponds; p++) {
-    let cx, cy;
-    do {
-      cx = 4 + rng() * (grid.width - 8);
-      cy = 4 + rng() * (grid.height - 8);
-    } while (Math.hypot(cx - mx, cy - my) < opts.clearRadius + 5);
+    // water collects in low ground: of a few candidate spots, take the lowest
+    let cx, cy, best = Infinity;
+    for (let tries = 0; tries < 12; tries++) {
+      let x, y;
+      do {
+        x = 4 + rng() * (grid.width - 8);
+        y = 4 + rng() * (grid.height - 8);
+      } while (Math.hypot(x - mx, y - my) < opts.clearRadius + 5);
+      const e = elevation(x, y);
+      if (e < best) [cx, cy, best] = [x, y, e];
+    }
     const radius = 2.2 + rng() * 2;
 
     for (let i = 0; i < grid.size; i++) {

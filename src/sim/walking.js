@@ -1,12 +1,16 @@
-// Where people can walk: every footpath, plus pavements along every road.
-// Both are merged into one weighted graph on the dense (fine) grid, so where
-// a footpath meets a road dot or crosses the middle of a road segment, people
-// can switch between them. Pavements cost a bit more, so footpaths are
-// preferred when there's a choice.
+// Where people can walk: every footpath, plus the sidewalks of streets (road
+// segments with sidewalks, world.sidewalks). Both are merged into one
+// weighted graph on the dense (fine) grid, so where a footpath meets a road
+// dot or crosses the middle of a road segment, people can switch between
+// them. Sidewalks cost a bit more, so footpaths are preferred when there's
+// a choice.
+//
+// Cyclists get their own network ({ allRoads: true }): footpaths plus every
+// road, sidewalks or not, at no extra cost.
 //
 // Parks and squares are walkable too: their site paths (world.sitePaths) join
 // the exits on their sides through a hub, and exits facing a road connect to
-// the pavement.
+// the street's sidewalk (if it has one).
 //
 // The graph is rebuilt lazily after roads, paths or buildings change.
 
@@ -14,9 +18,10 @@ import { MinHeap } from '../core/heap.js';
 import { STRUCTURE_TYPES } from '../../structures/index.js';
 
 export class WalkNetwork {
-  constructor(world, config) {
+  constructor(world, config, { allRoads = false } = {}) {
     this.world = world;
     this.config = config.walk;
+    this.allRoads = allRoads;
     this.adj = null;
     const dirty = () => (this.adj = null);
     world.events.on('roads:changed', dirty);
@@ -47,9 +52,11 @@ export class WalkNetwork {
     const paths = world.networks.path;
     for (const [a, b] of world.paths.edges()) link(a, b, paths.distance(a, b));
 
-    // Each road segment becomes two half-segments on the fine grid.
-    const k = this.config.sidewalkCost;
+    // Each street segment becomes two half-segments on the fine grid.
+    const k = this.allRoads ? 1 : this.config.sidewalkCost;
+    const street = [];
     for (const [a, b] of world.roads.edges()) {
+      if (!this.allRoads && !world.hasSidewalk(a, b)) continue;
       const fa = world.coarseToFine(a);
       const fb = world.coarseToFine(b);
       const [ax, ay] = world.fine.xy(fa);
@@ -58,6 +65,14 @@ export class WalkNetwork {
       const half = (world.grid.distance(a, b) / 2) * k;
       link(fa, mid, half);
       link(mid, fb, half);
+      street.push(fa, mid, fb);
+    }
+    // Footpaths ending right beside a street (at its kerb) step onto it.
+    const fine = world.fine;
+    for (const n of street) {
+      for (const m of fine.neighbors(n)) {
+        if (world.paths.hasNode(m)) link(n, m, paths.distance(n, m));
+      }
     }
     // Through parks and squares.
     for (const s of world.structures.values()) {
@@ -65,7 +80,7 @@ export class WalkNetwork {
       const { hub, hubPos, exits } = world.sitePaths(s);
       for (const e of exits) {
         link(hub, e.node, Math.hypot(e.pos[0] - hubPos[0], e.pos[1] - hubPos[1]) * 0.9);
-        if (e.road >= 0) link(e.node, world.coarseToFine(e.road), 0.5 * k);
+        if (e.road >= 0 && (this.allRoads || world.sidewalksAt(e.road).length)) link(e.node, world.coarseToFine(e.road), 0.5 * k);
       }
     }
     this.adj = adj;

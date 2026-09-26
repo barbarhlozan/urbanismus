@@ -4,7 +4,9 @@
 //
 // Every trip picks a mode:
 //   walk   – destination within comfortable walking distance over footpaths
-//            and pavements (or reachable on foot only)
+//            and street sidewalks (or reachable on foot only)
+//   cycle  – trips too long to walk, sometimes (bike.share), over footpaths
+//            and every road (with sidewalks or not), faster and further
 //   drive  – everything else, over the road network
 //   stroll – residents sometimes go for a walk (chance: def.sim.strollChance):
 //            to a park or square (def.sim.leisure) if one is in walking
@@ -18,10 +20,13 @@
 //   - visitors arrive through exits, drive to a destination (visitors.*),
 //     stay, then leave through a random exit and are gone
 //
+// Traffic: cars slow down where roads are crowded (config.traffic, see
+// trafficSpeeds). Pedestrians and cyclists always move at their own pace.
+//
 // Drivers use parking lots without owning cars: leaving by car takes a parked
 // car from the lot there (if any), arriving parks one (see sim/parking.js).
 //
-// Richer behaviour (schedules, needs, jobs, traffic) should replace
+// Richer behaviour (schedules, needs, jobs) should replace
 // startTrip / planCommute without changing how the renderer reads agents
 // (it only needs visible() and x / y / trip.mode).
 
@@ -38,6 +43,7 @@ export class AgentSystem {
     this.parking = parking;
     this.agents = new Map();
     this.walk = new WalkNetwork(world, config); // registers its listeners first
+    this.ride = new WalkNetwork(world, config, { allRoads: true }); // cyclists
     this.visitorTimer = 5;
     this.visitorSeq = 0;
     this.log = () => {}; // (text, [x, y]) – set by main to feed annotations
@@ -92,9 +98,15 @@ export class AgentSystem {
     return dwellMin + Math.random() * (dwellMax - dwellMin);
   }
 
+  speedOf(mode) {
+    if (mode === 'drive') return this.config.sim.agentSpeed;
+    if (mode === 'cycle') return this.config.bike.speed;
+    return this.config.sim.walkSpeed;
+  }
+
   update(dt) {
-    const { agentSpeed, walkSpeed } = this.config.sim;
     this.updateVisitors(dt);
+    const traffic = this.trafficSpeeds(dt);
     for (const [id, a] of this.agents) {
       switch (a.state) {
         case 'home':
@@ -118,8 +130,8 @@ export class AgentSystem {
           break;
         case 'out':
         case 'back': {
-          a.s += (a.trip.mode === 'drive' ? agentSpeed : walkSpeed) * dt;
           const leg = a.state === 'out' ? a.trip.out : a.trip.back;
+          a.s += this.speedOf(a.trip.mode) * (a.trip.mode === 'drive' ? traffic(a) : 1) * this.doorEase(a, leg) * dt;
           [a.x, a.y] = pointAt(leg, a.s);
           if (a.s < leg.total) break;
           const arrived = a.trip.mode === 'stroll' || a.trip.outside || this.world.structures.has(a.trip.dest);
@@ -261,9 +273,55 @@ export class AgentSystem {
     const { comfortDistance, maxDistance, longWalkChance } = this.config.walk;
     const walk = this.walk.route(home, dest, maxDistance);
     if (walk && (walk.cost <= comfortDistance || Math.random() < longWalkChance)) return { mode: 'walk', ...walk };
+    const bike = this.bikeRoute(home, dest, walk);
+    if (bike) return bike;
     const drive = this.driveRoute(home, dest);
     if (drive) return drive;
     return walk ? { mode: 'walk', ...walk } : null;
+  }
+
+  bikeRoute(home, dest, walk) {
+    const { share, maxDistance } = this.config.bike;
+    if (Math.random() >= share) return null;
+    const route = walk ?? this.ride.route(home, dest, maxDistance);
+    return route && { mode: 'cycle', ...route };
+  }
+
+  // ----- traffic -----
+
+  // Counts cars per grid cell and direction and returns (agent) -> speed
+  // factor 0..1. A car looks at its own cell and the one just ahead; every
+  // car there going the same way beyond `capacity` slows it down (oncoming
+  // traffic doesn't). Factors ease towards their target so cars brake and
+  // accelerate smoothly.
+  trafficSpeeds(dt) {
+    const { cell, capacity, slowdown, minSpeed, ease } = this.config.traffic;
+    const key = ([x, y], dir) => (Math.round(x / cell) * 4096 + Math.round(y / cell)) * 4 + dir;
+    const counts = new Map();
+    const cars = [];
+    for (const a of this.visible()) {
+      if (a.trip.mode !== 'drive') continue;
+      const leg = a.state === 'out' ? a.trip.out : a.trip.back;
+      const ahead = pointAt(leg, Math.min(leg.total, a.s + 0.6 * cell));
+      const dx = ahead[0] - a.x, dy = ahead[1] - a.y;
+      const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 0 : 1) : dy > 0 ? 2 : 3;
+      a.cell = key([a.x, a.y], dir);
+      a.ahead = key(ahead, dir);
+      counts.set(a.cell, (counts.get(a.cell) ?? 0) + 1);
+      cars.push(a);
+    }
+    let sum = 0;
+    for (const a of cars) {
+      const here = counts.get(a.cell) - 1;
+      const there = a.ahead === a.cell ? here : counts.get(a.ahead) ?? 0;
+      const crowd = Math.max(0, Math.max(here, there) - capacity);
+      const target = Math.max(minSpeed, (1 - slowdown) ** crowd);
+      a.speed = a.speed ?? 1;
+      a.speed += (target - a.speed) * Math.min(1, ease * dt);
+      sum += a.speed;
+    }
+    this.flow = cars.length ? sum / cars.length : 1; // average car speed, 1 = free flowing
+    return (a) => a.speed ?? 1;
   }
 
   driveRoute(home, dest) {
@@ -288,12 +346,17 @@ export class AgentSystem {
     const drive = plan.mode === 'drive';
     const layer = drive ? world.networks.road : world.networks.path;
     const curve = drive ? config.road : config.path;
-    const side = drive ? config.sim.laneOffset : config.walk.sideOffset;
+    const side = drive ? config.sim.laneOffset : plan.mode === 'cycle' ? config.bike.sideOffset : config.walk.sideOffset;
 
-    const pts = [plan.fromPoint ?? world.grid.xy(plan.fromDoor), ...plan.nodes.map((n) => layer.pos(n))];
+    // Only the route itself is smoothed; buildings are left and entered in a
+    // straight line from their edge, so nobody cuts across them or their yard.
+    const pts = plan.nodes.map((n) => layer.pos(n));
+    if (plan.fromPoint) pts.unshift(plan.fromPoint);
     if (plan.toPoint) pts.push(plan.toPoint);
-    else if (plan.toDoor != null) pts.push(world.grid.xy(plan.toDoor));
     const smooth = smoothPolyline(pts, curve.cornerRadius, curve.curveSamples);
+    const atDoor = !plan.toPoint && plan.toDoor != null;
+    if (plan.fromDoor != null) smooth.unshift(this.doorEdge(plan.fromDoor, smooth[0]));
+    if (atDoor) smooth.push(this.doorEdge(plan.toDoor, smooth[smooth.length - 1]));
 
     return {
       mode: plan.mode,
@@ -301,13 +364,41 @@ export class AgentSystem {
       outside: !!plan.outside,
       exit: plan.exit ?? null,
       nodes: plan.nodes,
-      out: measurePolyline(offsetPolyline(smooth, side)),
-      back: measurePolyline(offsetPolyline(smooth.slice().reverse(), side)),
+      out: this.leg(offsetPolyline(smooth, side), plan.fromDoor != null, atDoor),
+      back: this.leg(offsetPolyline(smooth.slice().reverse(), side), atDoor, plan.fromDoor != null),
     };
+  }
+
+  // A measured leg, remembering which of its ends is at a building's door.
+  leg(points, doorStart, doorEnd) {
+    return { ...measurePolyline(points), doorStart, doorEnd };
+  }
+
+  // Cars and bikes pull away from and roll up to doors slowly: speed factor
+  // from sim.doorMinSpeed at the door up to 1 over sim.doorSlowdown.
+  doorEase(a, leg) {
+    if (a.trip.mode !== 'drive' && a.trip.mode !== 'cycle') return 1;
+    const { doorSlowdown: zone, doorMinSpeed: min } = this.config.sim;
+    let t = 1;
+    if (leg.doorStart) t = Math.min(t, a.s / zone);
+    if (leg.doorEnd) t = Math.min(t, (leg.total - a.s) / zone);
+    if (t >= 1) return 1;
+    t = Math.max(0, t);
+    return min + (1 - min) * t * t * (3 - 2 * t); // smoothstep
+  }
+
+  // Where the line from a building's door dot towards `to` leaves the building.
+  doorEdge(door, to) {
+    const [x, y] = this.world.grid.xy(door);
+    const dx = to[0] - x, dy = to[1] - y;
+    const l = Math.hypot(dx, dy);
+    const pad = this.config.sim.doorPad;
+    return l > pad ? [x + (dx / l) * pad, y + (dy / l) * pad] : to;
   }
 
   beginLeg(a, leg) {
     a.s = 0;
+    a.speed = 1;
     [a.x, a.y] = leg.points[0];
   }
 
@@ -317,7 +408,8 @@ export class AgentSystem {
       const { roads } = this.world;
       return nodes.every((n, i) => roads.hasNode(n) && (i === 0 || roads.hasEdge(nodes[i - 1], n)));
     }
-    return nodes.every((n, i) => this.walk.hasNode(n) && (i === 0 || this.walk.hasEdge(nodes[i - 1], n)));
+    const net = trip.mode === 'cycle' ? this.ride : this.walk;
+    return nodes.every((n, i) => net.hasNode(n) && (i === 0 || net.hasEdge(nodes[i - 1], n)));
   }
 
   // After road / path edits, send anyone whose route no longer exists straight home.

@@ -113,3 +113,58 @@ export function pointAt(poly, s) {
   const b = points[hi];
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 }
+
+// The drawn centre line of one segment a -> b of a network (the same curves
+// as networkPolylines: half of the corner fillet at each end that bends).
+export function edgeCurve(layer, { cornerRadius, curveSamples }, a, b) {
+  const { graph } = layer;
+  const pos = (n) => layer.pos(n);
+  const half = curveSamples / 2;
+  const out = [];
+  if (graph.degree(a) === 2) {
+    const [x] = [...graph.neighbors(a)].filter((n) => n !== b);
+    out.push(...fillet(pos(x), pos(a), pos(b), cornerRadius, curveSamples).slice(Math.floor(half)));
+  } else {
+    out.push(pos(a));
+  }
+  if (graph.degree(b) === 2) {
+    const [c] = [...graph.neighbors(b)].filter((n) => n !== a);
+    out.push(...fillet(pos(a), pos(b), pos(c), cornerRadius, curveSamples).slice(0, Math.ceil(half) + 1));
+  } else {
+    out.push(pos(b));
+  }
+  return out;
+}
+
+// Cut `d` off the start of a polyline.
+export function trimStart(points, d) {
+  for (let i = 1; i < points.length; i++) {
+    const [ax, ay] = points[i - 1];
+    const [bx, by] = points[i];
+    const l = Math.hypot(bx - ax, by - ay);
+    if (l > d) {
+      const t = d / l;
+      return [[ax + (bx - ax) * t, ay + (by - ay) * t], ...points.slice(i)];
+    }
+    d -= l;
+  }
+  return [];
+}
+
+// Kerb lines on both sides of every street segment (road segments with
+// sidewalks), `width` from the centre line. They stop short of junctions so
+// they don't cut across the other roads there.
+export function streetKerbs(world, curve, width) {
+  const layer = world.networks.road;
+  const { graph } = layer;
+  const lines = [];
+  for (const key of world.sidewalks) {
+    const [a, b] = key.split('-').map(Number);
+    let line = edgeCurve(layer, curve, a, b);
+    if (graph.degree(a) > 2) line = trimStart(line, width * 1.5);
+    if (graph.degree(b) > 2) line = trimStart(line.reverse(), width * 1.5).reverse();
+    if (line.length < 2) continue;
+    lines.push(offsetPolyline(line, width), offsetPolyline(line, -width));
+  }
+  return lines;
+}

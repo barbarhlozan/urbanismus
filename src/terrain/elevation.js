@@ -1,0 +1,113 @@
+// Elevation: the lie of the land, drawn as contour lines. It is worked out
+// from the map seed (so it needs no saving) and is only drawn for now –
+// nothing stands higher for it (that is Terrain.height).
+//
+//   makeElevation(seed)  (x, y) -> metres, smooth hills plus a little roughness
+//   contours(elev, box, opts)  polylines of equal elevation (marching squares)
+
+import { valueNoise2D } from '../core/random.js';
+
+export const ELEVATION = {
+  relief: 160,   // metres from the lowest to the highest possible point
+  interval: 2,   // metres between contour lines
+  index: 4,      // every n-th line is an index line (brighter, labelled);
+                 // every other line is kept at mid zoom, the rest only close up
+  step: 0.2,     // sampling step in grid units (smaller = smoother, slower)
+};
+
+export function makeElevation(seed) {
+  // octaves: big hills, spurs, small knolls, then roughness for wiggly lines
+  const octaves = [[18, 1], [8, 0.5], [3.5, 0.22], [1.3, 0.07]]
+    .map(([cell, amp], i) => [valueNoise2D(seed + 911 + i * 37, cell), amp]);
+  const total = octaves.reduce((s, [, a]) => s + a, 0);
+  return (x, y) => {
+    let v = 0;
+    for (const [n, a] of octaves) v += n(x, y) * a;
+    // stretch the middle apart, so slopes are steep and tops / bottoms flatter
+    const t = v / total;
+    const s = t * t * (3 - 2 * t);
+    return (0.35 * t + 0.65 * s) * ELEVATION.relief;
+  };
+}
+
+// Contour polylines over box = [x0, y0, x1, y1] in world units.
+// Returns [{ level, tier, points: [[x, y]…] }], tier 0 = index line,
+// 1 = every other line, 2 = the rest. `skip(x, y)` hides segments
+// (e.g. over water), breaking the line there.
+export function contours(elev, [x0, y0, x1, y1], { step, interval, index }, skip = null) {
+  const nx = Math.ceil((x1 - x0) / step) + 1;
+  const ny = Math.ceil((y1 - y0) / step) + 1;
+  const v = new Float32Array(nx * ny);
+  let lo = Infinity, hi = -Infinity;
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const e = elev(x0 + i * step, y0 + j * step);
+      v[j * nx + i] = e;
+      lo = Math.min(lo, e);
+      hi = Math.max(hi, e);
+    }
+  }
+
+  const out = [];
+  for (let k = Math.ceil(lo / interval); k * interval <= hi; k++) {
+    const level = k * interval;
+    // Edge ids: horizontal edge (i, j)-(i+1, j) = 2 * (j * nx + i),
+    // vertical edge (i, j)-(i, j+1) = 2 * (j * nx + i) + 1.
+    const point = (edge) => {
+      const c = edge >> 1, i = c % nx, j = (c - i) / nx;
+      const a = v[c], b = v[edge & 1 ? c + nx : c + 1];
+      const t = (level - a) / (b - a);
+      return edge & 1 ? [x0 + i * step, y0 + (j + t) * step] : [x0 + (i + t) * step, y0 + j * step];
+    };
+    // segments between cell edges, linked both ways
+    const links = new Map();
+    const link = (a, b) => {
+      (links.get(a) ?? links.set(a, []).get(a)).push(b);
+      (links.get(b) ?? links.set(b, []).get(b)).push(a);
+    };
+    for (let j = 0; j < ny - 1; j++) {
+      for (let i = 0; i < nx - 1; i++) {
+        const c = j * nx + i;
+        const tl = v[c] > level, tr = v[c + 1] > level, bl = v[c + nx] > level, br = v[c + nx + 1] > level;
+        const code = tl | (tr << 1) | (br << 2) | (bl << 3);
+        if (code === 0 || code === 15) continue;
+        if (skip?.(x0 + (i + 0.5) * step, y0 + (j + 0.5) * step)) continue;
+        const T = 2 * c, L = 2 * c + 1, B = 2 * (c + nx), R = 2 * (c + 1) + 1;
+        switch (code) {
+          case 1: case 14: link(T, L); break;
+          case 2: case 13: link(T, R); break;
+          case 3: case 12: link(L, R); break;
+          case 4: case 11: link(R, B); break;
+          case 6: case 9: link(T, B); break;
+          case 7: case 8: link(L, B); break;
+          case 5: link(T, R); link(L, B); break;  // saddles: pick one pairing
+          case 10: link(T, L); link(R, B); break;
+        }
+      }
+    }
+    // walk the links into polylines, starting from open ends first
+    const used = new Set();
+    const walk = (start) => {
+      const chain = [start];
+      used.add(start);
+      let cur = start;
+      for (;;) {
+        const next = links.get(cur).find((n) => !used.has(n));
+        if (next === undefined) break;
+        used.add(next);
+        chain.push(next);
+        cur = next;
+      }
+      // closed loop: repeat the first point
+      if (chain.length > 2 && links.get(cur).includes(start)) chain.push(start);
+      return chain;
+    };
+    const starts = [...links.keys()].sort((a, b) => links.get(a).length - links.get(b).length);
+    for (const s of starts) {
+      if (used.has(s)) continue;
+      const chain = walk(s);
+      if (chain.length > 1) out.push({ level, tier: k % index === 0 ? 0 : k % 2 === 0 ? 1 : 2, points: chain.map(point) });
+    }
+  }
+  return out;
+}

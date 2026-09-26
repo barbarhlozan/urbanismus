@@ -17,10 +17,15 @@ export class NetworkLayer {
     this.version = 0; // bumped on every change, for caches
   }
 
-  // World position (in main grid units).
-  pos(n) {
+  // Position of the grid dot (in main grid units).
+  dot(n) {
     const [x, y] = this.grid.xy(n);
     return [x * this.scale, y * this.scale];
+  }
+
+  // Where the network is drawn and travelled at this node.
+  pos(n) {
+    return this.dot(n);
   }
 
   distance(a, b) {
