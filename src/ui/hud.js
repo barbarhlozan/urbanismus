@@ -4,6 +4,7 @@
 // tabs; the rest are always shown. Tapping the stats box folds it away.
 
 import { STRUCTURE_TYPES, CATEGORIES, levelOf } from '../../structures/index.js';
+import { mapCode } from '../render/renderer.js';
 
 export class Hud {
   constructor(root, { world, tools, agents, clock, actions }) {
@@ -13,13 +14,13 @@ export class Hud {
     this.clock = clock;
 
     root.insertAdjacentHTML('beforeend', `
-      <div class="hud"><div class="title">URBANISMUS</div><div class="stats"></div><div class="traffic"></div></div>
+      <div class="hud"><div class="title"><span>Urbanismus</span><small>MAP-${mapCode(world.seed)}</small></div><div class="stats cells"></div><div class="traffic strip"></div></div>
       <div class="controls">
         <button data-act="rotateLeft" title="Rotate (Q)">⟲</button>
         <button data-act="rotateRight" title="Rotate (E)">⟳</button>
         <button data-act="speed" title="Simulation speed (T)"><span class="long">Speed: </span><span class="val"></span></button>
         <button data-act="pause" title="Pause (P)">Pause</button>
-        <button data-act="style" title="Visual style">Style</button>
+        <button data-act="terrain" title="Terrain contour lines">Terrain</button>
         <button data-act="newMap" title="Discard this city and generate a new map">New map</button>
       </div>
       <div class="bottom">
@@ -114,10 +115,15 @@ export class Hud {
     if (this.statsDirty) this.renderStats();
     if (this.trafficTimer-- <= 0) {
       this.trafficTimer = 20;
-      let walking = 0, driving = 0;
-      for (const a of this.agents.visible()) a.trip.mode === 'drive' ? driving++ : walking++;
+      const count = { walk: 0, cycle: 0, drive: 0 };
+      for (const a of this.agents.visible()) count[a.trip.mode === 'stroll' ? 'walk' : a.trip.mode]++;
       const visitors = this.agents.visitorCount();
-      this.trafficEl.innerHTML = `On foot ${walking} · Driving ${driving}` + (visitors ? `<br>Visitors ${visitors}` : '');
+      const flow = this.agents.flow ?? 1;
+      const traffic = !count.drive ? '' : flow > 0.85 ? 'flowing' : flow > 0.55 ? 'busy' : 'jammed';
+      const item = (k, v) => `<span>${k}<b>${v}</b></span>`;
+      this.trafficEl.innerHTML = item('On foot', count.walk) + item('Cycling', count.cycle) + item('Driving', count.drive)
+        + (traffic ? item('Traffic', `${traffic} ${Math.round(flow * 100)}%`) : '')
+        + (visitors ? item('Visitors', visitors) : '');
     }
   }
 
@@ -134,13 +140,14 @@ export class Hud {
       const def = STRUCTURE_TYPES[s.type];
       for (const [k, v] of Object.entries(levelOf(def, s).stats ?? {})) totals[k] = (totals[k] ?? 0) + v;
     }
-    const lines = [
-      `Residents ${totals.residents ?? 0}`,
-      `Jobs ${totals.jobs ?? 0}`,
-      `Buildings ${world.structures.size}`,
-      `Road ${world.roads.edgeCount} · Paths ${world.paths.edgeCount}`,
+    const cells = [
+      ['Residents', totals.residents ?? 0],
+      ['Jobs', totals.jobs ?? 0],
+      ['Buildings', world.structures.size],
+      ['Road', world.roads.edgeCount],
+      ['Paths', world.paths.edgeCount],
     ];
-    if (unconnected) lines.push(`${unconnected} without road`);
-    this.statsEl.innerHTML = lines.join('<br>');
+    if (unconnected) cells.push(['No road', unconnected]);
+    this.statsEl.innerHTML = cells.map(([k, v]) => `<div class="cell"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
   }
 }

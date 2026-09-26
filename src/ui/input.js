@@ -14,10 +14,9 @@ export function attachInput(svg, { camera, onPointer, onClick, onCancel }) {
   const touches = new Map(); // pointerId -> [x, y], for pinch
   let pinch = null;
 
-  const local = (e) => {
-    const rect = svg.getBoundingClientRect();
-    return [e.clientX - rect.left, e.clientY - rect.top];
-  };
+  // The map fills the window, so window coordinates are map coordinates
+  // (the SVG's own box is stretched mid-zoom, see Renderer.placeView).
+  const local = (e) => [e.clientX, e.clientY];
 
   // World position under the pointer (on the ground plane).
   const pick = (e) => camera.unproject(...camera.clientToScene(...local(e)));

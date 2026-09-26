@@ -15,6 +15,7 @@ export class Popup {
     root.appendChild(this.el);
 
     this.el.addEventListener('click', (e) => {
+      if (e.target.closest('.close')) return this.hide();
       const btn = e.target.closest('button[data-i]');
       if (!btn || btn.disabled) return;
       const item = this.items[Number(btn.dataset.i)];
@@ -52,7 +53,7 @@ export class Popup {
 
   render(title, items) {
     this.items = items;
-    this.el.innerHTML = `<div class="title">${esc(title)}</div>` + items.map((item, i) => {
+    this.el.innerHTML = `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="Close">×</button></div>` + items.map((item, i) => {
       const disabled = item.disabled || item.info || !item.action;
       return `<button data-i="${i}" class="${item.heading ? 'heading' : item.info ? 'info' : ''}" ${disabled ? 'disabled' : ''}>
         <span class="label">${esc(item.label)}</span><span class="note">${esc(item.note ?? '')}</span>
