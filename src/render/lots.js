@@ -10,7 +10,7 @@
 
 import { rotateQuarter } from '../core/grid.js';
 import { SegmentIndex } from '../core/geom2d.js';
-import { networkPolylines } from '../roads/geometry.js';
+import { networkPolylines, streetKerbs } from '../roads/geometry.js';
 
 const ROAD_GAP = 0.1;   // clearance from the road centre line
 const STEP = 0.05;      // sampling along plot edges
@@ -26,7 +26,9 @@ function networkIndex(world, config, kind) {
   const layer = world.networks[kind];
   const c = caches.get(kind);
   if (c && c.layer === layer && c.version === layer.version) return c.index;
-  const index = new SegmentIndex(networkPolylines(layer, config[kind]));
+  const lines = networkPolylines(layer, config[kind]);
+  if (kind === 'road') lines.push(...streetKerbs(world, config.road, config.road.kerb)); // lots stop at the kerb
+  const index = new SegmentIndex(lines);
   caches.set(kind, { layer, version: layer.version, index });
   return index;
 }

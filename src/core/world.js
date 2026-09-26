@@ -9,7 +9,7 @@
 import { EventBus } from './events.js';
 import { Grid, ORTHO, DIAG } from './grid.js';
 import { Terrain } from '../terrain/terrain.js';
-import { RoadNetwork } from '../roads/network.js';
+import { RoadNetwork, edgeKey } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
 import { validateRoute } from '../roads/routing.js';
 import { STRUCTURE_TYPES, footprintOffsets, maxLevel, newSeed } from '../../structures/index.js';
@@ -30,6 +30,8 @@ export class World {
     this.structureAtNode = new Map(); // node -> structure id (every footprint node)
     this.featureAtNode = new Map();   // node -> feature id
     this.nextId = 1;
+
+    this.sidewalks = new Set(); // edgeKey of road segments that are streets (have sidewalks)
 
     this.networks = {
       road: new NetworkLayer({
@@ -410,6 +412,8 @@ export class World {
   }
 
   // `nodes` is an ordered list of adjacent nodes on that layer's grid.
+  // Footpaths drawn on or right beside a road become that road's sidewalks
+  // (see absorbSidewalks).
   buildNetwork(kind, nodes) {
     const layer = this.networks[kind];
     const check = validateRoute(layer, nodes);
@@ -419,6 +423,7 @@ export class World {
       if (c >= 0) this.clearFeaturesAt(c);
     }
     for (let i = 0; i < nodes.length - 1; i++) layer.graph.addEdge(nodes[i], nodes[i + 1]);
+    this.absorbSidewalks(kind !== 'path'); // a path build announces itself below
     layer.version++;
     this.events.emit(layer.event, { layer, nodes });
     return check;
@@ -428,9 +433,89 @@ export class World {
     const layer = this.networks[kind];
     if (!layer.graph.hasNode(node)) return false;
     const nodes = [node, ...layer.graph.neighbors(node)];
+    if (kind === 'road') for (const m of nodes) this.sidewalks.delete(edgeKey(node, m));
     layer.graph.removeNode(node);
     layer.version++;
     this.events.emit(layer.event, { layer, nodes });
+    return true;
+  }
+
+  // ---------- streets (roads with sidewalks) ----------
+
+  // Footpath segments that run along a road – on its dots or on the row of
+  // dense dots right beside it – are really sidewalks: remove them from the
+  // footpaths and make those road segments streets instead. Runs after every
+  // build and on load, so it doesn't matter which was drawn first.
+  absorbSidewalks(notify = true) {
+    const streets = [];
+    const gone = [];
+    for (const [f, g] of this.paths.edges()) {
+      const road = this.roadBeside(f, g);
+      if (!road) continue;
+      streets.push(road);
+      gone.push(f, g);
+      this.paths.removeEdge(f, g);
+    }
+    if (!streets.length) return false;
+    for (const [a, b] of streets) this.sidewalks.add(edgeKey(a, b));
+    this.networks.road.version++;
+    if (notify) {
+      const path = this.networks.path;
+      path.version++;
+      this.events.emit(path.event, { layer: path, nodes: gone });
+    }
+    this.events.emit('roads:changed', { layer: this.networks.road, nodes: streets.flat(), sidewalks: true });
+    return true;
+  }
+
+  // The road segment [a, b] that the footpath step f -> g runs along (on it,
+  // or parallel right beside it), or null.
+  roadBeside(f, g) {
+    const [fx, fy] = this.fine.xy(f);
+    const [gx, gy] = this.fine.xy(g);
+    for (const [dx, dy] of [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]]) {
+      const road = this.roadOn(fx + dx, fy + dy, gx + dx, gy + dy);
+      if (road) return road;
+    }
+    return null;
+  }
+
+  // The road segment covering the dense-grid step (fx, fy) -> (gx, gy), or
+  // null. A road segment spans three dense dots: its two ends and its middle.
+  roadOn(fx, fy, gx, gy) {
+    const even = (x, y) => x % 2 === 0 && y % 2 === 0;
+    const [end, mid] = even(fx, fy) ? [[fx, fy], [gx, gy]] : [[gx, gy], [fx, fy]];
+    if (!even(...end) || even(...mid)) return null;
+    const ax = end[0] / 2, ay = end[1] / 2;
+    const bx = mid[0] - ax, by = mid[1] - ay;
+    if (!this.grid.inBounds(ax, ay) || !this.grid.inBounds(bx, by)) return null;
+    const a = this.grid.index(ax, ay);
+    const b = this.grid.index(bx, by);
+    return this.roads.hasEdge(a, b) ? [a, b] : null;
+  }
+
+  hasSidewalk(a, b) {
+    return this.sidewalks.has(edgeKey(a, b));
+  }
+
+  // Road segments at a road dot that are streets.
+  sidewalksAt(node) {
+    return [...this.roads.neighbors(node)].filter((m) => this.hasSidewalk(node, m)).map((m) => [node, m]);
+  }
+
+  setSidewalks(edges, on) {
+    let changed = false;
+    for (const [a, b] of edges) {
+      const key = edgeKey(a, b);
+      if (on === this.sidewalks.has(key) || (on && !this.roads.hasEdge(a, b))) continue;
+      if (on) this.sidewalks.add(key);
+      else this.sidewalks.delete(key);
+      changed = true;
+    }
+    if (!changed) return false;
+    const layer = this.networks.road;
+    layer.version++;
+    this.events.emit(layer.event, { layer, nodes: edges.flat(), sidewalks: true });
     return true;
   }
 
@@ -469,6 +554,7 @@ export class World {
       nextId: this.nextId,
       terrain: this.terrain.toJSON(),
       networks: Object.fromEntries(Object.entries(this.networks).map(([k, l]) => [k, l.graph.toJSON()])),
+      sidewalks: [...this.sidewalks],
       structures: [...this.structures.values()],
       features: [...this.features.values()],
     };
@@ -486,6 +572,12 @@ export class World {
         world.networks[kind].version++;
       }
     }
+
+    for (const key of data.sidewalks ?? []) {
+      const [a, b] = key.split('-').map(Number);
+      if (world.roads.hasEdge(a, b)) world.sidewalks.add(key);
+    }
+    world.absorbSidewalks(false); // footpaths drawn beside roads before streets existed
 
     for (const s of data.structures) {
       if (!STRUCTURE_TYPES[s.type]) continue;

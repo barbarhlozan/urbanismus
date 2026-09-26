@@ -1,6 +1,7 @@
 // Isometric camera. World space: x/y along the grid, z up, one grid step = 1.
-// "Scene" space: projected pixels before pan/zoom (the SVG scene group then
-// applies pan + zoom as a single transform, so panning never re-renders).
+// "Scene" space: projected pixels before pan/zoom (the renderer applies pan +
+// zoom as a single transform, so panning never re-renders, see
+// Renderer.placeView).
 //
 // The view can rotate in 90° steps. All depth ordering and back-face culling
 // goes through depth() and facing(), so it stays correct in every rotation.
@@ -25,9 +26,11 @@ export class Camera {
     this.cx = (grid.width - 1) / 2;
     this.cy = (grid.height - 1) / 2;
     this.warp = null; // optional (x, y) -> [x, y] distortion (render/warp.js)
+    this.lift = null; // optional (x, y) -> extra height, the terrain relief (render/warp.js)
   }
 
   project(x, y, z = 0) {
+    if (this.lift) z += this.lift(x, y);
     if (this.warp) [x, y] = this.warp(x, y);
     const [rx, ry] = rotateQuarter(x - this.cx, y - this.cy, this.rotation);
     return [
@@ -53,20 +56,26 @@ export class Camera {
     return rx + ry + nz / this.zScale > 1e-9;
   }
 
-  // Scene point -> world (x, y) on the z = 0 plane (undoing the warp by a
-  // few fixed-point steps; it is smooth and small, so this converges fast).
+  // Scene point -> world (x, y) on the ground (z = 0 plus the relief). The
+  // warp and relief are undone by a few fixed-point steps: they are smooth
+  // and gentle, so this converges fast.
   unproject(sx, sy) {
+    const q = this.unprojectFlat(sx, sy);
+    if (!this.warp && !this.lift) return q;
+    let p = q;
+    for (let i = 0; i < 8; i++) {
+      const [fx, fy] = this.unprojectFlat(...this.project(p[0], p[1]));
+      p = [p[0] + (q[0] - fx), p[1] + (q[1] - fy)];
+    }
+    return p;
+  }
+
+  // The plain inverse of project() on a flat, unwarped map.
+  unprojectFlat(sx, sy) {
     const a = sx / (COS30 * this.tile);
     const b = sy / (SIN30 * this.tile);
     const [dx, dy] = rotateQuarter((a + b) / 2, (b - a) / 2, -this.rotation);
-    const q = [dx + this.cx, dy + this.cy];
-    if (!this.warp) return q;
-    let p = q;
-    for (let i = 0; i < 4; i++) {
-      const [wx, wy] = this.warp(p[0], p[1]);
-      p = [p[0] + (q[0] - wx), p[1] + (q[1] - wy)];
-    }
-    return p;
+    return [dx + this.cx, dy + this.cy];
   }
 
   // Screen radii of a ground circle with world radius r.
@@ -76,10 +85,6 @@ export class Camera {
 
   clientToScene(px, py) {
     return [(px - this.panX) / this.zoom, (py - this.panY) / this.zoom];
-  }
-
-  get transform() {
-    return `translate(${this.panX} ${this.panY}) scale(${this.zoom})`;
   }
 
   zoomAt(px, py, factor) {

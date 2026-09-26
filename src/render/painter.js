@@ -11,10 +11,15 @@
 //   g.prism(base[[x,y]…], z0, z1, opts)      any convex CCW footprint, extruded
 //   g.gable(x, y, z, w, d, h, roofH, opts)   block with a pitched roof (ridge along x)
 //   g.gableY(x, y, z, w, d, h, roofH, opts)  same, ridge along y
+//   g.roofed(x, y, z, w, d, h, roof, opts)   block with a hip / gable / pyramid /
+//                                            mansard / flat roof (see the method)
+//   g.lathe(x, y, z, [[r, h]…], sides, opts) solid of revolution (domes, spires, towers)
 //   g.face([[x,y,z]…], opts)                 single polygon, CCW seen from outside
 //   g.line([[x,y,z]…], opts)                 polyline; opts.facing = normal to hide it with its wall
 //   g.disc(x, y, z, r, opts)                 screen-facing circle (e.g. tree crowns)
 //   g.shape(x, y, z, [[u,v]…], opts)         screen-facing polygon, u right / v up, in grid units
+//   g.strokes(x, y, z, [[[u,v]…]…], opts)    screen-facing polylines (one <path>), e.g. tree glyphs
+//   g.strokeGroups([{x, y, z, lines}…], opts) the same for several anchors, still one <path>
 //   g.solid(x, y, z)                         start a new depth-sorted group manually
 //   g.cylinder(x, y, z, r, h, sides, opts)   upright polygonal cylinder (chimneys, silos)
 //
@@ -29,6 +34,8 @@
 // Facade helpers – call right after the box they decorate:
 //   g.floors(x, y, w, d, z0, z1, step)       horizontal lines around the box every `step`
 //   g.mullions(x, y, w, d, z0, z1, step)     vertical lines on every side, about `step` apart
+//   g.windows(x, y, w, d, z0, z1, step, spacing, opts)  a window per bay and storey
+//   All three take opts.skip: sides to leave blank (walls shared when joined).
 //
 // Site – for structures with `site: true` (parks, squares), g.site is the
 // ground they may fill, in local coordinates: { x0, y0, x1, y1 } (bounding
@@ -43,6 +50,10 @@
 //
 // Free space – g.free(x, y, r) is false where a footpath or road is within r
 // (footpaths have priority over lots). Props in kit.js check it themselves.
+//
+// Joins – g.join = { left, right }: true where this building shares a wall
+// with its neighbour on the local -x (left) / +x (right) side. Draw up to
+// x = ∓0.5 there (levels opt in with `join`, see structures/index.js).
 //
 // Spots – g.spot(x, y) marks a parking stall (cars are drawn and simulated
 // separately, see src/sim/parking.js).
@@ -86,13 +97,14 @@ function attrs(opts, lod = 0, base = '') {
 }
 
 // The four walls of a box as { n: outward normal, a, b: ends along the wall }.
-function boxSides(x, y, w, d, inset) {
+// skip: side names to leave out ('front', 'right', 'back', 'left').
+function boxSides(x, y, w, d, inset, skip = []) {
   return [
-    { n: [0, -1, 0], a: [x + inset, y], b: [x + w - inset, y] },
-    { n: [1, 0, 0], a: [x + w, y + inset], b: [x + w, y + d - inset] },
-    { n: [0, 1, 0], a: [x + w - inset, y + d], b: [x + inset, y + d] },
-    { n: [-1, 0, 0], a: [x, y + d - inset], b: [x, y + inset] },
-  ];
+    { side: 'front', n: [0, -1, 0], a: [x + inset, y], b: [x + w - inset, y] },
+    { side: 'right', n: [1, 0, 0], a: [x + w, y + inset], b: [x + w, y + d - inset] },
+    { side: 'back', n: [0, 1, 0], a: [x + w - inset, y + d], b: [x + inset, y + d] },
+    { side: 'left', n: [-1, 0, 0], a: [x, y + d - inset], b: [x, y + inset] },
+  ].filter((s) => !skip.includes(s.side));
 }
 
 export class Painter {
@@ -110,6 +122,7 @@ export class Painter {
     this.lod = 0;
     this.free = null;     // set by the renderer: (x, y, r) -> bool, local coords
     this.bounds = null;   // local [x0, y0, x1, y1] of all solids drawn
+    this.join = { left: false, right: false }; // set by the renderer, see structures/index.js
     this.current = null;
   }
 
@@ -245,17 +258,22 @@ export class Painter {
     return this.prism(base, z, z + h, opts);
   }
 
-  floors(x, y, w, d, z0, z1, step, inset = 0.04) {
+  // opts: a number (inset from the corners) or { inset, skip: [side…] };
+  // sides are 'front' (-y), 'right' (+x), 'back' (+y), 'left' (-x) – skip
+  // the walls shared with a joined neighbour.
+  floors(x, y, w, d, z0, z1, step, opts = {}) {
+    const { inset = 0.04, skip } = typeof opts === 'number' ? { inset: opts } : opts;
     for (let z = z0 + step; z < z1 - step * 0.3; z += step) {
-      for (const { n, a, b } of boxSides(x, y, w, d, inset)) {
+      for (const { n, a, b } of boxSides(x, y, w, d, inset, skip)) {
         this.line([[a[0], a[1], z], [b[0], b[1], z]], { facing: n });
       }
     }
     return this;
   }
 
-  mullions(x, y, w, d, z0, z1, step, inset = 0.03) {
-    for (const { n, a, b } of boxSides(x, y, w, d, 0)) {
+  mullions(x, y, w, d, z0, z1, step, opts = {}) {
+    const { inset = 0.03, skip } = typeof opts === 'number' ? { inset: opts } : opts;
+    for (const { n, a, b } of boxSides(x, y, w, d, 0, skip)) {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
       const count = Math.max(1, Math.round(len / step));
       for (let k = 1; k < count; k++) {
@@ -263,6 +281,40 @@ export class Painter {
         const px = a[0] + (b[0] - a[0]) * t;
         const py = a[1] + (b[1] - a[1]) * t;
         this.line([[px, py, z0 + inset], [px, py, z1 - inset]], { facing: n });
+      }
+    }
+    return this;
+  }
+
+  // Punched windows: a row per storey (`step` high) between z0 and z1, about
+  // `spacing` apart along every wall. opts = {
+  //   skip     sides to leave blank (as for floors)
+  //   w, h     window size as fractions of spacing / step (0.45, 0.45)
+  //   ribbon   true = one long window band per storey instead
+  //   from     first storey to draw (0; 1 = leave the ground floor blank)
+  // }
+  windows(x, y, w, d, z0, z1, step, spacing = 0.09, opts = {}) {
+    const { skip, ribbon = false, from = 0 } = opts;
+    const ww = spacing * (opts.w ?? 0.45), wh = step * (opts.h ?? 0.45);
+    const storeys = Math.round((z1 - z0) / step);
+    for (const { n, a, b } of boxSides(x, y, w, d, 0, skip)) {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
+      const at = (t, z) => [a[0] + ux * t, a[1] + uy * t, z];
+      const cols = Math.floor(len / spacing);
+      if (cols < 1) continue;
+      const pad = (len - cols * spacing) / 2;
+      for (let i = from; i < storeys; i++) {
+        const zb = z0 + i * step + (step - wh) * 0.55, zt = zb + wh;
+        if (ribbon) {
+          const t0 = spacing * 0.3, t1 = len - spacing * 0.3;
+          this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n });
+          continue;
+        }
+        for (let c = 0; c < cols; c++) {
+          const t0 = pad + c * spacing + (spacing - ww) / 2, t1 = t0 + ww;
+          this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n });
+        }
       }
     }
     return this;
@@ -278,6 +330,98 @@ export class Painter {
     this.face([[x1, y0, zt], [x1, y1, zt], [xm, y1, zr], [xm, y0, zr]], opts);
     this.face([[x0, y0, zt], [x1, y0, zt], [xm, y0, zr]], opts);
     this.face([[x1, y1, zt], [x0, y1, zt], [xm, y1, zr]], opts);
+    return this;
+  }
+
+  // Block with any common roof. roof = {
+  //   h        roof height (0 = flat)
+  //   ridge    'x' (default) or 'y': direction of the ridge
+  //   hip      [start, end]: how far the ridge stops short of each end
+  //            (0 = gable end; half the length on both = pyramid).
+  //            A number sets both. Default 0.
+  //   mansard  { h, inset }: a steep lower roof first, the roof above it.
+  //            Gable ends (hip 0) stay vertical there.
+  // }
+  // g.roofed(x, y, 0, w, d, h, { h: 0.15 }) is g.gable(...);
+  // { h: 0.1, hip: w / 2, ridge: 'x' } on a square is a pyramid roof.
+  roofed(x, y, z, w, d, h, roof = {}, opts = {}) {
+    const alongY = roof.ridge === 'y';
+    // canonical frame: u along the ridge (0..L), v across (0..D)
+    const L = alongY ? d : w, D = alongY ? w : d;
+    const P = alongY ? (u, v, zz) => [x + v, y + u, zz] : (u, v, zz) => [x + u, y + v, zz];
+    const face = (pts) => {
+      const out = pts.map(([u, v, zz]) => P(u, v, zz)).filter((p, i, a) => {
+        const q = a[(i + a.length - 1) % a.length];
+        return Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) > 1e-9;
+      });
+      if (out.length < 3) return;
+      // swapping axes mirrors the frame: keep faces counter-clockwise
+      this.face(alongY ? out.reverse() : out, opts);
+    };
+    const hip = Array.isArray(roof.hip) ? roof.hip : [roof.hip ?? 0, roof.hip ?? 0];
+    const rh = roof.h ?? 0, zt = z + h;
+    const m = roof.mansard;
+
+    this._grow([[x, y], [x + w, y + d]]);
+    this.solid(x + w / 2, y + d / 2, z + (h + rh + (m?.h ?? 0)) / 2);
+    this._walls([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, zt, opts);
+
+    // mansard: lower roof from the wall tops to an inset rectangle
+    let [u0, u1, v0, v1, zb] = [0, L, 0, D, zt];
+    if (m) {
+      const iv = m.inset ?? 0.05;
+      const iu0 = hip[0] > 0 ? iv : 0, iu1 = hip[1] > 0 ? iv : 0;
+      const zm = zt + m.h;
+      face([[0, 0, zt], [L, 0, zt], [L - iu1, iv, zm], [iu0, iv, zm]]);
+      face([[L, D, zt], [0, D, zt], [iu0, D - iv, zm], [L - iu1, D - iv, zm]]);
+      face([[0, D, zt], [0, 0, zt], [iu0, iv, zm], [iu0, D - iv, zm]]);
+      face([[L, 0, zt], [L, D, zt], [L - iu1, D - iv, zm], [L - iu1, iv, zm]]);
+      [u0, u1, v0, v1, zb] = [iu0, L - iu1, iv, D - iv, zm];
+    }
+
+    if (rh <= 0) {
+      face([[u0, v0, zb], [u1, v0, zb], [u1, v1, zb], [u0, v1, zb]]);
+      return this;
+    }
+    const vm = (v0 + v1) / 2, zr = zb + rh;
+    const span = u1 - u0;
+    let ra = u0 + Math.min(hip[0], span / 2), rb = u1 - Math.min(hip[1], span / 2);
+    if (ra > rb) ra = rb = (ra + rb) / 2;
+    face([[u0, v0, zb], [u1, v0, zb], [rb, vm, zr], [ra, vm, zr]]);
+    face([[u1, v1, zb], [u0, v1, zb], [ra, vm, zr], [rb, vm, zr]]);
+    face([[u0, v1, zb], [u0, v0, zb], [ra, vm, zr]]);
+    face([[u1, v0, zb], [u1, v1, zb], [rb, vm, zr]]);
+    return this;
+  }
+
+  // Solid of revolution around the vertical axis at (x, y): profile is
+  // [[radius, height]…] from the bottom up (radius 0 = a point). Domes,
+  // spires, cooling towers, water towers, tapered chimneys.
+  // opts.phase turns the polygon (in fractions of a side).
+  lathe(x, y, z, profile, sides = 12, opts = {}) {
+    const rmax = Math.max(...profile.map((p) => p[0]));
+    this._grow([[x - rmax, y - rmax], [x + rmax, y + rmax]]);
+    const top = profile[profile.length - 1][1];
+    this.solid(x, y, z + top / 2);
+    const ang = (j) => ((j + (opts.phase ?? 0)) / sides) * Math.PI * 2;
+    const at = (r, j, h) => [x + Math.cos(ang(j)) * r, y + Math.sin(ang(j)) * r, z + h];
+    for (let i = 0; i < profile.length - 1; i++) {
+      const [r0, h0] = profile[i], [r1, h1] = profile[i + 1];
+      for (let j = 0; j < sides; j++) {
+        const pts = [];
+        if (r0 > 0) pts.push(at(r0, j, h0), at(r0, j + 1, h0));
+        else pts.push(at(0, 0, h0));
+        if (r1 > 0) pts.push(at(r1, j + 1, h1), at(r1, j, h1));
+        else pts.push(at(0, 0, h1));
+        if (pts.length >= 3) this.face(pts, opts);
+      }
+    }
+    const [rt] = profile[profile.length - 1];
+    if (rt > 0) {
+      const cap = [];
+      for (let j = 0; j < sides; j++) cap.push(at(rt, j, top));
+      this.face(cap, opts);
+    }
     return this;
   }
 
@@ -363,6 +507,26 @@ export class Painter {
     const t = this.camera.tile;
     const pts = points.map(([u, v]) => `${r2(sx + u * t)},${r2(sy - v * t)}`).join(' ');
     this.current.parts.push(`<polygon points="${pts}"${attrs(opts, this._lod(opts))}/>`);
+    return this;
+  }
+
+  strokes(x, y, z, lines, opts = {}) {
+    return this.strokeGroups([{ x, y, z, lines }], opts);
+  }
+
+  strokeGroups(groups, opts = {}) {
+    groups = groups.filter((gr) => gr.lines.length);
+    if (!groups.length) return this;
+    this._ensure(groups[0].x, groups[0].y, groups[0].z);
+    const t = this.camera.tile;
+    // one decimal is plenty for these small glyphs, and keeps the markup small
+    const r1 = (n) => Math.round(n * 10) / 10;
+    let d = '';
+    for (const { x, y, z, lines } of groups) {
+      const [sx, sy] = this.camera.project(...this._world(x, y, z));
+      for (const pts of lines) d += pts.map(([u, v], i) => `${i ? 'L' : 'M'}${r1(sx + u * t)} ${r1(sy - v * t)}`).join('');
+    }
+    this.current.parts.push(`<path d="${d}"${attrs(opts, this._lod(opts), 'glyph')}/>`);
     return this;
   }
 
