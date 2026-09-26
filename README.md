@@ -18,7 +18,16 @@ Then open http://localhost:8173. The city saves itself in the browser; **New map
 - Draw a footpath **along a road** (on it or right beside it) to make it a street with sidewalks (kerb lines on both
   sides). People only walk along streets and footpaths; cyclists and cars use every road.
   Demolish on a street removes its sidewalks first.
+- **L** railways – drawn like roads, but bends can be at most 45° per dot. They cross roads
+  and footpaths (level crossings) but can't share a stretch with a road. Run a line off the map
+  edge and trains start coming through. Cars, cyclists and pedestrians wait at a crossing while
+  a train passes (barriers come down across roads) – see `crossing` in `src/config.js`.
+- **0** – station (1×3 station house) or **Stop** (1×2 platform with a shelter), beside a straight
+  stretch of track; they turn to face it. Trains stop at every station they pass, and turn round
+  at the last one when there's no other way off the map. With a road behind, a station gets a
+  forecourt (or parking) towards it.
 - **1 2 3** – residential / business / industrial (**Tab** rotates, **C** tries another look)
+- **I** – small (1×1) industry
 - **4–9** – parks, squares, services
 - **X** – demolish
 - **V / Esc / right-click** – back to select

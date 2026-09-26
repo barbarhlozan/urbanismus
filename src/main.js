@@ -15,6 +15,7 @@ import { AgentSystem } from './sim/agents.js';
 import { GrowthSystem } from './sim/growth.js';
 import { SimClock } from './sim/clock.js';
 import { ParkingSystem } from './sim/parking.js';
+import { TrainSystem } from './sim/trains.js';
 import { ToolManager } from './tools/manager.js';
 import { createInspectTool } from './tools/inspect.js';
 import { createNetworkTool } from './tools/network.js';
@@ -24,7 +25,7 @@ import { Popup } from './ui/popup.js';
 import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
 import { attachInput } from './ui/input.js';
-import { STRUCTURES } from '../structures/index.js';
+import { BUILD_FAMILIES } from '../structures/index.js';
 
 applyTheme();
 
@@ -84,18 +85,21 @@ const clock = new SimClock(CONFIG);
 const parking = new ParkingSystem(world);
 const agents = new AgentSystem(world, CONFIG, parking);
 const growth = new GrowthSystem(world, CONFIG);
-const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, parking, config: CONFIG });
+const trains = new TrainSystem(world, CONFIG);
+agents.trains = trains;
+const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, parking, config: CONFIG });
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);
 const annotations = new Annotations(uiRoot, { world, camera, clock });
-agents.log = growth.log = (text, pos) => annotations.log(text, pos);
+agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos);
 
 const tools = new ToolManager(world.grid, 'inspect');
 const ctx = { world, camera, tools, popup, growth, config: CONFIG };
 tools.register(createInspectTool(ctx));
-tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', hotkey: 'r' }));
-tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', hotkey: 'f', fineGrid: true }));
-for (const def of STRUCTURES) tools.register(createBuildTool(ctx, def));
+tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', hotkey: 'r', group: 'transport', blurb: 'Cars, bikes and people' }));
+tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', hotkey: 'f', fineGrid: true, group: 'transport', blurb: 'People and bikes · along a road makes a street' }));
+tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', hotkey: 'l', group: 'transport', blurb: 'Off the map edge brings trains' }));
+for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createBulldozeTool(ctx));
 
 const actions = {
@@ -113,7 +117,7 @@ const actions = {
   },
 };
 
-const hud = new Hud(uiRoot, { world, tools, agents, clock, actions });
+const hud = new Hud(uiRoot, { world, tools, agents, trains, clock, actions });
 new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
 
 // Terrain contour lines: off unless switched on (remembered in this browser).
@@ -166,10 +170,10 @@ window.addEventListener('keydown', (e) => {
   if (k === 'e') return actions.rotateRight();
   if (k === 'p' || k === ' ') { e.preventDefault(); return actions.pause(); }
   if (k === 't') return actions.speed();
-  const tool = tools.list().find((t) => t.hotkey === k);
+  const tool = tools.list().find((t) => t.hotkey === k || t.hotkeys?.includes(k));
   if (tool) {
     popup.hide();
-    tools.use(tool.id);
+    tools.use(tool.id, { hotkey: k });
   }
 });
 
@@ -185,6 +189,7 @@ function loop(now) {
   try {
     const simDt = clock.step(dt);
     agents.update(simDt);
+    trains.update(simDt);
     growth.update(simDt);
     renderer.frame(tools.overlay(overlayKit) + annotations.overlay(overlayKit, tools.point, tools.active?.id));
     hud.update();
@@ -197,4 +202,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // Handy for debugging from the console.
-window.urbanismus = { world, camera, clock, agents, growth, parking, tools, renderer, annotations, hud };
+window.urbanismus = { world, camera, clock, agents, trains, growth, parking, tools, renderer, annotations, hud };

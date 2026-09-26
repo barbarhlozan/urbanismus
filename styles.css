@@ -103,6 +103,13 @@ html, body {
   stroke-dasharray: 3 2.5;
   stroke-linejoin: round;
 }
+/* railways: the map symbol – a solid line with dashes of background
+   colour inside it; faded dashes past the map edge, a bar at dead ends */
+.rail { fill: none; stroke: var(--fg); stroke-width: 3.6; stroke-linejoin: round; }
+.rail-dash { fill: none; stroke: var(--bg); stroke-width: 1.4; stroke-dasharray: 7 7; stroke-linejoin: round; }
+.rail-exit { fill: none; stroke: var(--fg); stroke-width: 3.6; stroke-dasharray: 3 5; }
+.rail-buffer { fill: none; stroke: var(--fg); stroke-width: 1.4; stroke-linecap: square; }
+
 .driveway { fill: none; stroke: var(--fg); stroke-width: 1; }
 /* paths drawn inside parks, in the footpath style */
 .gnd.fp { stroke-width: 1.1; stroke-dasharray: 3 2.5; stroke-linecap: butt; }
@@ -123,8 +130,10 @@ html, body {
 
 .layer-objects polygon,
 .layer-objects circle,
+.layer-objects .filled,
 .ghost polygon,
-.ghost circle {
+.ghost circle,
+.ghost .filled {
   fill: var(--bg);
   stroke: var(--fg);
   stroke-width: 1.2;
@@ -147,6 +156,8 @@ html, body {
 .ghost .gnd { fill: none; stroke-width: 0.8; }
 
 .agent { fill: var(--fg); }
+.barrier { fill: none; stroke: var(--fg); stroke-width: 1.4; stroke-linecap: round; }
+.train { fill: var(--fg); stroke: var(--fg); stroke-width: 0.9; stroke-linejoin: round; }
 .parked { fill: var(--bg); stroke: var(--fg); stroke-width: 1.1; }
 
 /* Detail levels (set on both SVGs by the renderer from the zoom) */
@@ -180,6 +191,7 @@ html, body {
   stroke-dasharray: 1 5;
 }
 .overlay .preview.path { stroke-width: 1.1; }
+.overlay .preview.rail { stroke-width: 1.4; stroke-dasharray: 1 2.5; }
 .overlay .preview.invalid { stroke-width: 1; stroke-dasharray: 6 4; }
 .overlay .cross { stroke: var(--fg); stroke-width: 1.6; stroke-linecap: round; }
 .overlay .cross-halo { stroke: var(--bg); stroke-width: 5; stroke-linecap: round; }
@@ -264,22 +276,6 @@ html, body {
   gap: 14px;
   pointer-events: none;
 }
-.toolbar {
-  pointer-events: auto;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  max-width: calc(100vw - 32px);
-  border: var(--line) solid var(--fg);
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--bg);
-}
-.toolbar button { padding: 9px 14px; border-left: var(--line) solid var(--fg) !important; }
-.toolbar button:first-child { border-left: none !important; }
-.toolbar button .key { font-size: 10px; margin-right: 6px; opacity: 0.6; }
-.toolbar button:hover { text-decoration: underline; text-underline-offset: 4px; }
-.toolbar button.active { background: var(--fg) !important; color: var(--bg) !important; text-decoration: none; }
 
 .actions {
   pointer-events: auto;
@@ -371,17 +367,6 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .popup .heading { font-size: 10px; padding: 10px 12px 2px; opacity: 0.7; }
 .popup .heading .label { text-decoration: none !important; }
 
-.tabs {
-  pointer-events: auto;
-  display: flex;
-  gap: 18px;
-  font-size: 11px;
-  margin-bottom: -6px;
-  background: var(--bg);
-  padding: 3px 10px;
-}
-#ui .tabs button { background: var(--bg); padding: 2px 0; }
-#ui .tabs button.active { text-decoration: underline; text-underline-offset: 5px; }
 
 /* ---------- Map furniture ---------- */
 
@@ -417,17 +402,111 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 
 .hidden { display: none !important; }
 
+/* ---------- Build menu (bottom-right) ---------- */
+
+.build-menu {
+  position: fixed;
+  right: calc(20px + var(--safe-r));
+  bottom: calc(20px + var(--safe-b));
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.bm-panel,
+.bm-toggle {
+  background: var(--bg);
+  border: var(--line) solid var(--fg);
+  border-radius: var(--radius);
+}
+.bm-panel {
+  width: 270px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 110px - var(--safe-t) - var(--safe-b));
+  max-height: calc(100dvh - 110px - var(--safe-t) - var(--safe-b));
+  overflow: hidden;
+}
+.build-menu.folded .bm-panel,
+.build-menu:not(.folded) .bm-toggle { display: none; }
+
+.bm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  padding-left: 12px;
+  border-bottom: var(--line) solid var(--fg);
+  font-weight: 600;
+}
+.bm-head > span { padding: 9px 0; align-self: center; }
+.bm-body { overflow-y: auto; overscroll-behavior: contain; }
+
+#ui .bm-group,
+#ui .bm-tool {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+}
+#ui .bm-group {
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-top: var(--line) solid var(--fg);
+}
+#ui .bm-group:first-child { border-top: none; }
+.bm-caret::after { content: "+"; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.bm-group.open .bm-caret::after { content: "–"; }
+#ui .bm-group:hover,
+#ui .bm-group.open { background: var(--fg); color: var(--bg); }
+
+#ui .bm-tool { gap: 10px; padding: 5px 12px 5px 8px; }
+#ui .bm-tool:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
+#ui .bm-tool.active { background: var(--fg); color: var(--bg); }
+.bm-loose { border-top: var(--line) solid var(--fg); }
+
+.bm-icon { flex: 0 0 38px; height: 38px; display: flex; }
+.bm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bm-blurb { font-size: 9px; opacity: 0.65; text-transform: none; letter-spacing: 0.04em; }
+.bm-tool .key { font-size: 10px; opacity: 0.6; white-space: nowrap; }
+
+#ui .bm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  font-weight: 600;
+}
+.bm-toggle::before { content: "+"; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.build-menu.has-tool .bm-current::before { content: "· "; }
+.bm-current { font-weight: 400; }
+
+/* icons: the map's line style at a small size */
+.icon { width: 100%; height: 100%; overflow: visible; }
+.icon * { vector-effect: non-scaling-stroke; }
+.icon polygon, .icon circle, .icon .filled { fill: var(--bg); stroke: currentColor; stroke-width: 0.9; stroke-linejoin: round; }
+.icon polyline, .icon path, .icon line { fill: none; stroke: currentColor; stroke-width: 0.7; stroke-linecap: round; }
+.icon .gnd { stroke-width: 0.5; }
+.icon .glyph { stroke-width: 0.6; }
+.icon .d1, .icon .d2 { display: none; }
+.bm-tool.active .icon polygon, .bm-tool.active .icon circle, .bm-tool.active .icon .filled { fill: var(--fg); }
+.icon .i-road { stroke-width: 2.4; }
+.icon .i-path { stroke-width: 1.2; stroke-dasharray: 3 2.5; stroke-linecap: butt; }
+.icon .i-rail { stroke-width: 1.2; }
+.icon .i-sleeper { stroke-width: 1; }
+.icon .i-x { stroke-width: 1.8; }
+
 /* ---------- Touch ---------- */
 
 /* no keyboard: hide the key labels, give buttons finger-sized hit areas */
-body.touch .toolbar button .key,
+body.touch .build-menu .key,
 body.touch .actions button .key { display: none; }
-body.touch .toolbar button,
 body.touch .actions button,
-body.touch .controls button { min-height: 44px; }
-body.touch #ui .tabs button { padding: 10px 4px; }
+body.touch .controls button,
+body.touch .bm-group,
+body.touch .bm-toggle { min-height: 44px; }
 body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
-body.touch .toolbar button:hover { text-decoration: none; }
+body.touch .bm-tool:hover:not(.active),
+body.touch .bm-group:hover { background: var(--bg) !important; color: var(--fg) !important; }
 body.touch .controls button:hover:not(.on),
 body.touch .actions button:hover { background: var(--bg) !important; color: var(--fg) !important; }
 
@@ -464,17 +543,13 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
     bottom: calc(10px + var(--safe-b));
     gap: 10px;
   }
-  /* toolbar: a single row that scrolls sideways */
-  .toolbar {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    max-width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;
-    overscroll-behavior-x: contain;
+  /* the hint and actions sit above the folded Build button */
+  .bottom { bottom: calc(64px + var(--safe-b)); }
+  .build-menu {
+    right: calc(8px + var(--safe-r));
+    bottom: calc(10px + var(--safe-b));
   }
-  .toolbar::-webkit-scrollbar { display: none; }
-  .toolbar button { flex: 0 0 auto; white-space: nowrap; padding: 9px 12px; }
+  .bm-panel { width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); }
   .actions button { flex: 1 1 auto; }
   .hint { font-size: 10px; }
 

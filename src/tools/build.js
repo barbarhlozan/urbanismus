@@ -1,62 +1,87 @@
-// One build tool per structure definition (created in main.js).
-// The pointer grabs the middle of the footprint; Tab rotates, C tries
-// another look. The preview shows exactly the variant that will be built.
+// One build tool per structure family (BUILD_FAMILIES, created in main.js):
+// the sizes of the same thing (park / large park…) share a tool, S switches
+// between them. The pointer grabs the middle of the footprint; Tab rotates,
+// C tries another look. The preview shows exactly the variant that will be
+// built.
 
 import { footprintCenter, newSeed, categoryOf } from '../../structures/index.js';
 import { isTouch } from '../ui/device.js';
 
-export function createBuildTool({ world }, def) {
+// Label of a variant for the Size button: its own `size`, else by footprint.
+const sizeOf = (def) => def.size ?? (def.footprint.length > 1 ? 'Large' : 'Small');
+
+export function createBuildTool({ world }, defs) {
+  let variant = 0;
   let rotation = 0;
   let seed = newSeed();
+  const def = () => defs[variant];
   const rotate = () => { rotation = (rotation + 1) % 4; };
   const reroll = () => { seed = newSeed(); };
+  const resize = () => { variant = (variant + 1) % defs.length; };
 
   return {
-    id: `build:${def.id}`,
-    label: def.name,
-    hotkey: def.hotkey,
-    group: categoryOf(def),
+    id: `build:${defs[0].id}`,
+    label: defs[0].name,
+    blurb: defs[0].blurb ?? '',
+    defs,
+    hotkey: defs[0].hotkey,
+    // every variant keeps its own key; pressing it picks that variant
+    hotkeys: defs.map((d) => d.hotkey).filter(Boolean),
+    group: categoryOf(defs[0]),
     touchConfirm: true,
 
+    enter(params) {
+      const i = defs.findIndex((d) => d.hotkey && d.hotkey === params.hotkey);
+      if (i >= 0) variant = i;
+    },
+
     snap(x, y) {
-      const [cx, cy] = footprintCenter(def, rotation);
+      const [cx, cy] = footprintCenter(def(), rotation);
       return world.grid.nodeAt(x - cx, y - cy);
     },
 
-    hint: () => isTouch()
-      ? `Tap a dot to preview, tap again to place ${def.name.toLowerCase()}`
-      : `Click to place ${def.name.toLowerCase()} · Tab: rotate · C: another look · right-click to stop`,
+    hint() {
+      const name = def().name.toLowerCase();
+      if (isTouch()) return `Tap a dot to preview, tap again to place ${name}`;
+      return `Click to place ${name} · Tab: rotate · C: another look${defs.length > 1 ? ' · S: size' : ''} · right-click to stop`;
+    },
 
     click(node) {
-      if (world.placeStructure(def.id, node, { rotation, seed })) seed = newSeed();
+      const at = world.placementFor(def().id, node, rotation);
+      if (world.placeStructure(def().id, at.node, { rotation: at.rotation, seed })) seed = newSeed();
     },
 
     key(e) {
+      const k = e.key.toLowerCase();
       if (e.key === 'Tab') rotate();
-      else if (e.key.toLowerCase() === 'c') reroll();
+      else if (k === 'c') reroll();
+      else if (k === 's' && defs.length > 1) resize();
       else return false;
       return true;
     },
 
     actions: () => [
+      ...(defs.length > 1 ? [{ label: `Size: ${sizeOf(def())}`, key: 'S', run: resize }] : []),
       { label: 'Rotate', key: 'Tab', run: rotate },
       { label: 'Another look', key: 'C', run: reroll },
     ],
 
     overlay(kit, hover) {
       if (hover < 0) return '';
-      if (world.canPlaceStructure(def.id, hover, rotation).ok) {
-        let out = kit.ghost(def, hover, world.facingRotation(def.id, hover, rotation), 1, seed);
-        const r = def.levels[0].coverage;
+      const d = def();
+      const at = world.placementFor(d.id, hover, rotation);
+      if (at.check.ok) {
+        let out = kit.ghost(d, at.node, world.facingRotation(d.id, at.node, at.rotation), 1, seed);
+        const r = d.levels[0].coverage;
         if (r) {
           // service area: everything within r dots of the footprint
-          const pts = world.footprintNodes(def.id, hover, rotation).map((n) => world.grid.xy(n));
+          const pts = world.footprintNodes(d.id, hover, rotation).map((n) => world.grid.xy(n));
           const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
           out += kit.groundRect(Math.min(...xs) - r - 0.5, Math.min(...ys) - r - 0.5, Math.max(...xs) + r + 0.5, Math.max(...ys) + r + 0.5);
         }
         return out;
       }
-      return world.footprintNodes(def.id, hover, rotation).map((n) => kit.cross(n)).join('');
+      return world.footprintNodes(d.id, hover, rotation).map((n) => kit.cross(n)).join('');
     },
   };
 }

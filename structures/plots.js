@@ -10,7 +10,7 @@
 //
 // Coordinates: plot painters use world axes, (0, 0) = the building's anchor dot.
 
-import { tree, bush, shed, bench, bins, crates, container, pallets, fenceAlong, hedgeAlong, carpetRack, dryingFrame, sandpit, climbingFrame } from './kit.js';
+import { tree, bush, shed, bench, bins, crates, container, pallets, fenceAlong, hedgeAlong, carpetRack, dryingFrame, sandpit, climbingFrame, barrels, timber, heap, tank, transformer } from './kit.js';
 
 // Weighted props per style: [weight, radius, draw(g, x, y)]
 export const PLOT_STYLES = {
@@ -42,6 +42,11 @@ export const PLOT_STYLES = {
     [3, 0.07, (g, x, y) => crates(g, x, y)],
     [2, 0.07, (g, x, y) => pallets(g, x, y)],
     [2, 0.17, (g, x, y) => container(g, x, y, g.chance(0.5))],
+    [2, 0.06, (g, x, y) => barrels(g, x, y)],
+    [2, 0.1, (g, x, y) => timber(g, x, y)],
+    [1, 0.09, (g, x, y) => heap(g, x, y, 0.07)],
+    [1, 0.08, (g, x, y) => tank(g, x, y, 0.05, 0.1)],
+    [1, 0.06, (g, x, y) => transformer(g, x, y)],
   ],
 };
 

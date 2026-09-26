@@ -83,6 +83,12 @@ export class Annotations {
     }
     const exit = world.roadExits().find((e) => e.node === node);
     if (exit) return { pos: world.grid.xy(node), height: 0.1, lines: [`EXIT ${compass(exit.dir)} · ${world.grid.xy(node).join(',')}`] };
+    const railExit = world.railExits().find((e) => e.node === node);
+    if (railExit) return { pos: world.grid.xy(node), height: 0.1, lines: [`RAIL EXIT ${compass(railExit.dir)} · ${world.grid.xy(node).join(',')}`] };
+    if (world.hasRail(node)) {
+      const kind = world.hasRoad(node) ? 'level crossing' : `${world.rails.degree(node)}-way`;
+      return { pos: world.grid.xy(node), height: 0.1, lines: [`RL ${world.grid.xy(node).join(',')} · ${kind}`] };
+    }
     if (world.hasRoad(node)) {
       return { pos: world.grid.xy(node), height: 0.1, lines: [`RD ${world.grid.xy(node).join(',')} · ${world.roads.degree(node)}-way`] };
     }

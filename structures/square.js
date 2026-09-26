@@ -24,6 +24,7 @@ export const small = {
   ...common,
   id: 'square',
   name: 'Square',
+  blurb: 'Shops nearby grow faster',
   hotkey: '6',
   footprint: [[0, 0]],
   levels: [

@@ -17,6 +17,10 @@
 // Map exits (roads ending at the map edge, world.roadExits()):
 //   - residents sometimes drive off the map (sim.leaveChance), stay away a
 //     while and come back the same way
+//   - jobs vs residents (config.commute): when the city has more residents
+//     than jobs, that share of residents' trips go to work off the map; when
+//     it has more jobs, commuters drive in to buildings with jobs, work a
+//     shift and leave (see balance, updateCommuters)
 //   - visitors arrive through exits, drive to a destination (visitors.*),
 //     stay, then leave through a random exit and are gone
 //
@@ -46,8 +50,14 @@ export class AgentSystem {
     this.ride = new WalkNetwork(world, config, { allRoads: true }); // cyclists
     this.visitorTimer = 5;
     this.visitorSeq = 0;
+    this.commuteTimer = 3;
+    this._balance = null; // cached { residents, jobs, workplaces }
     this.log = () => {}; // (text, [x, y]) – set by main to feed annotations
+    this.trains = null;  // TrainSystem, set by main: closed level crossings
+    this.queues = new Map(); // closed crossing + heading + kind -> people queued there
 
+    const rebalance = () => (this._balance = null);
+    for (const type of ['structure:added', 'structure:changed', 'structure:removed', 'roads:changed']) world.events.on(type, rebalance);
     world.events.on('structure:added', (s) => this.sync(s));
     world.events.on('structure:changed', (s) => this.sync(s));
     world.events.on('structure:removed', (s) => this.despawnFor(s));
@@ -80,8 +90,40 @@ export class AgentSystem {
 
   visitorCount() {
     let n = 0;
-    for (const a of this.agents.values()) if (a.visitor) n++;
+    for (const a of this.agents.values()) if (a.visitor && !a.commuter) n++;
     return n;
+  }
+
+  commuterCount() {
+    let inbound = 0, outbound = 0;
+    for (const a of this.agents.values()) {
+      if (a.commuter) inbound++;
+      else if (a.trip?.commute) outbound++;
+    }
+    return { inbound, outbound };
+  }
+
+  // Residents and jobs in buildings connected to the city (as in the stats
+  // panel), plus the buildings that offer jobs.
+  balance() {
+    if (this._balance) return this._balance;
+    let residents = 0, jobs = 0;
+    const workplaces = [];
+    for (const s of this.world.structures.values()) {
+      if (!this.world.isServed(s)) continue;
+      const stats = levelOf(STRUCTURE_TYPES[s.type], s).stats ?? {};
+      residents += stats.residents ?? 0;
+      jobs += stats.jobs ?? 0;
+      if (stats.jobs) workplaces.push(s);
+    }
+    return (this._balance = { residents, jobs, workplaces });
+  }
+
+  // Share of residents' trips that go to work off the map.
+  outboundShare() {
+    const { residents, jobs } = this.balance();
+    if (!residents || residents <= jobs) return 0;
+    return ((residents - jobs) / residents) * this.config.commute.outShare;
   }
 
   *visible() {
@@ -90,6 +132,10 @@ export class AgentSystem {
 
   dwell(mode, trip) {
     if (mode === 'stroll') return 0.5 + Math.random() * 1.5; // a short pause, then back
+    if (trip?.commuter) {
+      const { shiftMin, shiftMax } = this.config.commute;
+      return shiftMin + Math.random() * (shiftMax - shiftMin);
+    }
     if (trip?.outside) {
       const { outsideMin, outsideMax } = this.config.sim;
       return outsideMin + Math.random() * (outsideMax - outsideMin);
@@ -106,7 +152,10 @@ export class AgentSystem {
 
   update(dt) {
     this.updateVisitors(dt);
+    this.updateCommuters(dt);
     const traffic = this.trafficSpeeds(dt);
+    const closed = this.trains?.closed;
+    for (const k of this.queues.keys()) if (!closed?.has(k.split('|')[0])) this.queues.delete(k);
     for (const [id, a] of this.agents) {
       switch (a.state) {
         case 'home':
@@ -131,7 +180,8 @@ export class AgentSystem {
         case 'out':
         case 'back': {
           const leg = a.state === 'out' ? a.trip.out : a.trip.back;
-          a.s += this.speedOf(a.trip.mode) * (a.trip.mode === 'drive' ? traffic(a) : 1) * this.doorEase(a, leg) * dt;
+          const step = this.speedOf(a.trip.mode) * (a.trip.mode === 'drive' ? traffic(a) : 1) * this.doorEase(a, leg) * dt;
+          a.s = Math.min(a.s + step, Math.max(a.s, this.crossingStop(a, leg)));
           [a.x, a.y] = pointAt(leg, a.s);
           if (a.s < leg.total) break;
           const arrived = a.trip.mode === 'stroll' || a.trip.outside || this.world.structures.has(a.trip.dest);
@@ -154,6 +204,41 @@ export class AgentSystem {
     }
   }
 
+  // ----- level crossings -----
+
+  // How far along its leg an agent may go: in front of the next closed
+  // level crossing (behind whoever already queues there), or Infinity.
+  // Anyone already at or over the line when it closes carries on across.
+  crossingStop(a, leg) {
+    const closed = this.trains?.closed;
+    if (!closed?.size) {
+      a.waitKey = null;
+      return Infinity;
+    }
+    const cfg = this.trains.crossing;
+    const kind = a.trip.mode === 'drive' ? 'drive' : a.trip.mode === 'cycle' ? 'cycle' : 'walk';
+    const version = this.trains.crossingVersion;
+    if (leg.crossVersion !== version) {
+      leg.crossings = this.trains.crossingsAlong(leg, 0.25);
+      leg.crossVersion = version;
+    }
+    for (const c of leg.crossings) {
+      const line = c.at - cfg.gap[kind];
+      if (line < a.s - 1e-6) continue; // passed it, or already on it
+      if (line - a.s > 1.5) break;     // the next one is still far off
+      if (!closed.has(c.id)) break;
+      const key = `${c.id}|${c.dir}|${kind}`;
+      if (a.waitKey !== key) {
+        a.waitKey = key;
+        a.slot = this.queues.get(key) ?? 0;
+        this.queues.set(key, a.slot + 1);
+      }
+      return line - a.slot * cfg.queue[kind];
+    }
+    a.waitKey = null;
+    return Infinity;
+  }
+
   // ----- map exits -----
 
   // A point just off the map beyond an exit.
@@ -168,13 +253,13 @@ export class AgentSystem {
   }
 
   // Residents' drive off the map (and, on the way back, the same way in).
-  planLeave(home) {
+  planLeave(home, why = 'leaves the city') {
     const exit = this.pickExit();
     const from = this.world.accessInfo(home);
     if (!exit || !from) return null;
     const nodes = findPath(this.world.networks.road, from.road, exit.node);
     if (!nodes) return null;
-    this.log(`${codeOf(home)} resident leaves the city · exit ${compass(exit.dir)}`, this.world.grid.xy(home.node));
+    this.log(`${codeOf(home)} resident ${why} · exit ${compass(exit.dir)}`, this.world.grid.xy(home.node));
     return { mode: 'drive', nodes, fromDoor: from.door, toPoint: this.offMap(exit), outside: true, exit };
   }
 
@@ -189,10 +274,21 @@ export class AgentSystem {
     if (this.visitorCount() < cfg.max) this.spawnVisitor();
   }
 
-  spawnVisitor() {
+  // More jobs than residents: people from outside fill the gap, arriving
+  // every commute.interval / (missing workers) seconds on average.
+  updateCommuters(dt) {
+    const { residents, jobs } = this.balance();
+    const missing = jobs - residents;
+    if (missing <= 0 || !this.world.roadExits().length) return;
+    if ((this.commuteTimer -= dt) > 0) return;
+    this.commuteTimer = (this.config.commute.interval / missing) * (0.5 + Math.random());
+    if (this.commuterCount().inbound < Math.min(missing, this.config.commute.max)) this.spawnVisitor({ commuter: true });
+  }
+
+  spawnVisitor({ commuter = false } = {}) {
     const { world } = this;
     const exit = this.pickExit();
-    const places = this.candidates({ id: null }, this.config.visitors.destinations);
+    const places = commuter ? this.balance().workplaces.slice() : this.candidates({ id: null }, this.config.visitors.destinations);
     for (let attempt = 0; attempt < 4 && exit && places.length; attempt++) {
       const dest = places.splice(Math.floor(Math.random() * places.length), 1)[0];
       const to = world.accessInfo(dest);
@@ -200,10 +296,12 @@ export class AgentSystem {
       const nodes = findPath(world.networks.road, exit.node, to.road);
       if (!nodes) continue;
       const id = `v${++this.visitorSeq}`;
-      const a = { id, home: null, visitor: true, state: 'out', timer: 0, trip: null, s: 0, x: 0, y: 0 };
+      const a = { id, home: null, visitor: true, commuter, state: 'out', timer: 0, trip: null, s: 0, x: 0, y: 0 };
       a.trip = this.buildTrip({ mode: 'drive', nodes, fromPoint: this.offMap(exit), toDoor: to.door }, dest.id);
       a.trip.visitor = true;
-      this.log(`V-${String(this.visitorSeq).padStart(3, '0')} arrives · exit ${compass(exit.dir)} → ${codeOf(dest)}`, world.grid.xy(exit.node));
+      a.trip.commuter = commuter;
+      const who = commuter ? 'Commuter' : 'V';
+      this.log(`${who}-${String(this.visitorSeq).padStart(3, '0')} arrives · exit ${compass(exit.dir)} → ${codeOf(dest)}`, world.grid.xy(exit.node));
       this.beginLeg(a, a.trip.out);
       this.agents.set(id, a);
       return true;
@@ -253,6 +351,16 @@ export class AgentSystem {
       }
       const stroll = this.walk.stroll(home, walk.strollMin, walk.strollMax);
       if (stroll) return this.begin(a, { mode: 'stroll', ...stroll }, null);
+    }
+
+    // not enough jobs in town: go to work elsewhere
+    const lives = levelOf(STRUCTURE_TYPES[home.type], home).stats?.residents;
+    if (lives && Math.random() < this.outboundShare()) {
+      const leave = this.planLeave(home, 'goes to work outside');
+      if (leave) {
+        leave.commute = true;
+        return this.begin(a, leave, null);
+      }
     }
 
     if (Math.random() < this.config.sim.leaveChance) {
@@ -362,6 +470,7 @@ export class AgentSystem {
       mode: plan.mode,
       dest: destId,
       outside: !!plan.outside,
+      commute: !!plan.commute, // resident working outside the map
       exit: plan.exit ?? null,
       nodes: plan.nodes,
       out: this.leg(offsetPolyline(smooth, side), plan.fromDoor != null, atDoor),

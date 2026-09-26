@@ -10,6 +10,7 @@ export function createInspectTool(ctx) {
     id: 'inspect',
     label: 'Select',
     hotkey: 'v',
+    toolbar: false, // it's what you're in when no tool is picked
 
     hint: () => isTouch()
       ? 'Tap the map · drag to pan · pinch to zoom'
@@ -99,6 +100,7 @@ function menuFor(ctx, node) {
 
   const feature = world.featureAt(node);
   const road = world.hasRoad(node);
+  const rail = world.hasRail(node);
   const fine = world.coarseToFine(node);
   const path = world.paths.hasNode(fine);
 
@@ -106,22 +108,26 @@ function menuFor(ctx, node) {
   for (const cat of CATEGORIES) {
     items.push({ label: cat.label, info: true, heading: true });
     for (const def of STRUCTURES.filter((d) => categoryOf(d) === cat.id)) {
-      const check = world.canPlaceStructure(def.id, node);
+      // types with their own rule (stations) may need turning to fit
+      const tries = def.canPlace ? [0, 1, 2, 3] : [0];
+      const at = tries.map((r) => world.placementFor(def.id, node, r)).find((p) => p.check.ok) ?? world.placementFor(def.id, node, 0);
       items.push({
         label: def.name,
-        note: check.ok ? key(def.hotkey) : check.reason,
-        disabled: !check.ok,
-        action: () => world.placeStructure(def.id, node),
+        note: at.check.ok ? key(def.hotkey) : at.check.reason,
+        disabled: !at.check.ok,
+        action: () => world.placeStructure(def.id, at.node, { rotation: at.rotation }),
       });
     }
   }
   items.push({ label: 'Lines', info: true, heading: true });
   items.push({ label: 'Road from here', note: key('R'), action: () => tools.use('road', { start: node }) });
   items.push({ label: 'Footpath from here', note: key('F'), action: () => tools.use('path', { start: fine }) });
+  items.push({ label: 'Railway from here', note: key('L'), action: () => tools.use('rail', { start: node }) });
   if (road) items.push({ label: 'Remove road', action: () => world.removeRoadAt(node) });
+  if (rail) items.push({ label: 'Remove railway', action: () => world.removeNetworkAt('rail', node) });
   if (path) items.push({ label: 'Remove footpath', action: () => world.removeNetworkAt('path', fine) });
   if (feature) items.push({ label: `Clear ${FEATURE_TYPES[feature.type].name.toLowerCase()}`, action: () => world.removeFeature(feature.id) });
 
-  const title = road ? 'Road' : path ? 'Footpath' : feature ? FEATURE_TYPES[feature.type].name : 'Empty lot';
+  const title = road && rail ? 'Level crossing' : road ? 'Road' : rail ? 'Railway' : path ? 'Footpath' : feature ? FEATURE_TYPES[feature.type].name : 'Empty lot';
   return { title, items };
 }

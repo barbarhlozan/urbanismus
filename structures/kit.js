@@ -5,7 +5,7 @@
 // they disappear when zoomed out.
 
 import { clipSegment, splitRuns } from '../src/core/geom2d.js';
-import { drawTree, pickKind } from '../features/trees.js';
+import { drawTree, drawShrub, pickKind } from '../features/trees.js';
 
 // A tree (features/trees.js), about half a grid step tall at size 1: any of
 // the three kinds, or one given as `kind`.
@@ -15,12 +15,10 @@ export function tree(g, x, y, size = 1, kind = null) {
   drawTree(g, x, y, k, (k === 'spruce' ? 0.56 : 0.5) * size);
 }
 
+// A low shrub (features/trees.js) about r * 4 tall; close-up detail only.
 export function bush(g, x, y, r = 0.04) {
   if (!g.isFree(x, y, r)) return;
-  g.detailed(2, () => {
-    g.solid(x, y, r);
-    g.disc(x, y, r, r);
-  });
+  g.detailed(2, () => drawShrub(g, x, y, r * 4));
 }
 
 // Low hedge block from x0 to x1 at depth y (along x).
@@ -329,5 +327,220 @@ export function climbingFrame(g, x, y) {
       const [cx, cy] = [Math.cos(a) * r, Math.sin(a) * r];
       g.line([[x - cx, y - cy, 0], [x - cx * 0.7, y - cy * 0.7, 0.07], [x, y, 0.1], [x + cx * 0.7, y + cy * 0.7, 0.07], [x + cx, y + cy, 0]]);
     }
+  });
+}
+
+// ----- works yard props -----
+
+// A few oil drums standing together.
+export function barrels(g, x, y) {
+  if (!g.isFree(x, y, 0.06)) return;
+  g.detailed(2, () => {
+    for (const [dx, dy] of g.pick([[[0, 0], [0.045, 0.01], [0.02, 0.045]], [[0, 0], [0.045, 0]]])) {
+      g.cylinder(x + dx - 0.02, y + dy - 0.02, 0, 0.02, 0.05, 6);
+    }
+  });
+}
+
+// Pile of logs or planks, lying along x or y.
+export function timber(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.09)) return;
+  const [w, d] = alongX ? [0.18, 0.08] : [0.08, 0.18];
+  g.detailed(2, () => {
+    g.box(x - w / 2, y - d / 2, 0, w, d, 0.035);
+    g.box(x - w / 2 + (alongX ? 0.02 : 0.01), y - d / 2 + (alongX ? 0.01 : 0.02), 0.035, w - (alongX ? 0.04 : 0.02), d - (alongX ? 0.02 : 0.04), 0.03);
+    g.floors(x - w / 2, y - d / 2, w, d, 0, 0.035, 0.012, { inset: 0 });
+  });
+}
+
+// Heap of coal or gravel.
+export function heap(g, x, y, r = 0.08) {
+  if (!g.isFree(x, y, r)) return;
+  g.detailed(1, () => g.lathe(x, y, 0, [[r, 0], [r * 0.55, r * 0.45], [0.01, r * 0.7], [0, r * 0.72]], 7));
+}
+
+// Upright tank on four legs.
+export function tank(g, x, y, r = 0.06, h = 0.12) {
+  if (!g.isFree(x, y, r)) return;
+  g.detailed(1, () => {
+    g.solid(x, y, 0.02);
+    for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) g.line([[x + dx * r * 0.6, y + dy * r * 0.6, 0], [x + dx * r * 0.6, y + dy * r * 0.6, 0.05]]);
+    g.lathe(x, y, 0.05, [[r * 0.3, 0], [r, r * 0.4], [r, h], [r * 0.5, h + r * 0.35], [0, h + r * 0.4]], 8);
+  });
+}
+
+// Transformer: a squat box with insulators on top.
+export function transformer(g, x, y) {
+  if (!g.isFree(x, y, 0.06)) return;
+  g.detailed(2, () => {
+    g.box(x - 0.04, y - 0.03, 0, 0.08, 0.06, 0.06);
+    for (const dx of [-0.025, 0, 0.025]) g.line([[x + dx, y, 0.06], [x + dx, y, 0.09]]);
+  });
+}
+
+// Gantry crane: two A-frame legs and a beam from a to b (2D points).
+export function gantry(g, a, b, h = 0.3) {
+  const [ax, ay] = a, [bx, by] = b;
+  const len = Math.hypot(bx - ax, by - ay);
+  const px = (-(by - ay) / len) * 0.05, py = ((bx - ax) / len) * 0.05;
+  g.detailed(1, () => {
+    g.solid((ax + bx) / 2, (ay + by) / 2, h);
+    for (const [x, y] of [a, b]) g.line([[x - px, y - py, 0], [x, y, h], [x + px, y + py, 0]]);
+    g.line([[ax, ay, h], [bx, by, h]]);
+    g.line([[ax, ay, h - 0.025], [bx, by, h - 0.025]]);
+    const t = 0.4;
+    const cx = ax + (bx - ax) * t, cy = ay + (by - ay) * t;
+    g.line([[cx, cy, h - 0.025], [cx, cy, h * 0.55]]);
+  });
+}
+
+// Pipe bridge between two points (2D) at height h, on posts.
+export function pipes(g, a, b, h = 0.14) {
+  const [ax, ay] = a, [bx, by] = b;
+  const n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / 0.25));
+  g.detailed(1, () => {
+    g.solid((ax + bx) / 2, (ay + by) / 2, h / 2);
+    for (let i = 0; i <= n; i++) {
+      const x = ax + ((bx - ax) * i) / n, y = ay + ((by - ay) * i) / n;
+      g.line([[x, y, 0], [x, y, h]]);
+    }
+    g.line([[ax, ay, h], [bx, by, h]]);
+    g.line([[ax, ay, h + 0.02], [bx, by, h + 0.02]]);
+  });
+}
+
+// ----- park props -----
+
+// Swing set: an A-frame each end, a bar and two seats.
+export function swings(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.09)) return;
+  const [dx, dy] = alongX ? [0.08, 0] : [0, 0.08];
+  const [px, py] = alongX ? [0, 0.035] : [0.035, 0];
+  const h = 0.11;
+  g.detailed(2, () => {
+    g.solid(x, y, h / 2);
+    for (const k of [-1, 1]) g.line([[x + dx * k - px, y + dy * k - py, 0], [x + dx * k, y + dy * k, h], [x + dx * k + px, y + dy * k + py, 0]]);
+    g.line([[x - dx, y - dy, h], [x + dx, y + dy, h]]);
+    for (const k of [-0.4, 0.4]) g.line([[x + dx * k, y + dy * k, h], [x + dx * k, y + dy * k, 0.03]]);
+  });
+}
+
+// Slide: a ladder up and a chute down.
+export function slide(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.09)) return;
+  const [dx, dy] = alongX ? [0.08, 0] : [0, 0.08];
+  g.detailed(2, () => {
+    g.solid(x, y, 0.05);
+    g.line([[x - dx, y - dy, 0], [x - dx * 0.5, y - dy * 0.5, 0.1], [x + dx, y + dy, 0.01]]);
+    g.line([[x - dx * 0.5, y - dy * 0.5, 0], [x - dx * 0.5, y - dy * 0.5, 0.1]]);
+  });
+}
+
+// Seesaw.
+export function seesaw(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.08)) return;
+  const [dx, dy] = alongX ? [0.08, 0] : [0, 0.08];
+  g.detailed(2, () => {
+    g.solid(x, y, 0.02);
+    g.line([[x, y, 0], [x, y, 0.03]]);
+    g.line([[x - dx, y - dy, 0.005], [x + dx, y + dy, 0.05]]);
+  });
+}
+
+// A playground: sandpit and one to three pieces around it.
+export function playground(g, x, y, r = 0.2) {
+  g.groundCircle(x, y, r, { dash: '1 2', lod: 1 });
+  const pieces = [swings, slide, seesaw, climbingFrame];
+  sandpit(g, x, y);
+  const n = g.int(1, 3);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + g.range(0, 1);
+    g.pick(pieces)(g, x + Math.cos(a) * r * 0.65, y + Math.sin(a) * r * 0.65);
+  }
+}
+
+// Bandstand / gazebo: a round floor, posts and a domed roof.
+export function bandstand(g, x, y, r = 0.1) {
+  if (!g.isFree(x, y, r)) return;
+  g.cylinder(x, y, 0, r, 0.02, 8);
+  g.detailed(1, () => {
+    g.solid(x, y, 0.06);
+    for (let i = 0; i < 8; i += 2) {
+      const a = (i / 8) * Math.PI * 2;
+      g.line([[x + Math.cos(a) * r * 0.85, y + Math.sin(a) * r * 0.85, 0.02], [x + Math.cos(a) * r * 0.85, y + Math.sin(a) * r * 0.85, 0.11]]);
+    }
+  });
+  g.lathe(x, y, 0.11, [[r * 1.08, 0], [r * 0.9, 0.03], [r * 0.4, 0.07], [0.012, 0.09], [0, 0.12]], 8);
+}
+
+// Round flower bed with a few blooms.
+export function flowerBed(g, x, y, r = 0.08) {
+  if (!g.isFree(x, y, r)) return;
+  g.groundCircle(x, y, r, { lod: 1 });
+  g.groundCircle(x, y, r * 0.6, { dash: '1 1.5', lod: 2 });
+  bush(g, x, y, 0.025);
+}
+
+// Obelisk / war memorial on a stepped base.
+export function obelisk(g, x, y, h = 0.3) {
+  if (!g.isFree(x, y, 0.07)) return;
+  g.box(x - 0.06, y - 0.06, 0, 0.12, 0.12, 0.03);
+  g.lathe(x, y, 0.03, [[0.042, 0], [0.028, h], [0, h + 0.04]], 4, { phase: 0.5 });
+}
+
+// Abstract concrete sculpture: stacked slabs at angles.
+export function sculpture(g, x, y) {
+  if (!g.isFree(x, y, 0.06)) return;
+  g.box(x - 0.04, y - 0.015, 0, 0.08, 0.03, 0.08);
+  g.box(x - 0.015, y - 0.05, 0.08, 0.03, 0.1, 0.05);
+}
+
+// Bicycle stands: a row of hoops from x0 to x1 along y.
+export function bikeRack(g, x0, x1, y) {
+  if (!g.isFree((x0 + x1) / 2, y, 0.05)) return;
+  g.detailed(1, () => {
+    g.solid((x0 + x1) / 2, y, 0.03);
+    for (let x = x0; x <= x1 + 1e-6; x += 0.05) g.line([[x, y - 0.02, 0], [x, y - 0.02, 0.05], [x, y + 0.02, 0.05], [x, y + 0.02, 0]]);
+  });
+}
+
+// Ice-cream / snack kiosk.
+export function kiosk(g, x, y) {
+  if (!g.isFree(x, y, 0.07)) return;
+  g.box(x - 0.05, y - 0.04, 0, 0.1, 0.08, 0.08);
+  g.box(x - 0.065, y - 0.06, 0.08, 0.13, 0.11, 0.015);
+  g.detailed(2, () => g.line([[x - 0.035, y - 0.04, 0.035], [x + 0.035, y - 0.04, 0.035], [x + 0.035, y - 0.04, 0.07], [x - 0.035, y - 0.04, 0.07], [x - 0.035, y - 0.04, 0.035]], { facing: [0, -1, 0] }));
+}
+
+// Outdoor chess / table with two stools.
+export function chessTable(g, x, y) {
+  if (!g.isFree(x, y, 0.06)) return;
+  g.detailed(2, () => {
+    g.box(x - 0.025, y - 0.025, 0, 0.05, 0.05, 0.04);
+    for (const k of [-1, 1]) g.cylinder(x + k * 0.05, y, 0, 0.012, 0.025, 5);
+  });
+}
+
+// Spa colonnade: a row of columns under a flat roof, from a to b along x at depth y.
+export function colonnade(g, x0, x1, y, d = 0.14, h = 0.16) {
+  g.box(x0, y - d / 2, h, x1 - x0, d, 0.025);
+  g.detailed(1, () => {
+    g.solid((x0 + x1) / 2, y, h / 2);
+    const n = Math.max(2, Math.round((x1 - x0) / 0.08));
+    for (let i = 0; i <= n; i++) {
+      const x = x0 + ((x1 - x0) * i) / n;
+      for (const k of [-0.4, 0.4]) g.line([[x, y + d * k, 0], [x, y + d * k, h]]);
+    }
+  });
+}
+
+// Wooden footbridge (ground drawing) from a to b.
+export function footbridge(g, a, b, w = 0.05) {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const px = (-(b[1] - a[1]) / len) * w, py = ((b[0] - a[0]) / len) * w;
+  g.groundPoly([[a[0] - px, a[1] - py], [b[0] - px, b[1] - py], [b[0] + px, b[1] + py], [a[0] + px, a[1] + py]], { fill: 'bg' });
+  g.detailed(2, () => {
+    g.solid((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0.02);
+    for (const k of [-1, 1]) g.line([[a[0] + px * k, a[1] + py * k, 0.03], [b[0] + px * k, b[1] + py * k, 0.03]]);
   });
 }

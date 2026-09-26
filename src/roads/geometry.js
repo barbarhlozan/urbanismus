@@ -168,3 +168,67 @@ export function streetKerbs(world, curve, width) {
   }
   return lines;
 }
+
+// A network split into runs between junctions and dead ends: node lists
+// through dots where exactly two segments meet, so each run can be drawn
+// as one continuous line (dash patterns don't restart at every dot). Loops
+// with no junction come out as one run starting and ending on the same dot.
+export function networkChains(graph) {
+  const seen = new Set();
+  const key = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+  const walk = (a, b) => {
+    const chain = [a, b];
+    seen.add(key(a, b));
+    let prev = a, cur = b;
+    while (graph.degree(cur) === 2) {
+      const next = [...graph.neighbors(cur)].find((m) => m !== prev);
+      if (next === undefined || seen.has(key(cur, next))) break;
+      seen.add(key(cur, next));
+      chain.push(next);
+      prev = cur;
+      cur = next;
+    }
+    return chain;
+  };
+  const chains = [];
+  for (const n of graph.nodes()) {
+    if (graph.degree(n) === 2) continue;
+    for (const m of graph.neighbors(n)) if (!seen.has(key(n, m))) chains.push(walk(n, m));
+  }
+  for (const [a, b] of graph.edges()) if (!seen.has(key(a, b))) chains.push(walk(a, b));
+  return chains;
+}
+
+// Railway linework, in the map symbol style (a solid line with light dashes
+// inside, see styles.css). All world-space polylines:
+//   lines    one smoothed polyline per run between junctions (networkChains),
+//            carried on 0.8 past map exits
+//   fades    their faint continuation off the map
+//   buffers  a stop across each dead end that isn't a map exit
+export function railLines(layer, curve, exits) {
+  const { graph } = layer;
+  const exitAt = new Map(exits.map((e) => [e.node, e.dir]));
+  const lines = [], fades = [], buffers = [];
+  const beyond = (n, d) => {
+    const [x, y] = layer.pos(n);
+    const [dx, dy] = exitAt.get(n);
+    return [x + dx * d, y + dy * d];
+  };
+  for (const chain of networkChains(graph)) {
+    const pts = chain.map((n) => layer.pos(n));
+    const first = chain[0], last = chain[chain.length - 1];
+    if (exitAt.has(first)) pts.unshift(beyond(first, 0.8));
+    if (exitAt.has(last)) pts.push(beyond(last, 0.8));
+    lines.push(smoothPolyline(pts, curve.cornerRadius, curve.curveSamples));
+  }
+  for (const n of exitAt.keys()) fades.push([beyond(n, 0.8), beyond(n, 1.9)]);
+  for (const n of graph.nodes()) {
+    if (graph.degree(n) !== 1 || exitAt.has(n)) continue;
+    const [m] = graph.neighbors(n);
+    const [px, py] = layer.pos(n), [qx, qy] = layer.pos(m);
+    const l = Math.hypot(px - qx, py - qy) || 1;
+    const nx = (-(py - qy) / l) * 0.12, ny = ((px - qx) / l) * 0.12;
+    buffers.push([[px + nx, py + ny], [px - nx, py - ny]]);
+  }
+  return { lines, fades, buffers };
+}

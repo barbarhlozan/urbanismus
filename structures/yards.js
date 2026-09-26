@@ -15,7 +15,7 @@
 // Levels list the styles they may get in `yards: [...]`; one is picked from
 // the building's seed. The player can override it (s.data.yard).
 
-import { tree, bush, hedge, fenceAlong, bench, crates, container, lamp, paving, garages } from './kit.js';
+import { tree, bush, hedge, fenceAlong, bench, crates, container, lamp, paving, garages, flowerBed, kiosk, bikeRack } from './kit.js';
 
 const spots = (x0, x1, step) => {
   const out = [];
@@ -114,6 +114,26 @@ export const YARDS = {
         tree(g, x, y, 0.95);
       }
       if (g.chance(0.6)) bench(g, g.pick([-0.12, 0.12]), y1 - 0.08);
+    },
+  },
+
+  // In front of a station: paving, a bike rack and flower beds either side
+  // of the way in, a lamp, sometimes a kiosk.
+  forecourt: {
+    name: 'Forecourt',
+    draw(g, yard) {
+      const { x0, x1, y1 } = yard;
+      paving(g, innerOutline(yard, 0.03, 0.04), 0.1);
+      const mid = (x) => (yard.frontAt(x) + 0.03 + y1) / 2;
+      const left = -Math.min(0.3, -x0 - 0.12), right = Math.min(0.3, x1 - 0.12);
+      if (room(yard, left, 0.03) > 0.18) flowerBed(g, left, mid(left), 0.07);
+      if (room(yard, right, 0.03) > 0.18) {
+        if (g.chance(0.4)) kiosk(g, right, mid(right));
+        else flowerBed(g, right, mid(right), 0.07);
+      }
+      if (x0 < -0.6 && room(yard, -0.75, 0.03) > 0.16) bikeRack(g, -0.9, -0.6, y1 - 0.08);
+      if (x1 > 0.6 && room(yard, 0.75, 0.03) > 0.16) bench(g, 0.75, y1 - 0.08);
+      if (room(yard, x1 - 0.06, 0.06) > 0.02) lamp(g, x1 - 0.06, yard.frontAt(x1 - 0.06) + 0.06);
     },
   },
 

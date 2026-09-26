@@ -31,6 +31,39 @@ export const CONFIG = {
     curveSamples: 6,
   },
 
+  // Railways: bends of at most 45° per dot (sharper ones can't be built),
+  // level crossings with roads.
+  rail: {
+    cornerRadius: 0.5,
+    curveSamples: 10,
+    gauge: 0.04,         // trains keep this far right of the centre line
+  },
+
+  // Trains come in through railways that run off the map edge, stop at the
+  // stations they pass and leave through another exit (or turn round at a
+  // station when there is no other way out).
+  trains: {
+    interval: 30,       // seconds between arrivals through one exit
+    max: 3,             // trains on the map at once
+    speed: 2.6,         // grid steps per second at full speed
+    accel: 1.2,         // grid steps per second² (braking too)
+    dwell: 6,           // seconds stopped at a station
+    maxStops: 3,        // stations visited per run
+    carSpacing: 0.13,   // grid steps between carriages
+    lengths: { short: 4, medium: 7, long: 11 }, // carriages, picked at random
+    lookAhead: 0.35,    // keep this far behind another train
+  },
+
+  // Level crossings: wherever a road, street or footpath crosses a railway.
+  // A crossing closes while a train is within `approach` of it (ahead) until
+  // its tail is `clear` past; cars, cyclists and pedestrians wait and queue.
+  crossing: {
+    approach: 1.8,
+    clear: 0.3,
+    gap: { drive: 0.3, cycle: 0.22, walk: 0.18 },   // stop this far before the line…
+    queue: { drive: 0.17, cycle: 0.09, walk: 0.07 }, // …and this far behind the one in front
+  },
+
   growth: {
     interval: 2,               // simulated seconds between checks
     upTime: { 2: 60, 3: 150 }, // ~seconds of met conditions to reach level 2 / level 3
@@ -67,6 +100,17 @@ export const CONFIG = {
     leaveChance: 0.06,    // share of residents' trips that leave the map (needs a map exit)
     outsideMin: 20,       // seconds spent outside the map…
     outsideMax: 50,       // …at most
+  },
+
+  // Jobs vs residents. More residents than jobs: that share of residents'
+  // trips (times outShare) go to work off the map. More jobs than residents:
+  // commuters drive in through map exits to buildings with jobs.
+  commute: {
+    outShare: 0.8,        // how strongly a job shortage sends residents out
+    interval: 40,         // seconds between commuter arrivals, divided by the missing workers
+    max: 30,              // commuters in the city at once
+    shiftMin: 25,         // seconds a commuter stays at work…
+    shiftMax: 60,         // …at most
   },
 
   visitors: {

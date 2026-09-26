@@ -5,8 +5,8 @@
 // grown from the painter's seeded randomness, so every tree is different
 // but the same tree always looks the same. Three kinds:
 //
-//   spruce     filled outline of drooping skirt tiers, narrowing to a
-//              pointed top, on a short trunk
+//   spruce     tall bare trunk, narrow even crown of foliage pads tapering
+//              to a spire, as a filled outline
 //   sapling    slender, slightly bent trunk, a few narrow forks and twig tips
 //   spreading  short thick trunk splitting into wide, wandering branches
 //
@@ -47,13 +47,32 @@ export function drawClump(g, x, y, trees) {
 }
 
 function drawSpruce(g, x, y, height, simple) {
-  const { outline, trunk } = spruceShape(g, height, simple);
+  const { outline, trunk, inside, branches } = spruceShape(g, height, simple);
   g.strokes(x, y, 0, trunk, { cls: 'trunk' });
-  g.shape(x, y, 0, outline);
+  g.shape(x, y, 0, outline, { smooth: true });
+  g.strokes(x, y, 0, inside, { cls: 'trunk', lod: 2 });
+  g.strokes(x, y, 0, branches, { cls: 'twig', lod: 2 });
 }
 
 function bareParts(g, kind, height, simple) {
   return bare(g, height, simple ? { ...BARE[kind], ...SIMPLE } : BARE[kind]);
+}
+
+// A shrub: a few thin stems fanning out from the ground, each forking once
+// near the top, as one path. `height` in grid units.
+export function drawShrub(g, x, y, height) {
+  g.solid(x, y, 0);
+  const lines = [];
+  const n = g.int(4, 6);
+  for (let i = 0; i < n; i++) {
+    const a = ((i + 0.5) / n - 0.5) * g.range(1.4, 2) + g.range(-0.15, 0.15);
+    const len = height * g.range(0.7, 1);
+    const [mx, my] = [Math.sin(a) * len * 0.6, Math.cos(a) * len * 0.6];
+    lines.push([[0, 0], [mx, my], [Math.sin(a) * len, Math.cos(a) * len]]);
+    const b = a + (a < 0 ? -1 : 1) * g.range(0.4, 0.8); // fork away from the middle
+    lines.push([[mx, my], [mx + Math.sin(b) * len * 0.35, my + Math.cos(b) * len * 0.35]]);
+  }
+  g.strokes(x, y, 0, lines, { cls: 'twig' });
 }
 
 // Random kind, weighted: [spruce, sapling, spreading].
@@ -63,42 +82,68 @@ export function pickKind(g, weights = [0.3, 0.25, 0.45]) {
   return TREE_KINDS[0];
 }
 
-// Spruce: a filled outline (it hides what stands behind it) of drooping
-// skirt tiers narrowing to a pointed top, on a short trunk. Each side is
-// jittered on its own, and close-up trees get small teeth along each skirt.
+// Spruce: a tall bare trunk carrying a narrow crown of about even width that
+// tapers to a spire at the top, drawn as one filled outline (it hides what
+// stands behind it). The outline is made of foliage pads on each side, each
+// with its own reach and droop, and now and then a gap where the trunk
+// shows. Close up (not simple) the pads get lumpier edges, and the trunk and
+// branches are drawn through the crown, as in an ink drawing.
 function spruceShape(g, H, simple) {
-  const base = H * g.range(0.08, 0.14);   // trunk showing below the lowest skirt
-  const W = H * g.range(0.22, 0.3);       // half width at the bottom
-  const n = simple ? g.int(3, 4) : g.int(4, 6);
-  const tier = (H - base) / n;
-  const lean = g.range(-0.025, 0.025) * H;
+  const crown0 = H * g.range(0.18, 0.32);    // bare trunk below the crown
+  const ch = H - crown0;
+  const W = H * g.range(0.13, 0.2);          // half width of the crown
+  const n = simple ? g.int(6, 8) : g.int(7, 9); // pads per side
+  const lean = g.range(-0.03, 0.03) * H;
+  const at = (u, v) => [u + lean * (v / H), v];
+  // crown half width at t (0 = crown bottom, 1 = top): a spire in the top
+  // third, slightly narrower at the very bottom, even in between
+  const width = (t) => W * Math.pow(Math.min(1, (1 - t) / 0.35), 0.85) * (0.8 + 0.2 * Math.min(1, t / 0.25));
+
+  // pads of uneven heights, laid out separately on each side so they
+  // alternate like real branches: random shares of the crown, top to bottom
+  const cutsFor = () => {
+    const shares = Array.from({ length: n }, () => g.range(0.6, 1.4));
+    const sum = shares.reduce((a, c) => a + c, 0);
+    const cuts = [1];
+    for (const sh of shares) cuts.push(cuts[cuts.length - 1] - sh / sum);
+    return cuts;
+  };
+  const bumps = simple ? 1 : 2; // scallops along the top of each pad
+
+  const branches = [];
   const side = (dir) => {
+    const cuts = cutsFor();
     const pts = [];
-    for (let k = 0; k < n; k++) {
-      const t = (k + 1) / n;              // 0 at the top, 1 at the bottom tier
-      const tip = [dir * W * Math.pow(t, 0.85) * g.range(0.85, 1.12) + lean * (1 - t), base + (H - base) * (1 - t) + tier * g.range(-0.12, 0.05)];
-      // the notch where this skirt starts, tucked in under the one above
-      if (k > 0) {
-        const prev = pts[pts.length - 1];
-        const notch = [dir * Math.abs(prev[0]) * g.range(0.6, 0.8) + lean * (1 - t), tip[1] + tier * g.range(0.4, 0.55)];
-        pts.push(notch);
-        if (!simple) {
-          // a small tooth halfway down the skirt
-          const m = [(notch[0] + tip[0]) / 2, (notch[1] + tip[1]) / 2];
-          pts.push([m[0] + dir * tier * 0.12, m[1] + tier * 0.02], [m[0] + dir * tier * 0.02, m[1] - tier * 0.08]);
-        }
+    for (let k = 0; k < n; k++) {             // top to bottom
+      const t1 = cuts[k], t0 = Math.max(0, cuts[k + 1]);
+      const v1 = crown0 + ch * t1, v0 = crown0 + ch * t0, h = v1 - v0;
+      const gap = k > 1 && k < n - 1 && g.chance(0.12);
+      const reach = Math.max(H * 0.012, width((t0 + t1) / 2) * (gap ? g.range(0.15, 0.3) : g.range(0.65, 1.15)));
+      const inner = reach * g.range(0.1, 0.25);
+      const tipV = v0 + h * g.range(-0.1, 0.3); // drooping tip
+      // a clump of foliage: in at the trunk, a scalloped top edge out to the
+      // drooping tip, a lumpy underside back in (drawn smooth through these)
+      pts.push(at(dir * inner, v1 - h * 0.1));
+      for (let j = 1; j <= bumps; j++) {
+        const f = j / (bumps + 1);
+        pts.push(at(dir * (inner + (reach - inner) * f), v1 - h * (0.15 + 0.3 * f) + (j % 2 ? 1 : -1) * h * g.range(0.08, 0.18)));
       }
-      pts.push(tip);
+      pts.push(at(dir * reach, tipV));
+      pts.push(at(dir * reach * g.range(0.6, 0.8), v0 + h * g.range(0.05, 0.2)));
+      if (!simple) pts.push(at(dir * reach * g.range(0.3, 0.45), v0 + h * g.range(-0.05, 0.15)));
+      pts.push(at(dir * inner, v0 + h * 0.2));
+      if (!simple && !gap) branches.push([at(0, v1 - h * 0.3), at(dir * reach * 0.45, (v1 + tipV) / 2 - h * 0.15), at(dir * reach * 0.85, tipV + h * 0.1)]);
     }
-    // under the lowest skirt, back to the trunk
-    pts.push([dir * H * 0.025, base + tier * g.range(0.1, 0.25)]);
+    pts.push(at(dir * H * 0.018, crown0 - H * 0.01));
     return pts;
   };
   const right = side(1), left = side(-1);
-  const top = [lean, H];
   return {
-    outline: [top, ...right, ...left.reverse()],
-    trunk: [[[0, 0], [0, base + tier * 0.2]]],
+    outline: [at(0, H), ...right, ...left.reverse()],
+    trunk: [[at(0, 0), at(0, crown0 + ch * 0.1)]],
+    // drawn over the fill, close-up only
+    inside: simple ? [] : [[at(0, crown0), at(0, crown0 + ch * 0.85)]],
+    branches,
   };
 }
 

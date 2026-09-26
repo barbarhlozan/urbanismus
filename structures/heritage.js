@@ -71,6 +71,7 @@ export const chapel = {
   ...common,
   id: 'chapel',
   name: 'Chapel',
+  blurb: 'Homes and offices nearby grow faster',
   footprint: [[0, 0]],
   levels: [
     {
@@ -103,6 +104,7 @@ export const church = {
   ...common,
   id: 'church',
   name: 'Church',
+  blurb: 'Homes and offices nearby grow faster',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   levels: [
     {
@@ -141,6 +143,7 @@ export const townHall = {
   ...common,
   id: 'town-hall',
   name: 'Town hall',
+  blurb: 'Homes and offices nearby grow faster',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   plot: { props: 'green', boundary: 0.2, kinds: ['hedge'], density: 0.2 },
   levels: [
@@ -188,6 +191,7 @@ export const column = {
   ...common,
   id: 'plague-column',
   name: 'Plague column',
+  blurb: 'Homes and offices nearby grow faster',
   footprint: [[0, 0]],
   plot: { props: 'green', boundary: 0, density: 0.2 },
   levels: [

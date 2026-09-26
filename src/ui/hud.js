@@ -1,14 +1,15 @@
-// Screen furniture: stats (top-left), controls (top-right), toolbar, hint and
-// the active tool's actions (bottom). Toolbar buttons are generated from the
-// registered tools. Tools with a `group` (building categories) sit behind
-// tabs; the rest are always shown. Tapping the stats box folds it away.
+// Screen furniture: stats (top-left), controls (top-right), hint and the
+// active tool's actions (bottom centre), Build menu (bottom-right, see
+// buildMenu.js). Tapping the stats box folds it away.
 
-import { STRUCTURE_TYPES, CATEGORIES, levelOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
+import { BuildMenu } from './buildMenu.js';
 import { mapCode } from '../render/renderer.js';
 
 export class Hud {
-  constructor(root, { world, tools, agents, clock, actions }) {
+  constructor(root, { world, tools, agents, trains, clock, actions }) {
     this.world = world;
+    this.trains = trains;
     this.tools = tools;
     this.agents = agents;
     this.clock = clock;
@@ -26,15 +27,12 @@ export class Hud {
       <div class="bottom">
         <div class="hint"></div>
         <div class="actions hidden"></div>
-        <div class="tabs"></div>
-        <div class="toolbar"></div>
       </div>`);
 
     this.statsEl = root.querySelector('.hud .stats');
     this.trafficEl = root.querySelector('.hud .traffic');
     this.trafficTimer = 0;
     this.hintEl = root.querySelector('.hint');
-    this.toolbarEl = root.querySelector('.toolbar');
     this.pauseBtn = root.querySelector('[data-act="pause"]');
     this.speedBtn = root.querySelector('[data-act="speed"]');
     this.speedVal = this.speedBtn.querySelector('.val');
@@ -62,37 +60,10 @@ export class Hud {
       if (act) actions[act]?.();
     });
 
-    this.tabsEl = root.querySelector('.tabs');
-    this.tabsEl.innerHTML = CATEGORIES.map((c) => `<button data-tab="${c.id}">${c.label}</button>`).join('');
-    this.tabsEl.addEventListener('click', (e) => {
-      const tab = e.target.closest('button')?.dataset.tab;
-      if (tab) this.showTab(tab);
-    });
-
-    this.toolbarEl.innerHTML = tools.list()
-      .filter((t) => t.toolbar !== false)
-      .map((t) => `<button data-tool="${t.id}" data-group="${t.group ?? ''}"><span class="key">${(t.hotkey ?? '').toUpperCase()}</span>${t.label}</button>`)
-      .join('');
-    this.toolbarEl.addEventListener('click', (e) => {
-      const id = e.target.closest('button')?.dataset.tool;
-      if (id) tools.use(id);
-    });
-    tools.onChange((tool) => {
-      if (tool.group) this.showTab(tool.group);
-      for (const b of this.toolbarEl.children) b.classList.toggle('active', b.dataset.tool === tool.id);
-      // on phones the toolbar scrolls sideways: keep the active tool in view
-      this.toolbarEl.querySelector('.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    });
-    this.showTab(CATEGORIES[0].id);
+    this.buildMenu = new BuildMenu(root, tools);
 
     world.events.on('*', () => (this.statsDirty = true));
     this.statsDirty = true;
-  }
-
-  showTab(id) {
-    this.tab = id;
-    for (const b of this.tabsEl.children) b.classList.toggle('active', b.dataset.tab === id);
-    for (const b of this.toolbarEl.children) b.classList.toggle('hidden', !!b.dataset.group && b.dataset.group !== id);
   }
 
   update() {
@@ -118,12 +89,16 @@ export class Hud {
       const count = { walk: 0, cycle: 0, drive: 0 };
       for (const a of this.agents.visible()) count[a.trip.mode === 'stroll' ? 'walk' : a.trip.mode]++;
       const visitors = this.agents.visitorCount();
+      const commute = this.agents.commuterCount();
       const flow = this.agents.flow ?? 1;
       const traffic = !count.drive ? '' : flow > 0.85 ? 'flowing' : flow > 0.55 ? 'busy' : 'jammed';
       const item = (k, v) => `<span>${k}<b>${v}</b></span>`;
       this.trafficEl.innerHTML = item('On foot', count.walk) + item('Cycling', count.cycle) + item('Driving', count.drive)
         + (traffic ? item('Traffic', `${traffic} ${Math.round(flow * 100)}%`) : '')
-        + (visitors ? item('Visitors', visitors) : '');
+        + (visitors ? item('Visitors', visitors) : '')
+        + (commute.inbound ? item('Commuting in', commute.inbound) : '')
+        + (commute.outbound ? item('Working outside', commute.outbound) : '')
+        + (this.trains.count ? item('Trains', this.trains.count) : '');
     }
   }
 
@@ -147,6 +122,7 @@ export class Hud {
       ['Road', world.roads.edgeCount],
       ['Paths', world.paths.edgeCount],
     ];
+    if (world.rails.edgeCount) cells.push(['Rail', world.rails.edgeCount]);
     if (unconnected) cells.push(['No road', unconnected]);
     this.statsEl.innerHTML = cells.map(([k, v]) => `<div class="cell"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
   }

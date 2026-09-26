@@ -4,12 +4,19 @@
 // up automatically.
 //
 // Optional definition fields beyond those documented in residential.js:
-//   category   toolbar tab: 'zone' (default), 'civic' or 'heritage' – see CATEGORIES
+//   category   toolbar group: 'zone' (default), 'transport', 'civic' or 'heritage' – see CATEGORIES
+//   blurb      one line for the Build menu, e.g. 'Homes nearby grow faster'
+//   size       label for the Size button when it shares a tool (default Small / Large)
 //   tags       extra names growth rules and agents can match, e.g. ['park']
 //   access     'road' (default) or 'any' – 'any' also counts a footpath as access
 //   code       short prefix for annotations, e.g. 'R' -> "R-012" (default: first letter)
 //   site       true = fills its lot up to the road and merges with neighbouring
 //              sites; drawings get the area as g.site (parks, squares)
+//   canPlace(world, nodes, rotation) -> { ok, reason }
+//              extra placement rule on top of free ground (stations need track)
+//              When it fails, the build tool also tries the footprint turned
+//              half round on the same dots (World.placementFor).
+//   railStop   true = trains stop here (stations, src/sim/trains.js)
 //   levels[i].coverage   service radius in dots (services)
 //   levels[i].yards      surroundings styles it may get (see yards.js)
 
@@ -18,22 +25,35 @@ import { mulberry32 } from '../src/core/random.js';
 import { YARDS } from './yards.js';
 import residential from './residential.js';
 import business from './business.js';
-import industrial from './industrial.js';
+import industrial, { small as industrialSmall } from './industrial.js';
 import * as park from './park.js';
 import * as square from './square.js';
 import * as services from './services.js';
 import * as heritage from './heritage.js';
+import * as station from './station.js';
 
+// Toolbar groups, in toolbar order. The network tools (road, footpath,
+// railway) join 'transport' too (src/main.js).
 export const CATEGORIES = [
+  { id: 'transport', label: 'Transport' },
   { id: 'zone', label: 'Zones' },
-  { id: 'civic', label: 'Civic' },
-  { id: 'heritage', label: 'Heritage' },
+  { id: 'civic', label: 'Public' },
+  { id: 'heritage', label: 'Landmarks' },
 ];
 
 export const STRUCTURES = [
-  residential, business, industrial,
-  park.small, park.large, square.small, square.large, services.small, services.large,
+  residential, business, industrial, industrialSmall,
+  park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.stop,
   heritage.chapel, heritage.church, heritage.townHall, heritage.column,
+];
+
+// Build menu entries: sizes of the same thing share one tool (S switches,
+// the first is the default). Every structure must be in exactly one.
+export const BUILD_FAMILIES = [
+  [station.station, station.stop],
+  [residential], [business], [industrial, industrialSmall],
+  [park.small, park.large], [square.small, square.large], [services.small, services.large],
+  [heritage.chapel], [heritage.church], [heritage.townHall], [heritage.column],
 ];
 
 export const STRUCTURE_TYPES = Object.fromEntries(STRUCTURES.map((s) => [s.id, s]));

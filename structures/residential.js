@@ -46,6 +46,7 @@ function gableWindow(g, x, y, z, s = 0.035) {
 export default {
   id: 'residential',
   name: 'Residential',
+  blurb: 'Homes',
   hotkey: '1',
   category: 'zone',
   footprint: [[0, 0]],

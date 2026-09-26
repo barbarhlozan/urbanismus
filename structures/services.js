@@ -30,6 +30,7 @@ export const small = {
   ...common,
   id: 'services',
   name: 'Services',
+  blurb: 'Top levels need their coverage',
   hotkey: '8',
   footprint: [[0, 0]],
   levels: [

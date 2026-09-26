@@ -42,6 +42,7 @@ function columns(g, x0, x1, y, h, n) {
 export default {
   id: 'business',
   name: 'Business',
+  blurb: 'Shops and offices · jobs',
   hotkey: '2',
   category: 'zone',
   footprint: [[0, 0]],

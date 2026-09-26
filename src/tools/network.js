@@ -7,7 +7,7 @@
 import { planRoute, validateRoute, BEND } from '../roads/routing.js';
 import { isTouch } from '../ui/device.js';
 
-// options: { kind, label, hotkey, fineGrid, curve (config key), hoverRadius }
+// options: { kind, label, hotkey, group (Build menu group), blurb, fineGrid, curve (config key), hoverRadius }
 export function createNetworkTool({ world, config }, options) {
   const { kind, label, hotkey, fineGrid = false, hoverRadius = 0.32 } = options;
   const layer = world.networks[kind];
@@ -38,6 +38,8 @@ export function createNetworkTool({ world, config }, options) {
 
   return {
     id: kind,
+    group: options.group,
+    blurb: options.blurb ?? '',
     label,
     hotkey,
     fineGrid,
@@ -91,14 +93,15 @@ export function createNetworkTool({ world, config }, options) {
 
     hint() {
       if (isTouch()) {
-        if (start < 0) return `Tap a dot to start a ${noun} · draw along a road to give it sidewalks`;
+        if (start < 0) return `Tap a dot to start a ${noun}${kind === 'path' ? ' · draw along a road to give it sidewalks' : ''}`;
         const plan = currentPlan();
         if (!plan) return 'Tap where it should end';
         return plan.check.ok ? 'Tap again to build' : plan.check.reason;
       }
       if (start < 0) {
         const nearRoad = kind === 'path' && hover >= 0 && nearAnyRoad(hover);
-        return nearRoad ? 'Draw along a road to give it sidewalks' : `Click a dot to start a ${noun}`;
+        if (nearRoad) return 'Draw along a road to give it sidewalks';
+        return kind === 'rail' ? 'Click a dot to start a railway · run it off the map edge for trains' : `Click a dot to start a ${noun}`;
       }
       const plan = currentPlan();
       const status = plan && !plan.check.ok ? `${plan.check.reason} · ` : sidewalkNote(plan);

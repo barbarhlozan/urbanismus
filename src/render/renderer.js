@@ -11,8 +11,11 @@
 //              (lawns, paving, parking lines); built together with objects
 //   markers  – ground indicators (unconnected buildings…)
 //   paths    – footpaths
-//   roads    – roads + driveways (for buildings without surroundings)
+//   rails    – railways: the map symbol, a solid line with dashes inside
+//   roads    – roads + driveways (for buildings without surroundings);
+//              over the railways, so level crossings read as road
 //   parked   – parked cars (hollow squares) in parking lots
+//   trains   – carriages (squares) coupled by a line
 //   agents   – moving dots; sit under objects so buildings hide them correctly
 //   objects  – structures + features, depth sorted together
 //   overlay  – tool previews, hover
@@ -29,7 +32,7 @@
 import { THEME } from '../theme.js';
 import { STYLE } from './style.js';
 import { Painter } from './painter.js';
-import { networkPolylines, streetKerbs } from '../roads/geometry.js';
+import { networkPolylines, streetKerbs, railLines } from '../roads/geometry.js';
 import { STRUCTURE_TYPES, levelOf, drawSeed, yardOf, joinSides } from '../../structures/index.js';
 import { YARDS } from '../../structures/yards.js';
 import { drawPlot } from '../../structures/plots.js';
@@ -40,7 +43,7 @@ import { densify } from './warp.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { ELEVATION, makeElevation, contours } from '../terrain/elevation.js';
 
-const LAYERS = ['terrain', 'frame', 'grid', 'subgrid', 'lots', 'markers', 'paths', 'roads', 'parked', 'agents', 'objects', 'overlay'];
+const LAYERS = ['terrain', 'frame', 'grid', 'subgrid', 'lots', 'markers', 'paths', 'rails', 'roads', 'parked', 'trains', 'agents', 'objects', 'overlay'];
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
 // redrawn, and how far past each window edge the map is drawn.
@@ -56,7 +59,7 @@ const STRUCTURE_PAD = 0.45;
 const FEATURE_PAD = 0.4; // forest trees stand in clumps around their dot
 
 export class Renderer {
-  constructor(svg, ground, { world, camera, agents, parking, config }) {
+  constructor(svg, ground, { world, camera, agents, trains, parking, config }) {
     this.svg = svg;
     this.ground = ground;
     this.parking = parking;
@@ -65,6 +68,8 @@ export class Renderer {
     this.agents = agents;
     this.config = config;
     this.agentEls = new Map();
+    this.trains = trains;
+    this.trainEls = new Map();
     this.lastOverlay = null;
     this.objs = new Map();       // key ('s12' / 'f7') -> { g, lg, bounds }
     this.objsDirty = new Set();  // keys to redraw
@@ -101,14 +106,15 @@ export class Renderer {
     for (const type of ['feature:added', 'feature:removed']) world.events.on(type, (f) => this.objsDirty.add(`f${f.id}`));
     on('roads:changed', 'roads', 'markers');
     on('paths:changed', 'paths', 'markers');
-    for (const type of ['roads:changed', 'paths:changed']) {
+    on('rails:changed', 'rails');
+    for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
       world.events.on(type, (e) => {
         if (e?.nodes) this.touchAround(e.nodes.map((n) => e.layer.pos(n)), 2); // curves reach further
         else this.objsAll = true;
       });
     }
     on('parking:changed', 'parked');
-    on('terrain:changed', 'terrain', 'grid', 'subgrid', 'paths', 'roads', 'markers');
+    on('terrain:changed', 'terrain', 'grid', 'subgrid', 'paths', 'rails', 'roads', 'markers');
     world.events.on('terrain:changed', () => {
       this.objsAll = true;
       this.contourLines = null; // water breaks them
@@ -150,10 +156,14 @@ export class Renderer {
     for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
     this.dirty.clear();
     if (this.objsAll || this.objsDirty.size) this.renderObjects();
-    if (this.showAgents) this.renderAgents();
-    else if (this.agentEls.size) {
-      this.agentEls.forEach((el) => el.remove());
-      this.agentEls.clear();
+    if (this.showAgents) {
+      this.renderAgents();
+      this.renderTrains();
+    } else {
+      for (const els of [this.agentEls, this.trainEls]) {
+        els.forEach((el) => el.remove());
+        els.clear();
+      }
     }
     if (overlaySVG !== this.lastOverlay) {
       this.layers.overlay.innerHTML = overlaySVG;
@@ -304,6 +314,16 @@ export class Renderer {
   renderPaths() {
     const d = this.pathData(networkPolylines(this.world.networks.path, this.config.path));
     this.layers.paths.innerHTML = d ? `<path class="footpath" d="${d}"/>` : '';
+  }
+
+  renderRails() {
+    const { world } = this;
+    const { lines, fades, buffers } = railLines(world.networks.rail, this.config.rail, world.railExits());
+    const d = this.pathData(lines);
+    const path = (data, cls) => (data ? `<path class="${cls}" d="${data}"/>` : '');
+    this.layers.rails.innerHTML =
+      path(this.pathData(fades), 'rail-exit') + path(this.pathData(buffers), 'rail-buffer') +
+      path(d, 'rail') + path(d, 'rail-dash');
   }
 
   renderRoads() {
@@ -636,6 +656,44 @@ export class Renderer {
       maxY = Math.max(maxY, ry + pad);
     }
     return { minX, maxX, minY, maxY };
+  }
+
+  // Trains: a filled square per carriage, coupled by a line; lowered
+  // barriers across roads at closed level crossings. Carriages beyond
+  // where the exits fade out are left out.
+  renderTrains() {
+    const bars = this.pathData(this.trains.barriers());
+    if (bars !== this.lastBarriers) {
+      this.lastBarriers = bars;
+      this.barrierEl ??= this.layers.trains.appendChild(document.createElementNS(SVGNS, 'path'));
+      this.barrierEl.setAttribute('class', 'barrier');
+      this.barrierEl.setAttribute('d', bars);
+    }
+    const { grid } = this.world;
+    const r = THEME.carriageRadius;
+    const m = 1.9;
+    const onMap = ([x, y]) => x > -m && y > -m && x < grid.width - 1 + m && y < grid.height - 1 + m;
+    const seen = new Set();
+    for (const t of this.trains.visible()) {
+      seen.add(t.id);
+      let el = this.trainEls.get(t.id);
+      if (!el) {
+        el = document.createElementNS(SVGNS, 'path');
+        el.setAttribute('class', 'train');
+        this.layers.trains.appendChild(el);
+        this.trainEls.set(t.id, el);
+      }
+      const pts = t.points.filter(onMap).map(([x, y]) => this.project(x, y, 0.04));
+      let d = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x)} ${r2(y)}`).join('');
+      for (const [x, y] of pts) d += rect(x - r, y - r, 2 * r, 2 * r);
+      el.setAttribute('d', d);
+    }
+    for (const [id, el] of this.trainEls) {
+      if (!seen.has(id)) {
+        el.remove();
+        this.trainEls.delete(id);
+      }
+    }
   }
 
   renderAgents() {

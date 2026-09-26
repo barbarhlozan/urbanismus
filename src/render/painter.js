@@ -14,10 +14,12 @@
 //   g.roofed(x, y, z, w, d, h, roof, opts)   block with a hip / gable / pyramid /
 //                                            mansard / flat roof (see the method)
 //   g.lathe(x, y, z, [[r, h]…], sides, opts) solid of revolution (domes, spires, towers)
+//   g.vault(x, y, z, w, d, h, rise, segs, opts) block with a barrel-vault roof (opts.alongY)
 //   g.face([[x,y,z]…], opts)                 single polygon, CCW seen from outside
 //   g.line([[x,y,z]…], opts)                 polyline; opts.facing = normal to hide it with its wall
 //   g.disc(x, y, z, r, opts)                 screen-facing circle (e.g. tree crowns)
 //   g.shape(x, y, z, [[u,v]…], opts)         screen-facing polygon, u right / v up, in grid units
+//                                            (opts.smooth: a rounded outline through the points' midpoints)
 //   g.strokes(x, y, z, [[[u,v]…]…], opts)    screen-facing polylines (one <path>), e.g. tree glyphs
 //   g.strokeGroups([{x, y, z, lines}…], opts) the same for several anchors, still one <path>
 //   g.solid(x, y, z)                         start a new depth-sorted group manually
@@ -425,6 +427,36 @@ export class Painter {
     return this;
   }
 
+  // Block with a barrel-vault roof (arched halls, hangars): the arch spans
+  // across the block, rising `rise` above the walls, and runs along x
+  // (or along y with opts.alongY). `segs` facets make the curve.
+  vault(x, y, z, w, d, h, rise, segs = 6, opts = {}) {
+    const alongY = !!opts.alongY;
+    const L = alongY ? d : w, D = alongY ? w : d;
+    const P = alongY ? (u, v, zz) => [x + v, y + u, zz] : (u, v, zz) => [x + u, y + v, zz];
+    const face = (pts) => {
+      const out = pts.map(([u, v, zz]) => P(u, v, zz));
+      this.face(alongY ? out.reverse() : out, opts);
+    };
+    const zt = z + h;
+    this._grow([[x, y], [x + w, y + d]]);
+    this.solid(x + w / 2, y + d / 2, z + (h + rise) / 2);
+    this._walls([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, zt, opts);
+    // arch profile across v: points (v, z) from v = 0 to v = D
+    const arch = [];
+    for (let i = 0; i <= segs; i++) {
+      const a = Math.PI * (i / segs);
+      arch.push([D / 2 - Math.cos(a) * (D / 2), zt + Math.sin(a) * rise]);
+    }
+    for (let i = 0; i < segs; i++) {
+      const [va, za] = arch[i], [vb, zb] = arch[i + 1];
+      face([[0, va, za], [L, va, za], [L, vb, zb], [0, vb, zb]]);
+    }
+    face(arch.map(([v, zz]) => [0, v, zz]));           // end at u = 0
+    face(arch.map(([v, zz]) => [L, v, zz]).reverse()); // end at u = L
+    return this;
+  }
+
   // ----- ground -----
 
   groundLine(points, opts = {}) {
@@ -505,8 +537,16 @@ export class Painter {
     this._ensure(x, y, z);
     const [sx, sy] = this.camera.project(...this._world(x, y, z));
     const t = this.camera.tile;
-    const pts = points.map(([u, v]) => `${r2(sx + u * t)},${r2(sy - v * t)}`).join(' ');
-    this.current.parts.push(`<polygon points="${pts}"${attrs(opts, this._lod(opts))}/>`);
+    const p = points.map(([u, v]) => [r2(sx + u * t), r2(sy - v * t)]);
+    if (!opts.smooth) {
+      this.current.parts.push(`<polygon points="${p.map((q) => q.join(',')).join(' ')}"${attrs(opts, this._lod(opts))}/>`);
+      return this;
+    }
+    // quadratic curves from midpoint to midpoint, each point a control point
+    const mid = (a, b) => [r2((a[0] + b[0]) / 2), r2((a[1] + b[1]) / 2)];
+    let d = `M${mid(p[p.length - 1], p[0]).join(' ')}`;
+    for (let i = 0; i < p.length; i++) d += `Q${p[i].join(' ')} ${mid(p[i], p[(i + 1) % p.length]).join(' ')}`;
+    this.current.parts.push(`<path d="${d}Z"${attrs(opts, this._lod(opts), 'filled')}/>`);
     return this;
   }
 

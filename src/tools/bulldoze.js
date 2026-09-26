@@ -1,5 +1,5 @@
 // Removes whatever is under the pointer: building, then footpath, then a
-// street's sidewalks, then road, then trees. Snaps to the dense grid so footpaths between buildings can be hit.
+// street's sidewalks, then road, then railway, then trees. Snaps to the dense grid so footpaths between buildings can be hit.
 
 import { isTouch } from '../ui/device.js';
 
@@ -20,6 +20,7 @@ export function createBulldozeTool({ world }) {
     const sidewalks = world.hasRoad(node) ? world.sidewalksAt(node) : [];
     if (sidewalks.length) return { at: world.grid.xy(node), size: 0.2, run: () => world.setSidewalks(sidewalks, false) };
     if (world.hasRoad(node)) return { at: world.grid.xy(node), size: 0.2, run: () => world.removeRoadAt(node) };
+    if (world.hasRail(node)) return { at: world.grid.xy(node), size: 0.2, run: () => world.removeNetworkAt('rail', node) };
     const f = world.featureAt(node);
     if (f) return { at: world.grid.xy(node), size: 0.2, run: () => world.removeFeature(f.id) };
     return null;
@@ -29,6 +30,7 @@ export function createBulldozeTool({ world }) {
     id: 'bulldoze',
     label: 'Demolish',
     hotkey: 'x',
+    blurb: 'Buildings, paths, roads, trees',
     touchConfirm: true,
 
     snap(x, y) {
@@ -38,7 +40,7 @@ export function createBulldozeTool({ world }) {
 
     hint: () => isTouch()
       ? 'Tap to pick what to remove, tap again to remove it'
-      : 'Click to remove a building, footpath, sidewalks, road dot or tree · right-click to stop',
+      : 'Click to remove a building, footpath, sidewalks, road or railway dot, or tree · right-click to stop',
 
     click() {
       target()?.run();

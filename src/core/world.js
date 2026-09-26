@@ -3,7 +3,7 @@
 // Everything here is plain data and round-trips through toJSON/fromJSON.
 //
 // Two grids:
-//   grid – the main dots (buildings, roads)
+//   grid – the main dots (buildings, roads, railways)
 //   fine – twice as dense (footpaths). Fine node (2x, 2y) sits on main dot (x, y).
 
 import { EventBus } from './events.js';
@@ -39,8 +39,21 @@ export class World {
         grid: this.grid,
         scale: 1,
         isBlocked: (n) => this.isRoadBlocked(n),
+        conflicts: (a, b) => this.rails.hasEdge(a, b),
         coarseOf: (n) => n,
         event: 'roads:changed',
+      }),
+      // Railways cross roads on a shared dot (a level crossing) but never
+      // share a segment with one.
+      rail: new NetworkLayer({
+        id: 'rail',
+        grid: this.grid,
+        scale: 1,
+        isBlocked: (n) => this.isRoadBlocked(n),
+        conflicts: (a, b) => this.roads.hasEdge(a, b),
+        maxTurn: Math.PI / 4,
+        coarseOf: (n) => n,
+        event: 'rails:changed',
       }),
       path: new NetworkLayer({
         id: 'path',
@@ -59,6 +72,10 @@ export class World {
 
   get paths() {
     return this.networks.path.graph;
+  }
+
+  get rails() {
+    return this.networks.rail.graph;
   }
 
   // ---------- fine grid ----------
@@ -118,6 +135,10 @@ export class World {
     return this.roads.hasNode(node);
   }
 
+  hasRail(node) {
+    return this.rails.hasNode(node);
+  }
+
   footprintNodes(type, node, rotation = 0) {
     return footprintOffsets(STRUCTURE_TYPES[type], rotation).map(([dx, dy]) => this.grid.offset(node, dx, dy));
   }
@@ -151,7 +172,31 @@ export class World {
     return ids[0] !== undefined && ids.every((id) => id === ids[0]);
   }
 
+  // Free ground for the footprint, plus the type's own rule (def.canPlace,
+  // e.g. a station needs track alongside).
   canPlaceStructure(type, node, rotation = 0, ignoreId = null) {
+    const fits = this.fitsStructure(type, node, rotation, ignoreId);
+    const rule = STRUCTURE_TYPES[type]?.canPlace;
+    return fits.ok && rule ? rule(this, this.footprintNodes(type, node, rotation), rotation) : fits;
+  }
+
+  // Where to put a structure the player points at: as asked, or – for types
+  // with their own rule (a station must face its track) – turned half round
+  // over the same dots if only that fits. { node, rotation, check }.
+  placementFor(type, node, rotation = 0) {
+    const check = this.canPlaceStructure(type, node, rotation);
+    if (check.ok || !STRUCTURE_TYPES[type]?.canPlace || node < 0) return { node, rotation, check };
+    const offs = footprintOffsets(STRUCTURE_TYPES[type], rotation);
+    const [sx, sy] = [0, 1].map((k) => Math.min(...offs.map((o) => o[k])) + Math.max(...offs.map((o) => o[k])));
+    const flipped = this.grid.offset(node, sx, sy);
+    const turned = (rotation + 2) % 4;
+    if (flipped >= 0 && this.canPlaceStructure(type, flipped, turned).ok) {
+      return { node: flipped, rotation: turned, check: { ok: true } };
+    }
+    return { node, rotation, check };
+  }
+
+  fitsStructure(type, node, rotation = 0, ignoreId = null) {
     if (!STRUCTURE_TYPES[type]) return { ok: false, reason: 'Unknown type' };
     if (node < 0) return { ok: false, reason: 'Off the map' };
     const nodes = this.footprintNodes(type, node, rotation);
@@ -161,6 +206,7 @@ export class World {
       const sid = this.structureAtNode.get(n);
       if (sid !== undefined && sid !== ignoreId) return { ok: false, reason: 'Occupied' };
       if (this.hasRoad(n)) return { ok: false, reason: 'Road' };
+      if (this.hasRail(n)) return { ok: false, reason: 'Railway' };
       const f = this.featureAt(n);
       if (f && FEATURE_TYPES[f.type]?.clearable === false) return { ok: false, reason: 'Blocked' };
     }
@@ -270,15 +316,29 @@ export class World {
   roadExits() {
     const layer = this.networks.road;
     if (this._exits?.version === layer.version) return this._exits.list;
+    const list = this.edgeExits(this.roads);
+    this._exits = { version: layer.version, list };
+    return list;
+  }
+
+  // Railways that run off the map edge, like roadExits().
+  railExits() {
+    const layer = this.networks.rail;
+    if (this._railExits?.version === layer.version) return this._railExits.list;
+    const list = this.edgeExits(this.rails);
+    this._railExits = { version: layer.version, list };
+    return list;
+  }
+
+  edgeExits(graph) {
     const { width, height } = this.grid;
     const list = [];
-    for (const n of this.roads.nodes()) {
-      if (this.roads.degree(n) !== 1) continue;
+    for (const n of graph.nodes()) {
+      if (graph.degree(n) !== 1) continue;
       const [x, y] = this.grid.xy(n);
       const dir = x === 0 ? [-1, 0] : x === width - 1 ? [1, 0] : y === 0 ? [0, -1] : y === height - 1 ? [0, 1] : null;
       if (dir) list.push({ node: n, dir });
     }
-    this._exits = { version: layer.version, list };
     return list;
   }
 
@@ -585,8 +645,14 @@ export class World {
       s.level ??= 1;
       s.seed ??= Math.imul(s.id, 2654435761) >>> 0;
       s.data ??= {};
+      // Stations saved facing away from their track: turn them round.
+      const rule = STRUCTURE_TYPES[s.type].canPlace;
+      if (rule && !rule(world, world.footprintNodes(s.type, s.node, s.rotation), s.rotation).ok) {
+        const at = world.placementFor(s.type, s.node, s.rotation);
+        if (at.check.ok) [s.node, s.rotation] = [at.node, at.rotation];
+      }
       // Footprints may have grown since the save was made; skip what no longer fits.
-      if (world.canPlaceStructure(s.type, s.node, s.rotation).ok) world._insertStructure(s);
+      if (world.fitsStructure(s.type, s.node, s.rotation).ok) world._insertStructure(s);
       else console.warn(`Dropped ${s.type} #${s.id}: no longer fits`);
     }
     for (const f of data.features) {
