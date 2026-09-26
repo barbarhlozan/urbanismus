@@ -5,7 +5,7 @@
 // brutalist towers with a heavy crown.
 // Front (shop window, entrance) is the -y side.
 
-import { door, panel, frontage, shared, hips, aerials, flagpole } from './kit.js';
+import { door, panel, frontage, shared, hips, aerials, flagpole, star } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -16,16 +16,6 @@ function roofSign(g, cx, y, z, w = 0.3) {
     g.solid(cx, y, z + 0.02);
     for (const k of [-0.35, 0.35]) g.line([[cx + w * k, y + 0.012, z], [cx + w * k, y + 0.012, z + 0.04]]);
   });
-}
-
-// Five-pointed star, facing the screen.
-function star(g, x, y, z, r = 0.04) {
-  const pts = [];
-  for (let i = 0; i < 10; i++) {
-    const a = Math.PI / 2 + (i * Math.PI) / 5, k = i % 2 ? 0.45 : 1;
-    pts.push([Math.cos(a) * r * k, Math.sin(a) * r * k]);
-  }
-  g.shape(x, y, z, pts);
 }
 
 // Columns in front of the facade (portico), from x0 to x1 at depth y.
@@ -41,6 +31,7 @@ function columns(g, x0, x1, y, h, n) {
 
 export default {
   id: 'business',
+  access: 'any', // a footpath will do: people walk or cycle
   name: 'Business',
   blurb: 'Shops and offices · jobs',
   hotkey: '2',

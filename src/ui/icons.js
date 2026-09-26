@@ -69,7 +69,8 @@ function fit(inner) {
 const LINES = {
   road: '<path class="i-road" d="M4 22 L16 15 L28 22"/>',
   path: '<path class="i-path" d="M4 22 L16 15 L28 22"/>',
-  rail: '<path class="i-rail" d="M4 20 L28 6 M4 26 L28 12"/><path class="i-sleeper" d="M7 16 L9 21 M12 13 L14 18 M17 10 L19 15 M22 7 L24 12"/>',
+  // the map symbol: a solid line with dashes of the background inside
+  rail: '<path class="i-rail" d="M4 22 L16 15 L28 22"/><path class="i-rail-dash" d="M4 22 L16 15 L28 22"/>',
   // an eraser, tilted, with its rubber tip and the smudge it leaves
   bulldoze: '<path class="i-eraser" d="M6 22 L20.1 7.9 L26.5 14.3 L12.4 28.4 Z M10.9 17.1 L17.3 23.5"/><path class="i-smudge" d="M16 29 H28"/>',
 };

@@ -15,8 +15,8 @@ Then open http://localhost:8173. The city saves itself in the browser; **New map
 Everything you can build is in the **Build** menu, bottom right: Transport, Zones, Public and
 Landmarks, plus Erase. Open a group to see its tools; click a tool to pick it up and click it
 again (or close its group, or **Esc**) to put it down. The **–** folds the menu into a single
-Build button. Things that come in two sizes (parks, squares, services, industry, station / stop)
-are one tool with a **Size** button (**S**). While a tool is in hand, its options (size, rotate,
+Build button. Things that come in two sizes or kinds (parks, squares, services, industry,
+station / stop, plague column / memorial) are one tool with a **Size** button (**S**). While a tool is in hand, its options (size, rotate,
 another look, bend…) are buttons above the bottom edge.
 
 - **Click the map** – menu for the nearest dot (build, road from here, remove); the dots
@@ -38,10 +38,12 @@ another look, bend…) are buttons above the bottom edge.
   map. With a road behind, a station gets a forecourt (or parking) towards it.
 - **1 2 3** – residential / business / industrial (**Tab** rotates, **C** tries another look)
 - **I** – small (1×1) industry (the industry tool's small size)
+- **M** – coal mine (pit → colliery → deep mine), **J** – farm (farmstead → JZD → cooperative)
 - **4–9** – parks, squares, services, small and large (**S** switches size)
 - **X** – erase
-- **V / Esc / right-click** – back to select; **right-click** with nothing in hand opens the
-  Build menu with the last thing you built picked up again
+- **V / Esc / right-click** – back to select; **right-click** with nothing in hand picks up
+  what's under the pointer (same building, size and rotation, or the road / railway /
+  footpath) to build more of it
 - **Middle click** – same as **Tab** (rotate what you're placing, flip a line's bend)
 - **Drag / wheel** – pan / zoom, **Q / E** – rotate view
 - **Space** – pause, **T** – speed, **Terrain** button – contour lines (off by default,
@@ -54,11 +56,21 @@ folded there and folds again once you pick a tool.
 
 - Buildings have three levels and grow on their own when their surroundings are right
   (enough neighbours, a park nearby, service coverage…). Click one to see what it's missing.
+- Not everything needs a road. Homes, shops and offices, services, landmarks and the
+  cemetery do fine with just a footpath within a dot and a half: their people walk or
+  cycle, and they face the footpath. Industry, mines, farms and stations still need a road.
+  Buildings without a road keep their surroundings (gardens, trees, a plaza) but never get a
+  car park or garages.
 - Neighbouring apartments and shops facing the same road often share a wall and form a
   street front; panel blocks join into one long block built in sections.
-- The **Landmarks** group has a chapel, a church, a town hall and a plague column. They make
-  nearby apartments and offices grow faster, and a church sometimes appears by itself in a
-  big enough neighbourhood without one.
+- The **Landmarks** group has the old town (a chapel, a church, a town hall, a plague column or
+  war memorial, a gate tower, a castle) and the new one (a house of culture, a stadium or Sokol
+  hall, and a TV tower or lookout, which only goes on a hilltop). They make nearby apartments
+  and offices grow faster, and a church sometimes appears by itself in a big enough
+  neighbourhood without one.
+- **Public** also has a cemetery. Parks
+  and squares have era layouts among their looks: a koupaliště, a summer cinema, a sports
+  ground, a forest park with a lookout, a shopping precinct, a bus station, a parade square.
 - Each building gets a random seed, so it always looks the same, but **C** / **Change look**
   rerolls it.
 - People walk, cycle or drive, depending on distance. Cyclists use footpaths and roads and take

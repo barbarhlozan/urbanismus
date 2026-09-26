@@ -1,5 +1,6 @@
 // Heritage: old landmarks the town grew around – a wayside chapel, a
-// baroque church, a town hall with a clock tower, a plague column. They
+// baroque church, a town hall with a clock tower, a plague column, a war
+// memorial, a gate tower left from the town walls, a castle (ruin, castle or chateau). They
 // don't develop (one level each); they draw visitors and strollers, and
 // make nearby apartments and offices grow faster (tag 'heritage').
 // A church can also appear by itself in a grown neighbourhood without one
@@ -7,7 +8,7 @@
 //
 // 2×2 ones: local area covers x, y from about -0.4 to 1.4, front on -y.
 
-import { door, panel, paving } from './kit.js';
+import { door, panel, paving, star, flagpole, flowerBed, tree, fountain, heap, roundWindows, FRAME, outward } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -60,6 +61,7 @@ function clockFaces(g, x, y, t, z, r = 0.055) {
 }
 
 const common = {
+  access: 'any', // a footpath will do
   category: 'heritage',
   tags: ['heritage'],
   code: 'H',
@@ -191,6 +193,7 @@ export const column = {
   ...common,
   id: 'plague-column',
   name: 'Plague column',
+  size: 'Plague column',
   blurb: 'Homes and offices nearby grow faster',
   footprint: [[0, 0]],
   plot: { props: 'green', boundary: 0, density: 0.2 },
@@ -212,6 +215,287 @@ export const column = {
             g.lathe(x, y, 0.04, [[0.018, 0], [0.02, 0.05], [0.01, 0.08], [0, 0.09]], 5);
           }
         });
+      },
+    },
+  ],
+};
+
+// ----- memorials, town gates, castles -----
+
+// A little figure on a pedestal top at z: body, head (and a rifle).
+function figure(g, x, y, z, s = 1) {
+  g.lathe(x, y, z, [[0.022 * s, 0], [0.02 * s, 0.07 * s], [0.012 * s, 0.085 * s], [0.014 * s, 0.1 * s], [0, 0.115 * s]], 6);
+  g.detailed(2, () => g.line([[x + 0.025 * s, y, z], [x + 0.03 * s, y, z + 0.13 * s]]));
+}
+
+// A tank on its plinth top at z, gun pointing along -x and up a little.
+function tankOn(g, x, y, z) {
+  g.box(x - 0.12, y - 0.055, z, 0.24, 0.11, 0.035);            // tracks and hull
+  g.box(x - 0.1, y - 0.045, z + 0.035, 0.2, 0.09, 0.025);
+  g.cylinder(x + 0.01, y, z + 0.06, 0.04, 0.03, 8);            // turret
+  g.detailed(1, () => g.line([[x - 0.03, y, z + 0.075], [x - 0.17, y, z + 0.09]], { width: 2 }));
+}
+
+export const memorial = {
+  ...common,
+  id: 'memorial',
+  name: 'Memorial',
+  size: 'Memorial',
+  blurb: 'Homes and offices nearby grow faster',
+  footprint: [[0, 0]],
+  plot: { props: 'green', boundary: 0, density: 0.3 },
+  levels: [
+    {
+      name: 'Memorial',
+      stats: {},
+      agents: 0,
+      yards: ['plaza', 'trees'],
+      draw(g) {
+        const kind = g.pick(['soldier', 'tank', 'pylon']);
+        if (kind === 'tank') {
+          // liberation memorial: a tank on a tall plinth, flowers below
+          g.box(-0.24, -0.14, 0, 0.48, 0.28, 0.03);
+          g.box(-0.18, -0.09, 0.03, 0.36, 0.18, 0.2);
+          panel(g, -0.1, 0.1, -0.09, 0.07, 0.15);
+          tankOn(g, 0, 0, 0.23);
+          flowerBed(g, -0.2, -0.26, 0.05);
+          flowerBed(g, 0.2, -0.26, 0.05);
+          return;
+        }
+        if (kind === 'pylon') {
+          // 50s memorial: a tapering pylon with a star, an eternal flame, two flags
+          g.box(-0.22, -0.22, 0, 0.44, 0.44, 0.025);
+          g.box(-0.15, -0.15, 0.025, 0.3, 0.3, 0.025);
+          g.lathe(0, 0.03, 0.05, [[0.07, 0], [0.035, 0.62], [0, 0.66]], 4, { phase: 0.5 });
+          star(g, 0, 0.03, 0.78, 0.05);
+          g.lathe(0, -0.1, 0.05, [[0.012, 0], [0.012, 0.03], [0.03, 0.05], [0.03, 0.055]], 6); // flame bowl
+          flagpole(g, -0.28, -0.1, 0.42);
+          flagpole(g, 0.28, -0.1, 0.42);
+          return;
+        }
+        // WWI memorial: a soldier on a stone pedestal inside a chain fence
+        g.box(-0.15, -0.15, 0, 0.3, 0.3, 0.03);
+        g.box(-0.08, -0.08, 0.03, 0.16, 0.16, 0.22);
+        panel(g, -0.05, 0.05, -0.08, 0.08, 0.18);
+        figure(g, 0, 0, 0.25, 1.3);
+        g.detailed(2, () => {
+          const c = 0.2, pts = [[-c, -c], [c, -c], [c, c], [-c, c], [-c, -c]];
+          g.solid(0, -c, 0.02);
+          for (const [px, py] of pts.slice(0, 4)) g.line([[px, py, 0], [px, py, 0.05]]);
+          for (let i = 0; i < 4; i++) {
+            const [a, b] = [pts[i], pts[i + 1]];
+            g.line([[a[0], a[1], 0.045], [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0.03], [b[0], b[1], 0.045]]);
+          }
+        });
+        for (const [x, y] of [[-0.28, 0.26], [0.28, 0.26]]) tree(g, x, y, 0.8, 'spruce');
+      },
+    },
+  ],
+};
+
+// Curtain wall with battlements between two points on one axis, d thick,
+// built in short pieces so each sorts in depth with what stands beside it.
+function curtain(g, [x0, y0], [x1, y1], h, d = 0.07) {
+  const alongX = y0 === y1, len = alongX ? x1 - x0 : y1 - y0;
+  const n = Math.max(1, Math.round(Math.abs(len) / 0.3));
+  for (let i = 0; i < n; i++) {
+    const a = (alongX ? x0 : y0) + (len * i) / n, b = a + len / n;
+    const [u0, u1] = [Math.min(a, b), Math.max(a, b)];
+    const box = (v0, v1, z, hh) => (alongX
+      ? g.box(v0, y0 - d / 2, z, v1 - v0, d, hh)
+      : g.box(x0 - d / 2, v0, z, d, v1 - v0, hh));
+    box(u0, u1, 0, h);
+    // battlements: a notched parapet on both faces of the wall, merlons
+    // and gaps about 0.035 wide, part of the same piece
+    g.detailed(1, () => {
+      const m = Math.max(3, Math.round((u1 - u0) / 0.035) | 1), c = 0.03;
+      const prof = [[u0, h]];
+      for (let k = 0; k < m; k++) {
+        const za = k % 2 ? h : h + c, t0 = u0 + ((u1 - u0) * k) / m, t1 = u0 + ((u1 - u0) * (k + 1)) / m;
+        prof.push([t0, za], [t1, za]);
+      }
+      prof.push([u1, h]);
+      for (const side of [-1, 1]) {
+        const pts = prof.map(([u, z]) => (alongX ? [u, y0 + (side * d) / 2, z] : [x0 + (side * d) / 2, u, z]));
+        const c3 = alongX ? [(u0 + u1) / 2, y0, h] : [x0, (u0 + u1) / 2, h];
+        g.face(outward(pts, c3));
+      }
+    });
+  }
+}
+
+export const townGate = {
+  ...common,
+  id: 'town-gate',
+  name: 'Gate tower',
+  blurb: 'Homes and offices nearby grow faster',
+  footprint: [[0, 0]],
+  plot: { props: 'green', boundary: 0, density: 0.2 },
+  levels: [
+    {
+      name: 'Gate tower',
+      stats: {},
+      agents: 0,
+      yards: ['plaza'],
+      draw(g) {
+        // a gothic or baroque gate tower standing on its own, the town
+        // walls long gone
+        const t = 0.15, h = g.range(0.72, 0.85);
+        g.box(-t, -t, 0, 2 * t, 2 * t, h);
+        g.windows(-t, -t, 2 * t, 2 * t, 0.3, h - 0.05, 0.14, 0.1, { w: 0.3, h: 0.55 });
+        // the gateway, front and back
+        for (const [y, n] of [[-t, [0, -1, 0]], [t, [0, 1, 0]]]) {
+          g.line([[-0.07, y, 0], [-0.07, y, 0.13], [-0.04, y, 0.18], [0, y, 0.2], [0.04, y, 0.18], [0.07, y, 0.13], [0.07, y, 0]], { facing: n, lod: 1 });
+        }
+        if (g.chance(0.6)) {
+          // gothic: a gallery, a steep spire and four corner pinnacles
+          g.box(-t - 0.02, -t - 0.02, h, 2 * t + 0.04, 2 * t + 0.04, 0.03);
+          spire(g, 0, 0, h + 0.03, t * 0.95, 0.5);
+          g.detailed(1, () => {
+            for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+              g.lathe(sx * t, sy * t, h + 0.03, [[0.022, 0], [0, 0.14]], 4, { phase: 0.5 });
+            }
+          });
+        } else {
+          // baroque: hipped roof with an onion
+          g.roofed(-t, -t, h, 2 * t, 2 * t, 0, { h: 0.12, hip: t });
+          onion(g, 0, 0, h + 0.12, t * 0.5);
+        }
+      },
+    },
+  ],
+};
+
+// Round tower (a castle keep): a smooth shaft on a battered plinth, rows
+// of small windows, and on top either a corbelled parapet under a hatched
+// cone roof ('cone'), battlements ('crenel') or broken masonry ('broken').
+// Returns the height of its walls.
+function roundTower(g, x, y, r, h, roof = 'cone') {
+  g.lathe(x, y, 0, [[r * 1.08, 0], [r, 0.08], [r, h]], 24, { smooth: true, rings: [1] });
+  g.detailed(1, () => roundWindows(g, x, y, r, 0.22, h - 0.1, 0.18, 5, { phase: g.random() }));
+  if (roof === 'broken') {
+    // the top crumbled away: stumps of the parapet round the rim
+    g.detailed(1, () => {
+      for (let i = 0; i < 12; i++) {
+        if (g.chance(0.4)) continue;
+        const a = (i / 12) * Math.PI * 2, s = 0.035;
+        g.box(x + Math.cos(a) * r * 0.86 - s / 2, y + Math.sin(a) * r * 0.86 - s / 2, h, s, s, g.range(0.015, 0.07));
+      }
+    });
+    return h;
+  }
+  // corbelled parapet, a little wider than the shaft
+  const R = r * 1.14;
+  g.lathe(x, y, h, [[r, 0], [R, 0.035], [R, 0.1]], 24, { smooth: true, rings: [1] });
+  if (roof === 'cone') {
+    g.lathe(x, y, h + 0.1, [[R * 1.1, 0], [R * 0.86, 0.05], [0, r * 2.7]], 24, { smooth: true, hatch: [0, 1] });
+    g.detailed(1, () => g.line([[x, y, h + 0.1 + r * 2.7], [x, y, h + 0.1 + r * 2.7 + 0.06]], FRAME));
+  } else {
+    g.detailed(2, () => {
+      for (let i = 0; i < 12; i += 2) {
+        const a = (i / 12) * Math.PI * 2, s = 0.032;
+        g.box(x + Math.cos(a) * R * 0.88 - s / 2, y + Math.sin(a) * R * 0.88 - s / 2, h + 0.1, s, s, 0.03);
+      }
+    });
+  }
+  return h;
+}
+
+// Arrow slits on the front of a wall at depth y.
+function slits(g, x0, x1, y, z) {
+  g.detailed(2, () => {
+    for (let x = x0 + 0.06; x < x1 - 0.03; x += 0.12) g.line([[x, y, z], [x, y, z + 0.05]], { facing: [0, -1, 0] });
+  });
+}
+
+export const castle = {
+  ...common,
+  id: 'castle',
+  name: 'Castle',
+  blurb: 'Homes and offices nearby grow faster',
+  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  plot: { props: 'green', boundary: 0.2, kinds: ['hedge'], density: 0.45 },
+  levels: [
+    {
+      name: 'Castle',
+      stats: { jobs: 3 },
+      agents: 1,
+      yards: ['trees'],
+      draw(g) {
+        const kind = g.pick(['ruin', 'castle', 'chateau']);
+        if (kind === 'chateau') {
+          // baroque chateau: a main wing and two side wings round a court
+          // of honour, a clock turret, a gate and a fountain in the court
+          const fh = 0.14, h = fh * 2;
+          // The side wings run the full depth and the main block sits
+          // between them: the painter sorts solids by their middle, so
+          // pieces that meet must be side by side across the join, not in
+          // an L, or a hidden wall gets drawn in front.
+          const roof = { h: 0.1, mansard: { h: 0.08, inset: 0.05 } };
+          for (const x of [-0.32, 1.0]) {
+            g.roofed(x, 0.0, 0, 0.32, 1.12, h, { ...roof, ridge: 'y', hip: 0.1 });
+            g.windows(x, 0.0, 0.32, 1.12, 0, h, fh, 0.1);
+          }
+          g.roofed(0, 0.72, 0, 1.0, 0.4, h, { ...roof, hip: 0 });
+          g.windows(0, 0.72, 1.0, 0.4, 0, h, fh, 0.1, { skip: ['left', 'right'] });
+          g.box(0.4, 0.66, 0, 0.2, 0.06, h + 0.06); // central risalit
+          door(g, 0.5, 0.66, 0.08, 0.13);
+          g.box(0.45, 0.87, h + 0.14, 0.1, 0.1, 0.1); // clock turret on the ridge
+          onion(g, 0.5, 0.92, h + 0.24, 0.05);
+          fountain(g, 0.5, 0.3, 0.07);
+          for (const x of [0.28, 0.72]) g.box(x - 0.03, -0.34, 0, 0.06, 0.06, 0.16); // gate piers
+          return;
+        }
+        if (kind === 'castle') {
+          // gothic castle: the palace across the back, a round keep with a
+          // cone roof beside it, curtain walls round the court and a gate
+          // tower in the front wall. Nothing overlaps, so it sorts cleanly.
+          const mirror = g.chance(0.5), M = (x) => (mirror ? 1 - x : x);
+          const [pa, pb] = [M(-0.3), M(0.85)].sort((p, q) => p - q);
+          g.roofed(pa, 0.78, 0, pb - pa, 0.52, 0.42, { h: 0.24, hip: 0.12 });
+          g.windows(pa, 0.78, pb - pa, 0.52, 0.14, 0.42, 0.14, 0.12);
+          roundTower(g, M(1.08), 1.04, 0.16, 0.95, 'cone');
+          curtain(g, [-0.34, -0.3], [0.36, -0.3], 0.26);
+          curtain(g, [0.64, -0.3], [1.34, -0.3], 0.26);
+          slits(g, -0.34, 0.36, -0.335, 0.12);
+          slits(g, 0.64, 1.34, -0.335, 0.12);
+          curtain(g, [M(-0.34), -0.265], [M(-0.34), 0.78], 0.26);
+          curtain(g, [M(1.34), -0.265], [M(1.34), 0.86], 0.26);
+          g.box(0.36, -0.42, 0, 0.28, 0.26, 0.5);
+          g.windows(0.36, -0.42, 0.28, 0.26, 0.24, 0.5, 0.13, 0.09, { w: 0.35, h: 0.55 });
+          g.line([[0.44, -0.42, 0], [0.44, -0.42, 0.14], [0.5, -0.42, 0.19], [0.56, -0.42, 0.14], [0.56, -0.42, 0]], { facing: [0, -1, 0], lod: 1 });
+          g.roofed(0.36, -0.42, 0.5, 0.28, 0.26, 0, { h: 0.14, hip: 0.13 });
+          return;
+        }
+        // ruin: a keep with a broken top, a curtain wall crumbling to
+        // stumps and gaps, the roofless palace with one gable standing
+        roundTower(g, 1.0, 0.95, 0.18, g.range(0.65, 0.8), 'broken');
+        const ring = [[-0.34, -0.3], [1.34, -0.3], [1.34, 1.3], [-0.34, 1.3], [-0.34, -0.3]];
+        const seg = 0.14, d = 0.07;
+        for (let i = 0; i < 4; i++) {
+          const [a, b] = [ring[i], ring[i + 1]];
+          const len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.round(len / seg);
+          let hgt = g.range(0.12, 0.3);
+          for (let k = 0; k < n; k++) {
+            hgt = Math.min(0.32, Math.max(0.03, hgt + g.range(-0.08, 0.08)));
+            if (g.chance(0.15)) continue; // a breach
+            const t0 = k / n, t1 = (k + 1) / n;
+            const x0 = a[0] + (b[0] - a[0]) * t0, y0 = a[1] + (b[1] - a[1]) * t0;
+            const x1 = a[0] + (b[0] - a[0]) * t1, y1 = a[1] + (b[1] - a[1]) * t1;
+            const [bx, by] = [Math.min(x0, x1) - (y0 === y1 ? 0 : d / 2), Math.min(y0, y1) - (x0 === x1 ? 0 : d / 2)];
+            g.box(bx, by, 0, Math.abs(x1 - x0) || d, Math.abs(y1 - y0) || d, hgt);
+          }
+        }
+        slits(g, 0.0, 1.0, -0.335, 0.06);
+        // roofless palace: walls with window holes, gable standing
+        g.box(-0.2, 0.55, 0, 0.7, 0.07, 0.36);
+        g.windows(-0.2, 0.55, 0.7, 0.07, 0.12, 0.36, 0.12, 0.14, { skip: ['left', 'right', 'back'] });
+        g.face([[-0.2, 0.55, 0.36], [0.5, 0.55, 0.36], [0.15, 0.55, 0.52]]);
+        g.box(-0.2, 0.62, 0, 0.07, 0.4, 0.28);
+        heap(g, 0.5, 0.2, 0.08);
+        heap(g, 1.2, 0.2, 0.06);
+        tree(g, 0.25, 0.95, 1, 'spreading');
+        tree(g, 1.25, 0.45, 0.9);
       },
     },
   ],

@@ -1,4 +1,5 @@
-// Surroundings: what fills the ground between a building and its road.
+// Surroundings: what fills the ground between a building and its road – or,
+// for a building without one, its footpath or just open ground in front.
 //
 // Each style draws into a "yard" in local coordinates where the road is
 // towards -y and the building's door dot is at (0, 0):
@@ -14,6 +15,7 @@
 //
 // Levels list the styles they may get in `yards: [...]`; one is picked from
 // the building's seed. The player can override it (s.data.yard).
+// `cars: true` styles are only for buildings with a road (see yardOf).
 
 import { tree, bush, hedge, fenceAlong, bench, crates, container, lamp, paving, garages, flowerBed, kiosk, bikeRack } from './kit.js';
 
@@ -83,6 +85,7 @@ export const YARDS = {
 
   parking: {
     name: 'Parking',
+    cars: true,
     draw(g, yard) {
       const { x0, x1, y1 } = yard;
       const a = x0 + 0.04, b = x1 - 0.04, back = y1 - 0.02, stall = 0.2;
@@ -139,6 +142,7 @@ export const YARDS = {
 
   garages: {
     name: 'Garages',
+    cars: true,
     draw(g, yard) {
       const { x0, x1, y1 } = yard;
       // a row of lock-ups either side of the way to the door, with an apron

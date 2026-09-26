@@ -903,27 +903,28 @@ export class Renderer {
 
   // Where and how a structure's surroundings are drawn, or null.
   // Local frame: door dot at (0, 0), road towards -y (see structures/yards.js).
+  // Without a road they face the building's footpath, or else its front as
+  // placed, and leave out the car park (yardOf).
   yardFrame(s) {
     const { world } = this;
-    const style = yardOf(STRUCTURE_TYPES[s.type], s);
+    const nodes = world.nodesOf(s);
+    const def = STRUCTURE_TYPES[s.type];
+    const front = world.frontFor(nodes) ?? this.placedFront(s, nodes);
+    if (front.road < 0 && def.access !== 'any') return null; // stations, industry: only towards a road
+    const style = yardOf(def, s, { cars: front.road >= 0 });
     if (!style) return null;
-    const access = world.accessInfo(s);
-    if (!access) return null;
 
-    const [dx, dy] = world.grid.xy(access.door);
-    const [rx, ry] = world.grid.xy(access.road);
-    const ox = Math.sign(rx - dx);
-    const oy = Math.sign(ry - dy);
-    const [fx, fy] = ox !== 0 ? [ox, 0] : [0, oy];
+    const [fx, fy] = front.dir;
     const rotation = fx === 1 ? 1 : fx === -1 ? 3 : fy === 1 ? 2 : 0;
+    const [dx, dy] = world.grid.xy(front.door);
 
     // How deep the yard can be: right up to a road, less if the dot in
     // front is open ground, none if something else is there.
-    const front = world.grid.offset(access.door, fx, fy);
-    if (front < 0) return null;
+    const ahead = world.grid.offset(front.door, fx, fy);
+    if (ahead < 0) return null;
     let y0;
-    if (world.hasRoad(front)) y0 = -0.86;
-    else if (!world.structureAt(front) && !world.terrain.isWater(front)) y0 = -0.62;
+    if (world.hasRoad(ahead)) y0 = -0.86;
+    else if (!world.structureAt(ahead) && !world.terrain.isWater(ahead)) y0 = -0.62;
     else return null;
 
     // Width: all footprint dots in the door's row, along the road.
@@ -941,6 +942,15 @@ export class Renderer {
       y0,
       y1: -0.34,
     };
+  }
+
+  // Front of a structure with neither road nor footpath: its local -y as
+  // placed, the door in the middle of that row.
+  placedFront(s, nodes) {
+    const { world } = this;
+    const dir = rotateQuarter(0, -1, world.facingRotation(s.type, s.node, s.rotation));
+    const row = nodes.filter((n) => !nodes.includes(world.grid.offset(n, dir[0], dir[1])));
+    return { door: row[Math.floor(row.length / 2)], dir, road: -1 };
   }
 
   // Ground rectangle of an object in view-aligned axes (both grow towards the viewer).
@@ -1168,7 +1178,7 @@ export class Renderer {
 // at size k, scaled about its foot. A truck far out is one absolute path and
 // fades instead.
 function scaleAgent(el, k) {
-  const s = k === 1 ? '' : ` scale(${k.toFixed(3)})`;
+  const s = k === 1 ? '' : ` scale(${Math.max(0, k).toFixed(3)})`;
   if (el.dataset.kind !== 'truck') return el.setAttribute('transform', el.at0 + s);
   const dot = el.dataset.key === 'dot';
   const opacity = dot && k < 1 ? Math.max(0, k).toFixed(3) : ''; // cleared when zoomed in mid-way

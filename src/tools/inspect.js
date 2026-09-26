@@ -1,6 +1,7 @@
-// Default tool: click a dot to get a context menu of what can be done there.
+// Default tool: click a building, road or feature to get a menu of what can
+// be done with it. Building new things is done from the Build menu.
 
-import { STRUCTURES, STRUCTURE_TYPES, CATEGORIES, levelOf, maxLevel, categoryOf, yardOf } from '../../structures/index.js';
+import { STRUCTURES, STRUCTURE_TYPES, levelOf, maxLevel, categoryOf, yardOf } from '../../structures/index.js';
 import { YARDS, YARD_STYLES } from '../../structures/yards.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { isTouch } from '../ui/device.js';
@@ -14,12 +15,13 @@ export function createInspectTool(ctx) {
 
     hint: () => isTouch()
       ? 'Tap the map · drag to pan · pinch to zoom'
-      : 'Click the map · right-click: build menu · drag to pan · scroll to zoom · Q / E rotate',
+      : 'Click the map · right-click: build more of what’s there · drag to pan · scroll to zoom · Q / E rotate',
 
     click(node, event) {
-      if (node < 0) return ctx.popup.hide();
-      const { title, items } = menuFor(ctx, node);
-      ctx.popup.show(event.clientX, event.clientY, title, items, () => menuFor(ctx, node));
+      const menu = node < 0 ? null : menuFor(ctx, node);
+      if (!menu) return ctx.popup.hide();
+      const around = screenBox(ctx, node);
+      ctx.popup.show(event.clientX, event.clientY, menu.title, menu.items, () => menuFor(ctx, node), around);
     },
 
     exit() {
@@ -28,8 +30,27 @@ export function createInspectTool(ctx) {
   };
 }
 
-// keyboard shortcuts as menu notes, left out on touch screens
-const key = (k) => (isTouch() ? '' : k);
+// Screen box around what was clicked (a building's whole footprint and some
+// height, or the one dot), so the menu can open beside it, not over it.
+const HEIGHT = 2.5; // in tiles; enough for most buildings
+function screenBox({ world, camera }, node) {
+  const s = world.structureAt(node);
+  const nodes = s ? world.nodesOf(s) : [node];
+  const z = s ? HEIGHT : 0.5;
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (const n of nodes) {
+    const [x, y] = world.grid.xy(n);
+    for (const [dx, dy] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
+      for (const h of [0, z]) {
+        const [sx, sy] = camera.project(x + dx, y + dy, h);
+        const cx = sx * camera.zoom + camera.panX, cy = sy * camera.zoom + camera.panY;
+        left = Math.min(left, cx); right = Math.max(right, cx);
+        top = Math.min(top, cy); bottom = Math.max(bottom, cy);
+      }
+    }
+  }
+  return { left, top, right, bottom };
+}
 
 const TREND = {
   growing: 'Growing',
@@ -67,9 +88,10 @@ function structureMenu({ world, growth }, s) {
   // Surroundings: cycles automatic -> each style -> none -> automatic.
   if (def.levels.some((l) => l.yards?.length)) {
     const choice = s.data.yard ?? 'auto';
-    const current = yardOf(def, s);
+    const cars = world.accessInfo(s) !== null; // no car park without a road
+    const current = yardOf(def, s, { cars });
     const note = choice === 'auto' ? `Auto · ${current ? YARDS[current].name : 'none'}` : choice === 'none' ? 'None' : YARDS[choice].name;
-    const order = ['auto', ...YARD_STYLES, 'none'];
+    const order = ['auto', ...YARD_STYLES.filter((y) => cars || !YARDS[y].cars || y === choice), 'none'];
     const next = order[(order.indexOf(choice) + 1) % order.length];
     items.push({ label: 'Surroundings', note, keepOpen: true, action: () => world.setYard(s.id, next === 'auto' ? null : next) });
   }
@@ -90,13 +112,9 @@ function structureMenu({ world, growth }, s) {
 }
 
 function menuFor(ctx, node) {
-  const { world, tools } = ctx;
+  const { world } = ctx;
   const s = world.structureAt(node);
   if (s) return structureMenu(ctx, s);
-
-  if (world.terrain.isWater(node)) {
-    return { title: 'Water', items: [{ label: 'Nothing to build here', info: true }] };
-  }
 
   const feature = world.featureAt(node);
   const road = world.hasRoad(node);
@@ -104,32 +122,13 @@ function menuFor(ctx, node) {
   const fine = world.coarseToFine(node);
   const path = world.paths.hasNode(fine);
 
-  // What fits here, by category; what doesn't is listed greyed out at the bottom.
+  // Building is done from the Build menu; here only what's already there.
   const items = [];
-  const unavailable = [];
-  for (const cat of CATEGORIES) {
-    const fits = [];
-    for (const def of STRUCTURES.filter((d) => categoryOf(d) === cat.id)) {
-      // types with their own rule (stations) may need turning to fit
-      const tries = def.canPlace ? [0, 1, 2, 3] : [0];
-      const at = tries.map((r) => world.placementFor(def.id, node, r)).find((p) => p.check.ok) ?? world.placementFor(def.id, node, 0);
-      if (!at.check.ok) {
-        unavailable.push({ label: def.name, note: at.check.reason, disabled: true, unavailable: true });
-        continue;
-      }
-      fits.push({ label: def.name, note: key(def.hotkey), action: () => world.placeStructure(def.id, at.node, { rotation: at.rotation }) });
-    }
-    if (fits.length) items.push({ label: cat.label, info: true, heading: true }, ...fits);
-  }
-  items.push({ label: 'Lines', info: true, heading: true });
-  items.push({ label: 'Road from here', note: key('R'), action: () => tools.use('road', { start: node }) });
-  items.push({ label: 'Footpath from here', note: key('F'), action: () => tools.use('path', { start: fine }) });
-  items.push({ label: 'Railway from here', note: key('L'), action: () => tools.use('rail', { start: node }) });
   if (road) items.push({ label: 'Remove road', action: () => world.removeRoadAt(node) });
   if (rail) items.push({ label: 'Remove railway', action: () => world.removeNetworkAt('rail', node) });
   if (path) items.push({ label: 'Remove footpath', action: () => world.removeNetworkAt('path', fine) });
   if (feature) items.push({ label: `Clear ${FEATURE_TYPES[feature.type].name.toLowerCase()}`, action: () => world.removeFeature(feature.id) });
-  if (unavailable.length) items.push({ label: 'Doesn’t fit here', info: true, heading: true }, ...unavailable);
+  if (!items.length) return null; // empty ground or water: no menu
 
   const title = road && rail ? 'Level crossing' : road ? 'Road' : rail ? 'Railway' : path ? 'Footpath' : feature ? FEATURE_TYPES[feature.type].name : 'Empty lot';
   return { title, items };

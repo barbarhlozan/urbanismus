@@ -157,28 +157,32 @@ tools.use('inspect');
 
 // ---------- input ----------
 
-// Right-click with nothing in hand: open the Build menu with the last thing
-// built picked up again (same size, rotation…), to build more of it.
-let worldVersion = 0;
-let lastBuilt = null;
-world.events.on('*', () => worldVersion++);
-function quickBuild() {
+// Right-click with nothing in hand picks up what's under the pointer (a
+// building of the same kind and size, turned the same way, or the road,
+// railway or footpath) to build more of it; right-click again puts it down.
+const buildToolFor = (type) => tools.list().find((t) => t.defs?.some((d) => d.id === type));
+function pickUp() {
+  const p = tools.point;
+  const node = tools.hoverNode;
+  if (!p || node < 0) return;
+  const s = world.structureAt(node);
+  let tool = null, params = {};
+  if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation }];
+  else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
+  else if (world.hasRail(node)) tool = tools.registry.get('rail');
+  else if (world.hasRoad(node)) tool = tools.registry.get('road');
+  if (!tool) return;
   hud.buildMenu.fold(false);
-  if (lastBuilt) tools.use(lastBuilt);
+  tools.use(tool.id, params);
 }
 
 attachInput(svg, {
   camera,
   onPointer: (x, y) => tools.pointer(x, y),
-  onClick: (e) => {
-    // remember the last tool that actually built something, for quickBuild
-    const tool = tools.active, before = worldVersion;
-    tools.click(e);
-    if (worldVersion !== before && tool?.group) lastBuilt = tool.id;
-  },
+  onClick: (e) => tools.click(e),
   onCancel: () => {
     if (popup.open) return popup.hide();
-    if (tools.active?.id === tools.defaultId) return quickBuild();
+    if (tools.active?.id === tools.defaultId) return pickUp();
     tools.cancel();
   },
   // middle click works like Tab: rotate what's being placed, flip a line's bend

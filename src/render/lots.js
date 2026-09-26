@@ -2,6 +2,7 @@
 // curves), rather than to the grid dots they're built on.
 //
 //   fitYard(world, config, frame)  surroundings between a building and its road
+//                                  (or a footpath in front)
 //   fitSite(world, config, site)   parks / squares on every side facing a road
 //
 // Both cast short rays from the plot towards the road and put the plot's edge
@@ -63,7 +64,8 @@ function samples(a, b) {
 //   y0                  shallowest point of the edge (safe for props)
 //   flat                true when the edge is straight
 export function fitYard(world, config, frame) {
-  const index = roadIndex(world, config);
+  const roads = roadIndex(world, config);
+  const paths = pathIndex(world, config);
   const { origin: [dx, dy], rotation, x0, x1, y1 } = frame;
   const toWorld = (lx, ly) => {
     const [wx, wy] = rotateQuarter(lx, ly, rotation);
@@ -72,9 +74,16 @@ export function fitYard(world, config, frame) {
   const dir = rotateQuarter(0, -1, rotation);
   const reach = y1 - YARD_MAX + ROAD_GAP;
 
+  // depth: short of the road, or YARD_OPEN where there's none – and never
+  // over a footpath crossing in front
+  const depth = (from) => {
+    const r = roads.cast(from, dir, reach);
+    const p = paths.cast(from, dir, reach);
+    const t = r === null ? y1 - YARD_OPEN : r - ROAD_GAP;
+    return p === null ? t : Math.min(t, p - PATH_GAP);
+  };
   const profile = samples(x0, x1).map((x) => {
-    const t = index.cast(toWorld(x, y1), dir, reach);
-    const y = t === null ? YARD_OPEN : y1 - t + ROAD_GAP;
+    const y = y1 - depth(toWorld(x, y1));
     return [x, Math.min(Math.max(y, YARD_MAX), y1 - 0.1)];
   });
 

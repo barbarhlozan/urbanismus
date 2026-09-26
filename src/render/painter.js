@@ -13,10 +13,12 @@
 //   g.gableY(x, y, z, w, d, h, roofH, opts)  same, ridge along y
 //   g.roofed(x, y, z, w, d, h, roof, opts)   block with a hip / gable / pyramid /
 //                                            mansard / flat roof (see the method)
-//   g.lathe(x, y, z, [[r, h]…], sides, opts) solid of revolution (domes, spires, towers)
+//   g.lathe(x, y, z, [[r, h]…], sides, opts) solid of revolution (domes, spires, towers;
+//                                            opts.smooth: outline only, no facet edges)
 //   g.vault(x, y, z, w, d, h, rise, segs, opts) block with a barrel-vault roof (opts.alongY)
 //   g.face([[x,y,z]…], opts)                 single polygon, CCW seen from outside
-//   g.line([[x,y,z]…], opts)                 polyline; opts.facing = normal to hide it with its wall
+//   g.line([[x,y,z]…], opts)                 polyline; opts.facing = normal to hide it with its wall,
+//                                            opts.wobble scales the hand-drawn wobble (1 = normal)
 //   g.disc(x, y, z, r, opts)                 screen-facing circle (e.g. tree crowns)
 //   g.shape(x, y, z, [[u,v]…], opts)         screen-facing polygon, u right / v up, in grid units
 //                                            (opts.smooth: a rounded outline through the points' midpoints)
@@ -195,7 +197,7 @@ export class Painter {
   // LOOK.overshoot: their edges run on a little past the corners.
   _outline(points, closed, opts, lod) {
     if (!LOOK.sketch) return `<${closed ? 'polygon' : 'polyline'} points="${points.map((p) => this._proj(p)).join(' ')}"${attrs(opts, lod)}/>`;
-    const { d, pts, size } = this._sketch(points, closed);
+    const { d, pts, size } = this._sketch(points, closed, opts.wobble ?? 1);
     // the overshoots go in the same path: open strokes have no area, so the
     // fill ignores them, and it saves an element per face
     let ticks = '';
@@ -216,8 +218,8 @@ export class Painter {
 
   // Sketchy path data through 3D points: { d, pts (jittered screen points,
   // each [x, y, x0, y0]), size (longest edge on screen) }.
-  _sketch(points, closed) {
-    const amp = LOOK.sketch * this.camera.tile / 32;
+  _sketch(points, closed, wobble = 1) {
+    const amp = LOOK.sketch * this.camera.tile / 32 * wobble;
     const scr = points.map((p) => this._project(...this._world(p[0], p[1], p[2])));
     // small shapes (windows) wobble less than walls and roofs
     let size = 0;
@@ -293,6 +295,14 @@ export class Painter {
       const kb = joined(b) ? 0 : LOOK.ground * (0.3 + 0.7 * Math.abs(hash2(b[0] * 50, b[1] * 50, 9)));
       this.line([[a[0] - ux * ka, a[1] - uy * ka, 0], [b[0] + ux * kb, b[1] + uy * kb, 0]], { facing: [uy, -ux, 0], cls: 'foot', lod: Math.max(1, this.lod) });
     }
+  }
+
+  // How squarely a local normal faces the viewer (the camera's linear
+  // facing test, before its sign is taken).
+  _view([nx, ny, nz]) {
+    const [wx, wy] = rotateQuarter(nx, ny, this.rotation);
+    const [rx, ry] = rotateQuarter(wx, wy, this.camera.rotation);
+    return rx + ry + nz / this.camera.zScale;
   }
 
   _facing([nx, ny, nz]) {
@@ -619,6 +629,12 @@ export class Painter {
   // [[radius, height]…] from the bottom up (radius 0 = a point). Domes,
   // spires, cooling towers, water towers, tapered chimneys.
   // opts.phase turns the polygon (in fractions of a side).
+  // opts.smooth: a smooth round body – no facet edges, only its outline
+  // (the silhouette and the near half of the bottom rim), plus the near
+  // half of the profile rings listed in opts.rings (indices into profile).
+  // opts.hatch (with smooth): pencil strokes down the segments listed
+  // (indices into profile, segment i runs from point i to i + 1), LOOK.hatch
+  // apart round the rim – a conical or domed roof drawn like the others.
   lathe(x, y, z, profile, sides = 12, opts = {}) {
     const rmax = Math.max(...profile.map((p) => p[0]));
     this._grow([[x - rmax, y - rmax], [x + rmax, y + rmax]]);
@@ -626,22 +642,93 @@ export class Painter {
     this.solid(x, y, z + top / 2);
     const ang = (j) => ((j + (opts.phase ?? 0)) / sides) * Math.PI * 2;
     const at = (r, j, h) => [x + Math.cos(ang(j)) * r, y + Math.sin(ang(j)) * r, z + h];
+    const { smooth, rings = [], hatch = [], ...faceOpts } = opts;
+    const side = smooth ? { ...faceOpts, stroke: 'none' } : faceOpts;
+    const seen = []; // seen[i][j]: side face j of segment i faces the viewer
     for (let i = 0; i < profile.length - 1; i++) {
       const [r0, h0] = profile[i], [r1, h1] = profile[i + 1];
+      seen.push([]);
       for (let j = 0; j < sides; j++) {
         const pts = [];
         if (r0 > 0) pts.push(at(r0, j, h0), at(r0, j + 1, h0));
         else pts.push(at(0, 0, h0));
         if (r1 > 0) pts.push(at(r1, j + 1, h1), at(r1, j, h1));
         else pts.push(at(0, 0, h1));
-        if (pts.length >= 3) this.face(pts, opts);
+        seen[i].push(pts.length >= 3 && this._facing(newellNormal(pts)));
+        if (pts.length >= 3) this.face(pts, side);
+      }
+    }
+    if (smooth) {
+      const n = profile.length - 1;
+      // the outline, like a face's edge, drawn with a steadier hand (a
+      // long curve with the usual jitter at every point would look wavy)
+      const pen = { stroke: 'main', width: 1.2, wobble: 0.12, ...faceOpts };
+      // The outline is worked out exactly rather than from the facets: the
+      // view is a linear test on normals (Camera.facing), so on each ring
+      // the surface turns away from the viewer at th ± d, where the normal
+      // (cos φ, sin φ, m) with m = -dr/dh is edge-on.
+      const va = this._view([1, 0, 0]), vb = this._view([0, 1, 0]), vc = this._view([0, 0, 1]);
+      const R = Math.hypot(va, vb), th = Math.atan2(vb, va);
+      const slope = (k) => {
+        const ms = [];
+        for (const [p, q] of [[k - 1, k], [k, k + 1]]) {
+          if (p < 0 || q > n) continue;
+          const dh = profile[q][1] - profile[p][1];
+          if (Math.abs(dh) > 1e-9) ms.push(-(profile[q][0] - profile[p][0]) / dh);
+        }
+        return ms.length ? ms.reduce((t, m) => t + m, 0) / ms.length : null;
+      };
+      // half-width of the near side of ring k (angle), 'full', or null (none)
+      const half = (k) => {
+        const m = slope(k);
+        if (m === null || R < 1e-9) return null;
+        const q = (-m * vc) / R;
+        return q >= 1 ? null : q <= -1 ? 'full' : Math.acos(q);
+      };
+      const P = (r, h, phi) => [x + Math.cos(phi) * r, y + Math.sin(phi) * r, z + h];
+      for (const sgn of [-1, 1]) {
+        let run = [];
+        const flush = () => { if (run.length > 1) this.line(run, pen); run = []; };
+        for (let k = 0; k <= n; k++) {
+          const [r, h] = profile[k];
+          if (r <= 0) { if (run.length) run.push([x, y, z + h]); flush(); continue; }
+          const d = half(k);
+          if (typeof d !== 'number') { flush(); continue; }
+          run.push(P(r, h, th + sgn * d));
+        }
+        flush();
+      }
+      // near halves of the rim and the chosen rings
+      for (const k of [0, ...rings]) {
+        const [r, h] = profile[k], d = half(k);
+        if (r <= 0 || d === null) continue;
+        const span = d === 'full' ? Math.PI : d, steps = Math.max(4, Math.round((span / Math.PI) * 24));
+        const arc = Array.from({ length: steps + 1 }, (_, i) => P(r, h, th - span + (2 * span * i) / steps));
+        this.line(arc, k === 0 ? pen : faceOpts);
+      }
+      // roof hatching: strokes down the chosen segments on the near side
+      if (LOOK.hatch) {
+        for (const i of hatch) {
+          const [r0, h0] = profile[i], [r1, h1] = profile[i + 1];
+          const count = Math.max(sides, Math.round((2 * Math.PI * Math.max(r0, r1)) / LOOK.hatch));
+          const lod = Math.max(1, this.lod);
+          for (let k = 0; k < count; k++) {
+            const j = (k * sides) / count; // angle in sides
+            const face = Math.floor(j) % sides;
+            if (!seen[i][face] || !seen[i][(face + sides - 1) % sides] || !seen[i][(face + 1) % sides]) continue;
+            const a = 0.04 + 0.08 * Math.abs(hash2(k, i, 6)), b = 0.08 + 0.2 * Math.abs(hash2(k, i, 7));
+            const lerp = (t) => [r0 + (r1 - r0) * t, h0 + (h1 - h0) * t];
+            const [ra, ha] = lerp(a), [rb, hb] = lerp(1 - b);
+            this.line([at(ra, j, ha), at(rb, j, hb)], { cls: 'roof-hatch', lod });
+          }
+        }
       }
     }
     const [rt] = profile[profile.length - 1];
     if (rt > 0) {
       const cap = [];
       for (let j = 0; j < sides; j++) cap.push(at(rt, j, top));
-      this.face(cap, opts);
+      this.face(cap, faceOpts);
     }
     return this;
   }

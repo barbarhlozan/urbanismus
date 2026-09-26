@@ -296,17 +296,40 @@ export class World {
     return { hub: fineAt(cx, cy), hubPos: [cx, cy], exits };
   }
 
+  // Which way a structure's front looks: { door, dir: [dx, dy], road }.
+  // Towards its road if it has one (road = that road dot), else towards the
+  // nearest footpath within 1.5 dots (road = -1), else null.
+  frontFor(nodes) {
+    const access = this.accessFor(nodes);
+    if (access) {
+      const [dx, dy] = this.grid.xy(access.door);
+      const [rx, ry] = this.grid.xy(access.road);
+      const ox = Math.sign(rx - dx), oy = Math.sign(ry - dy);
+      return { door: access.door, dir: ox !== 0 ? [ox, 0] : [0, oy], road: access.road };
+    }
+    const own = new Set(nodes);
+    for (let k = 1; k <= 3; k++) {
+      for (const n of nodes) {
+        const [x, y] = this.grid.xy(n);
+        for (const [dx, dy] of ORTHO) {
+          if (own.has(this.grid.offset(n, dx, dy))) continue; // an inner side
+          const fx = 2 * x + k * dx, fy = 2 * y + k * dy;
+          if (this.fine.inBounds(fx, fy) && this.paths.hasNode(this.fine.index(fx, fy))) return { door: n, dir: [dx, dy], road: -1 };
+        }
+      }
+    }
+    return null;
+  }
+
   // Rotation a building is drawn with: single-dot buildings turn their front
-  // (local -y) towards the road they use; larger ones keep their placed rotation.
+  // (local -y) towards the road they use, or without one towards a footpath;
+  // larger ones keep their placed rotation.
   facingRotation(type, node, rotation = 0) {
     const nodes = this.footprintNodes(type, node, rotation);
     if (nodes.length > 1) return rotation;
-    const access = this.accessFor(nodes);
-    if (!access) return rotation;
-    const [dx, dy] = this.grid.xy(access.door);
-    const [rx, ry] = this.grid.xy(access.road);
-    const ox = Math.sign(rx - dx);
-    const oy = Math.sign(ry - dy);
+    const front = this.frontFor(nodes);
+    if (!front) return rotation;
+    const [ox, oy] = front.dir;
     if (ox !== 0) return ox > 0 ? 1 : 3;
     return oy > 0 ? 2 : 0;
   }
@@ -366,7 +389,8 @@ export class World {
   }
 
   // Reachable enough to work and grow: a road, or for `access: 'any'`
-  // structures (parks, squares) a footpath is fine too.
+  // structures (homes, shops, parks…) a footpath is fine too – people walk
+  // or cycle there, nobody drives.
   isServed(s) {
     if (this.isConnected(s)) return true;
     return STRUCTURE_TYPES[s.type]?.access === 'any' && this.hasPathAccess(s);

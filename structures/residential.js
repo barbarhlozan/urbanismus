@@ -45,12 +45,13 @@ function gableWindow(g, x, y, z, s = 0.035) {
 
 export default {
   id: 'residential',
+  access: 'any', // a footpath will do: people walk or cycle
   name: 'Residential',
   blurb: 'Homes',
   hotkey: '1',
   category: 'zone',
   footprint: [[0, 0]],
-  sim: { destinations: ['business', 'industrial'], leisure: ['park', 'square', 'heritage'], strollChance: 0.3 },
+  sim: { destinations: ['business', 'industrial', 'farm'], leisure: ['park', 'square', 'heritage', 'cemetery'], strollChance: 0.3 },
   plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
 
   levels: [

@@ -8,7 +8,9 @@
 //   blurb      one line for the Build menu, e.g. 'Homes nearby grow faster'
 //   size       label for the Size button when it shares a tool (default Small / Large)
 //   tags       extra names growth rules and agents can match, e.g. ['park']
-//   access     'road' (default) or 'any' – 'any' also counts a footpath as access
+//   access     'road' (default) or 'any' – 'any' also counts a footpath as access:
+//              such a building works and grows without a road, its people walk
+//              or cycle, and its surroundings leave out the car park and garages
 //   code       short prefix for annotations, e.g. 'R' -> "R-012" (default: first letter)
 //   site       true = fills its lot up to the road and merges with neighbouring
 //              sites; drawings get the area as g.site (parks, squares)
@@ -33,6 +35,10 @@ import * as square from './square.js';
 import * as services from './services.js';
 import * as heritage from './heritage.js';
 import * as station from './station.js';
+import * as landmarks from './landmarks.js';
+import * as grounds from './grounds.js';
+import mine from './mine.js';
+import farm from './farm.js';
 
 // Toolbar groups, in toolbar order. The network tools (road, footpath,
 // railway) join 'transport' too (src/main.js).
@@ -44,18 +50,23 @@ export const CATEGORIES = [
 ];
 
 export const STRUCTURES = [
-  residential, business, industrial, industrialSmall,
+  residential, business, industrial, industrialSmall, mine, farm,
   park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.main, station.stop,
-  heritage.chapel, heritage.church, heritage.townHall, heritage.column,
+  grounds.cemetery,
+  heritage.chapel, heritage.church, heritage.townHall, heritage.column, heritage.memorial, heritage.townGate, heritage.castle,
+  landmarks.cultureHouse, landmarks.tvTower, landmarks.stadium,
 ];
 
 // Build menu entries: sizes of the same thing share one tool (S switches,
 // the first is the default). Every structure must be in exactly one.
 export const BUILD_FAMILIES = [
   [station.station, station.main, station.stop],
-  [residential], [business], [industrial, industrialSmall],
+  [residential], [business], [industrial, industrialSmall], [mine], [farm],
   [park.small, park.large], [square.small, square.large], [services.small, services.large],
-  [heritage.chapel], [heritage.church], [heritage.townHall], [heritage.column],
+  [grounds.cemetery],
+  [heritage.chapel], [heritage.church], [heritage.townHall], [heritage.column, heritage.memorial],
+  [heritage.townGate], [heritage.castle],
+  [landmarks.cultureHouse], [landmarks.tvTower], [landmarks.stadium],
 ];
 
 export const STRUCTURE_TYPES = Object.fromEntries(STRUCTURES.map((s) => [s.id, s]));
@@ -102,12 +113,13 @@ export function drawSeed(s) {
 }
 
 // Surroundings style for an instance: the player's choice (s.data.yard),
-// or one of the level's `yards` picked by seed. null = none.
-export function yardOf(def, s) {
+// or one of the level's `yards` picked by seed. null = none. Without a road
+// (cars: false) styles for cars (parking, garages) are left out.
+export function yardOf(def, s, { cars = true } = {}) {
   const chosen = s.data?.yard;
   if (chosen === 'none') return null;
-  if (chosen && YARDS[chosen]) return chosen;
-  const options = levelOf(def, s).yards ?? [];
+  if (chosen && YARDS[chosen] && (cars || !YARDS[chosen].cars)) return chosen;
+  const options = (levelOf(def, s).yards ?? []).filter((y) => cars || !YARDS[y].cars);
   if (!options.length) return null;
   return options[Math.floor(mulberry32(drawSeed(s) ^ 0x51ed)() * options.length)];
 }

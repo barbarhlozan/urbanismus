@@ -551,8 +551,11 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .bm-tool.active .icon polygon, .bm-tool.active .icon circle, .bm-tool.active .icon .filled { fill: var(--fg); }
 .icon .i-road { stroke-width: 2.4; }
 .icon .i-path { stroke-width: 1.2; stroke-dasharray: 3 2.5; stroke-linecap: butt; }
-.icon .i-rail { stroke-width: 1.2; }
-.icon .i-sleeper { stroke-width: 1; }
+.icon .i-rail { stroke-width: 3.6; stroke-linecap: butt; stroke-linejoin: round; }
+/* dashes in the colour behind the icon, as .rail-dash on the map */
+.icon .i-rail-dash { stroke: var(--bg); stroke-width: 1.4; stroke-dasharray: 3.5 3.5; stroke-linecap: butt; stroke-linejoin: round; }
+#ui .bm-tool:hover .icon .i-rail-dash { stroke: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
+#ui .bm-tool.active .icon .i-rail-dash { stroke: var(--fg); }
 .icon .i-eraser { stroke-width: 1.4; stroke-linejoin: round; }
 .icon .i-smudge { stroke-width: 1.2; stroke-dasharray: 2 2; }
 

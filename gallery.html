@@ -19,6 +19,7 @@
   <script type="module">
     // Dev page: every structure level drawn with a few seeds, close up.
     // gallery.html?type=residential&seeds=12&size=220&rot=0
+    //   &level=2     only that level (rot=2 shows most fronts)
     //   &compare=1   each one also drawn the earlier way (outlined windows, plain roofs), left
     //   &scheme=2    color scheme (src/theme.js: 0 Night, 1 Red light, 2 Paper)
     //   &join=1      drawn as if sharing walls on both sides (street fronts)
@@ -128,6 +129,7 @@
     for (const def of STRUCTURES) {
       if (only && def.id !== only) continue;
       def.levels.forEach((lvl, li) => {
+        if (q.has('level') && +q.get('level') !== li + 1) return;
         out.insertAdjacentHTML('beforeend', `<h2>${def.name} · ${lvl.name}</h2>`);
         const row = document.createElement('div');
         row.className = 'row';

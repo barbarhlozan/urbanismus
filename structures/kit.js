@@ -383,7 +383,23 @@ export function timber(g, x, y, alongX = g.chance(0.5)) {
 // Heap of coal or gravel.
 export function heap(g, x, y, r = 0.08) {
   if (!g.isFree(x, y, r)) return;
-  g.detailed(1, () => g.lathe(x, y, 0, [[r, 0], [r * 0.55, r * 0.45], [0.01, r * 0.7], [0, r * 0.72]], 7));
+  g.detailed(1, () => mound(g, x, y, r, r * 0.8));
+}
+
+// A mound drawn freehand: a smooth screen-facing outline with a few strokes
+// down its flanks, r = radius on the ground, h = height. Heaps, spoil tips.
+export function mound(g, x, y, r, h) {
+  const w = g.camera.groundEllipse(r)[0] / g.camera.tile;
+  g.solid(x, y, h / 3);
+  g.shape(x, y, 0, [
+    [-w, 0], [-w * 0.8, h * 0.3], [-w * 0.45, h * 0.85], [-w * 0.2, h], [w * 0.25, h * 0.97],
+    [w * 0.5, h * 0.8], [w * 0.85, h * 0.25], [w, 0], [0, -w * 0.15],
+  ], { smooth: true });
+  g.detailed(1, () => g.strokes(x, y, 0, [
+    [[-w * 0.35, h * 0.85], [-w * 0.6, h * 0.3]],
+    [[w * 0.05, h * 0.9], [w * 0.1, h * 0.35]],
+    [[w * 0.4, h * 0.75], [w * 0.65, h * 0.2]],
+  ]));
 }
 
 // Upright tank on four legs.
@@ -569,5 +585,215 @@ export function footbridge(g, a, b, w = 0.05) {
   g.detailed(2, () => {
     g.solid((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0.02);
     for (const k of [-1, 1]) g.line([[a[0] + px * k, a[1] + py * k, 0.03], [b[0] + px * k, b[1] + py * k, 0.03]]);
+  });
+}
+
+// Line style for the main members of steel and timber frames (headframes,
+// masts, floodlights): the outline pen, not the pale detail colour.
+export const FRAME = { stroke: 'main', width: 1.1 };
+
+// Five-pointed star, facing the screen.
+export function star(g, x, y, z, r = 0.04) {
+  const pts = [];
+  for (let i = 0; i < 10; i++) {
+    const a = Math.PI / 2 + (i * Math.PI) / 5, k = i % 2 ? 0.45 : 1;
+    pts.push([Math.cos(a) * r * k, Math.sin(a) * r * k]);
+  }
+  g.shape(x, y, z, pts);
+}
+
+// ----- street furniture of the 60s–80s (squares, precincts) -----
+
+// Concrete planter: a low box (or a hexagon) with a shrub in it.
+export function planter(g, x, y, s = 0.05) {
+  if (!g.isFree(x, y, s)) return;
+  if (g.chance(0.5)) g.box(x - s, y - s, 0, 2 * s, 2 * s, 0.03);
+  else g.cylinder(x, y, 0, s * 1.1, 0.03, 6);
+  bush(g, x, y, s * 0.6);
+}
+
+// Street clock: a post with a round double-sided face on top.
+export function streetClock(g, x, y, h = 0.2) {
+  if (!g.isFree(x, y, 0.03)) return;
+  const r = 0.028;
+  g.detailed(1, () => {
+    g.solid(x, y, h / 2);
+    g.line([[x, y, 0], [x, y, h - r]]);
+    g.line(Array.from({ length: 13 }, (_, i) => {
+      const a = (i / 12) * Math.PI * 2;
+      return [x + Math.cos(a) * r, y, h + Math.sin(a) * r];
+    }));
+  });
+}
+
+// Phone booth: a tall narrow glazed box with a flat cap.
+export function phoneBooth(g, x, y) {
+  if (!g.isFree(x, y, 0.03)) return;
+  g.detailed(1, () => {
+    g.box(x - 0.022, y - 0.022, 0, 0.044, 0.044, 0.11);
+    g.line([[x - 0.012, y - 0.022, 0.02], [x - 0.012, y - 0.022, 0.09], [x + 0.012, y - 0.022, 0.09], [x + 0.012, y - 0.022, 0.02]], { facing: [0, -1, 0] });
+  });
+}
+
+// Newspaper kiosk (PNS): a hexagonal booth under a wide hexagonal roof.
+export function newsKiosk(g, x, y) {
+  if (!g.isFree(x, y, 0.08)) return;
+  g.cylinder(x, y, 0, 0.055, 0.1, 6);
+  g.detailed(2, () => g.line([[x - 0.035, y - 0.048, 0.035], [x + 0.035, y - 0.048, 0.035], [x + 0.035, y - 0.048, 0.08], [x - 0.035, y - 0.048, 0.08], [x - 0.035, y - 0.048, 0.035]], { facing: [0, -1, 0] }));
+  g.lathe(x, y, 0.1, [[0.08, 0], [0.08, 0.014], [0.025, 0.036], [0, 0.042]], 6);
+}
+
+// Noticeboard: two posts, a board and a little roof over it.
+export function noticeboard(g, x, y, alongX = true) {
+  if (!g.isFree(x, y, 0.05)) return;
+  const [dx, dy] = alongX ? [0.045, 0] : [0, 0.045];
+  g.detailed(2, () => {
+    g.solid(x, y, 0.05);
+    for (const k of [-1, 1]) g.line([[x + dx * k, y + dy * k, 0], [x + dx * k, y + dy * k, 0.1]]);
+    g.line([[x - dx, y - dy, 0.04], [x + dx, y + dy, 0.04], [x + dx, y + dy, 0.09], [x - dx, y - dy, 0.09], [x - dx, y - dy, 0.04]]);
+    g.line([[x - dx * 1.2, y - dy * 1.2, 0.1], [x + dx * 1.2, y + dy * 1.2, 0.1]]);
+  });
+}
+
+// Floodlight mast: a lattice leg narrowing upwards, a bank of lamps on top
+// facing `face` (2D direction the lamps look).
+export function floodlight(g, x, y, h = 0.7, face = [1, 1]) {
+  const b = 0.03 + h * 0.015, t = 0.018;
+  const len = Math.hypot(face[0], face[1]);
+  const [fx, fy] = [face[0] / len, face[1] / len];
+  g.detailed(1, () => {
+    g.solid(x, y, h / 2);
+    const legs = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    for (const [sx, sy] of legs) g.line([[x + sx * b, y + sy * b, 0], [x + sx * t, y + sy * t, h]], FRAME);
+    g.detailed(2, () => {
+      // cross bracing on two sides, zig-zag up the mast
+      const n = 6;
+      for (const [a, c] of [[legs[0], legs[1]], [legs[1], legs[2]]]) {
+        const pts = [];
+        for (let i = 0; i <= n; i++) {
+          const k = i / n, r = b + (t - b) * k, s = i % 2 ? c : a;
+          pts.push([x + s[0] * r, y + s[1] * r, h * k]);
+        }
+        g.line(pts);
+      }
+    });
+    // the lamp bank: a block on top, leaning out towards the pitch
+    const [cx, cy] = [x + fx * 0.02, y + fy * 0.02];
+    g.box(cx - 0.05, cy - 0.05, h - 0.02, 0.1, 0.1, 0.07);
+  });
+}
+
+// Football pitch marked on the ground from (x0, y0) to (x1, y1), its length
+// along the longer side: outline, halfway line, centre circle, penalty
+// boxes, and a goal frame at each end.
+export function pitch(g, x0, y0, x1, y1) {
+  const alongX = x1 - x0 >= y1 - y0;
+  const P = alongX ? (u, v) => [x0 + u, y0 + v] : (u, v) => [x0 + v, y0 + u];
+  const L = alongX ? x1 - x0 : y1 - y0, W = alongX ? y1 - y0 : x1 - x0;
+  const box = (u0, u1, v0, v1) => [P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)];
+  g.groundPoly(box(0, L, 0, W));
+  g.groundLine([P(L / 2, 0), P(L / 2, W)]);
+  g.groundCircle(...P(L / 2, W / 2), Math.min(W * 0.16, 0.08), { lod: 1 });
+  const bd = L * 0.14, bw = W * 0.55;
+  g.groundPoly(box(0, bd, (W - bw) / 2, (W + bw) / 2), { lod: 1 });
+  g.groundPoly(box(L - bd, L, (W - bw) / 2, (W + bw) / 2), { lod: 1 });
+  const gw = Math.min(W * 0.18, 0.08), h = 0.035;
+  g.detailed(2, () => {
+    for (const u of [0, L]) {
+      const [a, b] = [P(u, (W - gw) / 2), P(u, (W + gw) / 2)];
+      g.solid((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, h / 2);
+      g.line([[...a, 0], [...a, h], [...b, h], [...b, 0]]);
+    }
+  });
+}
+
+// A sloping enclosed bridge (conveyor gallery) from a to b ([x, y, z],
+// bottom middle of each end), w wide and h tall.
+export function gallery(g, a, b, w = 0.05, h = 0.05) {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const px = (-(b[1] - a[1]) / len) * (w / 2), py = ((b[0] - a[0]) / len) * (w / 2);
+  const c = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2 + h / 2];
+  const at = (e, k, up) => [e[0] + px * k, e[1] + py * k, e[2] + (up ? h : 0)];
+  const A = [at(a, -1, 0), at(a, 1, 0), at(a, 1, 1), at(a, -1, 1)];
+  const B = [at(b, -1, 0), at(b, 1, 0), at(b, 1, 1), at(b, -1, 1)];
+  g.solid(...c);
+  const faces = [A, B, [A[0], A[1], B[1], B[0]], [A[3], A[2], B[2], B[3]], [A[0], A[3], B[3], B[0]], [A[1], A[2], B[2], B[1]]];
+  for (const f of faces) g.face(outward(f, c));
+}
+
+// Order a planar polygon counter-clockwise as seen from outside, away from
+// the point `c` inside the solid.
+export function outward(pts, c) {
+  let nx = 0, ny = 0, nz = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0, z0] = pts[i], [x1, y1, z1] = pts[(i + 1) % pts.length];
+    nx += (y0 - y1) * (z0 + z1);
+    ny += (z0 - z1) * (x0 + x1);
+    nz += (x0 - x1) * (y0 + y1);
+  }
+  const m = pts.reduce((s, p) => [s[0] + p[0], s[1] + p[1], s[2] + p[2]], [0, 0, 0]).map((v) => v / pts.length);
+  const dot = nx * (m[0] - c[0]) + ny * (m[1] - c[1]) + nz * (m[2] - c[2]);
+  return dot >= 0 ? pts : [...pts].reverse();
+}
+
+// Farm tractor, facing along x (or y), about as long as a car: a bonnet,
+// a cab, big back wheels and small front ones.
+export function tractor(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.08)) return;
+  const [ux, uy] = alongX ? [1, 0] : [0, 1];
+  const [vx, vy] = [-uy, ux];
+  // box in the tractor's own frame: u forward, v to the left
+  const box = (u0, u1, v0, v1, z0, z1) => g.box(
+    x + Math.min(u0 * ux + v0 * vx, u1 * ux + v1 * vx), y + Math.min(u0 * uy + v0 * vy, u1 * uy + v1 * vy), z0,
+    Math.abs((u1 - u0) * ux + (v1 - v0) * vx), Math.abs((u1 - u0) * uy + (v1 - v0) * vy), z1 - z0);
+  const wheel = (u, v, r) => {
+    const cx = x + u * ux + v * vx, cy = y + u * uy + v * vy;
+    g.line(Array.from({ length: 13 }, (_, i) => {
+      const a = (i / 12) * Math.PI * 2;
+      return [cx + Math.cos(a) * r * ux, cy + Math.cos(a) * r * uy, r + Math.sin(a) * r];
+    }), FRAME);
+  };
+  g.detailed(2, () => {
+    box(-0.05, 0.065, -0.018, 0.018, 0.02, 0.035);   // chassis
+    box(0.0, 0.065, -0.02, 0.02, 0.035, 0.06);       // bonnet
+    box(-0.06, -0.005, -0.027, 0.027, 0.035, 0.105); // cab
+    for (const v of [-0.04, 0.04]) wheel(-0.035, v, 0.035);
+    for (const v of [-0.032, 0.032]) wheel(0.045, v, 0.02);
+  });
+}
+
+// Haystack: a rounded stack.
+export function haystack(g, x, y, r = 0.06) {
+  if (!g.isFree(x, y, r)) return;
+  g.detailed(1, () => mound(g, x, y, r, r * 1.6));
+}
+
+// ----- round bodies (towers, silos): details on a curved wall -----
+
+// Small windows on a round wall of radius r round (x, y): n around, a row
+// every `step` from z0 to z1, each row turned half a bay from the one
+// below. Ink blocks (or outlines) like g.windows, hidden when round the back.
+export function roundWindows(g, x, y, r, z0, z1, step, n, { w = 0.025, h = 0.05, phase = 0 } = {}) {
+  const cls = LOOK.ink ? 'ink' : undefined;
+  const da = w / 2 / r;
+  let row = 0;
+  for (let z = z0; z + h <= z1 + 1e-6; z += step, row++) {
+    for (let k = 0; k < n; k++) {
+      const a = ((k + phase + (row % 2) * 0.5) / n) * Math.PI * 2;
+      const p = (t, zz) => [x + Math.cos(a + t) * r * 1.002, y + Math.sin(a + t) * r * 1.002, zz];
+      g.line([p(-da, z), p(da, z), p(da, z + h), p(-da, z + h), p(-da, z)], { facing: [Math.cos(a), Math.sin(a), 0], cls });
+    }
+  }
+}
+
+// Hoops round a silo or a tank: the near half of a ring at each height.
+export function hoops(g, x, y, r, zs) {
+  g.detailed(2, () => {
+    for (const z of zs) {
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2, b = ((k + 1) / 16) * Math.PI * 2, m = (a + b) / 2;
+        g.line([[x + Math.cos(a) * r, y + Math.sin(a) * r, z], [x + Math.cos(b) * r, y + Math.sin(b) * r, z]], { facing: [Math.cos(m), Math.sin(m), 0] });
+      }
+    }
   });
 }

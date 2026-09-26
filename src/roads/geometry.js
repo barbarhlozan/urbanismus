@@ -199,7 +199,27 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true) {
   const out = [];
   const arms = new Map(); // junction / dead end -> [{ to, dir, ends: [p, p] }]
   const exitAt = new Map(exits.map((e) => [e.node, e.dir]));
-  const trimAt = (n) => (graph.degree(n) > 2 ? width * 1.25 : 0);
+  // How far an edge stops short of a junction n, on the side of the road
+  // to `to` that faces the next road round (turn +1, anticlockwise) or the
+  // one before (-1): far enough for a corner, and on the inside of a sharp
+  // angle past where the two edges meet (w / tan(θ/2) out), so they don't
+  // cross into a notch.
+  const angleTo = (n, m) => {
+    const [x, y] = layer.pos(n), [tx, ty] = layer.pos(m);
+    return Math.atan2(ty - y, tx - x);
+  };
+  const trimAt = (n, to, turn) => {
+    if (graph.degree(n) <= 2) return 0;
+    const own = angleTo(n, to);
+    let gap = Math.PI * 2;
+    for (const m of graph.neighbors(n)) {
+      if (m === to) continue;
+      const d = ((((angleTo(n, m) - own) * turn) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      if (d > 1e-6) gap = Math.min(gap, d);
+    }
+    const meet = gap < Math.PI ? width / Math.tan(gap / 2) : 0;
+    return Math.max(width * 1.25, meet + width * 0.4);
+  };
   const pairKey = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
   for (const chain of networkChains(graph)) {
     // centre line of the run, remembering where each segment starts
@@ -216,19 +236,22 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true) {
     const [first, last] = [chain[0], chain[chain.length - 1]];
     const closed = first === last && graph.degree(first) === 2;
     const sides = [offsetPolyline(centre, width), offsetPolyline(centre, -width)];
+    // side 0 (offset +w) faces the next road round at the start of the run,
+    // the one before at its end; side 1 the other way
+    const cut = sides.map((_, k) => [trimAt(first, chain[1], k ? -1 : 1), trimAt(last, chain[chain.length - 2], k ? 1 : -1)]);
     for (let i = 1; i < chain.length; i++) {
       const [a, b] = [chain[i - 1], chain[i]];
       // side 0 / 1 = right / left of the segment going from its lower dot
       const flip = a > b;
       sides.forEach((side, k) => {
         let piece = side.slice(starts[i - 1], starts[i] + 1);
-        if (!closed && i === 1) piece = trimStart(piece, trimAt(first));
-        if (!closed && i === chain.length - 1) piece = trimStart(piece.reverse(), trimAt(last)).reverse();
+        if (!closed && i === 1) piece = trimStart(piece, cut[k][0]);
+        if (!closed && i === chain.length - 1) piece = trimStart(piece.reverse(), cut[k][1]).reverse();
         if (piece.length > 1) out.push({ key: `${pairKey(a, b)}${k ^ flip}`, kind: 'edge', line: piece, a, b });
       });
     }
     if (closed) continue;
-    const ends = sides.map((l) => [trimStart(l, trimAt(first))[0], trimStart(l.slice().reverse(), trimAt(last))[0]]);
+    const ends = sides.map((l, k) => [trimStart(l, cut[k][0])[0], trimStart(l.slice().reverse(), cut[k][1])[0]]);
     const arm = (n, to, pts) => {
       if (pts.some((p) => !p)) return;
       const [x, y] = layer.pos(n), [tx, ty] = layer.pos(to);

@@ -19,6 +19,7 @@ function cross(g, x, y, z, s = 0.05) {
 }
 
 const common = {
+  access: 'any', // a footpath will do
   category: 'civic',
   tags: ['services'],
   code: 'S',

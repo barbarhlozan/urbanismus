@@ -132,7 +132,7 @@ export const CONFIG = {
   // otherwise make service runs to businesses or other industry. Delivery
   // trucks also come in from outside to businesses and industry.
   trucks: {
-    homes: ['industrial'],          // structure ids / tags that keep trucks
+    homes: ['industrial', 'farm'],  // structure ids / tags that keep trucks
     perLevel: [1, 1, 2],            // trucks per building at level 1 / 2 / 3
     exportShare: 0.6,               // trips that leave the map (needs a road exit)
     destinations: ['business', 'business', 'industrial'], // service runs, picked at random

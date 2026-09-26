@@ -30,9 +30,12 @@ export function createBuildTool({ world }, defs) {
     group: categoryOf(defs[0]),
     touchConfirm: true,
 
+    // params: { hotkey } picks that variant; { type, rotation } picks up a
+    // copy of a built structure (right-click on it)
     enter(params) {
-      const i = defs.findIndex((d) => d.hotkey && d.hotkey === params.hotkey);
+      const i = defs.findIndex((d) => (d.hotkey && d.hotkey === params.hotkey) || d.id === params.type);
       if (i >= 0) variant = i;
+      if (params.rotation != null) rotation = params.rotation;
     },
 
     snap(x, y) {

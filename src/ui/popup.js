@@ -4,6 +4,8 @@
 // (unavailable: can't be done here – shown crossed out in the detail colour)
 // keepOpen items leave the menu open and rebuild it with `refresh()`
 // (passed to show), e.g. to cycle through options.
+// `around` (a screen box of what was clicked) puts the menu beside it rather
+// than at the pointer: to the right if there's room, else to the left.
 
 import { isNarrow } from './device.js';
 
@@ -42,7 +44,7 @@ export class Popup {
     return !this.el.classList.contains('hidden');
   }
 
-  show(x, y, title, items, refresh = null) {
+  show(x, y, title, items, refresh = null, around = null) {
     this.refresh = refresh;
     this.render(title, items);
     this.el.classList.toggle('sheet', isNarrow());
@@ -52,8 +54,18 @@ export class Popup {
       return;
     }
     const { width, height } = this.el.getBoundingClientRect();
-    this.el.style.left = `${Math.max(8, Math.min(x + 12, innerWidth - width - 8))}px`;
-    this.el.style.top = `${Math.max(8, Math.min(y + 12, innerHeight - height - 8))}px`;
+    const GAP = 16;
+    let left = x + 12, top = y + 12;
+    if (around) {
+      const fitsRight = around.right + GAP + width <= innerWidth - 8;
+      const fitsLeft = around.left - GAP - width >= 8;
+      if (fitsRight || !fitsLeft) left = around.right + GAP;
+      else left = around.left - GAP - width;
+      if (!fitsRight && !fitsLeft) left = x + 12; // too wide to go beside it
+      top = (around.top + around.bottom) / 2 - height / 2;
+    }
+    this.el.style.left = `${Math.max(8, Math.min(left, innerWidth - width - 8))}px`;
+    this.el.style.top = `${Math.max(8, Math.min(top, innerHeight - height - 8))}px`;
   }
 
   render(title, items) {

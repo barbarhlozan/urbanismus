@@ -126,7 +126,7 @@ export class Hud {
       ['Paths', world.paths.edgeCount],
     ];
     if (world.rails.edgeCount) cells.push(['Rail', world.rails.edgeCount]);
-    if (unconnected) cells.push(['No road', unconnected]);
+    if (unconnected) cells.push(['Cut off', unconnected]);
     this.statsEl.innerHTML = cells.map(([k, v]) => `<div class="cell"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
   }
 }
