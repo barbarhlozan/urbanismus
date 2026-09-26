@@ -12,8 +12,8 @@ export function createInspectTool(ctx) {
     hotkey: 'v',
 
     hint: () => isTouch()
-      ? 'Tap a dot · drag to pan · pinch to zoom'
-      : 'Click a dot · drag to pan · scroll to zoom · Q / E rotate',
+      ? 'Tap the map · drag to pan · pinch to zoom'
+      : 'Click the map · drag to pan · scroll to zoom · Q / E rotate',
 
     click(node, event) {
       if (node < 0) return ctx.popup.hide();

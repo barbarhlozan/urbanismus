@@ -4,7 +4,7 @@
 // up automatically.
 //
 // Optional definition fields beyond those documented in residential.js:
-//   category   toolbar tab: 'zone' (default) or 'civic' – see CATEGORIES
+//   category   toolbar tab: 'zone' (default), 'civic' or 'heritage' – see CATEGORIES
 //   tags       extra names growth rules and agents can match, e.g. ['park']
 //   access     'road' (default) or 'any' – 'any' also counts a footpath as access
 //   code       short prefix for annotations, e.g. 'R' -> "R-012" (default: first letter)
@@ -22,15 +22,18 @@ import industrial from './industrial.js';
 import * as park from './park.js';
 import * as square from './square.js';
 import * as services from './services.js';
+import * as heritage from './heritage.js';
 
 export const CATEGORIES = [
   { id: 'zone', label: 'Zones' },
   { id: 'civic', label: 'Civic' },
+  { id: 'heritage', label: 'Heritage' },
 ];
 
 export const STRUCTURES = [
   residential, business, industrial,
   park.small, park.large, square.small, square.large, services.small, services.large,
+  heritage.chapel, heritage.church, heritage.townHall, heritage.column,
 ];
 
 export const STRUCTURE_TYPES = Object.fromEntries(STRUCTURES.map((s) => [s.id, s]));
@@ -85,6 +88,37 @@ export function yardOf(def, s) {
   const options = levelOf(def, s).yards ?? [];
   if (!options.length) return null;
   return options[Math.floor(mulberry32(drawSeed(s) ^ 0x51ed)() * options.length)];
+}
+
+// Joined buildings: neighbouring single-dot buildings facing the same road
+// can share a wall and read as one street front (a terrace of tenements, a
+// panel block in sections). A level opts in with
+//   join: { group, chance }
+// Two neighbours join when both levels are in the same group, they stand side
+// by side along their road (same drawn rotation), and a roll seeded by both
+// buildings is under the lower chance – so it stays put until one of them is
+// restyled or changes level. The draw function gets g.join = { left, right }.
+export function joinSides(world, s) {
+  const none = { left: false, right: false };
+  const def = STRUCTURE_TYPES[s.type];
+  const join = def && levelOf(def, s).join;
+  if (!join || world.nodesOf(s).length !== 1) return none;
+  const rot = world.facingRotation(s.type, s.node, s.rotation);
+  const [x, y] = world.grid.xy(s.node);
+  const side = (dir) => {
+    const [dx, dy] = rotateQuarter(dir, 0, rot);
+    const n = world.grid.nodeAt(x + dx, y + dy);
+    const o = n >= 0 ? world.structureAt(n) : null;
+    if (!o || o.id === s.id) return false;
+    const odef = STRUCTURE_TYPES[o.type];
+    const ojoin = odef && levelOf(odef, o).join;
+    if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return false;
+    if (world.facingRotation(o.type, o.node, o.rotation) !== rot) return false;
+    const [a, b] = s.id < o.id ? [s, o] : [o, s];
+    const roll = mulberry32((drawSeed(a) ^ Math.imul(drawSeed(b), 0x85ebca6b) ^ 0x10ad) >>> 0)();
+    return roll < Math.min(join.chance ?? 1, ojoin.chance ?? 1);
+  };
+  return { left: side(-1), right: side(1) };
 }
 
 // Footprint offsets relative to the anchor dot, after rotation.

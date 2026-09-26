@@ -5,18 +5,14 @@
 // they disappear when zoomed out.
 
 import { clipSegment, splitRuns } from '../src/core/geom2d.js';
+import { drawTree, pickKind } from '../features/trees.js';
 
-export function tree(g, x, y, size = 1) {
+// A tree (features/trees.js), about half a grid step tall at size 1: any of
+// the three kinds, or one given as `kind`.
+export function tree(g, x, y, size = 1, kind = null) {
   if (!g.isFree(x, y, 0.07 * size)) return;
-  const h = 0.2 * size;
-  g.solid(x, y, h);
-  if (g.chance(0.35)) {
-    g.line([[x, y, 0], [x, y, h * 0.3]]);
-    g.shape(x, y, h * 0.2, [[-0.08 * size, 0], [0.08 * size, 0], [0, 0.28 * size]]);
-  } else {
-    g.line([[x, y, 0], [x, y, h * 0.7]]);
-    g.disc(x, y, h, 0.075 * size);
-  }
+  const k = kind ?? pickKind(g);
+  drawTree(g, x, y, k, (k === 'spruce' ? 0.56 : 0.5) * size);
 }
 
 export function bush(g, x, y, r = 0.04) {
@@ -147,11 +143,26 @@ export function pallets(g, x, y) {
   g.detailed(2, () => g.box(x - 0.06, y - 0.05, 0, 0.12, 0.1, 0.04));
 }
 
+// Street lamp: a tall concrete post with its head on a bent arm.
 export function lamp(g, x, y) {
   if (!g.isFree(x, y, 0.03)) return;
   g.detailed(2, () => {
     g.solid(x, y, 0.1);
-    g.line([[x, y, 0], [x, y, 0.16], [x + 0.03, y, 0.17]]);
+    g.line([[x, y, 0], [x, y, 0.2], [x + 0.02, y, 0.225], [x + 0.06, y, 0.23]]);
+    g.line([[x + 0.045, y, 0.225], [x + 0.08, y, 0.225]], { width: 2.2 });
+  });
+}
+
+// Row of lock-up garages from x0 to x1, backs at y1, doors facing -y.
+export function garages(g, x0, x1, y1, d = 0.17, h = 0.08) {
+  const n = Math.max(1, Math.floor((x1 - x0) / 0.12));
+  const w = (x1 - x0) / n;
+  g.box(x0, y1 - d, 0, x1 - x0, d, h);
+  g.detailed(2, () => {
+    for (let i = 0; i < n; i++) {
+      const a = x0 + i * w + 0.015, b = x0 + (i + 1) * w - 0.015;
+      g.line([[a, y1 - d, 0], [a, y1 - d, h * 0.75], [b, y1 - d, h * 0.75], [b, y1 - d, 0]], { facing: [0, -1, 0] });
+    }
   });
 }
 
@@ -212,4 +223,111 @@ function fenceRun(g, pts, h, spacing) {
     }
     run -= len;
   }
+}
+
+// ----- joined buildings (g.join, see structures/index.js) -----
+
+// x extent of a front `w` wide, reaching the lot edge on joined sides.
+export function frontage(g, w) {
+  return [g.join.left ? -0.5 : -w / 2, g.join.right ? 0.5 : w / 2];
+}
+
+// Walls shared with a neighbour, for opts.skip of floors / windows / mullions.
+export function shared(g) {
+  return [g.join.left && 'left', g.join.right && 'right'].filter(Boolean);
+}
+
+// Hip insets for a roof with its ridge along x: gable (party wall) ends where joined.
+export function hips(g, inset) {
+  return [g.join.left ? 0 : inset, g.join.right ? 0 : inset];
+}
+
+// ----- roof bits -----
+
+// TV aerials along the ridge or roof: n masts between x0 and x1 at depth y.
+export function aerials(g, x0, x1, y, z, n = 3) {
+  g.detailed(2, () => {
+    for (let i = 0; i < n; i++) {
+      const x = x0 + ((i + 0.5) / n) * (x1 - x0) + g.range(-0.03, 0.03);
+      const h = g.range(0.08, 0.13);
+      g.solid(x, y, z + h);
+      g.line([[x, y, z], [x, y, z + h]]);
+      for (const k of [0.6, 0.85]) g.line([[x - 0.035 * k, y, z + h * k], [x + 0.035 * k, y, z + h * k]]);
+    }
+  });
+}
+
+// Brick chimney standing on the roof (starts at z, pokes out above the ridge).
+export function chimney(g, x, y, z, h, s = 0.045) {
+  g.box(x - s / 2, y - s / 2, z, s, s, h);
+}
+
+// Tapered industrial chimney.
+export function stack(g, x, y, h, r = 0.08) {
+  g.lathe(x, y, 0, [[r, 0], [r * 0.55, h], [r * 0.62, h + 0.02], [r * 0.62, h + 0.04]], 10);
+}
+
+// Flag pole with a small pennant.
+export function flagpole(g, x, y, h) {
+  g.solid(x, y, h / 2);
+  g.line([[x, y, 0], [x, y, h]]);
+  g.shape(x, y, h - 0.06, [[0, 0], [0.09, 0.03], [0, 0.06]]);
+}
+
+// Door outline on the front (-y) wall.
+export function door(g, x, y, w = 0.07, h = 0.12) {
+  g.line([[x - w / 2, y, 0], [x - w / 2, y, h], [x + w / 2, y, h], [x + w / 2, y, 0]], { facing: [0, -1, 0] });
+}
+
+// Rectangle on the front (-y) wall.
+export function panel(g, x0, x1, y, z0, z1) {
+  g.line([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [x0, y, z0]], { facing: [0, -1, 0] });
+}
+
+// ----- housing estate props -----
+
+// Carpet-beating rack: two posts and a bar.
+export function carpetRack(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.07)) return;
+  const [dx, dy] = alongX ? [0.07, 0] : [0, 0.07];
+  g.detailed(2, () => {
+    g.solid(x, y, 0.05);
+    g.line([[x - dx, y - dy, 0], [x - dx, y - dy, 0.09], [x + dx, y + dy, 0.09], [x + dx, y + dy, 0]]);
+  });
+}
+
+// Clothes-drying frame: two T posts with lines between them.
+export function dryingFrame(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.1)) return;
+  const [dx, dy] = alongX ? [0.1, 0] : [0, 0.1];
+  const [px, py] = alongX ? [0, 0.03] : [0.03, 0];
+  g.detailed(2, () => {
+    g.solid(x, y, 0.04);
+    for (const k of [-1, 1]) {
+      const ex = x + dx * k, ey = y + dy * k;
+      g.line([[ex, ey, 0], [ex, ey, 0.08]]);
+      g.line([[ex - px, ey - py, 0.08], [ex + px, ey + py, 0.08]]);
+    }
+    for (const k of [-1, 0, 1]) g.line([[x - dx + px * k, y - dy + py * k, 0.08], [x + dx + px * k, y + dy + py * k, 0.08]]);
+  });
+}
+
+// Sandpit with a low wooden edge.
+export function sandpit(g, x, y) {
+  if (!g.isFree(x, y, 0.09)) return;
+  g.detailed(2, () => g.box(x - 0.07, y - 0.07, 0, 0.14, 0.14, 0.015));
+}
+
+// Climbing frame: the playground "rocket" / dome of bars.
+export function climbingFrame(g, x, y) {
+  if (!g.isFree(x, y, 0.07)) return;
+  g.detailed(2, () => {
+    g.solid(x, y, 0.06);
+    const r = 0.06;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI;
+      const [cx, cy] = [Math.cos(a) * r, Math.sin(a) * r];
+      g.line([[x - cx, y - cy, 0], [x - cx * 0.7, y - cy * 0.7, 0.07], [x, y, 0.1], [x + cx * 0.7, y + cy * 0.7, 0.07], [x + cx, y + cy, 0]]);
+    }
+  });
 }

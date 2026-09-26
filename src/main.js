@@ -2,12 +2,10 @@
 
 import { CONFIG } from './config.js';
 import { applyTheme } from './theme.js';
-import { Style } from './render/style.js';
-import { makeWarp } from './render/warp.js';
-import { Crt } from './ui/crt.js';
+import { STYLE } from './render/style.js';
+import { makeWarp, makeLift } from './render/warp.js';
+import { ELEVATION, makeElevation } from './terrain/elevation.js';
 import { Annotations } from './ui/annotations.js';
-import { StylePanel } from './ui/stylePanel.js';
-import { PixelRenderer } from './render/pixel.js';
 import { World } from './core/world.js';
 import { generateWorld } from './terrain/generate.js';
 import { Camera } from './render/camera.js';
@@ -24,6 +22,7 @@ import { createBuildTool } from './tools/build.js';
 import { createBulldozeTool } from './tools/bulldoze.js';
 import { Popup } from './ui/popup.js';
 import { Hud } from './ui/hud.js';
+import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
 import { attachInput } from './ui/input.js';
 import { STRUCTURES } from '../structures/index.js';
 
@@ -65,51 +64,31 @@ scheduleSave();
 const svg = document.getElementById('world');
 const uiRoot = document.getElementById('ui');
 
-const style = new Style();
 const camera = new Camera(world.grid, CONFIG.camera);
-camera.warp = makeWarp(world.seed, style.get('warp'), style.get('tremor'));
-camera.centerOn(camera.cx, camera.cy, svg.clientWidth, svg.clientHeight);
+camera.warp = makeWarp(world.seed, STYLE.warp, STYLE.tremor);
+camera.lift = makeLift(makeElevation(world.seed), ELEVATION.relief, STYLE.relief,
+  [-3, -3, world.grid.width + 2, world.grid.height + 2]);
+camera.centerOn(camera.cx, camera.cy, innerWidth, innerHeight);
 
 // Keep whatever is in the middle of the screen in the middle when resizing.
-let viewport = [svg.clientWidth, svg.clientHeight];
-new ResizeObserver(() => {
-  const [w, h] = [svg.clientWidth, svg.clientHeight];
+// (the SVGs reach past the window, see Renderer.placeView, so use the window)
+let viewport = [innerWidth, innerHeight];
+window.addEventListener('resize', () => {
+  const [w, h] = [innerWidth, innerHeight];
   camera.panX += (w - viewport[0]) / 2;
   camera.panY += (h - viewport[1]) / 2;
   viewport = [w, h];
-}).observe(svg);
+});
 
 const clock = new SimClock(CONFIG);
 const parking = new ParkingSystem(world);
 const agents = new AgentSystem(world, CONFIG, parking);
 const growth = new GrowthSystem(world, CONFIG);
-const renderer = new Renderer(svg, { world, camera, agents, parking, style, config: CONFIG });
+const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, parking, config: CONFIG });
 const overlayKit = new OverlayKit(world, camera, CONFIG);
-const pixels = new PixelRenderer(svg, { world, camera, renderer, agents, parking, config: CONFIG });
 const popup = new Popup(uiRoot);
-const crt = new Crt(uiRoot);
-const annotations = new Annotations(uiRoot, { world, camera, clock, style });
+const annotations = new Annotations(uiRoot, { world, camera, clock });
 agents.log = growth.log = (text, pos) => annotations.log(text, pos);
-const stylePanel = new StylePanel(uiRoot, style);
-
-// Visual style: CSS classes on the map, CRT overlay, and the map warp.
-function applyStyle(key) {
-  svg.classList.toggle('crisp', !!style.get('crisp'));
-  svg.classList.toggle('broken', !!style.get('broken'));
-  svg.classList.toggle('glow', !!style.get('glow'));
-  crt.set({ scanlines: style.get('scanlines') });
-  if (!key || key.startsWith('pixel')) {
-    pixels.set({ size: style.get('pixels'), weight: style.get('pixelWeight'), detail: style.get('pixelDetail'), follow: style.get('pixelFollow') });
-    annotations.pixelScale = pixels.scale;
-  }
-  if (key === 'warp' || key === 'tremor') {
-    camera.warp = makeWarp(world.seed, style.get('warp'), style.get('tremor'));
-    renderer.invalidate();
-  }
-  if (key === 'frame') renderer.dirty.add('frame');
-}
-style.onChange(applyStyle);
-applyStyle();
 
 const tools = new ToolManager(world.grid, 'inspect');
 const ctx = { world, camera, tools, popup, growth, config: CONFIG };
@@ -123,8 +102,8 @@ const actions = {
   rotateLeft: () => { camera.rotate(-1, ...viewport); renderer.invalidate(); },
   rotateRight: () => { camera.rotate(1, ...viewport); renderer.invalidate(); },
   pause: () => { clock.paused = !clock.paused; },
-  style: () => stylePanel.toggle(),
   speed: () => clock.cycleSpeed(),
+  terrain: () => setContours(!renderer.contours),
   newMap: () => {
     if (!confirm('Discard this city and generate a new map?')) return;
     world.events.off('*', scheduleSave);
@@ -135,7 +114,31 @@ const actions = {
 };
 
 const hud = new Hud(uiRoot, { world, tools, agents, clock, actions });
-tools.onChange((tool) => svg.classList.toggle('show-fine', !!tool.fineGrid));
+new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
+
+// Terrain contour lines: off unless switched on (remembered in this browser).
+const CONTOURS_KEY = 'urbanismus.contours';
+function setContours(on) {
+  renderer.setContours(on);
+  uiRoot.querySelector('[data-act="terrain"]').classList.toggle('on', on);
+  try {
+    localStorage.setItem(CONTOURS_KEY, on ? '1' : '0');
+  } catch {
+    // storage unavailable: the choice just won't be remembered
+  }
+}
+let savedContours = null;
+try {
+  savedContours = localStorage.getItem(CONTOURS_KEY);
+} catch {
+  // storage unavailable
+}
+setContours(savedContours === null ? STYLE.contours : savedContours === '1');
+tools.onChange((tool) => {
+  // dots only while building; Select shows the bare map
+  svg.classList.toggle('show-grid', tool.id !== 'inspect');
+  svg.classList.toggle('show-fine', !!tool.fineGrid);
+});
 tools.use('inspect');
 
 // ---------- input ----------
@@ -184,7 +187,6 @@ function loop(now) {
     agents.update(simDt);
     growth.update(simDt);
     renderer.frame(tools.overlay(overlayKit) + annotations.overlay(overlayKit, tools.point, tools.active?.id));
-    pixels.frame();
     hud.update();
     annotations.update();
   } catch (err) {
@@ -195,4 +197,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // Handy for debugging from the console.
-window.urbanismus = { world, camera, clock, agents, growth, parking, tools, renderer, style, annotations, pixels, hud };
+window.urbanismus = { world, camera, clock, agents, growth, parking, tools, renderer, annotations, hud };

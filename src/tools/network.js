@@ -22,6 +22,14 @@ export function createNetworkTool({ world, config }, options) {
     bend = bend === BEND.DIAGONAL_FIRST ? BEND.STRAIGHT_FIRST : BEND.DIAGONAL_FIRST;
   };
 
+  // Footpath dots on or right beside a road (where a stroke becomes sidewalks).
+  const nearAnyRoad = (f) => layer.grid.neighbors(f).some((g) => world.roadBeside(f, g));
+  const sidewalkNote = (plan) => {
+    if (kind !== 'path' || !plan?.check.ok) return '';
+    const along = plan.nodes.some((n, i) => i > 0 && world.roadBeside(plan.nodes[i - 1], n));
+    return along ? 'Along the road it becomes sidewalks · ' : '';
+  };
+
   const currentPlan = () => {
     if (start < 0 || hover < 0 || hover === start) return null;
     const nodes = planRoute(layer.grid, start, hover, bend);
@@ -83,21 +91,24 @@ export function createNetworkTool({ world, config }, options) {
 
     hint() {
       if (isTouch()) {
-        if (start < 0) return `Tap a dot to start a ${noun}`;
+        if (start < 0) return `Tap a dot to start a ${noun} · draw along a road to give it sidewalks`;
         const plan = currentPlan();
         if (!plan) return 'Tap where it should end';
         return plan.check.ok ? 'Tap again to build' : plan.check.reason;
       }
-      if (start < 0) return `Click a dot to start a ${noun}`;
+      if (start < 0) {
+        const nearRoad = kind === 'path' && hover >= 0 && nearAnyRoad(hover);
+        return nearRoad ? 'Draw along a road to give it sidewalks' : `Click a dot to start a ${noun}`;
+      }
       const plan = currentPlan();
-      const status = plan && !plan.check.ok ? `${plan.check.reason} · ` : '';
+      const status = plan && !plan.check.ok ? `${plan.check.reason} · ` : sidewalkNote(plan);
       return `${status}Click to end · Tab: ${bend} · right-click to stop`;
     },
 
     overlay(kit) {
       let out = '';
-      if (hover >= 0) out += kit.ringAt(...layer.pos(hover), hoverRadius * layer.scale);
-      if (start >= 0) out += kit.ringAt(...layer.pos(start), 0.22 * layer.scale, 'anchor');
+      if (hover >= 0) out += kit.ringAt(...layer.dot(hover), hoverRadius * layer.scale);
+      if (start >= 0) out += kit.ringAt(...layer.dot(start), 0.22 * layer.scale, 'anchor');
       const plan = currentPlan();
       if (!plan) return out;
       const points = plan.nodes.map((n) => layer.pos(n));

@@ -15,7 +15,7 @@
 // Levels list the styles they may get in `yards: [...]`; one is picked from
 // the building's seed. The player can override it (s.data.yard).
 
-import { tree, bush, hedge, fenceAlong, bench, crates, container, lamp, paving } from './kit.js';
+import { tree, bush, hedge, fenceAlong, bench, crates, container, lamp, paving, garages } from './kit.js';
 
 const spots = (x0, x1, step) => {
   const out = [];
@@ -114,6 +114,23 @@ export const YARDS = {
         tree(g, x, y, 0.95);
       }
       if (g.chance(0.6)) bench(g, g.pick([-0.12, 0.12]), y1 - 0.08);
+    },
+  },
+
+  garages: {
+    name: 'Garages',
+    draw(g, yard) {
+      const { x0, x1, y1 } = yard;
+      // a row of lock-ups either side of the way to the door, with an apron
+      const back = y1 - 0.02;
+      for (const [a, b] of [[x0 + 0.04, -0.1], [0.1, x1 - 0.04]]) {
+        if (b - a < 0.12) continue;
+        if (room(yard, a, 0.2) < 0.2 || room(yard, b, 0.2) < 0.2) continue;
+        if (![a, (a + b) / 2, b].every((x) => g.isFree(x, back - 0.09, 0.05))) continue;
+        garages(g, a, b, back);
+      }
+      g.groundLine(edgeLine(yard, 0.03, x0 + 0.03, x1 - 0.03));
+      if (g.chance(0.6) && room(yard, x1 - 0.06, 0.06) > 0.02) lamp(g, x1 - 0.06, yard.frontAt(x1 - 0.06) + 0.06);
     },
   },
 
