@@ -9,6 +9,7 @@
 
 import { STRUCTURE_TYPES, levelOf, codeOf } from '../../structures/index.js';
 import { STYLE } from '../render/style.js';
+import { sketchRect, sketchPolyline, seedOf } from '../render/sketch.js';
 
 const FEED_LINES = 6;
 
@@ -95,8 +96,8 @@ export class Annotations {
     return null;
   }
 
-  // Leader line from a point up and to the right, then a label in a
-  // rounded box (all in screen pixels, divided by the zoom).
+  // Leader line from a point up and to the right, then a label in a box,
+  // both drawn by pen (sketch.js; all in screen pixels, divided by the zoom).
   tag(kit, [x, y], lines, height) {
     const z = this.camera.zoom;
     const size = 11, lead = 14, padX = 6, padY = 4;
@@ -111,9 +112,12 @@ export class Annotations {
       // textLength: scaled text can lay out a little wider than measured
       .map((t, i) => `<text class="tag" x="${r2(bx + padX / z)}" y="${r2(by + (padY + size * 0.82 + i * lead) / z)}" font-size="${r2(size / z)}" textLength="${r2(widths[i] / z)}" lengthAdjust="spacingAndGlyphs">${esc(t)}</text>`)
       .join('');
-    return `<path class="tag-line" d="M${r2(sx)} ${r2(sy)}L${r2(ex)} ${r2(ey)}L${r2(bx)} ${r2(ey)}"/>` +
+    const seed = seedOf(x, y, lines.length);
+    const k = 1 / z;
+    return `<path class="tag-line" d="${sketchPolyline([[sx, sy], [ex, ey], [bx, ey]], seed, { k })}"/>` +
       `<circle class="tag-dot" cx="${r2(sx)}" cy="${r2(sy)}" r="${r2(2 / z)}"/>` +
-      `<rect class="tag-box" x="${r2(bx)}" y="${r2(by)}" width="${r2(w / z)}" height="${r2(h / z)}" rx="${r2(3 / z)}"/>${text}`;
+      `<rect class="tag-fill" x="${r2(bx)}" y="${r2(by)}" width="${r2(w / z)}" height="${r2(h / z)}"/>` +
+      `<path class="tag-box" d="${sketchRect(bx, by, w / z, h / z, seed + 7, { k, over: 3 })}"/>${text}`;
   }
 }
 

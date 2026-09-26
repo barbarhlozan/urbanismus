@@ -23,12 +23,17 @@ export const CONFIG = {
   road: {
     cornerRadius: 0.5, // fraction of the shorter adjoining segment (max 0.5)
     curveSamples: 8,
-    kerb: 0.05,        // streets (roads with sidewalks): kerb lines this far from the centre
+    edge: 0.08,        // roads are drawn as two edge lines this far from the centre
+                       // (cars keep sim.laneOffset right of it; lots stop at ROAD_GAP in render/lots.js)
+    kerb: 0.14,        // streets (roads with sidewalks): kerb lines this far from the centre
+    junctionRadius: 0, // cars round junction turns this much (same scale as cornerRadius)
   },
 
   path: {
     cornerRadius: 0.5,
     curveSamples: 6,
+    edge: 0.035,          // footpaths are drawn as two edge lines this far from the centre
+    junctionRadius: 0.12, // people round turns at junctions this much
   },
 
   // Railways: bends of at most 45° per dot (sharper ones can't be built),
@@ -49,8 +54,8 @@ export const CONFIG = {
     accel: 1.2,         // grid steps per second² (braking too)
     dwell: 6,           // seconds stopped at a station
     maxStops: 3,        // stations visited per run
-    carSpacing: 0.13,   // grid steps between carriages
-    lengths: { short: 4, medium: 7, long: 11 }, // carriages, picked at random
+    carSpacing: 0.26,   // grid steps between carriages (a carriage is drawn a bit shorter)
+    lengths: { short: 2, medium: 4, long: 6 }, // carriages, picked at random
     lookAhead: 0.35,    // keep this far behind another train
   },
 
@@ -122,6 +127,26 @@ export const CONFIG = {
     dwellMax: 15,
   },
 
+  // Trucks: a cab and a trailer. Industrial buildings keep some (perLevel)
+  // that mostly carry goods off the map through a road exit and come back,
+  // otherwise make service runs to businesses or other industry. Delivery
+  // trucks also come in from outside to businesses and industry.
+  trucks: {
+    homes: ['industrial'],          // structure ids / tags that keep trucks
+    perLevel: [1, 1, 2],            // trucks per building at level 1 / 2 / 3
+    exportShare: 0.6,               // trips that leave the map (needs a road exit)
+    destinations: ['business', 'business', 'industrial'], // service runs, picked at random
+    speed: 0.75,                    // share of a car's speed
+    dwellMin: 5,                    // seconds loading / unloading
+    dwellMax: 12,
+    firstTrip: 25,                  // new trucks set off within this many seconds
+    outsideMin: 25,                 // seconds away on an export run…
+    outsideMax: 60,                 // …at most
+    deliveryInterval: 30,           // seconds between delivery trucks from outside, full-size city
+    deliveryMax: 4,                 // delivery trucks in the city at once
+    trailer: 0.11,                  // grid steps between cab and trailer
+  },
+
   walk: {
     reach: 1.5,           // how far from a building people step onto a path / pavement
     sidewalkCost: 1.4,    // walking along a road counts as this much longer than a footpath
@@ -131,14 +156,16 @@ export const CONFIG = {
     leisureShare: 0.7,    // share of strolls that head for a park / square if one is in range
     strollMin: 2,         // strolls go this far along footpaths…
     strollMax: 8,         // …at most this far
-    sideOffset: 0.1,      // pedestrians keep this far right of the line
+    sideOffset: 0.1,      // pedestrians keep this far right of the line on a street (its sidewalk)…
+    pathOffset: 0.015,    // …and this far on a footpath
   },
 
   bike: {
     speed: 1.5,           // grid steps per second
     share: 0.35,          // share of trips too long to walk that go by bike instead of car
     maxDistance: 30,      // never cycle further than this
-    sideOffset: 0.07,     // cyclists keep this far right of the line
+    sideOffset: 0.07,     // cyclists keep this far right of the line on a road…
+    pathOffset: 0.015,    // …and this far on a footpath
   },
 
   // Cars slow down where roads get crowded. Only cars are affected.

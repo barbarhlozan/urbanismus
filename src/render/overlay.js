@@ -6,6 +6,7 @@ import { smoothPolyline } from '../roads/geometry.js';
 import { Painter } from './painter.js';
 import { levelOf, drawSeed } from '../../structures/index.js';
 import { fitSite } from './lots.js';
+import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -20,10 +21,13 @@ export class OverlayKit {
     return this.camera.project(x, y, this.world.terrain.heightAt(x, y));
   }
 
+  // A ring on the ground, circled by pen (sketch.js): the same stroke for
+  // the same spot, so it doesn't flicker while the pointer rests there.
   ringAt(x, y, r, cls = 'hover') {
     const [sx, sy] = this.project(x, y);
     const [rx, ry] = this.camera.groundEllipse(r);
-    return `<ellipse class="${cls}" cx="${r2(sx)}" cy="${r2(sy)}" rx="${r2(rx)}" ry="${r2(ry)}"/>`;
+    const d = sketchEllipse(sx, sy, rx, ry, seedOf(x, y, cls.length));
+    return `<path class="${cls}" d="${d}"/>`;
   }
 
   ring(node, r, cls = 'hover') {
@@ -35,7 +39,9 @@ export class OverlayKit {
   crossAt(x, y, size = 0.16) {
     const [cx, cy] = this.project(x, y);
     const s = size * this.camera.tile;
-    const d = `M${r2(cx - s)} ${r2(cy - s)}L${r2(cx + s)} ${r2(cy + s)}M${r2(cx - s)} ${r2(cy + s)}L${r2(cx + s)} ${r2(cy - s)}`;
+    const k = 1 / this.camera.zoom, seed = seedOf(x, y);
+    const d = sketchLine([cx - s, cy - s], [cx + s, cy + s], seed, { k, over: 1.5 })
+      + sketchLine([cx - s, cy + s], [cx + s, cy - s], seed + 1, { k, over: 1.5 });
     return `<path class="cross-halo" d="${d}"/><path class="cross" d="${d}"/>`;
   }
 
@@ -58,6 +64,9 @@ export class OverlayKit {
     const [x, y] = this.world.grid.xy(node);
     const instance = { type: def.id, node, rotation, level, seed, data: {} };
     const painter = new Painter(this.camera, { x, y, z: this.world.terrain.heightAt(x, y) }, rotation, drawSeed(instance));
+    // stays square, like the built one (Renderer.buildStructure)
+    const nodes = this.world.footprintNodes(def.id, node, rotation).filter((n) => n >= 0).map((n) => this.world.grid.xy(n));
+    painter.rigid = nodes.length ? [nodes.reduce((a, p) => a + p[0], 0) / nodes.length, nodes.reduce((a, p) => a + p[1], 0) / nodes.length] : [x, y];
     if (def.site) {
       painter.setSite(fitSite(this.world, this.config, this.world.siteArea(def.id, node, rotation)));
       const s = { id: -1, type: def.id, node, rotation, level, seed, data: {} };

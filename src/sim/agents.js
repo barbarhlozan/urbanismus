@@ -24,6 +24,13 @@
 //   - visitors arrive through exits, drive to a destination (visitors.*),
 //     stay, then leave through a random exit and are gone
 //
+// Trucks (config.trucks, agent.truck): drivers too, drawn as a cab and a
+// trailer (a.x / a.y and a.tx / a.ty). Industrial buildings keep a few
+// (perLevel) that export goods off the map – out through an exit, away a
+// while, back – or make service runs to businesses and other industry.
+// Delivery trucks also arrive from outside like visitors (updateDeliveries).
+// They don't use parking lots, and drive a bit slower than cars.
+//
 // Traffic: cars slow down where roads are crowded (config.traffic, see
 // trafficSpeeds). Pedestrians and cyclists always move at their own pace.
 //
@@ -37,7 +44,7 @@
 import { STRUCTURE_TYPES, levelOf, matches, codeOf } from '../../structures/index.js';
 import { compass } from '../ui/annotations.js';
 import { findPath } from '../roads/pathfinding.js';
-import { smoothPolyline, offsetPolyline, measurePolyline, pointAt } from '../roads/geometry.js';
+import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, roadway } from '../roads/geometry.js';
 import { WalkNetwork } from './walking.js';
 
 export class AgentSystem {
@@ -51,6 +58,7 @@ export class AgentSystem {
     this.visitorTimer = 5;
     this.visitorSeq = 0;
     this.commuteTimer = 3;
+    this.deliveryTimer = 12;
     this._balance = null; // cached { residents, jobs, workplaces }
     this.log = () => {}; // (text, [x, y]) – set by main to feed annotations
     this.trains = null;  // TrainSystem, set by main: closed level crossings
@@ -66,15 +74,22 @@ export class AgentSystem {
     for (const s of world.structures.values()) this.sync(s);
   }
 
-  // Match the number of agents to the structure's current level.
+  // Match the number of agents (and trucks) to the structure's current level.
   sync(s) {
     const def = STRUCTURE_TYPES[s.type];
     const count = def ? levelOf(def, s).agents ?? 1 : 0;
+    const trucks = this.config.trucks;
+    const fleet = def && trucks.homes.some((n) => matches(def, n)) ? trucks.perLevel[(s.level ?? 1) - 1] ?? 0 : 0;
+    this.syncCount(s, '', count, () => this.dwell() * Math.random());
+    this.syncCount(s, 't', fleet, () => trucks.firstTrip * Math.random(), { truck: true });
+  }
+
+  syncCount(s, tag, count, timer, extra = {}) {
     for (let k = 0; ; k++) {
-      const id = `${s.id}:${k}`;
+      const id = `${s.id}:${tag}${k}`;
       if (k < count) {
         if (!this.agents.has(id)) {
-          this.agents.set(id, { id, home: s.id, state: 'home', timer: this.dwell() * Math.random(), trip: null, s: 0, x: 0, y: 0 });
+          this.agents.set(id, { id, home: s.id, state: 'home', timer: timer(), trip: null, s: 0, x: 0, y: 0, ...extra });
         }
       } else if (this.agents.has(id)) {
         this.agents.delete(id);
@@ -90,9 +105,10 @@ export class AgentSystem {
 
   visitorCount() {
     let n = 0;
-    for (const a of this.agents.values()) if (a.visitor && !a.commuter) n++;
+    for (const a of this.agents.values()) if (a.visitor && !a.commuter && !a.truck) n++;
     return n;
   }
+
 
   commuterCount() {
     let inbound = 0, outbound = 0;
@@ -131,6 +147,11 @@ export class AgentSystem {
   }
 
   dwell(mode, trip) {
+    if (trip?.truck) {
+      const t = this.config.trucks;
+      const [min, max] = trip.outside ? [t.outsideMin, t.outsideMax] : [t.dwellMin, t.dwellMax];
+      return min + Math.random() * (max - min);
+    }
     if (mode === 'stroll') return 0.5 + Math.random() * 1.5; // a short pause, then back
     if (trip?.commuter) {
       const { shiftMin, shiftMax } = this.config.commute;
@@ -153,6 +174,7 @@ export class AgentSystem {
   update(dt) {
     this.updateVisitors(dt);
     this.updateCommuters(dt);
+    this.updateDeliveries(dt);
     const traffic = this.trafficSpeeds(dt);
     const closed = this.trains?.closed;
     for (const k of this.queues.keys()) if (!closed?.has(k.split('|')[0])) this.queues.delete(k);
@@ -171,8 +193,8 @@ export class AgentSystem {
           }
           this.beginLeg(a, a.trip.back);
           a.state = 'back';
-          if (a.trip.mode === 'drive') this.parking?.take(this.world.structures.get(a.trip.dest));
-          if (a.trip.outside) {
+          if (a.trip.mode === 'drive' && !a.truck) this.parking?.take(this.world.structures.get(a.trip.dest));
+          if (a.trip.outside && !a.truck) {
             const home = this.world.structures.get(a.home);
             if (home) this.log(`${codeOf(home)} resident returns · exit ${compass(a.trip.exit.dir)}`, this.world.grid.xy(a.trip.exit.node));
           }
@@ -180,12 +202,13 @@ export class AgentSystem {
         case 'out':
         case 'back': {
           const leg = a.state === 'out' ? a.trip.out : a.trip.back;
-          const step = this.speedOf(a.trip.mode) * (a.trip.mode === 'drive' ? traffic(a) : 1) * this.doorEase(a, leg) * dt;
+          const step = this.speedOf(a.trip.mode) * (a.trip.mode === 'drive' ? traffic(a) : 1) * this.doorEase(a, leg) * (a.truck ? this.config.trucks.speed : 1) * dt;
           a.s = Math.min(a.s + step, Math.max(a.s, this.crossingStop(a, leg)));
           [a.x, a.y] = pointAt(leg, a.s);
+          if (a.truck) [a.tx, a.ty] = pointAt(leg, a.s - this.config.trucks.trailer);
           if (a.s < leg.total) break;
           const arrived = a.trip.mode === 'stroll' || a.trip.outside || this.world.structures.has(a.trip.dest);
-          if (a.trip.mode === 'drive') {
+          if (a.trip.mode === 'drive' && !a.truck) {
             this.parking?.park(this.world.structures.get(a.state === 'out' ? a.trip.dest : a.home));
           }
           if (a.state === 'out' && arrived) {
@@ -196,7 +219,7 @@ export class AgentSystem {
           } else {
             a.state = 'home';
             a.trip = null;
-            a.timer = this.dwell();
+            a.timer = a.truck ? this.dwell('drive', { truck: true }) : this.dwell();
           }
           break;
         }
@@ -231,7 +254,7 @@ export class AgentSystem {
       if (a.waitKey !== key) {
         a.waitKey = key;
         a.slot = this.queues.get(key) ?? 0;
-        this.queues.set(key, a.slot + 1);
+        this.queues.set(key, a.slot + (a.truck ? 2 : 1)); // a truck takes two places
       }
       return line - a.slot * cfg.queue[kind];
     }
@@ -285,10 +308,23 @@ export class AgentSystem {
     if (this.commuterCount().inbound < Math.min(missing, this.config.commute.max)) this.spawnVisitor({ commuter: true });
   }
 
-  spawnVisitor({ commuter = false } = {}) {
+  // Delivery trucks from outside, more often in a bigger city (like visitors).
+  updateDeliveries(dt) {
+    const cfg = this.config.trucks;
+    const size = Math.min(1, this.world.structures.size / this.config.visitors.fullCity);
+    if (!this.world.roadExits().length || size === 0) return;
+    if ((this.deliveryTimer -= dt) > 0) return;
+    this.deliveryTimer = (cfg.deliveryInterval / size) * (0.5 + Math.random());
+    let n = 0;
+    for (const a of this.agents.values()) if (a.truck && a.visitor) n++;
+    if (n < cfg.deliveryMax) this.spawnVisitor({ truck: true });
+  }
+
+  spawnVisitor({ commuter = false, truck = false } = {}) {
     const { world } = this;
     const exit = this.pickExit();
-    const places = commuter ? this.balance().workplaces.slice() : this.candidates({ id: null }, this.config.visitors.destinations);
+    const places = commuter ? this.balance().workplaces.slice()
+      : this.candidates({ id: null }, truck ? this.config.trucks.destinations : this.config.visitors.destinations);
     for (let attempt = 0; attempt < 4 && exit && places.length; attempt++) {
       const dest = places.splice(Math.floor(Math.random() * places.length), 1)[0];
       const to = world.accessInfo(dest);
@@ -296,11 +332,12 @@ export class AgentSystem {
       const nodes = findPath(world.networks.road, exit.node, to.road);
       if (!nodes) continue;
       const id = `v${++this.visitorSeq}`;
-      const a = { id, home: null, visitor: true, commuter, state: 'out', timer: 0, trip: null, s: 0, x: 0, y: 0 };
+      const a = { id, home: null, visitor: true, commuter, truck, state: 'out', timer: 0, trip: null, s: 0, x: 0, y: 0 };
       a.trip = this.buildTrip({ mode: 'drive', nodes, fromPoint: this.offMap(exit), toDoor: to.door }, dest.id);
       a.trip.visitor = true;
       a.trip.commuter = commuter;
-      const who = commuter ? 'Commuter' : 'V';
+      a.trip.truck = truck;
+      const who = commuter ? 'Commuter' : truck ? 'Delivery truck' : 'V';
       this.log(`${who}-${String(this.visitorSeq).padStart(3, '0')} arrives · exit ${compass(exit.dir)} → ${codeOf(dest)}`, world.grid.xy(exit.node));
       this.beginLeg(a, a.trip.out);
       this.agents.set(id, a);
@@ -321,8 +358,29 @@ export class AgentSystem {
     const leave = this.buildTrip({ mode: 'drive', nodes, fromDoor: from.door, toPoint: this.offMap(exit) }, null);
     a.trip.back = leave.out;
     a.trip.nodes = nodes;
-    this.log(`V-${a.id.slice(1).padStart(3, '0')} leaves · exit ${compass(exit.dir)}`, world.grid.xy(exit.node));
+    if (!a.truck) this.log(`V-${a.id.slice(1).padStart(3, '0')} leaves · exit ${compass(exit.dir)}`, world.grid.xy(exit.node));
     return true;
+  }
+
+  // A truck's run from its depot: export off the map, or a service run.
+  startTruckTrip(a, home) {
+    const cfg = this.config.trucks;
+    if (Math.random() < cfg.exportShare) {
+      const exit = this.pickExit();
+      const from = this.world.accessInfo(home);
+      const nodes = exit && from && findPath(this.world.networks.road, from.road, exit.node);
+      if (nodes) {
+        this.log(`${codeOf(home)} truck exports goods · exit ${compass(exit.dir)}`, this.world.grid.xy(home.node));
+        return this.begin(a, { mode: 'drive', nodes, fromDoor: from.door, toPoint: this.offMap(exit), outside: true, exit, truck: true }, null);
+      }
+    }
+    const places = this.candidates(home, [cfg.destinations[Math.floor(Math.random() * cfg.destinations.length)]]);
+    for (let attempt = 0; attempt < 4 && places.length; attempt++) {
+      const dest = places.splice(Math.floor(Math.random() * places.length), 1)[0];
+      const drive = this.driveRoute(home, dest);
+      if (drive) return this.begin(a, { ...drive, truck: true }, dest.id);
+    }
+    return false;
   }
 
   // Structures matching any of `names` (ids or tags), excluding home.
@@ -339,6 +397,7 @@ export class AgentSystem {
   startTrip(a) {
     const home = this.world.structures.get(a.home);
     if (!home) return false;
+    if (a.truck) return this.startTruckTrip(a, home);
     const { walk } = this.config;
 
     const sim = STRUCTURE_TYPES[home.type]?.sim ?? {};
@@ -443,7 +502,7 @@ export class AgentSystem {
   begin(a, plan, destId) {
     a.trip = this.buildTrip(plan, destId);
     this.beginLeg(a, a.trip.out);
-    if (plan.mode === 'drive') this.parking?.take(this.world.structures.get(a.home));
+    if (plan.mode === 'drive' && !plan.truck) this.parking?.take(this.world.structures.get(a.home));
     return true;
   }
 
@@ -454,14 +513,20 @@ export class AgentSystem {
     const drive = plan.mode === 'drive';
     const layer = drive ? world.networks.road : world.networks.path;
     const curve = drive ? config.road : config.path;
-    const side = drive ? config.sim.laneOffset : plan.mode === 'cycle' ? config.bike.sideOffset : config.walk.sideOffset;
+    // on foot / by bike: the street's sidewalk or the road's lane where
+    // there's roadway, near the middle of a footpath elsewhere
+    const walker = plan.mode === 'cycle' ? config.bike : config.walk;
+    const onRoad = !drive && this.roadway();
+    const side = drive ? config.sim.laneOffset : (p) => (onRoad(p) ? walker.sideOffset : walker.pathOffset);
 
     // Only the route itself is smoothed; buildings are left and entered in a
     // straight line from their edge, so nobody cuts across them or their yard.
     const pts = plan.nodes.map((n) => layer.pos(n));
     if (plan.fromPoint) pts.unshift(plan.fromPoint);
     if (plan.toPoint) pts.push(plan.toPoint);
-    const smooth = smoothPolyline(pts, curve.cornerRadius, curve.curveSamples);
+    const first = plan.fromPoint ? 1 : 0;
+    const radius = (i) => this.cornerAt(plan.mode, plan.nodes[i - first]);
+    const smooth = smoothPolyline(pts, radius, curve.curveSamples);
     const atDoor = !plan.toPoint && plan.toDoor != null;
     if (plan.fromDoor != null) smooth.unshift(this.doorEdge(plan.fromDoor, smooth[0]));
     if (atDoor) smooth.push(this.doorEdge(plan.toDoor, smooth[smooth.length - 1]));
@@ -471,11 +536,41 @@ export class AgentSystem {
       dest: destId,
       outside: !!plan.outside,
       commute: !!plan.commute, // resident working outside the map
+      truck: !!plan.truck,
       exit: plan.exit ?? null,
       nodes: plan.nodes,
       out: this.leg(offsetPolyline(smooth, side), plan.fromDoor != null, atDoor),
       back: this.leg(offsetPolyline(smooth.slice().reverse(), side), atDoor, plan.fromDoor != null),
     };
+  }
+
+  // How much a route rounds its turn at node n: like the drawn roads and
+  // paths – curved where the line just bends, (almost) sharp at junctions,
+  // so nobody takes a shortcut across a crossroads.
+  cornerAt(mode, n) {
+    const { world, config } = this;
+    if (mode === 'drive') {
+      return n === undefined || world.roads.degree(n) === 2 ? config.road.cornerRadius : config.road.junctionRadius;
+    }
+    const { cornerRadius, junctionRadius } = config.path;
+    if (n === undefined) return cornerRadius;
+    const c = world.fineToCoarse(n);
+    const onRoad = c >= 0 && world.roads.hasNode(c);
+    const pathDeg = world.paths.degree(n);
+    if (!onRoad) return pathDeg === 2 ? cornerRadius : junctionRadius;
+    return pathDeg === 0 && world.roads.degree(c) === 2 ? cornerRadius : junctionRadius; // along a street
+  }
+
+  // The roadway test (roads/geometry.js), rebuilt when roads, paths or
+  // sidewalks change.
+  roadway() {
+    const { world, config } = this;
+    const key = `${world.networks.road.version}|${world.networks.path.version}|${world.sidewalks.size}`;
+    if (this.roadwayKey !== key) {
+      this.roadwayKey = key;
+      this.roadwayTest = roadway(world, config.road);
+    }
+    return this.roadwayTest;
   }
 
   // A measured leg, remembering which of its ends is at a building's door.
@@ -509,6 +604,7 @@ export class AgentSystem {
     a.s = 0;
     a.speed = 1;
     [a.x, a.y] = leg.points[0];
+    [a.tx, a.ty] = [a.x, a.y];
   }
 
   tripIntact(trip) {

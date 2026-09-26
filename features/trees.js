@@ -13,12 +13,20 @@
 // drawTree(g, x, y, kind, height, simple) – height in grid units (1 = one
 // grid step). Fine twigs are detail level 2 (close up only). `simple` draws
 // a plainer tree (fewer tiers / forks), for forests where many stand together.
+//
+// With LEAFY on, the broadleaf kinds are drawn as on an old map-sketching
+// sheet instead: a lumpy crown outline with diagonal hatching on a short
+// trunk (saplings now and then as a tall narrow poplar), and spruces and
+// shrubs get the same hatching. Hatching is hidden when zoomed far out.
 
 export const TREE_KINDS = ['spruce', 'sapling', 'spreading'];
+
+export const LEAFY = true;
 
 export function drawTree(g, x, y, kind, height, simple = false) {
   g.solid(x, y, 0);
   if (kind === 'spruce') return drawSpruce(g, x, y, height, simple);
+  if (LEAFY) return drawLeafy(g, x, y, kind, height, simple);
   for (const [lines, opts] of bareParts(g, kind, height, simple)) g.strokes(x, y, 0, lines, opts);
 }
 
@@ -30,9 +38,9 @@ export function drawTree(g, x, y, kind, height, simple = false) {
 export function drawClump(g, x, y, trees) {
   const byStyle = new Map();
   for (const t of trees) {
-    if (t.kind === 'spruce') {
-      g.solid(t.x, t.y, 0);
-      drawSpruce(g, t.x, t.y, t.height, true);
+    if (t.kind === 'spruce' || LEAFY) {
+      // filled crowns: each its own solid, so they overlap back to front
+      drawTree(g, t.x, t.y, t.kind, t.height, true);
       continue;
     }
     for (const [lines, opts] of bareParts(g, t.kind, t.height, true)) {
@@ -49,7 +57,14 @@ export function drawClump(g, x, y, trees) {
 function drawSpruce(g, x, y, height, simple) {
   const { outline, trunk, inside, branches } = spruceShape(g, height, simple);
   g.strokes(x, y, 0, trunk, { cls: 'trunk' });
-  g.shape(x, y, 0, outline, { smooth: true });
+  g.shape(x, y, 0, outline, { smooth: true, cls: 'tree' });
+  if (LEAFY) {
+    // hatch inside the smooth outline: it runs through the points' midpoints,
+    // pulled in a little towards the trunk
+    const clip = midpoints(outline).map(([u, v]) => [u * 0.8, v]);
+    g.strokes(x, y, 0, hatchIn(g, clip, height * (simple ? 0.075 : 0.06)), { cls: 'leaf', lod: 1 });
+    return;
+  }
   g.strokes(x, y, 0, inside, { cls: 'trunk', lod: 2 });
   g.strokes(x, y, 0, branches, { cls: 'twig', lod: 2 });
 }
@@ -59,9 +74,16 @@ function bareParts(g, kind, height, simple) {
 }
 
 // A shrub: a few thin stems fanning out from the ground, each forking once
-// near the top, as one path. `height` in grid units.
+// near the top, as one path – or with LEAFY a small hatched clump. `height`
+// in grid units.
 export function drawShrub(g, x, y, height) {
   g.solid(x, y, 0);
+  if (LEAFY) {
+    const { outline, clip } = blob(g, 0, height * 0.45, height * g.range(0.55, 0.7), height * 0.45, g.int(4, 6));
+    g.shape(x, y, 0, outline, { smooth: true, cls: 'tree' });
+    g.strokes(x, y, 0, hatchIn(g, clip, height * 0.22), { cls: 'leaf' });
+    return;
+  }
   const lines = [];
   const n = g.int(4, 6);
   for (let i = 0; i < n; i++) {
@@ -145,6 +167,87 @@ function spruceShape(g, H, simple) {
     inside: simple ? [] : [[at(0, crown0), at(0, crown0 + ch * 0.85)]],
     branches,
   };
+}
+
+// ----- leafy broadleaf trees (LEAFY) -----
+
+//   trunk   bare trunk below the crown (share of the height)
+//   width   crown half width (share of the height)
+//   lumps   bumps around the crown outline
+const LEAF = {
+  sapling: { trunk: [0.3, 0.42], width: [0.2, 0.27], lumps: [6, 8] },
+  poplar: { trunk: [0.1, 0.18], width: [0.1, 0.14], lumps: [7, 9] },
+  spreading: { trunk: [0.22, 0.3], width: [0.34, 0.46], lumps: [8, 11] },
+};
+
+function drawLeafy(g, x, y, kind, H, simple) {
+  const p = LEAF[kind === 'sapling' && g.chance(0.3) ? 'poplar' : kind];
+  const T = H * g.range(...p.trunk);
+  const lean = g.range(-0.04, 0.04) * H;
+  const ry = (H - T * 0.8) / 2, cy = T * 0.8 + ry;
+  const rx = Math.min(H * g.range(...p.width), ry * 1.4);
+  const { outline, clip } = blob(g, lean, cy, rx, ry, g.int(...p.lumps));
+  // the trunk runs up into the crown (its fill hides the top); close up,
+  // a fork shows through it, as in an ink drawing
+  g.strokes(x, y, 0, [[[0, 0], [lean * 0.5, T], [lean, cy]]], { cls: kind === 'spreading' ? 'trunk thick' : 'trunk' });
+  g.shape(x, y, 0, outline, { smooth: true, cls: 'tree' });
+  g.strokes(x, y, 0, hatchIn(g, clip, H * (simple ? 0.09 : 0.07)), { cls: 'leaf', lod: 1 });
+  if (!simple) {
+    const fork = [[lean * 0.6, T * 0.9], [lean - rx * 0.35, cy + ry * 0.1]];
+    const fork2 = [[lean * 0.6, T * 0.9], [lean + rx * 0.3, cy + ry * 0.25]];
+    g.strokes(x, y, 0, [[[lean * 0.5, T * 0.8], [lean * 0.6, T * 1.1]], fork, fork2], { cls: 'limb', lod: 2 });
+  }
+}
+
+// A lumpy closed outline around (cx, cy) with half axes rx, ry: points
+// alternately out and in, so drawn smooth (g.shape) they make scallops.
+// `clip` is a polygon a little inside the smooth outline, for hatching.
+function blob(g, cx, cy, rx, ry, lumps) {
+  const outline = [];
+  const phase = g.range(0, Math.PI);
+  for (let i = 0; i < lumps * 2; i++) {
+    const a = phase + (i / (lumps * 2)) * Math.PI * 2;
+    const r = i % 2 ? g.range(0.8, 0.9) : g.range(0.97, 1.08);
+    const flat = Math.cos(a) < -0.4 ? 0.88 : 1; // a flatter underside
+    outline.push([cx + Math.sin(a) * rx * r, cy + Math.cos(a) * ry * r * flat]);
+  }
+  const clip = midpoints(outline).map(([u, v]) => [cx + (u - cx) * 0.86, cy + (v - cy) * 0.86]);
+  return { outline, clip };
+}
+
+function midpoints(pts) {
+  return pts.map((p, i) => {
+    const q = pts[(i + 1) % pts.length];
+    return [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+  });
+}
+
+// Diagonal hatching ("/") inside a polygon, `step` apart: each line split
+// where it leaves and re-enters the shape, and a little uneven, like pencil
+// strokes.
+function hatchIn(g, poly, step) {
+  const lines = [];
+  const cs = poly.map(([u, v]) => v - u);
+  const [c0, c1] = [Math.min(...cs), Math.max(...cs)];
+  for (let c = c0 + step * g.range(0.3, 0.7); c < c1; c += step * g.range(0.85, 1.15)) {
+    // crossings of v = u + c with the outline, along u
+    const us = [];
+    for (let i = 0; i < poly.length; i++) {
+      const [a, b] = [poly[i], poly[(i + 1) % poly.length]];
+      const fa = a[1] - a[0] - c, fb = b[1] - b[0] - c;
+      if ((fa > 0) === (fb > 0)) continue;
+      const t = fa / (fa - fb);
+      us.push(a[0] + (b[0] - a[0]) * t);
+    }
+    us.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < us.length; i += 2) {
+      const len = us[i + 1] - us[i];
+      if (len < step * 0.5) continue;
+      const u0 = us[i] + len * g.range(0, 0.12), u1 = us[i + 1] - len * g.range(0, 0.12);
+      lines.push([[u0, u0 + c], [u1, u1 + c]]);
+    }
+  }
+  return lines;
 }
 
 // Bare broadleaf trees. Every limb carries on as a leader and sends off a

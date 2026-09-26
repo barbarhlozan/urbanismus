@@ -12,18 +12,32 @@ import {
   playground, bandstand, flowerBed, obelisk, sculpture, kiosk, chessTable, colonnade, footbridge,
 } from './kit.js';
 import { segmentDistance } from '../src/core/geom2d.js';
+import { CONFIG } from '../src/config.js';
 
-// The park's walkways (g.site.paths): straight dashed lines in the footpath
-// style from the hub in the middle to each exit on the footpath grid, so
-// footpaths drawn up to the park's edge join them. Exits facing a road carry
-// on to the lawn edge. People really walk along them (sim/walking.js).
+// The park's walkways (g.site.paths): straight paths in the footpath style
+// (two narrow edges, as wide as footpaths) from a small round plaza at the
+// hub in the middle to each exit on the footpath grid, so footpaths drawn up
+// to the park's edge run on into them. Exits facing a road carry on to the
+// lawn edge. People really walk along them (sim/walking.js).
+const PLAZA = 0.08; // radius of the plaza at the hub
 function walkways(g) {
   const { hub, exits } = g.site.paths;
   const { x0, y0, x1, y1 } = g.site;
+  const w = CONFIG.path.edge;
+  if (exits.length) g.groundCircle(hub[0], hub[1], PLAZA, { cls: 'fp' });
   for (const e of exits) {
     const [dx, dy] = e.dir;
     const end = e.road ? [dx > 0 ? x1 : dx < 0 ? x0 : e.pos[0], dy > 0 ? y1 : dy < 0 ? y0 : e.pos[1]] : e.pos;
-    g.groundLine([hub, end], { cls: 'fp' });
+    const len = Math.hypot(end[0] - hub[0], end[1] - hub[1]);
+    if (len > PLAZA) {
+      const [ux, uy] = [(end[0] - hub[0]) / len, (end[1] - hub[1]) / len];
+      // start where the edge meets the plaza's rim
+      const t = Math.sqrt(PLAZA * PLAZA - w * w);
+      for (const k of [-1, 1]) {
+        const [ox, oy] = [-uy * w * k, ux * w * k];
+        g.groundLine([[hub[0] + ux * t + ox, hub[1] + uy * t + oy], [end[0] + ox, end[1] + oy]], { cls: 'fp' });
+      }
+    }
     // entrance posts just inside the park
     gate(g, e.pos[0] - dx * 0.08, e.pos[1] - dy * 0.08, e.dir);
   }

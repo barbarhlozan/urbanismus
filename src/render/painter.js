@@ -57,7 +57,7 @@
 // with its neighbour on the local -x (left) / +x (right) side. Draw up to
 // x = ∓0.5 there (levels opt in with `join`, see structures/index.js).
 //
-// Spots – g.spot(x, y) marks a parking stall (cars are drawn and simulated
+// Spots – g.spot(x, y, dir) marks a parking stall (cars are drawn and simulated
 // separately, see src/sim/parking.js).
 //
 // Variation – seeded per building, so the same building always looks the same:
@@ -75,6 +75,47 @@ import { color } from '../theme.js';
 import { mulberry32 } from '../core/random.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
+
+// Global look knobs (gallery.html toggles them to compare):
+//   eave    how far pitched roofs overhang the walls (0 = flush)
+//   fascia  depth of the eave board under the roof edge
+//   sill    window sills
+//   tall    windows proportioned upright (about 2:3) instead of square
+//   sketch  hand-drawn wobble, in scene px at tile 32 (0 = ruler straight)
+//   overshoot  with sketch: edges run on past corners by about this much (scene px at tile 32)
+//   ink     windows as solid blocks of ink instead of outlines
+//   thin    with ink: this many times fewer windows along a wall (1 = every bay)
+//   hatch   pencil strokes down pitched roofs, this far apart (0 = none)
+//   ground  a stroke along the foot of each building, running past its corners by about this much
+//   floors  draw g.floors() lines (storey bands); off for the sparer sketch look
+//   roads   how far roads, paths and what moves on them stray from the ruler
+//           line, in grid units (0 = straight; see wobble())
+export const LOOK = {
+  eave: 0.03, fascia: 0, sill: false, tall: true, sketch: 5,
+  overshoot: 1.5, ink: true, thin: 1.4, hatch: 0.03, ground: 0.04, floors: false, roads: 0.035,
+};
+
+// The hand-drawn sway of roads: a smooth shift [dx, dy] of the map at
+// (x, y), made of a few long slow waves. Everything on the road network
+// (roads, kerbs, footpaths, driveways, people and cars) is shifted by it,
+// so junctions still meet and traffic stays on its line.
+export function wobble(x, y) {
+  const a = LOOK.roads;
+  if (!a) return [0, 0];
+  return [
+    a * (0.6 * Math.sin(1.9 * x + 0.7 * y + 1.3) + 0.4 * Math.sin(0.6 * x - 2.3 * y + 4.1)),
+    a * (0.6 * Math.sin(1.7 * y - 0.9 * x + 2.7) + 0.4 * Math.sin(0.5 * y + 2.1 * x + 0.4)),
+  ];
+}
+
+// Deterministic noise in [-1, 1] from a point (and a salt), so a vertex or
+// an edge shared by two faces wobbles the same way in both.
+function hash2(x, y, k = 0) {
+  let h = Math.imul(Math.round(x * 4) | 0, 0x27d4eb2d) ^ Math.imul(Math.round(y * 4) | 0, 0x165667b1) ^ Math.imul(k, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 2147483648 - 1;
+}
 
 function newellNormal(points) {
   let nx = 0, ny = 0, nz = 0;
@@ -126,9 +167,17 @@ export class Painter {
     this.bounds = null;   // local [x0, y0, x1, y1] of all solids drawn
     this.join = { left: false, right: false }; // set by the renderer, see structures/index.js
     this.current = null;
+    this.rigid = null;    // world [x, y]: move as one piece, see _project()
   }
 
   // ----- internals -----
+
+  // Project a world point; with `rigid` set, relief and warp are taken at
+  // that one point, so the whole drawing moves without bending (see
+  // Camera.project).
+  _project(x, y, z) {
+    return this.camera.project(x, y, z, this.rigid);
+  }
 
   _world(x, y, z) {
     const [lx, ly] = rotateQuarter(x, y, this.rotation);
@@ -136,8 +185,114 @@ export class Painter {
   }
 
   _proj(p) {
-    const [sx, sy] = this.camera.project(...this._world(p[0], p[1], p[2]));
+    const [sx, sy] = this._project(...this._world(p[0], p[1], p[2]));
     return `${r2(sx)},${r2(sy)}`;
+  }
+
+  // Outline through 3D points: a straight <polygon> / <polyline>, or with
+  // LOOK.sketch a <path> whose corners are nudged and whose edges bow a
+  // little, like a line drawn by hand. Closed outlines big enough also get
+  // LOOK.overshoot: their edges run on a little past the corners.
+  _outline(points, closed, opts, lod) {
+    if (!LOOK.sketch) return `<${closed ? 'polygon' : 'polyline'} points="${points.map((p) => this._proj(p)).join(' ')}"${attrs(opts, lod)}/>`;
+    const { d, pts, size } = this._sketch(points, closed);
+    // the overshoots go in the same path: open strokes have no area, so the
+    // fill ignores them, and it saves an element per face
+    let ticks = '';
+    const os = LOOK.overshoot * this.camera.tile / 32;
+    if (closed && os && size > os * 5) {
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len < os * 2) continue;
+        const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
+        const k = Math.min(os, len * 0.1);
+        const kb = k * (0.2 + 0.8 * Math.abs(hash2(b[2], b[3], 4))), ka = k * (0.2 + 0.8 * Math.abs(hash2(a[2], a[3], 5)));
+        ticks += `M${r2(b[0])} ${r2(b[1])}l${r2(ux * kb)} ${r2(uy * kb)}M${r2(a[0])} ${r2(a[1])}l${r2(-ux * ka)} ${r2(-uy * ka)}`;
+      }
+    }
+    return `<path d="${d}${ticks}"${attrs(opts, lod, closed ? 'sk filled' : 'sk ln')}/>`;
+  }
+
+  // Sketchy path data through 3D points: { d, pts (jittered screen points,
+  // each [x, y, x0, y0]), size (longest edge on screen) }.
+  _sketch(points, closed) {
+    const amp = LOOK.sketch * this.camera.tile / 32;
+    const scr = points.map((p) => this._project(...this._world(p[0], p[1], p[2])));
+    // small shapes (windows) wobble less than walls and roofs
+    let size = 0;
+    for (let i = 1; i < scr.length; i++) size = Math.max(size, Math.hypot(scr[i][0] - scr[i - 1][0], scr[i][1] - scr[i - 1][1]));
+    const jit = Math.min(amp * 0.4, size * 0.05);
+    const pts = scr.map(([x, y]) => [x + hash2(x, y, 1) * jit, y + hash2(x, y, 2) * jit, x, y]);
+    if (closed) pts.push(pts[0]);
+    let d = `M${r2(pts[0][0])} ${r2(pts[0][1])}`;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      // key the bow on the edge regardless of direction
+      const [p, q] = a[2] < b[2] || (a[2] === b[2] && a[3] < b[3]) ? [a, b] : [b, a];
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+      const bow = hash2(p[2] + q[2], p[3] + q[3], 3) * Math.min(amp, len * 0.04);
+      const cx = (a[0] + b[0]) / 2 - ((q[1] - p[1]) / len) * bow;
+      const cy = (a[1] + b[1]) / 2 + ((q[0] - p[0]) / len) * bow;
+      d += `Q${r2(cx)} ${r2(cy)} ${r2(b[0])} ${r2(b[1])}`;
+    }
+    return { d: closed ? d + 'Z' : d, pts, size };
+  }
+
+  // Pencil hatching on a roof plane (a convex polygon whose first edge is
+  // the eave): parallel strokes straight down the slope, LOOK.hatch apart,
+  // all in one <path>. Each stroke stops a little short of the edges, by a
+  // seeded amount.
+  _hatch(pts, normal) {
+    if (!LOOK.hatch || !this._facing(normal)) return;
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const unit = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+    // plane axes: e along the eave, s up the slope (both in the plane)
+    const o = pts[0], e = unit(sub(pts[1], o));
+    const far = pts.reduce((best, p) => (dot(sub(p, o), sub(p, o)) - dot(sub(p, o), e) ** 2 > dot(sub(best, o), sub(best, o)) - dot(sub(best, o), e) ** 2 ? p : best), pts[1]);
+    const rel = sub(far, o), along = dot(rel, e);
+    const sv = unit([rel[0] - e[0] * along, rel[1] - e[1] * along, rel[2] - e[2] * along]);
+    const flat = pts.map((p) => [dot(sub(p, o), e), dot(sub(p, o), sv)]);
+    const back = (u, w) => [o[0] + e[0] * u + sv[0] * w, o[1] + e[1] * u + sv[1] * w, o[2] + e[2] * u + sv[2] * w];
+    const us = flat.map((f) => f[0]);
+    const [u0, u1] = [Math.min(...us), Math.max(...us)];
+    let d = '';
+    for (let u = u0 + LOOK.hatch / 2; u < u1; u += LOOK.hatch) {
+      // where the line at u crosses the outline
+      const ws = [];
+      for (let i = 0; i < flat.length; i++) {
+        const [a, b] = [flat[i], flat[(i + 1) % flat.length]];
+        if ((a[0] - u) * (b[0] - u) > 0 || a[0] === b[0]) continue;
+        ws.push(a[1] + ((u - a[0]) / (b[0] - a[0])) * (b[1] - a[1]));
+      }
+      if (ws.length < 2) continue;
+      const [w0, w1] = [Math.min(...ws), Math.max(...ws)];
+      const len = w1 - w0;
+      if (len < LOOK.hatch * 0.8) continue;
+      const lo = w0 + len * (0.03 + 0.06 * Math.abs(hash2(u * 97, o[0] + o[1], 6)));
+      const hi = w1 - len * (0.05 + 0.12 * Math.abs(hash2(u * 97, o[2], 7)));
+      const line = [back(u, hi), back(u, lo)];
+      d += LOOK.sketch ? this._sketch(line, false).d : `M${this._proj(line[0]).replace(',', ' ')}L${this._proj(line[1]).replace(',', ' ')}`;
+    }
+    if (d) this.current.parts.push(`<path d="${d}"${attrs({}, Math.max(1, this.lod), 'ln roof-hatch')}/>`);
+  }
+
+  // A stroke along the foot of each wall of a footprint standing on the
+  // ground, running on past the corners (LOOK.ground) – not into a
+  // neighbour it shares a wall with.
+  _foot(base, z0, h) {
+    if (!LOOK.ground || z0 !== 0 || h <= 0.1) return;
+    const joined = ([px]) => (this.join.left && px <= -0.5 + 1e-6) || (this.join.right && px >= 0.5 - 1e-6);
+    for (let i = 0; i < base.length; i++) {
+      const a = base[i], b = base[(i + 1) % base.length];
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len < 1e-6 || (joined(a) && joined(b))) continue;
+      const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
+      const ka = joined(a) ? 0 : LOOK.ground * (0.3 + 0.7 * Math.abs(hash2(a[0] * 50, a[1] * 50, 8)));
+      const kb = joined(b) ? 0 : LOOK.ground * (0.3 + 0.7 * Math.abs(hash2(b[0] * 50, b[1] * 50, 9)));
+      this.line([[a[0] - ux * ka, a[1] - uy * ka, 0], [b[0] + ux * kb, b[1] + uy * kb, 0]], { facing: [uy, -ux, 0], cls: 'foot', lod: Math.max(1, this.lod) });
+    }
   }
 
   _facing([nx, ny, nz]) {
@@ -220,7 +375,15 @@ export class Painter {
   face(points, opts = {}) {
     this._ensure(...points[0]);
     if (!this._facing(newellNormal(points))) return this;
-    this.current.parts.push(`<polygon points="${points.map((p) => this._proj(p)).join(' ')}"${attrs(opts, this._lod(opts))}/>`);
+    this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
+    return this;
+  }
+
+  // A pitched roof plane: a face whose first edge is the eave, hatched with
+  // LOOK.hatch.
+  _plane(pts, opts = {}) {
+    this.face(pts, opts);
+    this._hatch(pts, newellNormal(pts));
     return this;
   }
 
@@ -230,6 +393,7 @@ export class Painter {
     const cy = base.reduce((s, p) => s + p[1], 0) / base.length;
     this.solid(cx, cy, (z0 + z1) / 2);
     this._walls(base, z0, z1, opts);
+    this._foot(base, z0, z1 - z0);
     this.face(base.map(([x, y]) => [x, y, z1]), opts);
     return this;
   }
@@ -244,10 +408,11 @@ export class Painter {
     this._grow([[x0, y0], [x1, y1]]);
     this.solid(x + w / 2, ym, z + (h + roofH) / 2);
     this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts);
-    this.face([[x0, y0, zt], [x1, y0, zt], [x1, ym, zr], [x0, ym, zr]], opts);
-    this.face([[x1, y1, zt], [x0, y1, zt], [x0, ym, zr], [x1, ym, zr]], opts);
+    this._foot([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, h);
     this.face([[x0, y1, zt], [x0, y0, zt], [x0, ym, zr]], opts);
     this.face([[x1, y0, zt], [x1, y1, zt], [x1, ym, zr]], opts);
+    this._plane([[x0, y0, zt], [x1, y0, zt], [x1, ym, zr], [x0, ym, zr]], opts);
+    this._plane([[x1, y1, zt], [x0, y1, zt], [x0, ym, zr], [x1, ym, zr]], opts);
     return this;
   }
 
@@ -264,6 +429,7 @@ export class Painter {
   // sides are 'front' (-y), 'right' (+x), 'back' (+y), 'left' (-x) – skip
   // the walls shared with a joined neighbour.
   floors(x, y, w, d, z0, z1, step, opts = {}) {
+    if (!LOOK.floors) return this;
     const { inset = 0.04, skip } = typeof opts === 'number' ? { inset: opts } : opts;
     for (let z = z0 + step; z < z1 - step * 0.3; z += step) {
       for (const { n, a, b } of boxSides(x, y, w, d, inset, skip)) {
@@ -297,7 +463,16 @@ export class Painter {
   // }
   windows(x, y, w, d, z0, z1, step, spacing = 0.09, opts = {}) {
     const { skip, ribbon = false, from = 0 } = opts;
-    const ww = spacing * (opts.w ?? 0.45), wh = step * (opts.h ?? 0.45);
+    let ww = spacing * (opts.w ?? 0.45), wh = step * (opts.h ?? 0.45);
+    if (LOOK.tall && !ribbon) {
+      // about 2:3 upright, as big as the bay allows
+      wh = step * Math.max(opts.h ?? 0.45, 0.5);
+      ww = Math.min(spacing * 0.55, wh * 0.66);
+    }
+    const sill = LOOK.sill && !LOOK.ink && !ribbon ? Math.min(0.012, ww * 0.25) : 0;
+    // ink: solid windows, and fewer of them (wider bays, same window size)
+    const cls = LOOK.ink ? 'ink' : undefined;
+    if (LOOK.ink && !ribbon) spacing *= LOOK.thin;
     const storeys = Math.round((z1 - z0) / step);
     for (const { n, a, b } of boxSides(x, y, w, d, 0, skip)) {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -307,15 +482,16 @@ export class Painter {
       if (cols < 1) continue;
       const pad = (len - cols * spacing) / 2;
       for (let i = from; i < storeys; i++) {
-        const zb = z0 + i * step + (step - wh) * 0.55, zt = zb + wh;
+        const zb = z0 + i * step + (step - wh) * (LOOK.tall ? 0.4 : 0.55), zt = zb + wh;
         if (ribbon) {
           const t0 = spacing * 0.3, t1 = len - spacing * 0.3;
-          this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n });
+          this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n, cls });
           continue;
         }
         for (let c = 0; c < cols; c++) {
           const t0 = pad + c * spacing + (spacing - ww) / 2, t1 = t0 + ww;
-          this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n });
+          this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n, cls });
+          if (sill) this.line([at(t0 - sill, zb - sill * 0.6), at(t1 + sill, zb - sill * 0.6)], { facing: n });
         }
       }
     }
@@ -328,10 +504,11 @@ export class Painter {
     this._grow([[x0, y0], [x1, y1]]);
     this.solid(xm, y + d / 2, z + (h + roofH) / 2);
     this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts);
-    this.face([[x0, y1, zt], [x0, y0, zt], [xm, y0, zr], [xm, y1, zr]], opts);
-    this.face([[x1, y0, zt], [x1, y1, zt], [xm, y1, zr], [xm, y0, zr]], opts);
+    this._foot([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, h);
     this.face([[x0, y0, zt], [x1, y0, zt], [xm, y0, zr]], opts);
     this.face([[x1, y1, zt], [x0, y1, zt], [xm, y1, zr]], opts);
+    this._plane([[x0, y1, zt], [x0, y0, zt], [xm, y0, zr], [xm, y1, zr]], opts);
+    this._plane([[x1, y0, zt], [x1, y1, zt], [xm, y1, zr], [xm, y0, zr]], opts);
     return this;
   }
 
@@ -360,6 +537,12 @@ export class Painter {
       // swapping axes mirrors the frame: keep faces counter-clockwise
       this.face(alongY ? out.reverse() : out, opts);
     };
+    // a hatched roof plane: eave corners first, then the top edge
+    const plane = (pts) => {
+      face(pts);
+      const q = pts.map(([u, v, zz]) => P(u, v, zz));
+      this._hatch(q, newellNormal(alongY ? [...q].reverse() : q));
+    };
     const hip = Array.isArray(roof.hip) ? roof.hip : [roof.hip ?? 0, roof.hip ?? 0];
     const rh = roof.h ?? 0, zt = z + h;
     const m = roof.mansard;
@@ -367,6 +550,13 @@ export class Painter {
     this._grow([[x, y], [x + w, y + d]]);
     this.solid(x + w / 2, y + d / 2, z + (h + rh + (m?.h ?? 0)) / 2);
     this._walls([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, zt, opts);
+    this._foot([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, h);
+    // The roof is its own solid just in front of the walls, so window lines
+    // drawn on the walls afterwards stay under the eaves.
+    const walls = this.current;
+    this.current = { depth: walls.depth + 1e-6, parts: [] };
+    this.solids.push(this.current);
+    const onWalls = (fn) => { const roofSolid = this.current; this.current = walls; fn(); this.current = roofSolid; };
 
     // mansard: lower roof from the wall tops to an inset rectangle
     let [u0, u1, v0, v1, zb] = [0, L, 0, D, zt];
@@ -374,25 +564,54 @@ export class Painter {
       const iv = m.inset ?? 0.05;
       const iu0 = hip[0] > 0 ? iv : 0, iu1 = hip[1] > 0 ? iv : 0;
       const zm = zt + m.h;
-      face([[0, 0, zt], [L, 0, zt], [L - iu1, iv, zm], [iu0, iv, zm]]);
-      face([[L, D, zt], [0, D, zt], [iu0, D - iv, zm], [L - iu1, D - iv, zm]]);
-      face([[0, D, zt], [0, 0, zt], [iu0, iv, zm], [iu0, D - iv, zm]]);
-      face([[L, 0, zt], [L, D, zt], [L - iu1, D - iv, zm], [L - iu1, iv, zm]]);
+      plane([[0, 0, zt], [L, 0, zt], [L - iu1, iv, zm], [iu0, iv, zm]]);
+      plane([[L, D, zt], [0, D, zt], [iu0, D - iv, zm], [L - iu1, D - iv, zm]]);
+      plane([[0, D, zt], [0, 0, zt], [iu0, iv, zm], [iu0, D - iv, zm]]);
+      plane([[L, 0, zt], [L, D, zt], [L - iu1, D - iv, zm], [L - iu1, iv, zm]]);
       [u0, u1, v0, v1, zb] = [iu0, L - iu1, iv, D - iv, zm];
     }
 
     if (rh <= 0) {
       face([[u0, v0, zb], [u1, v0, zb], [u1, v1, zb], [u0, v1, zb]]);
+      this.current = walls;
       return this;
     }
     const vm = (v0 + v1) / 2, zr = zb + rh;
     const span = u1 - u0;
     let ra = u0 + Math.min(hip[0], span / 2), rb = u1 - Math.min(hip[1], span / 2);
     if (ra > rb) ra = rb = (ra + rb) / 2;
-    face([[u0, v0, zb], [u1, v0, zb], [rb, vm, zr], [ra, vm, zr]]);
-    face([[u1, v1, zb], [u0, v1, zb], [ra, vm, zr], [rb, vm, zr]]);
-    face([[u0, v1, zb], [u0, v0, zb], [ra, vm, zr]]);
-    face([[u1, v0, zb], [u1, v1, zb], [rb, vm, zr]]);
+
+    // Eaves: the roof planes run on past the walls, their edge level with the
+    // wall tops (a touch flatter there, so the top-floor windows stay clear),
+    // with a thin board under the edge. Not over a wall shared with a
+    // neighbour, and not on mansards.
+    const e = m ? 0 : (roof.eave ?? LOOK.eave);
+    const shared = (u, v) => {
+      const [px] = P(u, v, 0);
+      return (this.join.left && px <= -0.5 + 1e-6) || (this.join.right && px >= 0.5 - 1e-6);
+    };
+    const ev0 = shared(L / 2, v0) ? 0 : e, ev1 = shared(L / 2, v1) ? 0 : e;
+    const eu0 = shared(u0, D / 2) ? 0 : e, eu1 = shared(u1, D / 2) ? 0 : e;
+    const [U0, U1, V0, V1] = [u0 - eu0, u1 + eu1, v0 - ev0, v1 + ev1];
+    const RA = ra > u0 ? ra : U0, RB = rb < u1 ? rb : U1;
+
+    // gable walls belong to the walls, so the verges overlap them
+    onWalls(() => {
+      if (ra <= u0) face([[u0, v1, zb], [u0, v0, zb], [u0, vm, zr]]);
+      if (rb >= u1) face([[u1, v0, zb], [u1, v1, zb], [u1, vm, zr]]);
+    });
+    const f = e ? LOOK.fascia : 0;
+    if (f) {
+      if (ev0) face([[U0, V0, zb - f], [U1, V0, zb - f], [U1, V0, zb], [U0, V0, zb]]);
+      if (ev1) face([[U1, V1, zb - f], [U0, V1, zb - f], [U0, V1, zb], [U1, V1, zb]]);
+      if (ra > u0 && eu0) face([[U0, V1, zb - f], [U0, V0, zb - f], [U0, V0, zb], [U0, V1, zb]]);
+      if (rb < u1 && eu1) face([[U1, V0, zb - f], [U1, V1, zb - f], [U1, V1, zb], [U1, V0, zb]]);
+    }
+    plane([[U0, V0, zb], [U1, V0, zb], [RB, vm, zr], [RA, vm, zr]]);
+    plane([[U1, V1, zb], [U0, V1, zb], [RA, vm, zr], [RB, vm, zr]]);
+    if (ra > u0) plane([[U0, V1, zb], [U0, V0, zb], [RA, vm, zr]]);
+    if (rb < u1) plane([[U1, V0, zb], [U1, V1, zb], [RB, vm, zr]]);
+    this.current = walls;
     return this;
   }
 
@@ -459,18 +678,23 @@ export class Painter {
 
   // ----- ground -----
 
+  // Ground lines wobble like everything else with LOOK.sketch.
   groundLine(points, opts = {}) {
-    this.ground.push(`<polyline points="${points.map(([x, y]) => this._proj([x, y, 0])).join(' ')}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
+    this.ground.push(LOOK.sketch
+      ? `<path d="${this._sketch(points.map(([x, y]) => [x, y, 0]), false).d}"${attrs(opts, this._lod(opts), 'gnd')}/>`
+      : `<polyline points="${points.map(([x, y]) => this._proj([x, y, 0])).join(' ')}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
     return this;
   }
 
   groundPoly(points, opts = {}) {
-    this.ground.push(`<polygon points="${points.map(([x, y]) => this._proj([x, y, 0])).join(' ')}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
+    this.ground.push(LOOK.sketch
+      ? `<path d="${this._sketch(points.map(([x, y]) => [x, y, 0]), true).d}"${attrs(opts, this._lod(opts), 'gnd')}/>`
+      : `<polygon points="${points.map(([x, y]) => this._proj([x, y, 0])).join(' ')}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
     return this;
   }
 
   groundCircle(x, y, r, opts = {}) {
-    const [sx, sy] = this.camera.project(...this._world(x, y, 0));
+    const [sx, sy] = this._project(...this._world(x, y, 0));
     const [rx, ry] = this.camera.groundEllipse(r);
     this.ground.push(`<ellipse cx="${r2(sx)}" cy="${r2(sy)}" rx="${r2(rx)}" ry="${r2(ry)}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
     return this;
@@ -504,9 +728,11 @@ export class Painter {
     return !this.free || this.free(x, y, r);
   }
 
-  spot(x, y) {
+  // `dir`: the way a car parked there faces (local; default nose to +y).
+  spot(x, y, dir = [0, 1]) {
     const [wx, wy] = this._world(x, y, 0);
-    this.spots.push([wx, wy]);
+    const [dx, dy] = rotateQuarter(dir[0], dir[1], this.rotation);
+    this.spots.push([wx, wy, Math.atan2(dy, dx)]);
     return this;
   }
 
@@ -522,20 +748,20 @@ export class Painter {
     this._ensure(...points[0]);
     if (opts.facing && !this._facing(opts.facing)) return this;
     const lod = opts.lod ?? (opts.facing ? Math.max(2, this.lod) : this.lod);
-    this.current.parts.push(`<polyline points="${points.map((p) => this._proj(p)).join(' ')}"${attrs(opts, lod)}/>`);
+    this.current.parts.push(this._outline(points, false, opts, lod));
     return this;
   }
 
   disc(x, y, z, r, opts = {}) {
     this._ensure(x, y, z);
-    const [sx, sy] = this.camera.project(...this._world(x, y, z));
+    const [sx, sy] = this._project(...this._world(x, y, z));
     this.current.parts.push(`<circle cx="${r2(sx)}" cy="${r2(sy)}" r="${r2(r * this.camera.tile)}"${attrs(opts, this._lod(opts))}/>`);
     return this;
   }
 
   shape(x, y, z, points, opts = {}) {
     this._ensure(x, y, z);
-    const [sx, sy] = this.camera.project(...this._world(x, y, z));
+    const [sx, sy] = this._project(...this._world(x, y, z));
     const t = this.camera.tile;
     const p = points.map(([u, v]) => [r2(sx + u * t), r2(sy - v * t)]);
     if (!opts.smooth) {
@@ -563,7 +789,7 @@ export class Painter {
     const r1 = (n) => Math.round(n * 10) / 10;
     let d = '';
     for (const { x, y, z, lines } of groups) {
-      const [sx, sy] = this.camera.project(...this._world(x, y, z));
+      const [sx, sy] = this._project(...this._world(x, y, z));
       for (const pts of lines) d += pts.map(([u, v], i) => `${i ? 'L' : 'M'}${r1(sx + u * t)} ${r1(sy - v * t)}`).join('');
     }
     this.current.parts.push(`<path d="${d}"${attrs(opts, this._lod(opts), 'glyph')}/>`);

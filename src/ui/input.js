@@ -1,6 +1,7 @@
 // Pointer input on the world SVG: left click / tap = tool click, drag (any
 // button, one finger) = pan, two fingers = pinch zoom + pan, right click =
-// cancel, wheel = zoom around the cursor.
+// cancel, middle click = the tool's Tab (rotate / flip the bend), wheel =
+// zoom around the cursor.
 //
 // Touch has no hover: the hover position only moves on a tap (not while
 // panning), and stays where it was when the finger lifts.
@@ -9,7 +10,7 @@ import { notePointer } from './device.js';
 
 const DRAG_THRESHOLD = { mouse: 5, touch: 10 };
 
-export function attachInput(svg, { camera, onPointer, onClick, onCancel }) {
+export function attachInput(svg, { camera, onPointer, onClick, onCancel, onMiddle }) {
   let drag = null;
   const touches = new Map(); // pointerId -> [x, y], for pinch
   let pinch = null;
@@ -27,6 +28,9 @@ export function attachInput(svg, { camera, onPointer, onClick, onCancel }) {
   };
 
   svg.addEventListener('contextmenu', (e) => e.preventDefault());
+  // no autoscroll / paste on middle click
+  svg.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+  svg.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
 
   svg.addEventListener('pointerdown', (e) => {
     notePointer(e);
@@ -88,6 +92,7 @@ export function attachInput(svg, { camera, onPointer, onClick, onCancel }) {
     onPointer(...pick(e));
     if (d.button === 0) onClick(e);
     else if (d.button === 2) onCancel();
+    else if (d.button === 1) onMiddle?.();
   });
 
   svg.addEventListener('pointercancel', (e) => {

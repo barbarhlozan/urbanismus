@@ -1,6 +1,7 @@
 // Context menu shown when clicking a dot. On narrow screens it is a sheet
 // along the bottom edge instead, within easy reach of the thumb.
-// items: [{ label, note?, disabled?, info?, action?, keepOpen? }]
+// items: [{ label, note?, disabled?, info?, heading?, unavailable?, action?, keepOpen? }]
+// (unavailable: can't be done here – shown crossed out in the detail colour)
 // keepOpen items leave the menu open and rebuild it with `refresh()`
 // (passed to show), e.g. to cycle through options.
 
@@ -12,6 +13,10 @@ export class Popup {
   constructor(root) {
     this.el = document.createElement('div');
     this.el.className = 'popup hidden';
+    // the content scrolls inside, so the box itself (and its frame) stays put
+    this.body = document.createElement('div');
+    this.body.className = 'popup-body';
+    this.el.appendChild(this.body);
     root.appendChild(this.el);
 
     this.el.addEventListener('click', (e) => {
@@ -41,7 +46,7 @@ export class Popup {
     this.refresh = refresh;
     this.render(title, items);
     this.el.classList.toggle('sheet', isNarrow());
-    this.el.scrollTop = 0;
+    this.body.scrollTop = 0;
     if (isNarrow()) {
       this.el.style.left = this.el.style.top = '';
       return;
@@ -53,9 +58,10 @@ export class Popup {
 
   render(title, items) {
     this.items = items;
-    this.el.innerHTML = `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="Close">×</button></div>` + items.map((item, i) => {
+    this.body.innerHTML = `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="Close">×</button></div>` + items.map((item, i) => {
       const disabled = item.disabled || item.info || !item.action;
-      return `<button data-i="${i}" class="${item.heading ? 'heading' : item.info ? 'info' : ''}" ${disabled ? 'disabled' : ''}>
+      const cls = item.heading ? 'heading' : item.info ? 'info' : item.unavailable ? 'unavailable' : '';
+      return `<button data-i="${i}" class="${cls}" ${disabled ? 'disabled' : ''}>
         <span class="label">${esc(item.label)}</span><span class="note">${esc(item.note ?? '')}</span>
       </button>`;
     }).join('');

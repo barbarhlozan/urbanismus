@@ -1,5 +1,5 @@
-// Screen furniture: stats (top-left), controls (top-right), hint and the
-// active tool's actions (bottom centre), Build menu (bottom-right, see
+// Screen furniture: stats (top-left), controls (top-right), the active
+// tool's actions (bottom centre), Build menu (bottom-right, see
 // buildMenu.js). Tapping the stats box folds it away.
 
 import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
@@ -22,17 +22,17 @@ export class Hud {
         <button data-act="speed" title="Simulation speed (T)"><span class="long">Speed: </span><span class="val"></span></button>
         <button data-act="pause" title="Pause (P)">Pause</button>
         <button data-act="terrain" title="Terrain contour lines">Terrain</button>
+        <button data-act="colors" title="Color scheme: click for the next one"></button>
+        <button data-act="debug" title="Debug panel: drawing switches and frame rate">Debug</button>
         <button data-act="newMap" title="Discard this city and generate a new map">New map</button>
       </div>
       <div class="bottom">
-        <div class="hint"></div>
         <div class="actions hidden"></div>
       </div>`);
 
     this.statsEl = root.querySelector('.hud .stats');
     this.trafficEl = root.querySelector('.hud .traffic');
     this.trafficTimer = 0;
-    this.hintEl = root.querySelector('.hint');
     this.pauseBtn = root.querySelector('[data-act="pause"]');
     this.speedBtn = root.querySelector('[data-act="speed"]');
     this.speedVal = this.speedBtn.querySelector('.val');
@@ -67,8 +67,6 @@ export class Hud {
   }
 
   update() {
-    const hint = this.tools.hint();
-    if (hint !== this.lastHint) this.hintEl.textContent = this.lastHint = hint;
     const actions = this.tools.actions();
     const actionsKey = actions.map((a) => a.label).join('|');
     if (actionsKey !== this.lastActions) {
@@ -87,13 +85,18 @@ export class Hud {
     if (this.trafficTimer-- <= 0) {
       this.trafficTimer = 20;
       const count = { walk: 0, cycle: 0, drive: 0 };
-      for (const a of this.agents.visible()) count[a.trip.mode === 'stroll' ? 'walk' : a.trip.mode]++;
+      let trucks = 0;
+      for (const a of this.agents.visible()) {
+        if (a.truck) trucks++;
+        else count[a.trip.mode === 'stroll' ? 'walk' : a.trip.mode]++;
+      }
       const visitors = this.agents.visitorCount();
       const commute = this.agents.commuterCount();
       const flow = this.agents.flow ?? 1;
-      const traffic = !count.drive ? '' : flow > 0.85 ? 'flowing' : flow > 0.55 ? 'busy' : 'jammed';
+      const traffic = !count.drive && !trucks ? '' : flow > 0.85 ? 'flowing' : flow > 0.55 ? 'busy' : 'jammed';
       const item = (k, v) => `<span>${k}<b>${v}</b></span>`;
       this.trafficEl.innerHTML = item('On foot', count.walk) + item('Cycling', count.cycle) + item('Driving', count.drive)
+        + (trucks ? item('Trucks', trucks) : '')
         + (traffic ? item('Traffic', `${traffic} ${Math.round(flow * 100)}%`) : '')
         + (visitors ? item('Visitors', visitors) : '')
         + (commute.inbound ? item('Commuting in', commute.inbound) : '')

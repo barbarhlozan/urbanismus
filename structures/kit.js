@@ -6,6 +6,7 @@
 
 import { clipSegment, splitRuns } from '../src/core/geom2d.js';
 import { drawTree, drawShrub, pickKind } from '../features/trees.js';
+import { LOOK } from '../src/render/painter.js';
 
 // A tree (features/trees.js), about half a grid step tall at size 1: any of
 // the three kinds, or one given as `kind`.
@@ -179,15 +180,33 @@ export function statue(g, x, y) {
 
 // Paving: a grid of lines clipped to a polygon ([[x, y]…], e.g.
 // g.site.outline), optionally with the outline. Grid lines sit on multiples
-// of `step`, so neighbouring pavings line up.
+// of `step`, so neighbouring pavings line up. With LOOK.sketch the lines
+// are broken into pencil strokes: about a third of the step-long pieces
+// are left out, picked by their place on the map, so neighbouring pavings
+// still agree.
 export function paving(g, poly, step = 0.1, { dash = '1.5 2', outline = true, lod = 2 } = {}) {
   if (outline) g.groundPoly(poly);
   const xs = poly.map((p) => p[0]), ys = poly.map((p) => p[1]);
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const keep = (x, y) => {
+    const [wx, wy] = g.toWorld(x, y);
+    return !LOOK.sketch || noise(wx, wy) > -0.35;
+  };
   const draw = (seg) => {
     // leave the footpaths clear
     for (const run of splitRuns(seg, (p) => g.isFree(p[0], p[1], 0.02), 0.06)) {
-      g.groundLine([run[0], run[run.length - 1]], { dash, lod });
+      const [a, b] = [run[0], run[run.length - 1]];
+      const n = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+      const at = (t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      let from = null;
+      for (let i = 0; i <= n; i++) {
+        const on = i < n && keep(...at((i + 0.5) / n));
+        if (on && from === null) from = i;
+        if (!on && from !== null) {
+          g.groundLine([at(from / n), at(i / n)], { dash, lod });
+          from = null;
+        }
+      }
     }
   };
   for (let x = Math.ceil(x0 / step) * step; x < x1; x += step) {
@@ -196,6 +215,14 @@ export function paving(g, poly, step = 0.1, { dash = '1.5 2', outline = true, lo
   for (let y = Math.ceil(y0 / step) * step; y < y1; y += step) {
     for (const seg of clipSegment([x0 - 1, y], [x1 + 1, y], poly)) draw(seg);
   }
+}
+
+// Noise in [-1, 1] from a map position (same place, same value).
+function noise(x, y) {
+  let h = Math.imul(Math.round(x * 1000) | 0, 0x27d4eb2d) ^ Math.imul(Math.round(y * 1000) | 0, 0x165667b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 2147483648 - 1;
 }
 
 // Picket fence along any polyline.

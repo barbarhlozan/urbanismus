@@ -28,7 +28,7 @@ export function createBulldozeTool({ world }) {
 
   return {
     id: 'bulldoze',
-    label: 'Demolish',
+    label: 'Erase',
     hotkey: 'x',
     blurb: 'Buildings, paths, roads, trees',
     touchConfirm: true,

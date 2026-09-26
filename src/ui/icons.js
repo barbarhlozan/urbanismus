@@ -1,6 +1,6 @@
 // Small line drawings for the Build menu. Buildings are drawn with their own
 // draw() through the same Painter as the map (level 2, fixed seed), so the
-// icons always match what gets built; lines and demolish are hand drawn.
+// icons always match what gets built; lines and the eraser are hand drawn.
 
 import { Camera } from '../render/camera.js';
 import { Painter } from '../render/painter.js';
@@ -70,7 +70,8 @@ const LINES = {
   road: '<path class="i-road" d="M4 22 L16 15 L28 22"/>',
   path: '<path class="i-path" d="M4 22 L16 15 L28 22"/>',
   rail: '<path class="i-rail" d="M4 20 L28 6 M4 26 L28 12"/><path class="i-sleeper" d="M7 16 L9 21 M12 13 L14 18 M17 10 L19 15 M22 7 L24 12"/>',
-  bulldoze: '<path class="i-x" d="M9 9 L23 23 M9 23 L23 9"/>',
+  // an eraser, tilted, with its rubber tip and the smudge it leaves
+  bulldoze: '<path class="i-eraser" d="M6 22 L20.1 7.9 L26.5 14.3 L12.4 28.4 Z M10.9 17.1 L17.3 23.5"/><path class="i-smudge" d="M16 29 H28"/>',
 };
 
 export function toolIcon(tool) {

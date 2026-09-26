@@ -1,7 +1,7 @@
 // Boot: create / load the world, wire systems together, run the loop.
 
 import { CONFIG } from './config.js';
-import { applyTheme } from './theme.js';
+import { applyTheme, nextScheme, SCHEMES, schemeIndex } from './theme.js';
 import { STYLE } from './render/style.js';
 import { makeWarp, makeLift } from './render/warp.js';
 import { ELEVATION, makeElevation } from './terrain/elevation.js';
@@ -24,6 +24,7 @@ import { createBulldozeTool } from './tools/bulldoze.js';
 import { Popup } from './ui/popup.js';
 import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
+import { sketchFrames } from './ui/sketchFrame.js';
 import { attachInput } from './ui/input.js';
 import { BUILD_FAMILIES } from '../structures/index.js';
 
@@ -103,11 +104,13 @@ for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createBulldozeTool(ctx));
 
 const actions = {
+  debug: () => debugPanel.toggle(),
   rotateLeft: () => { camera.rotate(-1, ...viewport); renderer.invalidate(); },
   rotateRight: () => { camera.rotate(1, ...viewport); renderer.invalidate(); },
   pause: () => { clock.paused = !clock.paused; },
   speed: () => clock.cycleSpeed(),
   terrain: () => setContours(!renderer.contours),
+  colors: () => { colorsButton().textContent = nextScheme().name; },
   newMap: () => {
     if (!confirm('Discard this city and generate a new map?')) return;
     world.events.off('*', scheduleSave);
@@ -118,9 +121,16 @@ const actions = {
 };
 
 const hud = new Hud(uiRoot, { world, tools, agents, trains, clock, actions });
-new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
+const debugPanel = new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
+debugPanel.onToggle = (open) => uiRoot.querySelector('[data-act="debug"]').classList.toggle('on', open);
+// pen-drawn frames on every UI box, to match the sketched map
+sketchFrames(uiRoot, '.hud, .controls, .actions, .popup, .feed, .bm-panel, .bm-toggle, .debug-panel');
 
 // Terrain contour lines: off unless switched on (remembered in this browser).
+// Color scheme: the button shows the one in use (applied at boot, above).
+const colorsButton = () => uiRoot.querySelector('[data-act="colors"]');
+colorsButton().textContent = SCHEMES[schemeIndex].name;
+
 const CONTOURS_KEY = 'urbanismus.contours';
 function setContours(on) {
   renderer.setContours(on);
@@ -147,11 +157,32 @@ tools.use('inspect');
 
 // ---------- input ----------
 
+// Right-click with nothing in hand: open the Build menu with the last thing
+// built picked up again (same size, rotation…), to build more of it.
+let worldVersion = 0;
+let lastBuilt = null;
+world.events.on('*', () => worldVersion++);
+function quickBuild() {
+  hud.buildMenu.fold(false);
+  if (lastBuilt) tools.use(lastBuilt);
+}
+
 attachInput(svg, {
   camera,
   onPointer: (x, y) => tools.pointer(x, y),
-  onClick: (e) => tools.click(e),
-  onCancel: () => { popup.hide(); tools.cancel(); },
+  onClick: (e) => {
+    // remember the last tool that actually built something, for quickBuild
+    const tool = tools.active, before = worldVersion;
+    tools.click(e);
+    if (worldVersion !== before && tool?.group) lastBuilt = tool.id;
+  },
+  onCancel: () => {
+    if (popup.open) return popup.hide();
+    if (tools.active?.id === tools.defaultId) return quickBuild();
+    tools.cancel();
+  },
+  // middle click works like Tab: rotate what's being placed, flip a line's bend
+  onMiddle: () => tools.key({ key: 'Tab', preventDefault() {} }),
 });
 
 window.addEventListener('keydown', (e) => {

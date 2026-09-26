@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Urbanismus – building gallery</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--fg); font: 12px system-ui; margin: 16px; }
+    h2 { font-weight: 500; margin: 24px 0 6px; }
+    .row { display: flex; flex-wrap: wrap; gap: 4px; }
+    figure { margin: 0; border: 1px solid #222; }
+    figcaption { padding: 2px 4px; color: #777; }
+    svg { display: block; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: every structure level drawn with a few seeds, close up.
+    // gallery.html?type=residential&seeds=12&size=220&rot=0
+    //   &compare=1   each one also drawn the earlier way (outlined windows, plain roofs), left
+    //   &scheme=2    color scheme (src/theme.js: 0 Night, 1 Red light, 2 Paper)
+    //   &join=1      drawn as if sharing walls on both sides (street fronts)
+    //   &sketch=1.2  hand-drawn wobble (LOOK.sketch); any LOOK key works, e.g. &eave=0.05
+    //   &speed=3     pen animations slowed down (DRAW in src/render/draw.js)
+    // Click a drawing to watch it sketched in, shift-click to watch it erased.
+    import { applyTheme } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter, LOOK } from './src/render/painter.js';
+    import { STRUCTURES } from './structures/index.js';
+    import { agentShape } from './src/render/renderer.js';
+    import { VEHICLES, vehicleSVG } from './src/render/vehicles.js';
+    import { PEOPLE, walkerSVG, cyclistSVG } from './src/render/people.js';
+    import { DRAW, drawIn, eraseOut } from './src/render/draw.js';
+    import { drawTree, drawShrub, drawClump, TREE_KINDS } from './features/trees.js';
+    const q = new URLSearchParams(location.search);
+    applyTheme(q.has('scheme') ? +q.get('scheme') : undefined);
+    const seeds = +(q.get('seeds') ?? 6), size = +(q.get('size') ?? 200), only = q.get('type');
+    const cam = new Camera({ width: 1, height: 1 }, { tile: 64 });
+    cam.rotation = +(q.get('rot') ?? 0);
+    for (const k of Object.keys(LOOK)) if (q.has(k)) LOOK[k] = q.get(k) === 'false' ? false : +q.get(k) || (q.get(k) === 'true');
+    // before = the look at the start of the hand-drawn pass (wobble only)
+    const NEW = { ...LOOK }, OLD = { ...LOOK, fascia: 0.012, sill: true, overshoot: 0, ink: false, hatch: 0, ground: 0, floors: true };
+    const looks = q.has('compare') ? [['before', OLD], ['after', NEW]] : [['', NEW]];
+    const out = document.getElementById('out');
+    if (q.has('speed')) DRAW.speed = +q.get('speed');
+    out.addEventListener('click', (e) => {
+      const g = e.target.closest('figure')?.querySelector('g.scene');
+      if (!g) return;
+      g.getAnimations({ subtree: true }).forEach((a) => a.cancel());
+      if (e.shiftKey) eraseOut([null, g], { tile: cam.tile });
+      else drawIn([null, g], { tile: cam.tile });
+    });
+    // one drawing per seed in a row of figures, framed to fit
+    function row(title, draw) {
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2>`);
+      const el = document.createElement('div');
+      el.className = 'row';
+      out.appendChild(el);
+      for (let k = 0; k < seeds; k++) for (const [label, look] of looks) {
+        Object.assign(LOOK, look);
+        const seed = (k + 1) * 2654435761 >>> 0;
+        const g = new Painter(cam, { x: 0, y: 0 }, 0, seed);
+        let svg;
+        try { draw(g, k, seed); svg = g.toSVG(); } catch (e) { svg = ''; console.warn(title, e.message); }
+        const fig = document.createElement('figure');
+        fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0">${svg}</g></svg><figcaption>#${k} ${label}</figcaption>`;
+        el.appendChild(fig);
+        const box = fig.querySelector('svg'), b = box.querySelector('g').getBBox();
+        const m = Math.max(b.width, b.height) + 16;
+        box.setAttribute('viewBox', `${b.x + b.width / 2 - m / 2} ${b.y + b.height / 2 - m / 2} ${m} ${m}`);
+      }
+    }
+    if (!only || only === 'people') {
+      // the marks further out, then the figures close up: every walker body,
+      // and cyclists riding round in 8 steps; drawn at the map's scale, shown
+      // `zoom` times larger (default 3)
+      const z = +(q.get('zoom') ?? 3);
+      const mapCam = new Camera({ width: 1, height: 1 }, { tile: 32 });
+      mapCam.rotation = cam.rotation;
+      const strip = (title, items) => {
+        out.insertAdjacentHTML('beforeend', `<h2>${title}</h2>`);
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', `-3 -5 ${items.length * 6} 7`);
+        svg.style.cssText = `position:static;width:${items.length * 6 * z}px;height:${7 * z}px;border:1px solid #8884`;
+        svg.innerHTML = `<g class="scene">${items.map((html, i) => `<g class="agent" transform="translate(${i * 6} 0)">${html}</g>`).join('')}</g>`;
+        out.appendChild(svg);
+      };
+      const mark = (kind, i) => agentShape(kind, i).innerHTML || '';
+      strip('People · further out', [...[0, 1, 2, 3].map((i) => mark('walker', i)), ...[0, 1, 2, 3].map((i) => mark('cyclist', i))]);
+      strip('Walkers', Array.from({ length: PEOPLE.bodies }, (_, i) => walkerSVG(i)));
+      strip('Cyclists', Array.from({ length: 8 }, (_, i) => cyclistSVG(mapCam, (i * VEHICLES.headings) / 8, i % PEOPLE.bodies)));
+    }
+    if (!only || only === 'vehicles') {
+      // each model turning round in 8 steps, drawn at the map's own scale
+      // (tile 32) and shown `zoom` times larger (default 3)
+      const z = +(q.get('zoom') ?? 3);
+      const mapCam = new Camera({ width: 1, height: 1 }, { tile: 32 });
+      mapCam.rotation = cam.rotation;
+      for (const name of ['saloon', 'hatch', 'van', 'cab', 'trailer', 'loco:0.24', 'coach:0.24']) {
+        out.insertAdjacentHTML('beforeend', `<h2>Vehicle · ${name}</h2>`);
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '-8 -10 128 16');
+        svg.style.cssText = `position:static;width:${128 * z}px;height:${16 * z}px;border:1px solid #8884`;
+        const scene = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        scene.setAttribute('class', 'scene');
+        svg.appendChild(scene);
+        for (let i = 0; i < 8; i++) {
+          const el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          el.setAttribute('class', 'agent car');
+          el.setAttribute('transform', `translate(${i * 16} 0)`);
+          el.innerHTML = vehicleSVG(mapCam, name, (i * VEHICLES.headings) / 8, i % VEHICLES.hands);
+          scene.appendChild(el);
+        }
+        out.appendChild(svg);
+      }
+    }
+    if (!only || only === 'trees') {
+      for (const kind of TREE_KINDS) row(`Tree · ${kind}`, (g) => drawTree(g, 0, 0, kind, kind === 'spruce' ? 0.56 : 0.5));
+      row('Shrub', (g) => drawShrub(g, 0, 0, 0.16));
+      row('Forest clump', (g) => {
+        const trees = [];
+        for (let i = g.int(2, 4); i > 0; i--) trees.push({ x: g.range(-0.38, 0.38), y: g.range(-0.38, 0.38), kind: g.pick(TREE_KINDS), height: g.range(0.5, 0.8) });
+        drawClump(g, 0, 0, trees);
+      });
+    }
+    for (const def of STRUCTURES) {
+      if (only && def.id !== only) continue;
+      def.levels.forEach((lvl, li) => {
+        out.insertAdjacentHTML('beforeend', `<h2>${def.name} · ${lvl.name}</h2>`);
+        const row = document.createElement('div');
+        row.className = 'row';
+        out.appendChild(row);
+        for (let k = 0; k < seeds; k++) for (const [label, look] of looks) {
+          Object.assign(LOOK, look);
+          const seed = (k + 1) * 2654435761 >>> 0;
+          const g = new Painter(cam, { x: 0, y: 0 }, 0, seed);
+          if (q.has('join')) g.join = { left: true, right: true };
+          if (def.site) {
+            // parks and squares: their footprint as the site, a path hub in the middle
+            const xs = def.footprint.map((f) => f[0]), ys = def.footprint.map((f) => f[1]);
+            const [x0, y0, x1, y1] = [Math.min(...xs) - 0.5, Math.min(...ys) - 0.5, Math.max(...xs) + 0.5, Math.max(...ys) + 0.5];
+            g.setSite([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
+            g.setSitePaths({ hubPos: [(x0 + x1) / 2, (y0 + y1) / 2], exits: [] });
+          }
+          const s = { type: def.id, level: li + 1, seed, id: k, node: 0, rotation: 0 };
+          let svg;
+          try { lvl.draw(g, s); svg = g.toGroundSVG() + g.toSVG(); } catch (e) { svg = ''; console.warn(def.id, lvl.name, e.message); }
+          const fig = document.createElement('figure');
+          fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0">${svg}</g></svg><figcaption>#${k} ${label}</figcaption>`;
+          row.appendChild(fig);
+          const el = fig.querySelector('svg'), b = el.querySelector('g').getBBox();
+          const pad = 8, m = Math.max(b.width, b.height) + pad * 2;
+          el.setAttribute('viewBox', `${b.x + b.width / 2 - m / 2} ${b.y + b.height / 2 - m / 2} ${m} ${m}`);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

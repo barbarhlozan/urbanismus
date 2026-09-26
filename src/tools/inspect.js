@@ -14,7 +14,7 @@ export function createInspectTool(ctx) {
 
     hint: () => isTouch()
       ? 'Tap the map · drag to pan · pinch to zoom'
-      : 'Click the map · drag to pan · scroll to zoom · Q / E rotate',
+      : 'Click the map · right-click: build menu · drag to pan · scroll to zoom · Q / E rotate',
 
     click(node, event) {
       if (node < 0) return ctx.popup.hide();
@@ -84,7 +84,7 @@ function structureMenu({ world, growth }, s) {
       action: () => world.convertStructure(s.id, other.id),
     });
   }
-  items.push({ label: 'Demolish', action: () => world.removeStructure(s.id) });
+  items.push({ label: 'Erase', action: () => world.removeStructure(s.id) });
 
   return { title: `${def.name} · ${level.name}`, items };
 }
@@ -104,20 +104,22 @@ function menuFor(ctx, node) {
   const fine = world.coarseToFine(node);
   const path = world.paths.hasNode(fine);
 
+  // What fits here, by category; what doesn't is listed greyed out at the bottom.
   const items = [];
+  const unavailable = [];
   for (const cat of CATEGORIES) {
-    items.push({ label: cat.label, info: true, heading: true });
+    const fits = [];
     for (const def of STRUCTURES.filter((d) => categoryOf(d) === cat.id)) {
       // types with their own rule (stations) may need turning to fit
       const tries = def.canPlace ? [0, 1, 2, 3] : [0];
       const at = tries.map((r) => world.placementFor(def.id, node, r)).find((p) => p.check.ok) ?? world.placementFor(def.id, node, 0);
-      items.push({
-        label: def.name,
-        note: at.check.ok ? key(def.hotkey) : at.check.reason,
-        disabled: !at.check.ok,
-        action: () => world.placeStructure(def.id, at.node, { rotation: at.rotation }),
-      });
+      if (!at.check.ok) {
+        unavailable.push({ label: def.name, note: at.check.reason, disabled: true, unavailable: true });
+        continue;
+      }
+      fits.push({ label: def.name, note: key(def.hotkey), action: () => world.placeStructure(def.id, at.node, { rotation: at.rotation }) });
     }
+    if (fits.length) items.push({ label: cat.label, info: true, heading: true }, ...fits);
   }
   items.push({ label: 'Lines', info: true, heading: true });
   items.push({ label: 'Road from here', note: key('R'), action: () => tools.use('road', { start: node }) });
@@ -127,6 +129,7 @@ function menuFor(ctx, node) {
   if (rail) items.push({ label: 'Remove railway', action: () => world.removeNetworkAt('rail', node) });
   if (path) items.push({ label: 'Remove footpath', action: () => world.removeNetworkAt('path', fine) });
   if (feature) items.push({ label: `Clear ${FEATURE_TYPES[feature.type].name.toLowerCase()}`, action: () => world.removeFeature(feature.id) });
+  if (unavailable.length) items.push({ label: 'Doesn’t fit here', info: true, heading: true }, ...unavailable);
 
   const title = road && rail ? 'Level crossing' : road ? 'Road' : rail ? 'Railway' : path ? 'Footpath' : feature ? FEATURE_TYPES[feature.type].name : 'Empty lot';
   return { title, items };

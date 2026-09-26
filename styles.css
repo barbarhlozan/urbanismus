@@ -1,12 +1,27 @@
-/* Colors come from src/theme.js (applied as CSS variables at boot).
-   The look follows instrument approach charts: thin white lines, Helvetica,
-   rounded boxes split into cells. */
+/* Colors come from the color scheme in src/theme.js: --bg, --main and
+   --detail are set at boot and by the Colors button (what each is for is
+   described there). --fg is the older name for --main.
+   The look follows instrument approach charts: thin lines, rounded boxes
+   split into cells; the UI and map labels are set in Basteleur. */
+@font-face {
+  font-family: "Basteleur";
+  src: url("fonts/Basteleur-Moonlight.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #000;
-  --fg: #fff;
+  --main: #bababa;
+  --detail: #5f5f5f;
+  --fg: var(--main);
+  --contour: color-mix(in srgb, var(--detail) 30%, var(--bg));
+  --contourIndex: color-mix(in srgb, var(--detail) 55%, var(--bg));
   --line: 1px; /* UI border width */
   --radius: 6px; /* corners of UI boxes */
-  --ui-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --panel-w: 370px; /* one width for every window: stats, top bar, menus, debug */
+  --ui-font: "Basteleur", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* notches and home indicators on phones */
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
@@ -31,12 +46,13 @@ html, body {
 
 /* ---------- World ---------- */
 
-/* #view holds both SVGs; it is larger than the window and moved on the GPU
+/* #view holds the SVGs; it is larger than the window and moved on the GPU
    while the camera moves (position and size set by Renderer.placeView) */
 #view { position: fixed; will-change: transform; }
-/* the terrain gets its own GPU layer, so moving dots don't repaint it */
-#ground { will-change: transform; }
-#world, #ground {
+/* the terrain and the buildings get their own GPU layers, so moving dots
+   don't repaint them (see Renderer) */
+#ground, #objects { will-change: transform; }
+#world, #ground, #objects {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -47,17 +63,17 @@ html, body {
   user-select: none;
 }
 /* terrain underneath: no input */
-#ground { pointer-events: none; }
+#ground, #objects { pointer-events: none; }
 #world.panning { cursor: grabbing; }
 
 .scene * { vector-effect: non-scaling-stroke; }
 
-.grid-dot { fill: var(--fg); }
+.grid-dot { fill: var(--detail); }
 /* the dots only show while building (any tool but Select, see main.js) */
 .layer-grid { display: none; }
 #world.show-grid .layer-grid { display: inline; }
 
-.hatch { stroke: var(--fg); stroke-width: 0.8; }
+.hatch { stroke: var(--detail); stroke-width: 0.8; }
 
 .contour { fill: none; stroke: var(--contour); stroke-width: 0.7; stroke-linejoin: round; }
 .contour.index { stroke: var(--contourIndex); stroke-width: 0.9; }
@@ -71,12 +87,18 @@ html, body {
   stroke: var(--bg);
   stroke-width: 3px;
 }
-.water { fill: url(#hatch-water); stroke: none; }
+/* lakes (Renderer.renderWater): the shoreline in the main pen, waterlines
+   inside it lighter, the innermost one and the ripples dashed */
+.shore { fill: none; stroke: var(--main); stroke-width: 1.1; stroke-linejoin: round; }
+.waterline { fill: none; stroke: var(--detail); stroke-width: 0.8; stroke-linejoin: round; stroke-linecap: round; }
+.waterline.far { stroke-dasharray: 6 3; }
+.waterline.ripple { stroke-dasharray: 3 2; }
 
+/* roads: their two edge lines (roadEdges in src/roads/geometry.js) */
 .road {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 2.4;
+  stroke-width: 1.2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -92,15 +114,16 @@ html, body {
 .road-exit {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 2.4;
-  stroke-dasharray: 3 5;
+  stroke-width: 1.2;
+  stroke-dasharray: 3 4;
 }
 
+/* footpaths: two narrow edge lines, like small roads (roadEdges) */
 .footpath {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 1.1;
-  stroke-dasharray: 3 2.5;
+  stroke-width: 0.9;
+  stroke-linecap: round;
   stroke-linejoin: round;
 }
 /* railways: the map symbol – a solid line with dashes of background
@@ -110,21 +133,21 @@ html, body {
 .rail-exit { fill: none; stroke: var(--fg); stroke-width: 3.6; stroke-dasharray: 3 5; }
 .rail-buffer { fill: none; stroke: var(--fg); stroke-width: 1.4; stroke-linecap: square; }
 
-.driveway { fill: none; stroke: var(--fg); stroke-width: 1; }
+.driveway { fill: none; stroke: var(--detail); stroke-width: 1; }
 /* paths drawn inside parks, in the footpath style */
-.gnd.fp { stroke-width: 1.1; stroke-dasharray: 3 2.5; stroke-linecap: butt; }
+.gnd.fp { stroke: var(--main); stroke-width: 0.9; stroke-linecap: round; }
 
-/* flat ground drawing: lawns, paving, parking lines */
+/* flat ground drawing: lawns, paving, parking lines (texture: detail color) */
 .gnd {
   fill: none;
-  stroke: var(--fg);
+  stroke: var(--detail);
   stroke-width: 0.8;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 .overlay .coverage { fill: none; stroke: var(--fg); stroke-width: 1; stroke-dasharray: 2 4; }
 
-.fine-dot { fill: var(--fg); }
+.fine-dot { fill: var(--detail); }
 .layer-subgrid { display: none; }
 #world.show-fine .layer-subgrid { display: inline; }
 
@@ -139,26 +162,50 @@ html, body {
   stroke-width: 1.2;
   stroke-linejoin: round;
 }
+/* lines on and around buildings (windows, floors, fences, props): detail */
 .layer-objects polyline,
-.ghost polyline {
+.layer-objects .ln,
+.ghost polyline,
+.ghost .ln {
   fill: none;
-  stroke: var(--fg);
+  stroke: var(--detail);
   stroke-width: 1;
   stroke-linecap: round;
 }
-.ghost polygon, .ghost polyline { stroke-dasharray: 3 3; }
+.ghost polygon, .ghost polyline, .ghost .sk { stroke-dasharray: 3 3; }
+/* hand-drawn marks (LOOK in src/render/painter.js): the stroke along a
+   building's foot in the outline pen, roof hatching and
+   ink windows as texture */
+.layer-objects .foot { stroke: var(--main); stroke-width: 1.2; }
+.layer-objects .roof-hatch { stroke: var(--main); stroke-width: 0.7; }
+.layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: 0.8; stroke-linejoin: round; }
 /* screen-facing line drawings (trees, see features/trees.js) */
-.glyph { fill: none; stroke: var(--fg); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round; }
+.glyph { fill: none; stroke: var(--detail); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round; }
 .glyph.trunk { stroke-width: 1.4; }
 .glyph.trunk.thick { stroke-width: 2.4; }
 .glyph.limb { stroke-width: 1.15; }
 .glyph.twig { stroke-width: 0.6; }
+/* hatching in leafy crowns (LEAFY in features/trees.js) */
+.glyph.leaf { stroke-width: 0.7; }
+/* spruce outlines are trees too */
+.layer-objects .filled.tree { stroke: var(--detail); stroke-width: 1; }
 .ghost .gnd { fill: none; stroke-width: 0.8; }
 
 .agent { fill: var(--fg); }
+.agent.truck { stroke: var(--fg); stroke-width: 0.9; stroke-linejoin: round; }
+/* vehicles close up (src/render/vehicles.js): paper bodies in the outline
+   pen, inked wheels and windows; parked cars sit back in the detail color */
+.vb { fill: var(--bg); stroke: var(--main); stroke-width: 0.9; stroke-linejoin: round; }
+.vi { fill: var(--main); stroke: var(--main); stroke-width: 0.3; stroke-linejoin: round; }
+/* people close up (src/render/people.js): paper bodies, open heads, wheel rings */
+.fig-body { fill: var(--bg); stroke: var(--main); stroke-width: 0.9; stroke-linejoin: round; }
+.fig-head, .fig-wheel { fill: none; stroke: var(--main); stroke-width: 0.8; }
+.parked-car .vb { stroke: var(--detail); }
+.parked-car .vi { fill: var(--detail); stroke: var(--detail); }
+.agent.cyclist { stroke: var(--fg); stroke-width: 0.4; stroke-linejoin: round; }
 .barrier { fill: none; stroke: var(--fg); stroke-width: 1.4; stroke-linecap: round; }
 .train { fill: var(--fg); stroke: var(--fg); stroke-width: 0.9; stroke-linejoin: round; }
-.parked { fill: var(--bg); stroke: var(--fg); stroke-width: 1.1; }
+.parked { fill: var(--bg); stroke: var(--detail); stroke-width: 1.1; }
 
 /* Detail levels (set on both SVGs by the renderer from the zoom) */
 .lod-1 .d2,
@@ -179,9 +226,11 @@ html, body {
 .overlay .hover, .overlay .anchor {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 1;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.overlay .anchor { stroke-width: 1.6; }
+.overlay .anchor { stroke-width: 1.7; }
 .overlay .preview {
   fill: none;
   stroke: var(--fg);
@@ -193,8 +242,8 @@ html, body {
 .overlay .preview.path { stroke-width: 1.1; }
 .overlay .preview.rail { stroke-width: 1.4; stroke-dasharray: 1 2.5; }
 .overlay .preview.invalid { stroke-width: 1; stroke-dasharray: 6 4; }
-.overlay .cross { stroke: var(--fg); stroke-width: 1.6; stroke-linecap: round; }
-.overlay .cross-halo { stroke: var(--bg); stroke-width: 5; stroke-linecap: round; }
+.overlay .cross { fill: none; stroke: var(--fg); stroke-width: 1.6; stroke-linecap: round; }
+.overlay .cross-halo { fill: none; stroke: var(--bg); stroke-width: 5; stroke-linecap: round; }
 
 /* ---------- UI ---------- */
 
@@ -218,6 +267,8 @@ html, body {
 
 .hud {
   position: fixed;
+  width: var(--panel-w);
+  box-sizing: border-box;
   top: calc(16px + var(--safe-t));
   left: calc(20px + var(--safe-l));
   cursor: pointer;
@@ -242,7 +293,7 @@ html, body {
 .hud .cells { display: flex; border-top: var(--line) solid var(--fg); }
 .hud .cell { padding: 3px 10px 5px; border-left: var(--line) solid var(--fg); text-align: center; flex: 1 1 auto; }
 .hud .cell:first-child { border-left: none; }
-.hud .cell .k { font-size: 10px; white-space: nowrap; }
+.hud .cell .k { font-size: 10px; white-space: nowrap; color: var(--detail); }
 .hud .cell .v { font-size: 13px; font-weight: 700; }
 /* a strip of inline values: "On foot 3 | Cycling 1 | …" */
 .hud .strip { display: flex; flex-wrap: wrap; border-top: var(--line) solid var(--fg); font-size: 11px; }
@@ -255,14 +306,19 @@ html, body {
   position: fixed;
   top: calc(16px + var(--safe-t));
   right: calc(20px + var(--safe-r));
+  width: var(--panel-w);
+  box-sizing: border-box;
   display: flex;
   border: var(--line) solid var(--fg);
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg);
 }
-.controls button { padding: 7px 12px; border-left: var(--line) solid var(--fg) !important; }
+.controls button { flex: 1 1 auto; padding: 7px 3px; white-space: nowrap; border-left: var(--line) solid var(--fg) !important; }
 .controls button:first-child { border-left: none !important; }
+.controls .long { display: none; }
+.controls button[data-act^="rotate"] { flex: 0 0 28px; }
+.controls { font-size: 11px; } /* "Speed: " – the button's title says it */
 .controls button:hover, .controls button.on { background: var(--fg) !important; color: var(--bg) !important; }
 
 .bottom {
@@ -291,19 +347,13 @@ html, body {
 .actions button { padding: 7px 12px; border-left: var(--line) solid var(--fg) !important; }
 .actions button:first-child { border-left: none !important; }
 .actions button:hover { background: var(--fg) !important; color: var(--bg) !important; }
-.actions button .key { font-size: 10px; margin-right: 6px; opacity: 0.6; }
+.actions button .key { font-size: 10px; margin-right: 6px; color: var(--detail); }
 
-.hint {
-  text-align: center;
-  font-size: 11px;
-  min-height: 1em;
-  padding: 3px 8px;
-  background: var(--bg);
-}
 
 .popup {
   position: fixed;
-  min-width: 200px;
+  width: var(--panel-w);
+  box-sizing: border-box;
   background: var(--bg);
   border: var(--line) solid var(--fg);
   border-radius: var(--radius);
@@ -352,37 +402,40 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .popup button:hover:not(:disabled) { background: var(--fg) !important; color: var(--bg) !important; }
 .popup button:disabled { cursor: default; }
 .popup button:disabled .label { text-decoration: line-through; }
+.popup .unavailable, .popup button:disabled:not(.info):not(.heading) .label { color: var(--detail); }
 .popup .info .label { text-decoration: none !important; }
-.popup .note { font-size: 10px; opacity: 0.7; }
-.popup { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain; }
+.popup .note { font-size: 10px; color: var(--detail); }
+.popup { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); display: flex; flex-direction: column; }
+.popup-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .popup.sheet {
   left: calc(8px + var(--safe-l));
   right: calc(8px + var(--safe-r));
   bottom: calc(8px + var(--safe-b));
   top: auto;
-  min-width: 0;
+  width: auto;
   max-height: 60vh;
   max-height: 60dvh;
 }
-.popup .heading { font-size: 10px; padding: 10px 12px 2px; opacity: 0.7; }
+.popup .heading { font-size: 10px; padding: 10px 12px 2px; color: var(--detail); }
 .popup .heading .label { text-decoration: none !important; }
 
 
 /* ---------- Map furniture ---------- */
 
 .frame { fill: none; stroke: var(--fg); stroke-width: 1; }
-.frame.thin { stroke-width: 0.5; stroke-dasharray: 1 3; }
+.frame.thin { stroke: var(--detail); stroke-width: 0.5; stroke-dasharray: 1 3; }
 .frame-label, .tag {
   fill: var(--fg);
   font-family: var(--ui-font);
 }
 /* same size on screen at every zoom (--z is set by the renderer) */
-.frame-label { font-size: calc(10px / var(--z, 1)); text-anchor: middle; dominant-baseline: middle; }
-/* black outline so labels stay readable over linework */
+.frame-label { fill: var(--detail); font-size: calc(10px / var(--z, 1)); text-anchor: middle; dominant-baseline: middle; }
+/* background-coloured outline so labels stay readable over linework */
 .frame-label { paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
 .tag { stroke: none; }
-.tag-box { fill: var(--bg); stroke: var(--fg); stroke-width: 1; }
-.tag-line { fill: none; stroke: var(--fg); stroke-width: 1; }
+.tag-fill { fill: var(--bg); }
+.tag-box { fill: none; stroke: var(--fg); stroke-width: 1.2; stroke-linecap: round; }
+.tag-line { fill: none; stroke: var(--detail); stroke-width: 1.1; stroke-linecap: round; }
 .tag-dot { fill: var(--fg); }
 
 .feed {
@@ -420,15 +473,16 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
   border-radius: var(--radius);
 }
 .bm-panel {
-  width: 270px;
+  width: var(--panel-w);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 110px - var(--safe-t) - var(--safe-b));
   max-height: calc(100dvh - 110px - var(--safe-t) - var(--safe-b));
   overflow: hidden;
 }
-.build-menu.folded .bm-panel,
-.build-menu:not(.folded) .bm-toggle { display: none; }
+#ui .build-menu.folded .bm-panel,
+#ui .build-menu:not(.folded) .bm-toggle { display: none; }
 
 .bm-head {
   display: flex;
@@ -466,10 +520,11 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 
 .bm-icon { flex: 0 0 38px; height: 38px; display: flex; }
 .bm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.bm-blurb { font-size: 9px; opacity: 0.65; text-transform: none; letter-spacing: 0.04em; }
-.bm-tool .key { font-size: 10px; opacity: 0.6; white-space: nowrap; }
+.bm-blurb { font-size: 9px; color: var(--detail); text-transform: none; letter-spacing: 0.04em; }
+.bm-tool .key { font-size: 10px; color: var(--detail); white-space: nowrap; }
 
 #ui .bm-toggle {
+  border: var(--line) solid var(--fg);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -480,6 +535,11 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .build-menu.has-tool .bm-current::before { content: "· "; }
 .bm-current { font-weight: 400; }
 
+/* keep the tool actions clear of the open panel */
+@media (min-width: 641px) {
+  body:has(.build-menu:not(.folded)) .bottom { right: calc(var(--panel-w) + 40px + var(--safe-r)); }
+}
+
 /* icons: the map's line style at a small size */
 .icon { width: 100%; height: 100%; overflow: visible; }
 .icon * { vector-effect: non-scaling-stroke; }
@@ -487,13 +547,31 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .icon polyline, .icon path, .icon line { fill: none; stroke: currentColor; stroke-width: 0.7; stroke-linecap: round; }
 .icon .gnd { stroke-width: 0.5; }
 .icon .glyph { stroke-width: 0.6; }
-.icon .d1, .icon .d2 { display: none; }
+.icon .d2 { display: none; }
 .bm-tool.active .icon polygon, .bm-tool.active .icon circle, .bm-tool.active .icon .filled { fill: var(--fg); }
 .icon .i-road { stroke-width: 2.4; }
 .icon .i-path { stroke-width: 1.2; stroke-dasharray: 3 2.5; stroke-linecap: butt; }
 .icon .i-rail { stroke-width: 1.2; }
 .icon .i-sleeper { stroke-width: 1; }
-.icon .i-x { stroke-width: 1.8; }
+.icon .i-eraser { stroke-width: 1.4; stroke-linejoin: round; }
+.icon .i-smudge { stroke-width: 1.2; stroke-dasharray: 2 2; }
+
+/* ---------- Sketched frames (src/ui/sketchFrame.js) ---------- */
+
+/* the border keeps its room but the pen-drawn frame replaces it */
+#ui .sketched { border-color: transparent !important; border-radius: 0; }
+.bm-panel, #ui .bm-toggle, .actions { position: relative; }
+.sk-frame {
+  position: absolute;
+  top: calc(-1 * var(--line));
+  left: calc(-1 * var(--line));
+  width: calc(100% + 2 * var(--line));
+  height: calc(100% + 2 * var(--line));
+  pointer-events: none;
+  overflow: visible;
+  z-index: 3;
+}
+.sk-frame path { fill: none; stroke: var(--main); stroke-width: 1.3; stroke-linecap: round; }
 
 /* ---------- Touch ---------- */
 
@@ -521,8 +599,11 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
     left: calc(8px + var(--safe-l));
     right: calc(8px + var(--safe-r));
   }
-  .controls button { flex: 1 1 0; min-width: 0; padding: 6px 4px; }
-  .controls .long { display: none; }
+  .controls { width: auto; }
+  .controls button { flex: 1 1 auto; min-width: 0; padding: 6px 2px; white-space: normal; font-size: 10px; letter-spacing: 0; }
+  .controls button[data-act^="rotate"] { flex: 0 0 30px; }
+  .controls button[data-act="newMap"] { flex: 0 1 min-content; } /* wraps to two lines */
+  .hud { width: auto; }
 
   /* stats: under the controls, smaller; tap to fold */
   .hud {
@@ -543,7 +624,7 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
     bottom: calc(10px + var(--safe-b));
     gap: 10px;
   }
-  /* the hint and actions sit above the folded Build button */
+  /* the tool actions sit above the folded Build button */
   .bottom { bottom: calc(64px + var(--safe-b)); }
   .build-menu {
     right: calc(8px + var(--safe-r));
@@ -551,7 +632,6 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
   }
   .bm-panel { width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); }
   .actions button { flex: 1 1 auto; }
-  .hint { font-size: 10px; }
 
   .feed {
     left: calc(8px + var(--safe-l));
@@ -568,6 +648,8 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
   position: fixed;
   right: calc(20px + var(--safe-r));
   top: calc(60px + var(--safe-t));
+  width: var(--panel-w);
+  box-sizing: border-box;
   z-index: 20;
   background: var(--bg);
   border: var(--line) solid var(--fg);
@@ -577,19 +659,28 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 }
 .debug-panel .debug-head {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: stretch;
+  gap: 12px;
   margin: 0 -10px 4px;
-  padding: 5px 10px;
+  padding-left: 10px;
   border-bottom: var(--line) solid var(--fg);
   font-weight: 700;
-  cursor: pointer;
 }
-.debug-panel .fps { font-weight: 400; font-variant-numeric: tabular-nums; }
+.debug-panel .debug-head > span { padding: 5px 0; align-self: center; }
+.debug-panel .fps { flex: 1; text-align: right; font-weight: 400; font-variant-numeric: tabular-nums; }
 .debug-panel label { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
 .debug-panel input { accent-color: var(--fg); margin: 0; }
-.debug-panel.folded { padding-bottom: 0; }
-.debug-panel.folded label { display: none; }
-.debug-panel.folded .debug-head { margin-bottom: 0; border-bottom: none; }
+@media (max-width: 640px) {
+  .debug-panel {
+    top: calc(62px + var(--safe-t));
+    left: calc(8px + var(--safe-l));
+    right: calc(8px + var(--safe-r));
+    width: auto;
+  }
+}
 /* "Constant line width" off: lines scale with the zoom */
 body.scaling-strokes .scene * { vector-effect: none; }
+
+/* secondary text on highlighted rows / buttons takes the row's text colour */
+#ui .bm-tool.active .bm-blurb, #ui .bm-tool.active .key,
+.actions button:hover .key { color: inherit; opacity: 0.7; }

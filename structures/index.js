@@ -17,6 +17,8 @@
 //              When it fails, the build tool also tries the footprint turned
 //              half round on the same dots (World.placementFor).
 //   railStop   true = trains stop here (stations, src/sim/trains.js)
+//   tracks     [{ pts, buffer }] extra railway drawn with the real lines, in
+//              local coordinates (stations' passing tracks and sidings)
 //   levels[i].coverage   service radius in dots (services)
 //   levels[i].yards      surroundings styles it may get (see yards.js)
 
@@ -43,14 +45,14 @@ export const CATEGORIES = [
 
 export const STRUCTURES = [
   residential, business, industrial, industrialSmall,
-  park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.stop,
+  park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.main, station.stop,
   heritage.chapel, heritage.church, heritage.townHall, heritage.column,
 ];
 
 // Build menu entries: sizes of the same thing share one tool (S switches,
 // the first is the default). Every structure must be in exactly one.
 export const BUILD_FAMILIES = [
-  [station.station, station.stop],
+  [station.station, station.main, station.stop],
   [residential], [business], [industrial, industrialSmall],
   [park.small, park.large], [square.small, square.large], [services.small, services.large],
   [heritage.chapel], [heritage.church], [heritage.townHall], [heritage.column],
@@ -119,26 +121,46 @@ export function yardOf(def, s) {
 // buildings is under the lower chance – so it stays put until one of them is
 // restyled or changes level. The draw function gets g.join = { left, right }.
 export function joinSides(world, s) {
-  const none = { left: false, right: false };
+  return { left: !!joinedNeighbour(world, s, -1), right: !!joinedNeighbour(world, s, 1) };
+}
+
+// Every structure in the street front `s` belongs to (just [s] if it
+// shares no walls), from one end to the other.
+export function joinedRow(world, s) {
+  const row = [s];
+  for (const dir of [-1, 1]) {
+    let cur = s;
+    for (let o; (o = joinedNeighbour(world, cur, dir)) && !row.includes(o);) {
+      if (dir < 0) row.unshift(o);
+      else row.push(o);
+      cur = o;
+    }
+  }
+  return row;
+}
+
+// The neighbour `s` shares its wall with on the local -x (dir -1) or +x
+// (dir 1) side, or null.
+function joinedNeighbour(world, s, dir) {
   const def = STRUCTURE_TYPES[s.type];
   const join = def && levelOf(def, s).join;
-  if (!join || world.nodesOf(s).length !== 1) return none;
+  if (!join || world.nodesOf(s).length !== 1) return null;
   const rot = world.facingRotation(s.type, s.node, s.rotation);
   const [x, y] = world.grid.xy(s.node);
   const side = (dir) => {
     const [dx, dy] = rotateQuarter(dir, 0, rot);
     const n = world.grid.nodeAt(x + dx, y + dy);
     const o = n >= 0 ? world.structureAt(n) : null;
-    if (!o || o.id === s.id) return false;
+    if (!o || o.id === s.id) return null;
     const odef = STRUCTURE_TYPES[o.type];
     const ojoin = odef && levelOf(odef, o).join;
-    if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return false;
-    if (world.facingRotation(o.type, o.node, o.rotation) !== rot) return false;
+    if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return null;
+    if (world.facingRotation(o.type, o.node, o.rotation) !== rot) return null;
     const [a, b] = s.id < o.id ? [s, o] : [o, s];
     const roll = mulberry32((drawSeed(a) ^ Math.imul(drawSeed(b), 0x85ebca6b) ^ 0x10ad) >>> 0)();
-    return roll < Math.min(join.chance ?? 1, ojoin.chance ?? 1);
+    return roll < Math.min(join.chance ?? 1, ojoin.chance ?? 1) ? o : null;
   };
-  return { left: side(-1), right: side(1) };
+  return side(dir);
 }
 
 // Footprint offsets relative to the anchor dot, after rotation.

@@ -29,9 +29,17 @@ export class Camera {
     this.lift = null; // optional (x, y) -> extra height, the terrain relief (render/warp.js)
   }
 
-  project(x, y, z = 0) {
-    if (this.lift) z += this.lift(x, y);
-    if (this.warp) [x, y] = this.warp(x, y);
+  // `at` (optional, world [x, y]): move the point by the relief and warp
+  // found there instead of at the point itself – so a whole building moves
+  // as one piece and stays square instead of bending with the ground.
+  project(x, y, z = 0, at = null) {
+    const [ax, ay] = at ?? [x, y];
+    if (this.lift) z += this.lift(ax, ay);
+    if (this.warp) {
+      const [wx, wy] = this.warp(ax, ay);
+      x += wx - ax;
+      y += wy - ay;
+    }
     const [rx, ry] = rotateQuarter(x - this.cx, y - this.cy, this.rotation);
     return [
       (rx - ry) * COS30 * this.tile,

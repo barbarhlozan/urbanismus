@@ -1,6 +1,6 @@
 // The Build menu, bottom-right: a vertical panel of groups (CATEGORIES), each
 // opening to its tools with an icon, a line on what it does and its key, and
-// tools without a group (Demolish) at the bottom. It folds away to a single
+// tools without a group (Erase) at the bottom. It folds away to a single
 // Build button, which then names the tool in hand.
 //
 // Only one group is open at a time. Clicking the active tool again, or
