@@ -9,7 +9,7 @@
 // glassworks, a panel plant, a coal power station, a lime works, a dairy and
 // a Benzina petrol station. Coal mines are in mine.js.
 
-import { stack, door, panel, timber, heap, tank, barrels, gantry, pipes, transformer, gallery, crates, roundWindows, hoops } from './kit.js';
+import { stack, door, panel, timber, heap, tank, barrels, gantry, pipes, transformer, gallery, crates, roundWindows, hoops, fenceAlong, FRAME } from './kit.js';
 
 // Water tower: a drum on a column (the mushroom kind).
 function waterTower(g, x, y, h) {
@@ -84,7 +84,7 @@ function loadingDoor(g, x, y, w, h) {
 export default {
   id: 'industrial',
   name: 'Industrial',
-  blurb: 'Factories and yards · jobs',
+  blurb: 'Factories and yards',
   hotkey: '3',
   category: 'zone',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
@@ -369,8 +369,22 @@ export const small = {
       yards: ['depot', 'parking'],
       grow: { requires: [{ type: 'residential', count: 3, radius: 4 }] },
       draw(g) {
-        const kind = g.pick(['bakery', 'boiler', 'print', 'depot', 'dairy']);
-        if (kind === 'dairy') {
+        const kind = g.pick(['bakery', 'boiler', 'print', 'depot', 'dairy', 'substation']);
+        if (kind === 'substation') {
+          // electrical substation: a fenced switchyard of transformers under
+          // a steel portal carrying the lines, and a brick control house
+          g.roofed(-0.34, -0.3, 0, 0.26, 0.22, 0.16, { h: 0.08, hip: 0.08 });
+          g.windows(-0.34, -0.3, 0.26, 0.22, 0, 0.16, 0.16, 0.09, { skip: ['front'], h: 0.45 });
+          door(g, -0.21, -0.3, 0.05, 0.1);
+          for (const [x, y] of [[0.0, 0.05], [0.22, 0.05], [0.0, 0.28], [0.22, 0.28]]) transformer(g, x, y);
+          g.detailed(1, () => {
+            g.solid(0.11, 0.17, 0.2);
+            for (const x of [-0.1, 0.32]) for (const y of [0.0, 0.34]) g.line([[x, y, 0], [x, y, 0.32]], FRAME);
+            for (const y of [0.0, 0.34]) g.line([[-0.1, y, 0.32], [0.32, y, 0.32]], FRAME);
+            for (const x of [-0.1, 0.11, 0.32]) g.line([[x, 0.0, 0.3], [x, 0.34, 0.3]]);
+          });
+          fenceAlong(g, [[-0.05, -0.12], [0.38, -0.12], [0.38, 0.4], [-0.16, 0.4], [-0.16, -0.05]], 0.07);
+        } else if (kind === 'dairy') {
           // dairy (mlékárna): a flat-roofed works with ribbon windows, steel
           // milk tanks beside it and a covered loading ramp for the churns
           g.box(-0.3, -0.05, 0, 0.44, 0.38, 0.26);

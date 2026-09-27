@@ -172,10 +172,92 @@ export function fountain(g, x, y, r = 0.1) {
   g.cylinder(x, y, 0.04, r * 0.25, 0.08, 8);
 }
 
-export function statue(g, x, y) {
-  if (!g.isFree(x, y, 0.06)) return;
-  g.box(x - 0.05, y - 0.05, 0, 0.1, 0.1, 0.06);
-  g.box(x - 0.018, y - 0.018, 0.06, 0.036, 0.036, 0.12);
+// A statue on a stone pedestal: a bronze figure drawn as a solid ink
+// silhouette (see figure() below). kind: one of STATUES, or null for any
+// of the single figures. Pedestals are stepped, with a plaque on the front.
+export function statue(g, x, y, kind = null, size = 1) {
+  if (!g.isFree(x, y, 0.07 * size)) return;
+  kind ??= g.pick(['standing', 'worker', 'flag', 'mother', 'bust', 'standing']);
+  const long = kind === 'equestrian' || kind === 'pair';
+  const [w, d] = long ? [0.17 * size, 0.1 * size] : [0.08 * size, 0.08 * size];
+  const ph = (kind === 'bust' ? 0.16 : 0.1) * size;
+  g.box(x - w / 2 - 0.02, y - d / 2 - 0.02, 0, w + 0.04, d + 0.04, 0.02);
+  g.box(x - w / 2, y - d / 2, 0.02, w, d, ph);
+  g.detailed(2, () => g.line([[x - w * 0.3, y - d / 2, 0.02 + ph * 0.3], [x + w * 0.3, y - d / 2, 0.02 + ph * 0.3], [x + w * 0.3, y - d / 2, 0.02 + ph * 0.7], [x - w * 0.3, y - d / 2, 0.02 + ph * 0.7], [x - w * 0.3, y - d / 2, 0.02 + ph * 0.3]], { facing: [0, -1, 0] }));
+  figure(g, x, y, 0.02 + ph, (kind === 'bust' ? 0.12 : kind === 'equestrian' ? 0.2 : 0.16) * size, kind);
+}
+
+export const STATUES = ['standing', 'worker', 'flag', 'soldier', 'mother', 'pair', 'bust', 'equestrian'];
+
+// Outlines of the figures, in units of the figure's height (u right, v up
+// from its feet). Drawn facing the screen, like trees and people.
+const circle = (cu, cv, r, n = 12) => Array.from({ length: n }, (_, i) => [cu + Math.cos((i / n) * Math.PI * 2) * r, cv + Math.sin((i / n) * Math.PI * 2) * r]);
+const FIG = {
+  // a man in a long coat, legs a little apart
+  man: [[-0.13, 0], [-0.03, 0], [0, 0.28], [0.03, 0], [0.13, 0], [0.15, 0.42], [0.19, 0.72], [0.16, 0.8],
+    [0.07, 0.83], [0.05, 0.86], [-0.05, 0.86], [-0.07, 0.83], [-0.16, 0.8], [-0.19, 0.72], [-0.15, 0.42]],
+  // a woman in a long skirt
+  woman: [[-0.17, 0], [0.17, 0], [0.13, 0.48], [0.16, 0.74], [0.13, 0.8], [0.06, 0.83], [0.05, 0.86],
+    [-0.05, 0.86], [-0.06, 0.83], [-0.13, 0.8], [-0.16, 0.74], [-0.13, 0.48]],
+  child: [[-0.08, 0], [0.08, 0], [0.07, 0.32], [0.04, 0.36], [-0.04, 0.36], [-0.07, 0.32]],
+  bust: [[-0.3, 0], [0.3, 0], [0.28, 0.22], [0.14, 0.34], [0.07, 0.36], [0.07, 0.44], [-0.07, 0.44], [-0.07, 0.36], [-0.14, 0.34], [-0.28, 0.22]],
+  horse: [[-0.34, 0], [-0.3, 0], [-0.27, 0.3], [-0.16, 0.32], [-0.13, 0], [-0.09, 0], [-0.09, 0.33], [0.18, 0.33],
+    [0.2, 0], [0.24, 0], [0.24, 0.33], [0.3, 0.36], [0.38, 0.1], [0.43, 0.12], [0.36, 0.42], [0.4, 0.62],
+    [0.52, 0.72], [0.57, 0.68], [0.53, 0.8], [0.45, 0.86], [0.36, 0.8], [0.27, 0.6], [0.05, 0.6],
+    [-0.2, 0.62], [-0.36, 0.58], [-0.45, 0.5], [-0.52, 0.3], [-0.44, 0.44], [-0.38, 0.36]],
+  rider: [[-0.1, 0.56], [0.08, 0.56], [0.07, 0.8], [0.1, 0.9], [0.04, 0.95], [-0.06, 0.95], [-0.1, 0.88], [-0.08, 0.74]],
+};
+
+// A bronze figure standing at (x, y, z), h tall: ink silhouettes for the
+// bodies, ink strokes for arms, tools and poles.
+export function figure(g, x, y, z, h, kind = 'standing') {
+  const v = h * g.camera.zScale; // screen units per figure height
+  const ink = { cls: 'ink' };
+  const pen = { stroke: 'main', width: Math.max(1, g.camera.tile * h * 0.05) };
+  const body = (pts, du = 0, sc = 1) => g.shape(x, y, z, pts.map(([a, b]) => [(a * sc + du) * v, b * sc * v]), ink);
+  const head = (du, dv, r = 0.075, sc = 1) => g.shape(x, y, z, circle(du * v, dv * sc * v, r * sc * v), ink);
+  const stroke = (...lines) => g.strokes(x, y, z, lines.map((l) => l.map(([a, b]) => [a * v, b * v])), pen);
+  g.solid(x, y, z + h / 2);
+  switch (kind) {
+    case 'worker':
+      // raising a hammer
+      body(FIG.man); head(0, 0.93);
+      stroke([[0.15, 0.78], [0.28, 1.1]], [[0.24, 1.06], [0.34, 1.3]], [[0.27, 1.33], [0.42, 1.27]]);
+      break;
+    case 'flag':
+      // carrying a flag on a long pole
+      body(FIG.man); head(0, 0.93);
+      stroke([[0.17, 0.05], [0.3, 1.5]], [[0.14, 0.76], [0.25, 0.95]]);
+      g.shape(x, y, z, [[0.3, 1.5], [0.66, 1.42], [0.58, 1.3], [0.66, 1.17], [0.28, 1.25]].map(([a, b]) => [a * v, b * v]), ink);
+      break;
+    case 'soldier':
+      // with a rifle over the shoulder
+      body(FIG.man); head(0, 0.93, 0.08);
+      stroke([[0.1, 0.55], [0.26, 1.15]]);
+      break;
+    case 'mother':
+      body(FIG.woman); head(0, 0.93);
+      body(FIG.child, 0.24); head(0.24, 0.43, 0.05);
+      stroke([[0.12, 0.72], [0.22, 0.4]]);
+      break;
+    case 'pair':
+      // a worker and a farm woman, arms raised together (hammer and sheaf)
+      body(FIG.man, -0.17); head(-0.17, 0.93);
+      body(FIG.woman, 0.17, 0.95); head(0.17, 0.93, 0.075, 0.95);
+      stroke([[-0.05, 0.78], [0, 1.15]], [[0.05, 0.76], [0.02, 1.15]], [[-0.04, 1.2], [0.06, 1.2]]);
+      g.shape(x, y, z, [[0.0, 1.15], [-0.08, 1.35], [0.02, 1.3], [0.1, 1.36]].map(([a, b]) => [a * v, b * v]), ink);
+      break;
+    case 'bust':
+      body(FIG.bust); head(0, 0.6, 0.17);
+      break;
+    case 'equestrian':
+      body(FIG.horse); body(FIG.rider); head(-0.01, 1.03, 0.065);
+      stroke([[0.0, 0.6], [0.06, 0.4]], [[0.06, 0.88], [0.22, 1.2]]);
+      break;
+    default:
+      // standing figure, one hand on the chest
+      body(FIG.man); head(0, 0.93);
+  }
 }
 
 // Paving: a grid of lines clipped to a polygon ([[x, y]…], e.g.

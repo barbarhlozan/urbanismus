@@ -30,7 +30,7 @@ export function createBulldozeTool({ world }) {
     id: 'bulldoze',
     label: 'Erase',
     hotkey: 'x',
-    blurb: 'Buildings, paths, roads, trees',
+    blurb: 'Remove anything',
     touchConfirm: true,
 
     snap(x, y) {

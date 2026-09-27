@@ -1,5 +1,6 @@
-// Where people can walk: every footpath, plus the sidewalks of streets (road
-// segments with sidewalks, world.sidewalks). Both are merged into one
+// Where people can walk: every footpath, the sidewalks of streets (road
+// segments with sidewalks, world.sidewalks) and single-track lanes
+// (world.lanes, shared with the cars). All are merged into one
 // weighted graph on the dense (fine) grid, so where a footpath meets a road
 // dot or crosses the middle of a road segment, people can switch between
 // them. Sidewalks cost a bit more, so footpaths are preferred when there's
@@ -21,6 +22,7 @@ export class WalkNetwork {
   constructor(world, config, { allRoads = false } = {}) {
     this.world = world;
     this.config = config.walk;
+    this.laneCost = config.lane.walkCost;
     this.allRoads = allRoads;
     this.adj = null;
     const dirty = () => (this.adj = null);
@@ -53,10 +55,11 @@ export class WalkNetwork {
     for (const [a, b] of world.paths.edges()) link(a, b, paths.distance(a, b));
 
     // Each street segment becomes two half-segments on the fine grid.
-    const k = this.allRoads ? 1 : this.config.sidewalkCost;
     const street = [];
     for (const [a, b] of world.roads.edges()) {
-      if (!this.allRoads && !world.hasSidewalk(a, b)) continue;
+      const lane = world.isLane(a, b);
+      if (!this.allRoads && !lane && !world.hasSidewalk(a, b)) continue;
+      const k = this.allRoads ? 1 : lane ? this.laneCost : this.config.sidewalkCost;
       const fa = world.coarseToFine(a);
       const fb = world.coarseToFine(b);
       const [ax, ay] = world.fine.xy(fa);
@@ -80,7 +83,9 @@ export class WalkNetwork {
       const { hub, hubPos, exits } = world.sitePaths(s);
       for (const e of exits) {
         link(hub, e.node, Math.hypot(e.pos[0] - hubPos[0], e.pos[1] - hubPos[1]) * 0.9);
-        if (e.road >= 0 && (this.allRoads || world.sidewalksAt(e.road).length)) link(e.node, world.coarseToFine(e.road), 0.5 * k);
+        if (e.road < 0) continue;
+        const walkable = this.allRoads || world.sidewalksAt(e.road).length || [...world.roads.neighbors(e.road)].some((m) => world.isLane(e.road, m));
+        if (walkable) link(e.node, world.coarseToFine(e.road), 0.5 * (this.allRoads ? 1 : this.config.sidewalkCost));
       }
     }
     this.adj = adj;
@@ -140,20 +145,38 @@ export class WalkNetwork {
     return { nodes, cost: best.cost, fromDoor: starts.get(nodes[0]).door, toDoor: ends.get(best.node).door };
   }
 
-  // A walk from a structure to a random footpath spot between minCost and maxCost away.
-  stroll(from, minCost, maxCost) {
+  // A loop walk from a structure: out to a random spot between minCost and
+  // maxCost away (on a footpath if there is one in reach, else anywhere
+  // walkable) and home another way where there is one – the way out counts
+  // `detour` times its length on the way back.
+  // { nodes, cost, fromDoor, toDoor: null, backNodes, backDoor } or null.
+  stroll(from, minCost, maxCost, detour = 4) {
     const starts = this.entries(from);
     if (!starts.size) return null;
     const { dist, came, order } = this.explore(starts, maxCost);
-    const spots = order.filter((n) => dist.get(n) >= minCost && this.world.paths.hasNode(n));
+    const far = order.filter((n) => dist.get(n) >= minCost);
+    const onPath = far.filter((n) => this.world.paths.hasNode(n));
+    const spots = onPath.length ? onPath : far;
     if (!spots.length) return null;
     const target = spots[Math.floor(Math.random() * spots.length)];
     const nodes = reconstruct(came, target);
-    return { nodes, cost: dist.get(target), fromDoor: starts.get(nodes[0]).door, toDoor: null };
+
+    const used = new Set();
+    for (let i = 1; i < nodes.length; i++) used.add(`${nodes[i - 1]}|${nodes[i]}`).add(`${nodes[i]}|${nodes[i - 1]}`);
+    const back = this.explore(new Map([[target, { cost: 0 }]]), maxCost * detour * 2, (a, b) => (used.has(`${a}|${b}`) ? detour : 1));
+    let best = null;
+    for (const [n, { cost }] of starts) {
+      const d = back.dist.get(n);
+      if (d !== undefined && (!best || d + cost < best.cost)) best = { node: n, cost: d + cost };
+    }
+    const backNodes = best ? reconstruct(back.came, best.node) : nodes.slice().reverse();
+    const backDoor = starts.get(backNodes[backNodes.length - 1]).door;
+    return { nodes, cost: dist.get(target), fromDoor: starts.get(nodes[0]).door, toDoor: null, backNodes, backDoor };
   }
 
-  // Dijkstra from several start nodes, up to maxCost.
-  explore(starts, maxCost) {
+  // Dijkstra from several start nodes, up to maxCost. `weight(a, b)`
+  // optionally scales the cost of stepping from a to b.
+  explore(starts, maxCost, weight = null) {
     const g = this.graph;
     const dist = new Map();
     const came = new Map();
@@ -172,7 +195,7 @@ export class WalkNetwork {
       done.add(n);
       order.push(n);
       for (const [m, c] of g.get(n) ?? []) {
-        const nd = dn + c;
+        const nd = dn + (weight ? c * weight(n, m) : c);
         if (nd < (dist.get(m) ?? Infinity)) {
           dist.set(m, nd);
           came.set(m, n);

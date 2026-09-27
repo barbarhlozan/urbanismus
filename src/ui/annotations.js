@@ -1,13 +1,14 @@
-// Technical annotations (each switchable in render/style.js):
-//   hover tags  a leader line and a boxed label on the building / road / exit under
-//               the pointer, e.g. "R-012 · APARTMENTS · L2"
+// Annotations (each switchable in render/style.js):
+//   hover tags  a leader line and a boxed label naming the building / road /
+//               exit under the pointer, e.g. "Clinic"
 //   event log   a running log of what happens (visitors, residents leaving
 //               the city, buildings growing …), with simulation time
 //
 // Systems report events with annotations.log(text, [x, y]) (the position is
 // currently unused, kept so events can be placed on the map later).
 
-import { STRUCTURE_TYPES, levelOf, codeOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
+import { FEATURE_TYPES } from '../../features/index.js';
 import { STYLE } from '../render/style.js';
 import { sketchRect, sketchPolyline, seedOf } from '../render/sketch.js';
 
@@ -16,12 +17,11 @@ const FEED_LINES = 6;
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const r2 = (n) => Math.round(n * 100) / 100;
 
-// Label widths, measured in the tag font (see .tag in styles.css).
-const TAG_FONT = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+// Label widths, measured in the tag font (the UI font, see .tag in styles.css).
 let measureCtx = null;
 function textWidth(text, size) {
   measureCtx ??= document.createElement('canvas').getContext('2d');
-  measureCtx.font = `${size}px ${TAG_FONT}`;
+  measureCtx.font = `${size}px ${getComputedStyle(document.documentElement).getPropertyValue('--ui-font')}`;
   return measureCtx.measureText(text).width;
 }
 
@@ -46,7 +46,7 @@ export class Annotations {
 
   update() {
     const show = STYLE.feed && this.lines.length > 0;
-    this.el.classList.toggle('hidden', !show);
+    if (show !== this.shown) this.el.classList.toggle('hidden', !(this.shown = show));
     if (!show || !this.feedDirty) return;
     this.feedDirty = false;
     const clock = (t) => {
@@ -70,29 +70,17 @@ export class Annotations {
     const { world } = this;
     const node = world.grid.nodeAt(x, y);
     if (node < 0) return null;
+    const at = (height) => ({ pos: world.grid.xy(node), height });
     const s = world.structureAt(node);
-    if (s) {
-      const def = STRUCTURE_TYPES[s.type];
-      const level = levelOf(def, s);
-      const stats = Object.entries(level.stats ?? {}).map(([k, v]) => `${k} ${v}`);
-      if (level.coverage) stats.push(`area ${level.coverage}`);
-      return {
-        pos: world.centerOf(s),
-        height: 0.5,
-        lines: [`${codeOf(s)} · ${level.name} · L${s.level}`, ...(stats.length ? [stats.join(' · ')] : [])],
-      };
-    }
-    const exit = world.roadExits().find((e) => e.node === node);
-    if (exit) return { pos: world.grid.xy(node), height: 0.1, lines: [`EXIT ${compass(exit.dir)} · ${world.grid.xy(node).join(',')}`] };
-    const railExit = world.railExits().find((e) => e.node === node);
-    if (railExit) return { pos: world.grid.xy(node), height: 0.1, lines: [`RAIL EXIT ${compass(railExit.dir)} · ${world.grid.xy(node).join(',')}`] };
-    if (world.hasRail(node)) {
-      const kind = world.hasRoad(node) ? 'level crossing' : `${world.rails.degree(node)}-way`;
-      return { pos: world.grid.xy(node), height: 0.1, lines: [`RL ${world.grid.xy(node).join(',')} · ${kind}`] };
-    }
-    if (world.hasRoad(node)) {
-      return { pos: world.grid.xy(node), height: 0.1, lines: [`RD ${world.grid.xy(node).join(',')} · ${world.roads.degree(node)}-way`] };
-    }
+    if (s) return { pos: world.centerOf(s), height: 0.5, lines: [levelOf(STRUCTURE_TYPES[s.type], s).name] };
+    if (world.roadExits().some((e) => e.node === node)) return { ...at(0.1), lines: ['Road out of town'] };
+    if (world.railExits().some((e) => e.node === node)) return { ...at(0.1), lines: ['Railway out of town'] };
+    if (world.hasRail(node)) return { ...at(0.1), lines: [world.hasRoad(node) ? 'Level crossing' : 'Railway'] };
+    if (world.hasRoad(node)) return { ...at(0.1), lines: [world.laneOnly(node) ? 'Lane' : 'Road'] };
+    if (world.paths.hasNode(world.coarseToFine(node))) return { ...at(0.05), lines: ['Footpath'] };
+    const f = world.featureAt(node);
+    const name = f && FEATURE_TYPES[f.type]?.name;
+    if (name) return { ...at(0.5), lines: [name] };
     return null;
   }
 
@@ -103,7 +91,7 @@ export class Annotations {
     const size = 11, lead = 14, padX = 6, padY = 4;
     const [sx, sy] = this.camera.project(x, y, height);
     const [ex, ey] = [sx + 18 / z, sy - 26 / z];
-    const texts = lines.map((l) => l.toUpperCase());
+    const texts = lines;
     const widths = texts.map((t) => textWidth(t, size));
     const w = Math.max(...widths) + padX * 2;
     const h = lead * texts.length + padY * 2 - (lead - size);
@@ -114,10 +102,13 @@ export class Annotations {
       .join('');
     const seed = seedOf(x, y, lines.length);
     const k = 1 / z;
-    return `<path class="tag-line" d="${sketchPolyline([[sx, sy], [ex, ey], [bx, ey]], seed, { k })}"/>` +
+    // data-anim: it waits as long as the hover ring (styles.css) and isn't
+    // held back again by every redraw of a pan (Renderer.keepAnimating)
+    return `<g class="tag-group" data-anim="tag-${seed}-${esc(lines.join('|'))}">` +
+      `<path class="tag-line" d="${sketchPolyline([[sx, sy], [ex, ey], [bx, ey]], seed, { k })}"/>` +
       `<circle class="tag-dot" cx="${r2(sx)}" cy="${r2(sy)}" r="${r2(2 / z)}"/>` +
       `<rect class="tag-fill" x="${r2(bx)}" y="${r2(by)}" width="${r2(w / z)}" height="${r2(h / z)}"/>` +
-      `<path class="tag-box" d="${sketchRect(bx, by, w / z, h / z, seed + 7, { k, over: 3 })}"/>${text}`;
+      `<path class="tag-box" d="${sketchRect(bx, by, w / z, h / z, seed + 7, { k, over: 3 })}"/>${text}</g>`;
   }
 }
 

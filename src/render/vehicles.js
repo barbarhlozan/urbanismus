@@ -1,4 +1,4 @@
-// Vehicles as little hand-drawn models: cars, trucks, trains.
+// Vehicles as little hand-drawn models: cars, trucks, buses, trains.
 //
 // A model is made of parts, each a side profile – a convex polygon in (x, z),
 // x forward, z up, in grid units – pushed out sideways to its half width, as
@@ -9,7 +9,9 @@
 //
 //   body    the main part (required)
 //   cabin   a glasshouse on top: every face but its roof is a window
-//   top     plain roof gear (no windows)
+//   vault   { x: [x0, x1], z, rise }, an arched roof across the body's width
+//   top     plain roof gear (no windows), or a list of parts standing on
+//           the body (drawn back to front), each may have its own vault
 //   wheels  { x: [positions along], r }, inked discs on the near side
 //   glass   (face) -> bool: body faces that are windows (when no cabin)
 //   panes   window profiles [[x, z]…] on the near side
@@ -30,64 +32,150 @@ export const VEHICLES = {
   jitter: 0.0025, // grid units a profile corner may stray
 };
 
-// Profiles, grid units. The eras' cars: a Škoda 120-like saloon (long bonnet
-// and boot, cabin in the middle), a hatchback (Škoda Favorit / Trabant-ish,
-// cabin to the back) and a van (Avia / Barkas box).
+// Profiles, grid units. The eras' vehicles:
+//   hatch   Škoda Favorit – a wedge: low sloping bonnet, long glasshouse,
+//           an almost upright hatch
+//   saloon  Škoda 120 – long bonnet and boot, cabin in the middle
+//   lada    Lada 2107 – a boxy saloon, flat bonnet and boot
+//   volga   GAZ-24 Volga – a big long saloon
+//   trabant Trabant 601 Universal – small, the roof running to an upright back
+//   van     Škoda 1203 – a short rounded nose, then one tall box with a row
+//           of side windows
+//   bus     Karosa 700 series – a long box, a big raked windscreen, a row of
+//           large windows, a glazed front door, the stripe of the livery
+//   trucks  one rigid model each (see truckFor): a Praga V3S (bonnet, cab
+//           behind it; canvas-covered, a box body or an open flatbed) or a
+//           Tatra 815 (cab-over, a tipper body), three axles
+// `glass` gets each face with n (normal), x and z (its middle along the car
+// and up), side (±1 the flat sides, 0 the faces round the profile).
 const MODELS = {
+  hatch: {
+    body: { w: 0.035, profile: [[-0.074, 0.012], [0.074, 0.012], [0.077, 0.027], [0.072, 0.036], [0.028, 0.045], [-0.072, 0.047], [-0.076, 0.03]] },
+    cabin: { w: 0.032, profile: [[-0.071, 0.047], [0.028, 0.045], [-0.006, 0.071], [-0.058, 0.072]] },
+    wheels: { x: [-0.047, 0.05], r: 0.015 },
+  },
   saloon: {
     body: { w: 0.036, profile: [[-0.085, 0.012], [0.085, 0.012], [0.085, 0.034], [0.07, 0.042], [-0.08, 0.042], [-0.085, 0.036]] },
     cabin: { w: 0.032, profile: [[-0.045, 0.042], [0.032, 0.042], [0.016, 0.07], [-0.036, 0.07]] },
     wheels: { x: [-0.05, 0.05], r: 0.015 },
   },
-  hatch: {
-    body: { w: 0.035, profile: [[-0.07, 0.012], [0.075, 0.012], [0.075, 0.034], [0.06, 0.043], [-0.07, 0.043]] },
-    cabin: { w: 0.032, profile: [[-0.068, 0.043], [0.03, 0.043], [0.012, 0.072], [-0.062, 0.072]] },
-    wheels: { x: [-0.042, 0.048], r: 0.015 },
+  volga: {
+    body: { w: 0.038, profile: [[-0.095, 0.012], [0.095, 0.012], [0.096, 0.03], [0.09, 0.04], [0.035, 0.044], [-0.05, 0.044], [-0.092, 0.042], [-0.096, 0.03]] },
+    cabin: { w: 0.034, profile: [[-0.05, 0.044], [0.035, 0.044], [0.015, 0.071], [-0.035, 0.071]] },
+    wheels: { x: [-0.058, 0.058], r: 0.016 },
+  },
+  lada: {
+    body: { w: 0.036, profile: [[-0.083, 0.012], [0.083, 0.012], [0.083, 0.038], [0.03, 0.043], [-0.083, 0.043], [-0.084, 0.03]] },
+    cabin: { w: 0.032, profile: [[-0.045, 0.043], [0.03, 0.043], [0.012, 0.071], [-0.04, 0.071]] },
+    wheels: { x: [-0.05, 0.052], r: 0.015 },
+  },
+  trabant: {
+    body: { w: 0.032, profile: [[-0.07, 0.013], [0.07, 0.013], [0.071, 0.03], [0.066, 0.037], [0.028, 0.042], [-0.07, 0.042]] },
+    cabin: { w: 0.03, profile: [[-0.07, 0.042], [0.028, 0.042], [0.01, 0.066], [-0.068, 0.066]] },
+    wheels: { x: [-0.044, 0.046], r: 0.014 },
   },
   van: {
-    // one tall box, glass only at the cab: the windscreen, and a side window
-    body: { w: 0.038, profile: [[-0.09, 0.012], [0.09, 0.012], [0.09, 0.046], [0.062, 0.088], [-0.09, 0.088]] },
-    wheels: { x: [-0.058, 0.055], r: 0.016 },
-    glass: (face) => face.side === 0 && face.x > 0.06 && face.n[0] > 0,
-    panes: [[[0.035, 0.05], [0.084, 0.05], [0.06, 0.082], [0.035, 0.082]]],
+    body: { w: 0.038, profile: [[-0.086, 0.012], [0.086, 0.012], [0.09, 0.03], [0.085, 0.05], [0.066, 0.058], [0.05, 0.09], [-0.084, 0.09], [-0.088, 0.03]] },
+    vault: { x: [-0.084, 0.05], z: 0.09, rise: 0.006 },
+    wheels: { x: [-0.056, 0.054], r: 0.016 },
+    glass: (face) => face.side === 0 && face.n[0] > 0 && face.x > 0.052 && face.z > 0.06, // the windscreen
+    panes: [
+      [[0.012, 0.062], [0.046, 0.062], [0.042, 0.084], [0.012, 0.084]], // the door
+      ...[-0.076, -0.044, -0.012].map((x) => [[x, 0.062], [x + 0.026, 0.062], [x + 0.026, 0.084], [x, 0.084]]),
+    ],
   },
-  // Trucks (Tatra / Liaz cab-over): the cab and the box trailer are two
-  // models, each turned its own way, so the truck bends at corners.
-  cab: {
-    body: { w: 0.038, profile: [[-0.035, 0.014], [0.036, 0.014], [0.036, 0.05], [0.03, 0.08], [-0.035, 0.082]] },
-    wheels: { x: [0.004], r: 0.016 },
-    glass: (face) => face.side === 0 && face.n[0] > 0 && face.n[2] > 0,
-    panes: [[[0.004, 0.05], [0.033, 0.05], [0.028, 0.076], [0.004, 0.076]]],
+  bus: {
+    body: { w: 0.044, profile: [[-0.12, 0.014], [0.12, 0.014], [0.121, 0.05], [0.115, 0.098], [-0.12, 0.098], [-0.12, 0.03]] },
+    vault: { x: [-0.12, 0.115], z: 0.098, rise: 0.007 },
+    wheels: { x: [-0.066, 0.07], r: 0.019 },
+    glass: (face) => face.side === 0 && face.n[0] > 0 && face.x > 0.11 && face.z > 0.06, // the windscreen
+    panes: [
+      [[0.09, 0.03], [0.108, 0.03], [0.108, 0.09], [0.09, 0.09]], // the front door
+      [[-0.116, 0.046], [0.086, 0.046], [0.086, 0.051], [-0.116, 0.051]], // the stripe
+      ...Array.from({ length: 6 }, (_, i) => {
+        const x0 = -0.112 + i * 0.033;
+        return [[x0, 0.058], [x0 + 0.028, 0.058], [x0 + 0.028, 0.09], [x0, 0.09]];
+      }),
+    ],
   },
-  trailer: {
-    body: { w: 0.04, profile: [[-0.07, 0.018], [0.07, 0.018], [0.07, 0.088], [-0.07, 0.088]] },
-    wheels: { x: [-0.048, -0.022], r: 0.015 },
+  // Trucks, one rigid model each, 0.2 long: a chassis (body) with the cab
+  // and the load standing on it (top, drawn back to front).
+  // Praga V3S: a bonnet in front of the cab, three axles; a canvas-covered
+  // back, a box body with windows, or an open flatbed with low sides.
+  'v3s-canvas': v3s({ w: 0.046, profile: [[-0.1, 0.058], [-0.006, 0.058], [-0.006, 0.096], [-0.1, 0.096]], vault: { x: [-0.1, -0.006], z: 0.096, rise: 0.012 } }),
+  'v3s-box': v3s({ w: 0.046, profile: [[-0.1, 0.058], [-0.006, 0.058], [-0.006, 0.1], [-0.1, 0.1]], vault: { x: [-0.1, -0.006], z: 0.1, rise: 0.008 } },
+    [-0.05, -0.028].map((x) => [[x, 0.072], [x + 0.014, 0.072], [x + 0.014, 0.09], [x, 0.09]])),
+  'v3s-open': v3s({ w: 0.046, profile: [[-0.1, 0.058], [-0.006, 0.058], [-0.006, 0.074], [-0.1, 0.074]] }),
+  // Tatra 815: a tall cab-over with a big raked windscreen, a tipper body
+  t815: {
+    body: { w: 0.036, profile: [[-0.1, 0.024], [0.1, 0.024], [0.1, 0.05], [-0.1, 0.05]] },
+    top: [
+      { w: 0.042, profile: [[0.03, 0.05], [0.101, 0.05], [0.097, 0.092], [0.092, 0.098], [0.03, 0.098]] },
+      { w: 0.045, profile: [[-0.094, 0.05], [0.022, 0.05], [0.022, 0.088], [-0.1, 0.088], [-0.1, 0.062]] },
+    ],
+    wheels: { x: [0.064, -0.05, -0.076], r: 0.021 },
+    glass: (face) => face.side === 0 && face.n[0] > 0 && face.z > 0.06 && face.x > 0.09, // the windscreen
+    panes: [[[0.04, 0.062], [0.07, 0.062], [0.07, 0.088], [0.04, 0.088]]],
   },
 };
 
-// Railway carriages `len` long (their spacing on the track, less a gap):
-// a coach with a row of windows and bogies, or a locomotive with a
-// windscreen at each end and a box on the roof.
+// A V3S with `load` on the back (a top part), and panes of its own.
+function v3s(load, panes = []) {
+  return {
+    body: { w: 0.036, profile: [[-0.1, 0.024], [0.1, 0.024], [0.1, 0.044], [0.095, 0.058], [-0.1, 0.058]] },
+    top: [{ w: 0.04, profile: [[0, 0.058], [0.056, 0.058], [0.052, 0.095], [0, 0.096]] }, load],
+    wheels: { x: [0.076, -0.05, -0.078], r: 0.021 },
+    glass: (face) => face.side === 0 && face.n[0] > 0 && face.z > 0.066 && face.x > 0.045, // the windscreen
+    panes: [[[0.012, 0.066], [0.044, 0.066], [0.044, 0.088], [0.012, 0.088]], ...panes],
+  };
+}
+
+// Which model a truck is drawn as, by its id.
+const TRUCKS = ['v3s-canvas', 'v3s-open', 'v3s-box', 't815', 't815'];
+export function truckFor(id) {
+  let h = 0;
+  for (const c of String(id)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
+  return TRUCKS[(h >>> 5) % TRUCKS.length];
+}
+
+// Railway carriages `len` long (their spacing on the track, less a gap),
+// after the ČD coaches and the class 362 locomotive: a box body under an
+// arched roof, a coach with a row of windows and a stripe below them, the
+// locomotive with slanted windscreens at both ends and roof gear on top.
+// RAIL_SCALE sizes their height and details, RAIL_WIDTH their width (1 = a
+// car's).
+const RAIL_SCALE = 1.7, RAIL_WIDTH = 1.25;
 function railModel(kind, len) {
-  const h = len / 2;
-  const body = { w: 0.042, profile: [[-h, 0.016], [h, 0.016], [h, 0.064], [h - 0.012, 0.078], [-h + 0.012, 0.078], [-h, 0.064]] };
-  const wheels = { x: [-h + 0.022, -h + 0.045, h - 0.045, h - 0.022], r: 0.011 };
+  const h = len / 2, k = RAIL_SCALE, kw = RAIL_WIDTH;
+  const [base, eaves, rise] = [0.016 * k, 0.068 * k, 0.014 * k];
+  const wheels = { x: [-h + 0.022 * k, -h + 0.045 * k, h - 0.045 * k, h - 0.022 * k], r: 0.011 * k };
+  const [z0, z1] = [0.044 * k, 0.06 * k]; // window band
+  const a = 0.01 * k; // stripe inset from the ends
+  const stripe = [[-h + a, 0.03 * k], [h - a, 0.03 * k], [h - a, 0.035 * k], [-h + a, 0.035 * k]];
   if (kind === 'loco') {
+    const s = 0.008 * k, b = 0.035 * k; // windscreen slant, cab window
     return {
-      body, wheels,
-      glass: (face) => face.side === 0 && face.n[2] > 0 && Math.abs(face.x) > h - 0.02, // the sloped ends
-      panes: [[[h - 0.035, 0.044], [h - 0.012, 0.044], [h - 0.012, 0.06], [h - 0.035, 0.06]], [[-h + 0.012, 0.044], [-h + 0.035, 0.044], [-h + 0.035, 0.06], [-h + 0.012, 0.06]]],
-      top: { w: 0.024, profile: [[-h * 0.45, 0.078], [h * 0.45, 0.078], [h * 0.45, 0.09], [-h * 0.45, 0.09]] },
+      body: { w: 0.042 * kw, profile: [[-h, base], [h, base], [h, eaves - 0.016 * k], [h - s, eaves], [-h + s, eaves], [-h, eaves - 0.016 * k]] },
+      vault: { x: [-h + s, h - s], z: eaves, rise },
+      wheels,
+      glass: (face) => face.side === 0 && face.n[2] > 0.3 * Math.hypot(...face.n) && Math.abs(face.x) > h - s * 1.5, // the slanted windscreens, not the (jittered) upright fronts
+      panes: [[[h - b, z0], [h - s - 0.004, z0], [h - s - 0.004, z1], [h - b, z1]], [[-h + s + 0.004, z0], [-h + b, z0], [-h + b, z1], [-h + s + 0.004, z1]], stripe],
+      top: { w: 0.02 * kw, profile: [[-h * 0.4, eaves + rise * 0.8], [h * 0.4, eaves + rise * 0.8], [h * 0.4, eaves + rise + 0.012 * k], [-h * 0.4, eaves + rise + 0.012 * k]] },
     };
   }
-  const n = Math.max(2, Math.floor((len - 0.05) / 0.032));
-  const step = (len - 0.05) / n;
-  const panes = [];
+  const end = 0.025 * k; // no windows over the doors at the ends
+  const n = Math.max(2, Math.floor((len - 2 * end) / (0.032 * k)));
+  const step = (len - 2 * end) / n;
+  const panes = [stripe];
   for (let i = 0; i < n; i++) {
-    const x0 = -h + 0.025 + i * step + step * 0.2;
-    panes.push([[x0, 0.042], [x0 + step * 0.6, 0.042], [x0 + step * 0.6, 0.06], [x0, 0.06]]);
+    const x0 = -h + end + i * step + step * 0.2;
+    panes.push([[x0, z0], [x0 + step * 0.6, z0], [x0 + step * 0.6, z1], [x0, z1]]);
   }
-  return { body, wheels, panes };
+  return {
+    body: { w: 0.042 * kw, profile: [[-h, base], [h, base], [h, eaves], [-h, eaves]] },
+    vault: { x: [-h, h], z: eaves, rise },
+    wheels, panes,
+  };
 }
 
 // A model by name: one of MODELS, or 'coach:<len>' / 'loco:<len>'.
@@ -98,7 +186,8 @@ function model(name) {
   }
   return MODELS[name];
 }
-const PICK = ['saloon', 'saloon', 'hatch', 'hatch', 'van'];
+
+const PICK = ['hatch', 'hatch', 'hatch', 'saloon', 'saloon', 'lada', 'lada', 'trabant', 'trabant', 'volga', 'van'];
 
 // Which model an agent drives (by its id).
 export function modelFor(id) {
@@ -151,12 +240,12 @@ function draw(camera, model, angle, hand) {
     const w = part.w;
     const cx = prof.reduce((a, p) => a + p[0], 0) / prof.length, cz = prof.reduce((a, p) => a + p[1], 0) / prof.length;
     const out = [];
-    for (const side of [1, -1]) out.push({ pts: prof.map(([x, z]) => [x, side * w, z]), n: [0, side, 0], side, x: cx });
+    for (const side of [1, -1]) out.push({ pts: prof.map(([x, z]) => [x, side * w, z]), n: [0, side, 0], side, x: cx, z: cz });
     for (let i = 0; i < prof.length; i++) {
       const [ax, az] = prof[i], [bx, bz] = prof[(i + 1) % prof.length];
       let [nx, nz] = [bz - az, -(bx - ax)];
       if (nx * ((ax + bx) / 2 - cx) + nz * ((az + bz) / 2 - cz) < 0) [nx, nz] = [-nx, -nz];
-      out.push({ pts: [[ax, w, az], [bx, w, bz], [bx, -w, bz], [ax, -w, az]], n: [nx, 0, nz], side: 0, x: (ax + bx) / 2 });
+      out.push({ pts: [[ax, w, az], [bx, w, bz], [bx, -w, bz], [ax, -w, az]], n: [nx, 0, nz], side: 0, x: (ax + bx) / 2, z: (az + bz) / 2 });
     }
     return out.filter((f) => facing(f.n));
   };
@@ -167,9 +256,32 @@ function draw(camera, model, angle, hand) {
     return pts.map((p) => [m[0] + (p[0] - m[0]) * k, m[1] + (p[1] - m[1]) * k, m[2] + (p[2] - m[2]) * k]);
   };
 
+  // an arched roof (model.vault) over the body's width: strips along x
+  // round the arch, closed at both ends
+  const vault = ({ x: [x0, x1], z, rise }, w, segs = 6) => {
+    const arc = Array.from({ length: segs + 1 }, (_, i) => (i / segs) * Math.PI);
+    const at = (t) => [w * Math.cos(t), z + rise * Math.sin(t)];
+    const out = [];
+    for (let i = 0; i < segs; i++) {
+      const [ya, za] = at(arc[i]), [yb, zb] = at(arc[i + 1]), tm = (arc[i] + arc[i + 1]) / 2;
+      out.push({ pts: [[x0, ya, za], [x1, ya, za], [x1, yb, zb], [x0, yb, zb]], n: [0, Math.cos(tm) / w, Math.sin(tm) / rise], side: 0, x: 0 });
+    }
+    for (const [x, d] of [[x0, -1], [x1, 1]]) out.push({ pts: arc.map((t) => [x, ...at(t)]), n: [d, 0, 0], side: 0, x });
+    return out.filter((f) => facing(f.n));
+  };
+
   const body = faces(model.body);
+  const roof = model.vault ? vault(model.vault, model.body.w) : [];
   const cabin = model.cabin ? faces(model.cabin) : [];
-  const top = model.top ? faces(model.top) : [];
+  // parts on top, the one further back first
+  const back = (p) => {
+    const cx = p.profile.reduce((a, q) => a + q[0], 0) / p.profile.length;
+    const [rx, ry] = rotateQuarter(...toWorld([cx, 0, 0]).slice(0, 2), camera.rotation);
+    return rx + ry;
+  };
+  const tops = [].concat(model.top ?? []).sort((a, b) => back(a) - back(b));
+  const topParts = tops.map((p) => [...faces(p), ...(p.vault ? vault(p.vault, p.w) : [])]);
+  const top = topParts.flat();
   // wheels on the side that shows, as inked discs
   const near = [1, -1].find((side) => facing([0, side, 0])) ?? 1; // seen head-on: either
   let wheels = '';
@@ -186,11 +298,13 @@ function draw(camera, model, angle, hand) {
   // picks, shrunk to panes; plus any side `panes` (profiles) on the near side
   const glass = model.cabin
     ? cabin.filter((f) => f.n[2] < 0.9 * Math.hypot(...f.n))
-    : body.filter(model.glass ?? (() => false));
+    : [...body, ...top].filter(model.glass ?? (() => false));
   let windows = glass.map((f) => poly(inset(f.pts, f.side ? 0.7 : 0.72))).join('');
   for (const pane of model.panes ?? []) windows += poly(pane.map(([x, z]) => [x, near * (model.body.w + 0.001), z]));
   return `<path class="vb" d="${body.map((f) => poly(f.pts)).join('')}"/>`
     + `<path class="vi" d="${wheels}"/>`
-    + `<path class="vb" d="${[...cabin, ...top].map((f) => poly(f.pts)).join('')}"/>`
+    + `<path class="vb" d="${[...roof, ...cabin].map((f) => poly(f.pts)).join('')}"/>`
+    // each part on top its own path, so a nearer one hides the one behind
+    + topParts.map((fs) => `<path class="vb" d="${fs.map((f) => poly(f.pts)).join('')}"/>`).join('')
     + `<path class="vi" d="${windows}"/>`;
 }

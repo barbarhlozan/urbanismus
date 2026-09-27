@@ -66,7 +66,7 @@ export const small = {
   ...common,
   id: 'square',
   name: 'Square',
-  blurb: 'Shops nearby grow faster',
+  blurb: 'A paved plaza',
   hotkey: '6',
   footprint: [[0, 0]],
   levels: [
@@ -77,6 +77,7 @@ export const small = {
       draw(g) {
         pave(g, 0.14);
         for (const [x, y] of g.pick([[[-0.28, -0.28], [0.28, 0.28]], [[0.28, -0.28], [-0.28, 0.28]]])) tree(g, x, y, 1);
+        if (g.chance(0.4)) statue(g, 0, 0, 'bust'); // a poet or a teacher
       },
     },
     {
@@ -122,8 +123,8 @@ export const small = {
       draw(g) {
         pave(g, 0.14);
         g.groundCircle(0, 0, 0.2);
-        statue(g, 0, 0);
-        for (const x of [-0.3, 0.3]) for (const y of [-0.3, 0.3]) tree(g, x, y, 1);
+        statue(g, 0, 0, null, 1.5);
+        for (const x of [-0.36, 0.36]) for (const y of [-0.36, 0.36]) tree(g, x, y, 0.9);
         lamp(g, -0.2, 0.05);
       },
     },
@@ -221,13 +222,19 @@ export const large = {
         }
         g.groundCircle(m, m, 0.5);
         g.groundCircle(m, m, 0.3);
-        g.box(m - 0.09, m - 0.09, 0, 0.18, 0.18, 0.08);
-        g.box(m - 0.03, m - 0.03, 0.08, 0.06, 0.06, 0.35); // obelisk
+        // the centrepiece: an obelisk, an equestrian statue or a statue group
+        const centre = g.pick(['obelisk', 'equestrian', 'pair']);
+        if (centre === 'obelisk') {
+          g.box(m - 0.09, m - 0.09, 0, 0.18, 0.18, 0.08);
+          g.box(m - 0.03, m - 0.03, 0.08, 0.06, 0.06, 0.35);
+        } else {
+          statue(g, m, m, centre, 1.6);
+        }
         for (const t of [-0.25, 0.25, 0.75, 1.25]) {
           tree(g, t, -0.3, 1);
           tree(g, -0.3, t + 0.02, 1);
         }
-        g.box(1.0, 1.0, 0, 0.25, 0.2, 0.14); // kiosk
+        g.box(1.08, -0.3, 0, 0.22, 0.18, 0.14); // kiosk
         lamp(g, 0.1, m);
         lamp(g, 0.9, m);
       },

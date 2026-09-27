@@ -10,6 +10,14 @@ import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
+// Length of a path of straight segments (M/L only, as sketchEllipse draws).
+function pathLength(d) {
+  const n = d.match(/-?[\d.]+/g).map(Number);
+  let len = 0;
+  for (let i = 2; i < n.length; i += 2) len += Math.hypot(n[i] - n[i - 2], n[i + 1] - n[i - 1]);
+  return len;
+}
+
 export class OverlayKit {
   constructor(world, camera, config) {
     this.world = world;
@@ -23,11 +31,17 @@ export class OverlayKit {
 
   // A ring on the ground, circled by pen (sketch.js): the same stroke for
   // the same spot, so it doesn't flicker while the pointer rests there.
+  // --len and data-anim are for the pen animation (.hover in styles.css,
+  // kept running across redraws by Renderer.keepAnimating). The stroke
+  // doesn't scale (non-scaling-stroke), so its dashes are measured on
+  // screen: the length is too.
   ringAt(x, y, r, cls = 'hover') {
     const [sx, sy] = this.project(x, y);
     const [rx, ry] = this.camera.groundEllipse(r);
-    const d = sketchEllipse(sx, sy, rx, ry, seedOf(x, y, cls.length));
-    return `<path class="${cls}" d="${d}"/>`;
+    const seed = seedOf(x, y, cls.length);
+    const d = sketchEllipse(sx, sy, rx, ry, seed);
+    const len = Math.ceil(pathLength(d) * this.camera.zoom * 1.05); // a little spare: mid-zoom the scene lags the camera
+    return `<path class="${cls}" d="${d}" style="--len:${len}px" data-anim="${seed}"/>`;
   }
 
   ring(node, r, cls = 'hover') {

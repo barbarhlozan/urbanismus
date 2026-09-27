@@ -4,6 +4,7 @@
 
 import { Camera } from '../render/camera.js';
 import { Painter } from '../render/painter.js';
+import { vehicleSVG } from '../render/vehicles.js';
 import { levelOf, drawSeed } from '../../structures/index.js';
 
 const ICON_SEED = 12345;
@@ -24,14 +25,11 @@ function measureSvg() {
   return measure;
 }
 
-export function structureIcon(def, zScale = 0.9) {
-  if (cache.has(def.id)) return cache.get(def.id);
-  let body = '';
+// The structure's drawing (ground + solids) as SVG markup, on its own.
+function paint(def, level, seed, camera) {
   try {
-    const camera = new Camera({ width: 1, height: 1 }, { tile: 32, zScale });
     camera.cx = camera.cy = 0;
-    const level = Math.min(2, def.levels.length);
-    const instance = { id: -1, type: def.id, node: 0, rotation: 0, level, seed: ICON_SEED, data: {} };
+    const instance = { id: -1, type: def.id, node: 0, rotation: 0, level, seed, data: {} };
     const g = new Painter(camera, { x: 0, y: 0, z: 0 }, 0, drawSeed(instance));
     if (def.site) {
       // a lot just around the footprint, no roads
@@ -41,17 +39,47 @@ export function structureIcon(def, zScale = 0.9) {
       g.setSitePaths({ hubPos: [(x0 + x1) / 2, (y0 + y1) / 2], exits: [] });
     }
     levelOf(def, instance).draw(g, instance);
-    body = g.toGroundSVG() + g.toSVG();
+    return g.toGroundSVG() + g.toSVG();
   } catch (err) {
-    console.warn(`No icon for ${def.id}`, err);
+    console.warn(`Can't draw ${def.id}`, err);
+    return '';
   }
-  const svg = fit(`<g class="icon-art">${body}</g>`);
-  cache.set(def.id, svg);
+}
+
+export function structureIcon(def, { level = Math.min(2, def.levels.length), seed = ICON_SEED } = {}) {
+  const key = `${def.id}:${level}:${seed}`;
+  if (cache.has(key)) return cache.get(key);
+  const body = paint(def, level, seed, new Camera({ width: 1, height: 1 }, { tile: 32, zScale: 0.9 }));
+  const svg = fit(`<g class="icon-art">${body}</g>`, 'icon lod-1', PAD);
+  cache.set(key, svg);
   return svg;
 }
 
+// The same drawing close up in the map's own style (as gallery.html), not
+// the simplified icon line style.
+export function structureDrawing(def, { level = 1, seed = ICON_SEED } = {}) {
+  const body = paint(def, level, seed, new Camera({ width: 1, height: 1 }, { tile: 64 }));
+  return fit(`<g class="scene layer-objects lod-0">${body}</g>`, 'drawing', 8);
+}
+
+// Vehicle models (src/render/vehicles.js) close up. `parts`: [{ name,
+// heading, hand, at: [x, y] }] – one model, or coupled ones such as a cab and
+// its trailer – placed in grid units and drawn back to front.
+export function vehicleDrawing(parts) {
+  const camera = new Camera({ width: 1, height: 1 }, { tile: 64 });
+  camera.cx = camera.cy = 0;
+  const body = [...parts]
+    .sort((a, b) => camera.depth(...a.at) - camera.depth(...b.at))
+    .map(({ name, heading, hand, at }) => {
+      const [sx, sy] = camera.project(...at);
+      return `<g transform="translate(${sx.toFixed(2)} ${sy.toFixed(2)})">${vehicleSVG(camera, name, heading, hand)}</g>`;
+    })
+    .join('');
+  return fit(`<g class="scene"><g class="agent car">${body}</g></g>`, 'drawing', 4);
+}
+
 // Wrap a drawing in an <svg> whose viewBox hugs it.
-function fit(inner) {
+function fit(inner, cls, pad) {
   const m = measureSvg();
   m.innerHTML = inner;
   let box = { x: -16, y: -16, width: 32, height: 32 };
@@ -60,14 +88,15 @@ function fit(inner) {
     if (b.width && b.height) box = b;
   } catch { /* not measurable: keep the default */ }
   m.innerHTML = '';
-  const size = Math.max(box.width, box.height) + PAD * 2;
+  const size = Math.max(box.width, box.height) + pad * 2;
   const x = box.x + box.width / 2 - size / 2, y = box.y + box.height / 2 - size / 2;
-  return `<svg class="icon lod-1" viewBox="${x.toFixed(1)} ${y.toFixed(1)} ${size.toFixed(1)} ${size.toFixed(1)}" aria-hidden="true">${inner}</svg>`;
+  return `<svg class="${cls}" viewBox="${x.toFixed(1)} ${y.toFixed(1)} ${size.toFixed(1)} ${size.toFixed(1)}" aria-hidden="true">${inner}</svg>`;
 }
 
 // Hand-drawn icons in isometric directions, on a 32×32 box.
 const LINES = {
   road: '<path class="i-road" d="M4 22 L16 15 L28 22"/>',
+  lane: '<path class="i-lane" d="M4 22 L16 15 L28 22"/>',
   path: '<path class="i-path" d="M4 22 L16 15 L28 22"/>',
   // the map symbol: a solid line with dashes of the background inside
   rail: '<path class="i-rail" d="M4 22 L16 15 L28 22"/><path class="i-rail-dash" d="M4 22 L16 15 L28 22"/>',
@@ -79,4 +108,22 @@ export function toolIcon(tool) {
   if (tool.defs) return structureIcon(tool.defs[0]);
   const art = LINES[tool.id];
   return art ? `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">${art}</svg>` : '<svg class="icon" viewBox="0 0 32 32"></svg>';
+}
+
+// Little pen drawings for the HUD's numbers, on a 16×16 box.
+const STATS = {
+  residents: '<circle cx="6" cy="5" r="2"/><path d="M2.5 13 C2.5 9 9.5 9 9.5 13"/><circle cx="11.2" cy="5.8" r="1.6"/><path d="M10.4 9.3 C12.6 8.9 14 10.4 14 13"/>',
+  jobs: '<path d="M2 6.2 H14 V13.2 H2 Z M6 6.2 V4 H10 V6.2 M2 9.2 H14"/>',
+  buildings: '<path d="M2.5 8 L8 3 L13.5 8 M4 6.7 V13 H12 V6.7 M7 13 V10 H9 V13"/>',
+  cutoff: '<path d="M1.5 12.5 L5.5 8.5 M10.5 7.5 L14.5 3.5 M7 5.5 L7.6 3.2 M9 10.5 L8.4 12.8 M5.4 5.6 L3.6 4.6 M10.6 10.4 L12.4 11.4"/>',
+  walk: '<circle cx="9" cy="2.8" r="1.4"/><path d="M8.6 5 L7.6 9.4 L5.2 13.2 M7.6 9.4 L10.2 13.2 M8.3 6.4 L5.8 8.2 M8.3 6.4 L10.9 8.4"/>',
+  cycle: '<circle cx="4" cy="11" r="2.7"/><circle cx="12" cy="11" r="2.7"/><path d="M4 11 L6.8 6.6 L11 6.6 L12 11 M6.8 6.6 L8.4 11 L11 6.6 M5.8 5.4 H7.8 M11 6.6 L10.6 4.6 H12"/>',
+  drive: '<path d="M1.5 11.5 V9 L3.6 8.4 L5.6 5.5 H10.4 L12.4 8.4 L14.5 9 V11.5 Z M5.6 8.4 H12.4"/><circle cx="4.6" cy="11.6" r="1.4"/><circle cx="11.4" cy="11.6" r="1.4"/>',
+  truck: '<path d="M1.5 11.5 V4.5 H9.5 V11.5 Z M9.5 7 H12.5 L14.5 9.4 V11.5 H9.5"/><circle cx="4.4" cy="11.6" r="1.4"/><circle cx="11.8" cy="11.6" r="1.4"/>',
+  bus: '<path d="M1.5 11.5 V4 H14.5 V11.5 Z M1.5 7.5 H14.5 M5 4 V7.5 M8.5 4 V7.5 M12 4 V7.5"/><circle cx="4.6" cy="11.6" r="1.4"/><circle cx="11.4" cy="11.6" r="1.4"/>',
+  pen: '<path d="M3 13 L3.6 10.4 L10.8 3.2 L12.8 5.2 L5.6 12.4 Z M9.6 4.4 L11.6 6.4"/>',
+};
+
+export function statIcon(id) {
+  return `<svg class="icon stat-icon" viewBox="0 0 16 16" aria-hidden="true">${STATS[id] ?? ''}</svg>`;
 }

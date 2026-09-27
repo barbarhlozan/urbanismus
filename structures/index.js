@@ -5,7 +5,7 @@
 //
 // Optional definition fields beyond those documented in residential.js:
 //   category   toolbar group: 'zone' (default), 'transport', 'civic' or 'heritage' – see CATEGORIES
-//   blurb      one line for the Build menu, e.g. 'Homes nearby grow faster'
+//   blurb      a few words for the Build menu on what it is, e.g. 'Trees and paths'
 //   size       label for the Size button when it shares a tool (default Small / Large)
 //   tags       extra names growth rules and agents can match, e.g. ['park']
 //   access     'road' (default) or 'any' – 'any' also counts a footpath as access:
@@ -19,6 +19,7 @@
 //              When it fails, the build tool also tries the footprint turned
 //              half round on the same dots (World.placementFor).
 //   railStop   true = trains stop here (stations, src/sim/trains.js)
+//   busStop    true = buses call here (src/sim/agents.js, updateBuses)
 //   tracks     [{ pts, buffer }] extra railway drawn with the real lines, in
 //              local coordinates (stations' passing tracks and sidings)
 //   levels[i].coverage   service radius in dots (services)
@@ -35,6 +36,7 @@ import * as square from './square.js';
 import * as services from './services.js';
 import * as heritage from './heritage.js';
 import * as station from './station.js';
+import { busStop } from './busStop.js';
 import * as landmarks from './landmarks.js';
 import * as grounds from './grounds.js';
 import mine from './mine.js';
@@ -51,7 +53,7 @@ export const CATEGORIES = [
 
 export const STRUCTURES = [
   residential, business, industrial, industrialSmall, mine, farm,
-  park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.main, station.stop,
+  park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.main, station.stop, busStop,
   grounds.cemetery,
   heritage.chapel, heritage.church, heritage.townHall, heritage.column, heritage.memorial, heritage.townGate, heritage.castle,
   landmarks.cultureHouse, landmarks.tvTower, landmarks.stadium,
@@ -60,13 +62,13 @@ export const STRUCTURES = [
 // Build menu entries: sizes of the same thing share one tool (S switches,
 // the first is the default). Every structure must be in exactly one.
 export const BUILD_FAMILIES = [
-  [station.station, station.main, station.stop],
+  [station.station, station.main, station.stop], [busStop],
   [residential], [business], [industrial, industrialSmall], [mine], [farm],
   [park.small, park.large], [square.small, square.large], [services.small, services.large],
-  [grounds.cemetery],
+  [grounds.cemetery], [landmarks.cultureHouse],
   [heritage.chapel], [heritage.church], [heritage.townHall], [heritage.column, heritage.memorial],
   [heritage.townGate], [heritage.castle],
-  [landmarks.cultureHouse], [landmarks.tvTower], [landmarks.stadium],
+  [landmarks.tvTower], [landmarks.stadium],
 ];
 
 export const STRUCTURE_TYPES = Object.fromEntries(STRUCTURES.map((s) => [s.id, s]));

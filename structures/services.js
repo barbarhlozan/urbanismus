@@ -1,10 +1,11 @@
 // Services (police, fire and health in one): 1×1 and 2×2.
 // Fire stations with a hose-drying tower, a polyclinic with ribbon windows,
-// a hospital of hipped pavilions.
+// a hospital of hipped pavilions – and, as another look of the service
+// centre, a 60s pavilion school with its gym hall and playground.
 // Each level covers a radius (`coverage`, in dots). Top-level homes,
 // businesses and industry need to be inside some service coverage.
 
-import { flagpole } from './kit.js';
+import { flagpole, pitch, tree } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -31,7 +32,7 @@ export const small = {
   ...common,
   id: 'services',
   name: 'Services',
-  blurb: 'Top levels need their coverage',
+  blurb: 'Police, clinic, hospital',
   hotkey: '8',
   footprint: [[0, 0]],
   levels: [
@@ -125,6 +126,25 @@ export const large = {
       yards: ['parking', 'plaza'],
       grow: { requires: [{ type: 'residential', count: 10, radius: 7 }] },
       draw(g) {
+        if (g.chance(0.4)) {
+          // 60s pavilion school: a two-storey classroom wing along the back
+          // with ribbon windows, the entrance hall in front of it, the gym
+          // hall with tall windows, a playground with a pitch
+          const fh = 0.13;
+          g.box(-0.32, 0.72, 0, 1.64, 0.4, fh * 2);
+          g.windows(-0.32, 0.72, 1.64, 0.4, 0, fh * 2, fh, 0.1, { ribbon: true });
+          g.box(-0.34, 0.7, fh * 2, 1.68, 0.44, 0.02);
+          g.box(0.35, 0.36, 0, 0.5, 0.36, fh);                   // entrance hall
+          g.mullions(0.35, 0.36, 0.5, 0.36, 0, fh, 0.05, { skip: ['back'] });
+          g.box(0.33, 0.34, fh, 0.54, 0.38, 0.015);
+          g.box(-0.32, -0.3, 0, 0.6, 0.9, 0.3);                  // gym hall
+          g.windows(-0.32, -0.3, 0.6, 0.9, 0.08, 0.3, 0.22, 0.12, { skip: ['front', 'back'], w: 0.4, h: 0.8 });
+          g.box(-0.34, -0.32, 0.3, 0.64, 0.94, 0.02);
+          pitch(g, 0.45, -0.34, 1.34, 0.22);
+          flagpole(g, 0.95, 0.4, 0.45);
+          tree(g, 1.25, 0.45, 1);
+          return;
+        }
         g.box(-0.3, 0.32, 0, 1.6, 1.0, 0.6);
         g.windows(-0.3, 0.32, 1.6, 1.0, 0, 0.6, 0.15, 0.1, { ribbon: true });
         g.box(-0.32, 0.3, 0.6, 1.64, 1.04, 0.02);

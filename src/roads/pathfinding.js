@@ -1,10 +1,10 @@
-// A* over a network layer's graph. Edge cost is plain distance for now;
-// weight it by congestion / road class later by passing `cost`.
+// A* over a network layer's graph. Edge cost is the layer's (distance, or
+// longer for slow segments such as lanes); pass `cost` to weigh it otherwise.
 
 import { MinHeap } from '../core/heap.js';
 import { turnAngle } from './routing.js';
 
-export function findPath(layer, from, to, cost = (a, b) => layer.distance(a, b)) {
+export function findPath(layer, from, to, cost = layer.cost) {
   const { graph } = layer;
   if (!graph.hasNode(from) || !graph.hasNode(to)) return null;
   if (from === to) return [from];

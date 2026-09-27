@@ -160,7 +160,7 @@ export class InkLayer {
         out += near(end, first) ? rest.map(([x, y]) => `L${r2(x)} ${r2(y)}`).join('') : pathD(it.pts);
         end = it.pts[it.pts.length - 1];
       }
-      settled.setAttribute('d', out);
+      if (settled.getAttribute('d') !== out) settled.setAttribute('d', out); // an unchanged write still re-lays it out
     }
     this.settledDirty = false;
   }

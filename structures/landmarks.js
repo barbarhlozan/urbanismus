@@ -1,12 +1,12 @@
-// Landmarks of the new town, 1950s–80s: a house of culture, a TV tower on
-// a hilltop, a stadium. Like the heritage ones (structures/heritage.js)
-// they don't develop, draw visitors and strollers, and make nearby homes
-// and offices grow faster (tag 'heritage').
+// Landmarks of the new town, 1950s–80s: a TV tower on a hilltop, a
+// stadium – and a house of culture, which sits in the Public group. Like the
+// heritage ones (structures/heritage.js) they don't develop, draw visitors
+// and strollers, and make nearby homes and offices grow faster (tag
+// 'heritage').
 //
 // 2×2 ones: local area covers x, y from about -0.4 to 1.4, front on -y.
 
 import { door, panel, flagpole, star, sculpture, bench, lamp, floodlight, pitch, planter, tree, transformer, FRAME, roundWindows } from './kit.js';
-import { makeElevation } from '../src/terrain/elevation.js';
 
 const FRONT = [0, -1, 0];
 
@@ -36,7 +36,11 @@ export const cultureHouse = {
   ...common,
   id: 'culture-house',
   name: 'House of culture',
-  blurb: 'Homes and offices nearby grow faster',
+  blurb: 'Cinema and dance hall',
+  // a public building rather than a landmark (Build menu: Public); it
+  // keeps the 'heritage' tag, so it still helps homes and offices grow
+  category: 'civic',
+  code: 'K',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   levels: [
     {
@@ -106,14 +110,8 @@ export const cultureHouse = {
 
 // Hilltop: higher than the ground around it (the average `radius` dots
 // away) by at least `rise` metres – a summit or a ridge, not a slope.
-const elevations = new Map();
-function elevationOf(world) {
-  if (!elevations.has(world.seed)) elevations.set(world.seed, makeElevation(world.seed));
-  return elevations.get(world.seed);
-}
-
 export function onHilltop(world, node, radius = 3, rise = 8) {
-  const elev = elevationOf(world);
+  const elev = world.elevation;
   const [x, y] = world.grid.xy(node);
   const e = elev(x, y);
   let sum = 0;
@@ -149,7 +147,7 @@ export const tvTower = {
   ...common,
   id: 'tv-tower',
   name: 'Tower',
-  blurb: 'On a hilltop · homes and offices nearby grow faster',
+  blurb: 'On a hilltop',
   footprint: [[0, 0]],
   plot: { props: 'green', boundary: 0.3, kinds: ['fence'], density: 0.4 },
   canPlace(world, nodes) {
@@ -256,7 +254,7 @@ export const stadium = {
   ...common,
   id: 'stadium',
   name: 'Stadium',
-  blurb: 'Homes and offices nearby grow faster',
+  blurb: 'Sports ground',
   // 3×2: local x from about -0.4 to 2.4, y from -0.4 to 1.4
   footprint: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
   plot: { props: 'green', boundary: 0.5, kinds: ['fence', 'hedge'], density: 0.3 },

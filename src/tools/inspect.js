@@ -27,6 +27,21 @@ export function createInspectTool(ctx) {
     exit() {
       ctx.popup.hide();
     },
+
+    // A ring only over something that can be clicked: around a building's
+    // whole footprint, or on a road, railway, footpath or tree dot.
+    cursor(kit, node) {
+      if (node < 0) return '';
+      const { world } = ctx;
+      const s = world.structureAt(node);
+      if (s) {
+        const pts = world.nodesOf(s).map((n) => world.grid.xy(n));
+        const span = (i) => Math.max(...pts.map((p) => p[i])) - Math.min(...pts.map((p) => p[i])) + 1;
+        return kit.ringAt(...world.centerOf(s), Math.max(span(0), span(1)) / 2 + 0.15);
+      }
+      const something = world.hasRoad(node) || world.hasRail(node) || world.featureAt(node) || world.paths.hasNode(world.coarseToFine(node));
+      return something ? kit.ring(node, 0.32) : '';
+    },
   };
 }
 
@@ -124,12 +139,13 @@ function menuFor(ctx, node) {
 
   // Building is done from the Build menu; here only what's already there.
   const items = [];
-  if (road) items.push({ label: 'Remove road', action: () => world.removeRoadAt(node) });
+  const lane = road && world.laneOnly(node);
+  if (road) items.push({ label: lane ? 'Remove lane' : 'Remove road', action: () => world.removeRoadAt(node) });
   if (rail) items.push({ label: 'Remove railway', action: () => world.removeNetworkAt('rail', node) });
   if (path) items.push({ label: 'Remove footpath', action: () => world.removeNetworkAt('path', fine) });
   if (feature) items.push({ label: `Clear ${FEATURE_TYPES[feature.type].name.toLowerCase()}`, action: () => world.removeFeature(feature.id) });
   if (!items.length) return null; // empty ground or water: no menu
 
-  const title = road && rail ? 'Level crossing' : road ? 'Road' : rail ? 'Railway' : path ? 'Footpath' : feature ? FEATURE_TYPES[feature.type].name : 'Empty lot';
+  const title = road && rail ? 'Level crossing' : lane ? 'Lane' : road ? 'Road' : rail ? 'Railway' : path ? 'Footpath' : feature ? FEATURE_TYPES[feature.type].name : 'Empty lot';
   return { title, items };
 }

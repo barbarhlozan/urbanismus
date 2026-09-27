@@ -1,4 +1,4 @@
-// Pointer input on the world SVG: left click / tap = tool click, drag (any
+// Pointer input on the map (the #input box over it, see styles.css): left click / tap = tool click, drag (any
 // button, one finger) = pan, two fingers = pinch zoom + pan, right click =
 // cancel, middle click = the tool's Tab (rotate / flip the bend), wheel =
 // zoom around the cursor.
@@ -10,7 +10,7 @@ import { notePointer } from './device.js';
 
 const DRAG_THRESHOLD = { mouse: 5, touch: 10 };
 
-export function attachInput(svg, { camera, onPointer, onClick, onCancel, onMiddle }) {
+export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle }) {
   let drag = null;
   const touches = new Map(); // pointerId -> [x, y], for pinch
   let pinch = null;
@@ -27,14 +27,14 @@ export function attachInput(svg, { camera, onPointer, onClick, onCancel, onMiddl
     return { mid: [(ax + bx) / 2, (ay + by) / 2], dist: Math.hypot(bx - ax, by - ay) || 1 };
   };
 
-  svg.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
   // no autoscroll / paste on middle click
-  svg.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
-  svg.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+  el.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+  el.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
 
-  svg.addEventListener('pointerdown', (e) => {
+  el.addEventListener('pointerdown', (e) => {
     notePointer(e);
-    try { svg.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    try { el.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
     if (e.pointerType !== 'mouse') {
       touches.set(e.pointerId, local(e));
       if (touches.size === 2) {
@@ -48,7 +48,7 @@ export function attachInput(svg, { camera, onPointer, onClick, onCancel, onMiddl
     drag = { id: e.pointerId, type: e.pointerType, button: e.button, x: e.clientX, y: e.clientY, panX: camera.panX, panY: camera.panY, moved: false };
   });
 
-  svg.addEventListener('pointermove', (e) => {
+  el.addEventListener('pointermove', (e) => {
     const isMouse = e.pointerType === 'mouse';
     if (!isMouse && touches.has(e.pointerId)) {
       touches.set(e.pointerId, local(e));
@@ -67,7 +67,7 @@ export function attachInput(svg, { camera, onPointer, onClick, onCancel, onMiddl
       const threshold = isMouse ? DRAG_THRESHOLD.mouse : DRAG_THRESHOLD.touch;
       if (!drag.moved && Math.hypot(dx, dy) > threshold) {
         drag.moved = true;
-        svg.classList.add('panning');
+        el.classList.add('panning');
       }
       if (drag.moved) {
         camera.panX = drag.panX + dx;
@@ -82,12 +82,12 @@ export function attachInput(svg, { camera, onPointer, onClick, onCancel, onMiddl
     if (touches.size < 2) pinch = null;
   };
 
-  svg.addEventListener('pointerup', (e) => {
+  el.addEventListener('pointerup', (e) => {
     release(e);
     if (!drag || drag.id !== e.pointerId) return;
     const d = drag;
     drag = null;
-    svg.classList.remove('panning');
+    el.classList.remove('panning');
     if (d.moved) return;
     onPointer(...pick(e));
     if (d.button === 0) onClick(e);
@@ -95,17 +95,17 @@ export function attachInput(svg, { camera, onPointer, onClick, onCancel, onMiddl
     else if (d.button === 1) onMiddle?.();
   });
 
-  svg.addEventListener('pointercancel', (e) => {
+  el.addEventListener('pointercancel', (e) => {
     release(e);
     drag = null;
-    svg.classList.remove('panning');
+    el.classList.remove('panning');
   });
 
-  svg.addEventListener('pointerleave', (e) => {
+  el.addEventListener('pointerleave', (e) => {
     if (!drag && e.pointerType === 'mouse') onPointer(null);
   });
 
-  svg.addEventListener('wheel', (e) => {
+  el.addEventListener('wheel', (e) => {
     e.preventDefault();
     camera.zoomAt(...local(e), Math.exp(-e.deltaY * 0.0015));
   }, { passive: false });

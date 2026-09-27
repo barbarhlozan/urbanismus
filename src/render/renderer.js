@@ -6,6 +6,8 @@
 //              <svg id="ground"> underneath the map
 //   grid     – the main dots (shown while building, see styles.css)
 //   frame    – map border with coordinate ticks (STYLE.frame)
+//   meadow   – grass and wild flowers on open ground (meadow.js), in
+//              chunks rebuilt near a change and culled with the view
 //   subgrid  – the dense footpath dots (only visible while drawing footpaths)
 //   lots     – flat ground drawing of structures and their surroundings
 //              (lawns, paving, parking lines); built together with objects
@@ -37,24 +39,28 @@
 import { THEME } from '../theme.js';
 import { STYLE } from './style.js';
 import { Painter, LOOK, wobble } from './painter.js';
-import { VEHICLES, vehicleSVG, modelFor, headingIndex } from './vehicles.js';
+import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex } from './vehicles.js';
 import { bodyFor, walkerSVG, cyclistSVG } from './people.js';
 import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './draw.js';
 import { chainEdges, edgeCurve, streetKerbPairs, railParts, roadEdges, roadway, keepRuns } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
+import { AgentCanvas, AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
 import { stationTracks } from '../../structures/station.js';
 import { STRUCTURE_TYPES, levelOf, drawSeed, yardOf, joinSides, joinedRow } from '../../structures/index.js';
 import { YARDS } from '../../structures/yards.js';
 import { drawPlot } from '../../structures/plots.js';
-import { rotateQuarter } from '../core/grid.js';
+import { rotateQuarter, ORTHO } from '../core/grid.js';
+import { mulberry32 } from '../core/random.js';
 import { pointInPolygon } from '../core/geom2d.js';
 import { fitYard, fitSite, freeTest, pathIndex } from './lots.js';
 import { densify } from './warp.js';
 import { FEATURE_TYPES } from '../../features/index.js';
-import { ELEVATION, makeElevation, contours } from '../terrain/elevation.js';
+import { ELEVATION, contours } from '../terrain/elevation.js';
+import { findBridges, makeDeck, bridgeLines, hiddenUnder } from './bridges.js';
+import { MEADOW, meadowGround, chunkSVG } from './meadow.js';
 
-const LAYERS = ['terrain', 'frame', 'grid', 'subgrid', 'lots', 'markers', 'paths', 'rails', 'roads', 'parked', 'trains', 'agents', 'objects', 'overlay'];
+const LAYERS = ['terrain', 'frame', 'meadow', 'grid', 'subgrid', 'lots', 'markers', 'paths', 'rails', 'roads', 'parked', 'trains', 'agents', 'objects', 'overlay'];
 const TOP = ['objects', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -63,12 +69,73 @@ const VIEW_SETTLE = 150;
 const OVERSCAN = 0.25;
 const r2 = (n) => Math.round(n * 100) / 100;
 
-// Lakes (Renderer.renderWater): disc radius around each water dot and how
-// softly neighbouring discs blend (higher = less), the sampling step, and
-// depths of the shoreline and the waterlines inside it (grid units).
-const WATER = { radius: 0.62, soft: 5, step: 0.08, lines: [0, 0.06, 0.14, 0.26] };
+// Contour lines drawn by hand (pencil()), per tier (index line, every
+// other line, the rest): stroke lengths, the gap or overlap where the pen
+// starts again, how far a stroke strays from the true line (grid units),
+// and the share of strokes left out, so the minor lines read lighter.
+const PENCIL = [
+  { len: [3, 6], gap: [-0.12, 0.08], drift: 0.025, skip: 0 },
+  { len: [1.5, 4], gap: [-0.1, 0.18], drift: 0.035, skip: 0.08 },
+  { len: [1, 3], gap: [-0.08, 0.25], drift: 0.04, skip: 0.2 },
+];
+
+// A polyline (world) as pencil strokes: pieces of random length along it,
+// each drifting a little to one side and back, with a small gap or overlap
+// where the next one starts, some left out. Seeded by the line itself, so
+// the same terrain always comes out the same.
+function pencil(points, level, { len, gap, drift, skip }) {
+  if (points.length < 2) return [];
+  const rnd = mulberry32(Math.imul(level + 1, 0x9e3779b1) ^ Math.round(points[0][0] * 97) ^ Math.round(points[0][1] * 131));
+  const range = ([a, b]) => a + rnd() * (b - a);
+  const cum = [0];
+  for (let i = 1; i < points.length; i++) cum.push(cum[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+  const total = cum[cum.length - 1];
+  // point and unit normal at arc length s
+  const at = (s) => {
+    let lo = 1, hi = cum.length - 1; // first i with cum[i] >= s
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cum[mid] < s) lo = mid + 1; else hi = mid;
+    }
+    const i = lo;
+    const [ax, ay] = points[i - 1], [bx, by] = points[i];
+    const l = cum[i] - cum[i - 1] || 1, t = Math.min(1, Math.max(0, (s - cum[i - 1]) / l));
+    return [ax + (bx - ax) * t, ay + (by - ay) * t, -(by - ay) / l, (bx - ax) / l];
+  };
+  const out = [];
+  let s = rnd() * len[0] * 0.5;
+  while (s < total) {
+    const e = Math.min(total, s + range(len));
+    if (rnd() >= skip) {
+      // a stroke: off the line by d0 at its start, d1 at its end, bowing between
+      const d0 = (rnd() - 0.5) * 2 * drift, d1 = (rnd() - 0.5) * 2 * drift, bow = (rnd() - 0.5) * 2 * drift;
+      const n = Math.max(2, Math.ceil((e - s) / 0.2));
+      const stroke = [];
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        const [x, y, nx, ny] = at(s + (e - s) * t);
+        const d = d0 + (d1 - d0) * t + bow * Math.sin(Math.PI * t);
+        stroke.push([x + nx * d, y + ny * d]);
+      }
+      out.push(stroke);
+    }
+    s = e + range(gap);
+  }
+  return out;
+}
+
+// Lakes (Renderer.renderWater): the furthest the shore reaches from a water
+// dot (under 1, so dry dots stay dry) and how softly neighbouring dots'
+// reach blends (higher = less), metres of elevation counted as one grid
+// step of depth, the sampling step; `wave`: the two short strokes in the
+// middle of a lake – shown from this far from the shore in, this long per
+// grid unit of it (at most `max`), this far apart (grid units).
+const WATER = { radius: 0.75, soft: 5, metres: 6, step: 0.08, wave: { from: 0.45, length: 0.7, max: 1.6, gap: 0.09 } };
 
 // Short code for a map, shown in the frame corner and the stats box.
+// a, b, … z, aa, ab, … – a chessboard's files, for maps wider than eight
+const fileName = (i) => (i >= 26 ? fileName(Math.floor(i / 26) - 1) : '') + String.fromCharCode(97 + (i % 26));
+
 export const mapCode = (seed) => (seed % 46656).toString(36).toUpperCase().padStart(3, '0');
 
 // Half-size of a building's ground area around each of its dots.
@@ -81,10 +148,12 @@ export class Renderer {
   constructor(svg, ground, { world, camera, agents, trains, parking, config }) {
     this.svg = svg;
     this.ground = ground;
-    // Buildings, trees and the overlay sit in their own <svg> on top (its
-    // own GPU layer, like the ground): moving people and trains repaint only
-    // #world under them, not the far heavier building drawings.
-    this.top = svg.parentNode.querySelector('#objects');
+    // Buildings, trees and the overlay sit in their own <svg> on top, in
+    // their own wrapper (#view-top), over the canvas with the moving people
+    // and trains (agentCanvas.js). See styles.css.
+    this.top = document.getElementById('objects');
+    this.wrappers = [svg.parentNode, this.top.parentNode];
+    this.pen = new AgentCanvas(document.getElementById('agents'));
     this.parking = parking;
     this.world = world;
     this.camera = camera;
@@ -106,7 +175,10 @@ export class Renderer {
     this.lodLevel = -1;
     this.deferView = true;  // move on the GPU while the camera moves (placeView)
     this.showAgents = true; // (both switchable in the temporary debug panel)
+    this.cullOn = true;     // hide objects outside the view (cull)
     this.contours = STYLE.contours;
+    this.meadow = new Map();        // chunk key 'cx,cy' -> { g, box, svg, shown }
+    this.meadowDirty = new Set();   // chunk keys to rebuild
 
     ground.innerHTML = '<g class="scene"><g class="layer-terrain"></g></g>';
     svg.innerHTML = `
@@ -120,14 +192,19 @@ export class Renderer {
     const svgOf = (l) => (l === 'terrain' ? ground : TOP.includes(l) ? this.top : svg);
     this.scenes = [ground, svg, this.top].map((s) => s.querySelector('.scene'));
     this.layers = Object.fromEntries(LAYERS.map((l) => [l, svgOf(l).querySelector(`.layer-${l}`)]));
+    // hover rings and tags on their way out, over the overlay (see letGo)
+    this.leaving = this.layers.overlay.parentNode.appendChild(document.createElementNS(SVGNS, 'g'));
+    this.leaving.setAttribute('class', 'overlay leaving');
     this.ink = {
-      roads: new InkLayer(this.layers.roads, ['driveway', 'road', 'kerb', 'road-exit']),
-      paths: new InkLayer(this.layers.paths, ['footpath']),
-      rails: new InkLayer(this.layers.rails, ['rail-exit', 'rail-buffer', 'rail', 'rail-dash']),
+      roads: new InkLayer(this.layers.roads, ['driveway', 'road', 'kerb', 'road-exit', 'bridge', 'bridge-post']),
+      paths: new InkLayer(this.layers.paths, ['footpath', 'bridge', 'bridge-post']),
+      rails: new InkLayer(this.layers.rails, ['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'bridge', 'bridge-post']),
     };
     this.buildOrder = new Map(); // network layer -> Map dot -> its place in the last build, for the pen
 
     this.dirty = new Set();
+    this.parkedEls = new Map(); // structure id -> { g, html }, its parked cars
+    this.parkedDirty = new Set(); // structure ids whose cars changed
     this.invalidate();
 
     const on = (type, ...layers) => world.events.on(type, () => layers.forEach((l) => this.dirty.add(l)));
@@ -137,9 +214,15 @@ export class Renderer {
       world.events.on(type, (s) => {
         this.objsDirty.add(`s${s.id}`);
         near(s); // neighbours' plots, sites and yards depend on it
+        this.touchMeadow(world.nodesOf(s).map((n) => world.grid.xy(n)));
       });
     }
-    for (const type of ['feature:added', 'feature:removed']) world.events.on(type, (f) => this.objsDirty.add(`f${f.id}`));
+    for (const type of ['feature:added', 'feature:removed']) {
+      world.events.on(type, (f) => {
+        this.objsDirty.add(`f${f.id}`);
+        this.touchMeadow([world.grid.xy(f.node)]);
+      });
+    }
     for (const k of ['s', 'f']) {
       const kind = k === 's' ? 'structure' : 'feature';
       world.events.on(`${kind}:added`, (o) => this.born.set(`${k}${o.id}`, null));
@@ -148,23 +231,40 @@ export class Renderer {
     on('roads:changed', 'roads', 'markers');
     on('paths:changed', 'paths', 'markers');
     on('rails:changed', 'rails');
+    for (const type of ['roads:changed', 'paths:changed']) world.events.on(type, () => (this.roadLines = null));
+    // bridges come and go with the networks; the water breaks under them
+    for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
+      world.events.on(type, () => {
+        const before = this.bridgeKey;
+        if (this.bridgeState().key !== before) this.dirty.add('terrain');
+      });
+    }
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
       world.events.on(type, (e) => {
         if (e?.nodes && e.layer) this.buildOrder.set(e.layer, new Map(e.nodes.map((n, i) => [n, i])));
-        if (e?.nodes) this.touchAround(e.nodes.map((n) => e.layer.pos(n)), 2); // curves reach further
-        else this.objsAll = true;
+        if (e?.nodes) {
+          const points = e.nodes.map((n) => e.layer.pos(n));
+          this.touchAround(points, 2); // curves reach further
+          this.touchMeadow(points);
+        } else {
+          this.objsAll = this.worldAll = true;
+          this.dirty.add('meadow');
+        }
       });
     }
-    on('parking:changed', 'parked');
-    on('terrain:changed', 'terrain', 'grid', 'subgrid', 'paths', 'rails', 'roads', 'markers');
+    // a car parking redraws only its own lot (renderParked)
+    world.events.on('parking:changed', (s) => this.parkedDirty.add(s.id));
+    on('terrain:changed', 'terrain', 'meadow', 'grid', 'subgrid', 'paths', 'rails', 'roads', 'markers');
     world.events.on('terrain:changed', () => {
-      this.objsAll = true;
+      this.objsAll = this.worldAll = true; // (not just the view: draw them all now)
+      this.roadLines = null;
       this.contourLines = null; // water breaks them
     });
   }
 
   // Rebuild everything (e.g. after a camera rotation).
   invalidate() {
+    this.roadLines = null; // drawn for the old view
     for (const l of LAYERS) if (l !== 'agents' && l !== 'overlay' && l !== 'objects' && l !== 'lots') this.dirty.add(l);
     this.objsAll = true;
     this.lastOverlay = null;
@@ -187,6 +287,17 @@ export class Renderer {
     }
   }
 
+  // Mark the meadow chunks within 2 dots of any of the world points for
+  // rebuilding (curves, plots and yards reach that far).
+  touchMeadow(points) {
+    const c = MEADOW.chunk, r = 2;
+    for (const [x, y] of points) {
+      for (let cy = Math.floor((y - r) / c); cy <= Math.floor((y + r) / c); cy++) {
+        for (let cx = Math.floor((x - r) / c); cx <= Math.floor((x + r) / c); cx++) this.meadowDirty.add(`${cx},${cy}`);
+      }
+    }
+  }
+
   frame(overlaySVG) {
     this.placeView();
     // labels that keep their screen size divide by this (styles.css); set
@@ -198,29 +309,97 @@ export class Renderer {
     this.updateLod(this.drawn.zoom);
     for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
     this.dirty.clear();
+    if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
     for (const ink of Object.values(this.ink)) if (ink.busy) ink.tick();
+    if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
     if (this.objsAll || this.objsDirty.size) this.renderObjects();
     if (this.ghosts.size) this.reapGhosts();
     if (this.showAgents) {
+      this.pen.begin(this.camera);
+      this.renderTrains(); // under the people and cars
       this.renderAgents();
-      this.renderTrains();
     } else {
       this.agentsShown = false;
-      for (const el of this.agentGhosts) el.remove();
+      this.pen.clear();
       this.agentGhosts.clear();
-      for (const els of [this.agentEls, this.trainEls]) {
-        els.forEach((el) => el.remove());
-        els.clear();
-      }
+      this.agentEls.clear();
+      this.trainEls.clear();
     }
     if (overlaySVG !== this.lastOverlay) {
+      this.letGo(overlaySVG);
       this.layers.overlay.innerHTML = overlaySVG;
       this.lastOverlay = overlaySVG;
+      this.keepAnimating();
     }
+  }
+
+  // Hover rings and tags that the next overlay no longer has don't just
+  // vanish: a ring is rubbed out from where the pen started, a tag fades.
+  // They're moved out of the overlay, frozen where their entrance got to.
+  letGo(nextSVG) {
+    const next = new Set([...nextSVG.matchAll(/data-anim="([^"]*)"/g)].map((m) => m[1]));
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    for (const el of this.layers.overlay.querySelectorAll('[data-anim]')) {
+      if (next.has(el.dataset.anim)) continue;
+      const cs = getComputedStyle(el);
+      const ring = el.classList.contains('hover');
+      const len = parseFloat(cs.getPropertyValue('--len'));
+      const from = ring ? parseFloat(cs.strokeDashoffset) : parseFloat(cs.opacity);
+      if (still || (ring ? from >= len - 1 : from < 0.01)) continue; // never got drawn
+      el.style.animation = 'none';
+      this.leaving.appendChild(el);
+      const frames = ring
+        ? [{ strokeDashoffset: `${from}px` }, { strokeDashoffset: `${-len}px` }]
+        : [{ opacity: from }, { opacity: 0 }];
+      el.animate(frames, { duration: ring ? 220 : 150, easing: 'ease-in', fill: 'forwards' })
+        .finished.then(() => el.remove(), () => el.remove());
+    }
+  }
+
+  // The overlay is rebuilt whenever it changes (every frame of a pan), which
+  // would restart its CSS animations. Anything marked data-anim picks up
+  // where the element with the same key left off; a new key starts afresh.
+  keepAnimating() {
+    const now = document.timeline.currentTime;
+    const starts = new Map();
+    for (const el of this.layers.overlay.querySelectorAll('[data-anim]')) {
+      const key = el.dataset.anim;
+      const start = this.animStarts?.get(key) ?? starts.get(key) ?? now;
+      starts.set(key, start);
+      for (const a of el.getAnimations()) a.startTime = start;
+    }
+    this.animStarts = starts;
   }
 
   project(x, y, z = 0) {
     return this.camera.project(x, y, this.world.terrain.heightAt(x, y) + z);
+  }
+
+  // For what travels the networks: up on a bridge's deck where there is one.
+  projectDeck(x, y, z = 0) {
+    return this.project(x, y, z + this.bridgeState().deck(x, y));
+  }
+
+  // The bridges (render/bridges.js) with their deck, found again when a
+  // network changes. { key, list, deck }.
+  bridgeState() {
+    const { networks, terrain } = this.world;
+    const key = `${networks.road.version}|${networks.rail.version}|${networks.path.version}|${this.world.sidewalks.size}|${this.world.lanes.size}|${terrain.rivers.length}`;
+    if (this.bridges?.key !== key) {
+      const list = terrain.rivers.length ? findBridges(this.world) : [];
+      this.bridges = { key, list, deck: makeDeck(list, this.camera.lift) };
+      this.bridgeKey = list.map((b) => `${b.kind}${b.a}${b.b}`).join('|');
+    }
+    return this.bridges;
+  }
+
+  // A network's bridges as ink items (railings, piers, truss), with `add`
+  // from inkItems().
+  addBridges(kind, add) {
+    const { list, deck } = this.bridgeState();
+    list.filter((b) => b.kind === kind).forEach((b, i) => {
+      bridgeLines(b, deck).forEach(({ cls, line }, j) => add(`br${kind}${b.a}${b.b}.${j}`, cls, line));
+    });
   }
 
   // `sway`: the line belongs to the road network and gets its hand-drawn
@@ -230,16 +409,20 @@ export class Renderer {
   }
 
   // The same as lists of screen points.
-  screenLines(lines, dense = true, sway = false) {
+  // `deck`: lift the lines onto bridge decks (the networks). Points given
+  // as [x, y, z] keep their own height instead (bridge railings and piers).
+  screenLines(lines, dense = true, sway = false, deck = false) {
     sway = sway && LOOK.roads > 0;
+    const onDeck = deck ? this.bridgeState().deck : null;
     // under a warp or relief (or the sway), long straight pieces get extra points so they bend too
-    if ((this.camera.warp || this.camera.lift || sway) && dense) lines = lines.map((pts) => densify(pts));
-    return lines.map((pts) => pts.map(([x, y]) => {
+    if ((this.camera.warp || this.camera.lift || sway || onDeck) && dense) lines = lines.map((pts) => (pts[0]?.length > 2 ? pts : densify(pts)));
+    return lines.map((pts) => pts.map(([x, y, z]) => {
+      const lift = z ?? (onDeck ? onDeck(x, y) : 0);
       if (sway) {
         const [dx, dy] = wobble(x, y);
         [x, y] = [x + dx, y + dy];
       }
-      return this.project(x, y);
+      return this.project(x, y, lift);
     }));
   }
 
@@ -251,24 +434,126 @@ export class Renderer {
 
   // ----- layers -----
 
+  // The meadow, all chunks (the layer was marked dirty: a new view, new
+  // terrain) or just `keys`. A chunk's markup is only swapped when it
+  // changed, so rebuilding around a change touches little of the page.
+  renderMeadow(keys = null) {
+    const { world, camera } = this;
+    const { width, height } = world.grid;
+    const c = MEADOW.chunk;
+    if (!keys) {
+      keys = new Set();
+      for (let cy = 0; cy * c < height; cy++) for (let cx = 0; cx * c < width; cx++) keys.add(`${cx},${cy}`);
+    }
+    const ground = meadowGround(world, this.config);
+    const project = (x, y) => this.project(x, y);
+    for (const key of keys) {
+      const [cx, cy] = key.split(',').map(Number);
+      if (cx < 0 || cy < 0 || cx * c >= width || cy * c >= height) continue;
+      let chunk = this.meadow.get(key);
+      if (!chunk) {
+        chunk = { g: this.layers.meadow.appendChild(document.createElementNS(SVGNS, 'g')), svg: null, shown: true };
+        this.meadow.set(key, chunk);
+      }
+      const svg = chunkSVG(world, ground, cx * c, cy * c, project, camera.tile);
+      if (svg !== chunk.svg) chunk.g.innerHTML = chunk.svg = svg;
+      const x0 = cx * c - 0.5, y0 = cy * c - 0.5, x1 = x0 + c, y1 = y0 + c;
+      chunk.box = this.sceneBox([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], 0, 0.3);
+    }
+    this.meadowDirty.clear();
+    this.cullMeadow();
+  }
+
+  // Hide the meadow chunks outside the drawn view (as cull() does objects).
+  cullMeadow() {
+    if (!this.viewBox) return;
+    for (const chunk of this.meadow.values()) {
+      const show = !chunk.box || !this.cullOn || this.inView(chunk.box);
+      if (show === chunk.shown) continue;
+      chunk.shown = show;
+      chunk.g.style.display = show ? '' : 'none';
+    }
+  }
+
   renderTerrain() {
     this.layers.terrain.innerHTML = (this.contours ? this.renderContours() : '') + this.renderWater();
   }
 
-  // Lakes as on a hand-drawn map: a shoreline, and inside it "waterlines"
-  // that follow the shore, further apart towards the middle, plus a few
-  // short ripples out on open water. The shore is a contour of a smooth
-  // depth field – each water dot a disc, blended with a soft maximum, so
-  // neighbouring dots merge into one rounded lake.
+  // Lakes as on a hand-drawn map: a single shoreline, and in the middle of
+  // a bigger lake two short strokes for the water. The shore is the elevation contour at
+  // the lake's surface – so it curves with the land, like the contour lines
+  // around it – kept within reach of the water dots, so the lake covers
+  // exactly its dots. A river's banks are a set distance from its
+  // centreline instead (terrain/rivers.js), out to the map frame. Each
+  // body of water is worked out on its own, over just its own box.
   renderWater() {
+    const { world } = this;
+    const out = { shore: '', bank: '', wave: '' };
+    const elev = world.elevation, field = world.riverField;
+    for (const cells of this.waterBodies()) {
+      if (field && world.terrain.isRiver(world.grid.nodeAt(...cells[0]))) {
+        this.renderWaterBody(cells, (x, y) => field.depth(x, y), out, field);
+      } else {
+        const level = this.waterLevel(cells, elev);
+        this.renderWaterBody(cells, (x, y) => (level - elev(x, y)) / WATER.metres, out);
+      }
+    }
+    const path = (d, cls) => (d ? `<path class="${cls}" d="${d}"/>` : '');
+    return path(out.shore, 'shore') + path(out.bank, 'bank') + path(out.wave, 'wave');
+  }
+
+  // Water dots grouped into lakes (touching, diagonals too), as [[x, y]…] each.
+  waterBodies() {
     const { grid, terrain } = this.world;
-    const cells = [];
-    for (let i = 0; i < grid.size; i++) if (terrain.isWater(i)) cells.push(grid.xy(i));
-    if (!cells.length) return '';
-    const { radius, soft, step, lines } = WATER;
+    const seen = new Uint8Array(grid.size);
+    const bodies = [];
+    for (let i = 0; i < grid.size; i++) {
+      if (seen[i] || !terrain.isWater(i)) continue;
+      const cells = [], stack = [i];
+      seen[i] = 1;
+      while (stack.length) {
+        const n = stack.pop();
+        cells.push(grid.xy(n));
+        for (const m of grid.neighbors(n)) if (!seen[m] && terrain.isWater(m)) { seen[m] = 1; stack.push(m); }
+      }
+      bodies.push(cells);
+    }
+    return bodies;
+  }
+
+  // The height of a lake's surface: halfway from its highest dot up to the
+  // lowest dry ground next to it (generate.js keeps lakes below their rim).
+  waterLevel(cells, elev) {
+    const { grid, terrain } = this.world;
+    let top = -Infinity, rim = Infinity;
+    for (const [x, y] of cells) {
+      top = Math.max(top, elev(x, y));
+      for (const [dx, dy] of ORTHO) {
+        const n = grid.nodeAt(x + dx, y + dy);
+        if (n >= 0 && !terrain.isWater(n)) rim = Math.min(rim, elev(x + dx, y + dy));
+      }
+    }
+    return rim > top && rim < Infinity ? (top + rim) / 2 : top + 0.5;
+  }
+
+  // One body of water's shore (a river's: banks) and waves, appended to `out`.
+  // `below(x, y)`: grid units inside the shore (negative on land), kept
+  // within reach of the water dots. With `river` (its field) it is worked
+  // out to the map frame, past the dots at the edges.
+  renderWaterBody(cells, below, out, river = null) {
+    const { radius, soft, step, wave } = WATER;
+    const { width, height } = this.world.grid;
     const xs = cells.map((c) => c[0]), ys = cells.map((c) => c[1]);
-    const [x0, y0] = [Math.min(...xs) - 1.5, Math.min(...ys) - 1.5];
-    const nx = Math.ceil((Math.max(...xs) + 1.5 - x0) / step) + 1, ny = Math.ceil((Math.max(...ys) + 1.5 - y0) / step) + 1;
+    let [x0, y0, x1, y1] = [Math.min(...xs) - 1.5, Math.min(...ys) - 1.5, Math.max(...xs) + 1.5, Math.max(...ys) + 1.5];
+    if (river) {
+      const m = 1.2; // same margin as the frame
+      [x0, y0, x1, y1] = [Math.max(x0, -m), Math.max(y0, -m), Math.min(x1, width - 1 + m), Math.min(y1, height - 1 + m)];
+      if (x0 < 0) x0 = -m;
+      if (y0 < 0) y0 = -m;
+      if (x1 > width - 1) x1 = width - 1 + m;
+      if (y1 > height - 1) y1 = height - 1 + m;
+    }
+    const nx = Math.ceil((x1 - x0) / step) + 1, ny = Math.ceil((y1 - y0) / step) + 1;
     // soft maximum of the discs' depths (radius - distance): sum exp(soft * depth) per sample
     const sum = new Float32Array(nx * ny);
     const reach = Math.ceil((radius + 1) / step);
@@ -280,12 +565,37 @@ export class Renderer {
         }
       }
     }
-    // The waterlines follow the true distance to the shore (the blended
-    // depth dips between dots, which would break them into islands): a
-    // two-pass chamfer distance over the samples, from the land ones.
-    const depth = (k) => (sum[k] > 0 ? Math.log(sum[k]) / soft : -1);
+    // depth below the shore, but no further out than the dots' reach (a
+    // river needs none: its water dots are exactly those inside its banks)
+    const wet = new Float32Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i, x = x0 + i * step, y = y0 + j * step;
+      const reachDepth = river ? Infinity : sum[k] > 0 ? Math.log(sum[k]) / soft : -1;
+      wet[k] = Math.min(reachDepth, below(x, y));
+    }
+    const box = [x0, y0, x0 + (nx - 1) * step, y0 + (ny - 1) * step];
+    // on land the depth, inside a flat 0.5 (the shore alone is traced)
+    // (clamped: the contour tracer may take one sample more than the box,
+    // by rounding, which would wrap onto the next row)
+    const sample = (x, y) => {
+      const i = Math.min(Math.max(Math.round((x - x0) / step), 0), nx - 1);
+      const j = Math.min(Math.max(Math.round((y - y0) / step), 0), ny - 1);
+      return j * nx + i;
+    };
+    const field = (x, y) => Math.min(wet[sample(x, y)] / 0.06, 0.5);
+    // broken where a bridge deck passes over
+    const bridges = this.bridgeState().list;
+    const hidden = hiddenUnder(bridges, this.bridgeState().deck, this.camera);
+    for (const c of contours(field, box, { step, interval: 1, index: 99 })) {
+      if (c.level !== 0) continue;
+      const runs = bridges.length ? keepRuns(c.points, (q) => !hidden(...q), 0.04) : [c.points];
+      out[river ? 'bank' : 'shore'] += this.pathData(runs, false);
+    }
+    if (river) return;
+    // Waves: at the point furthest from the shore (a two-pass chamfer
+    // distance from the land samples), along the lake's long axis.
     const dist = new Float32Array(nx * ny);
-    for (let k = 0; k < dist.length; k++) dist[k] = depth(k) > 0 ? Infinity : 0;
+    for (let k = 0; k < dist.length; k++) dist[k] = wet[k] > 0 ? Infinity : 0;
     const diag = step * Math.SQRT2;
     const relax = (k, n, w) => { if (dist[n] + w < dist[k]) dist[k] = dist[n] + w; };
     for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
@@ -297,6 +607,7 @@ export class Renderer {
         if (i < nx - 1) relax(k, k - nx + 1, diag);
       }
     }
+    let best = 0;
     for (let j = ny - 1; j >= 0; j--) for (let i = nx - 1; i >= 0; i--) {
       const k = j * nx + i;
       if (i < nx - 1) relax(k, k + 1, step);
@@ -305,45 +616,22 @@ export class Renderer {
         if (i < nx - 1) relax(k, k + nx + 1, diag);
         if (i > 0) relax(k, k + nx - 1, diag);
       }
+      if (dist[k] > dist[best]) best = k;
     }
-    // the chamfer steps show as stairs in the lines: soften it a little
-    for (let pass = 0; pass < 3; pass++) {
-      const prev = dist.slice();
-      for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
-        const k = j * nx + i;
-        if (prev[k] === 0) continue;
-        dist[k] = (prev[k] * 4 + prev[k - 1] + prev[k + 1] + prev[k - nx] + prev[k + nx]) / 8;
-      }
-    }
-    // mapped so that the waterlines fall on whole numbers (0 = the shore);
-    // on land the (negative) depth, so the shore itself stays smooth
-    const field = (x, y) => {
-      const k = Math.round((y - y0) / step) * nx + Math.round((x - x0) / step);
-      const d = depth(k);
-      if (d <= 0) return Math.max(d / lines[1], -0.5);
-      const t = dist[k];
-      for (let n = 1; n < lines.length; n++) if (t < lines[n]) return n - 1 + (t - lines[n - 1]) / (lines[n] - lines[n - 1]);
-      return lines.length - 0.5;
+    const r = dist[best];
+    if (!(r >= wave.from)) return;
+    const cx = x0 + (best % nx) * step, cy = y0 + Math.floor(best / nx) * step;
+    // long axis: the main direction of the dots' spread
+    const mx = cells.reduce((s, c) => s + c[0], 0) / cells.length, my = cells.reduce((s, c) => s + c[1], 0) / cells.length;
+    let sxx = 0, syy = 0, sxy = 0;
+    for (const [x, y] of cells) { sxx += (x - mx) ** 2; syy += (y - my) ** 2; sxy += (x - mx) * (y - my); }
+    const a = Math.atan2(2 * sxy, sxx - syy) / 2, ux = Math.cos(a), uy = Math.sin(a);
+    const len = Math.min(r * wave.length * 2, wave.max);
+    const stroke = (along, off, l) => {
+      const px = cx + ux * along - uy * off, py = cy + uy * along + ux * off;
+      return [[px - ux * l / 2, py - uy * l / 2], [px + ux * l / 2, py + uy * l / 2]];
     };
-    const box = [x0, y0, x0 + (nx - 1) * step, y0 + (ny - 1) * step];
-    let shore = '', inner = '', innermost = '';
-    for (const c of contours(field, box, { step, interval: 1, index: 99 })) {
-      const d = this.pathData([c.points], false);
-      if (c.level === 0) shore += d;
-      else if (c.level < lines.length - 1) inner += d;
-      else innermost += d;
-    }
-    // ripples: short strokes along the screen's horizontal, on water well
-    // away from the shore, some dots only
-    const ripples = [];
-    for (const [cx, cy] of cells) {
-      if ((Math.imul(cx * 73 + cy * 151, 0x9e3779b1) >>> 28) > 6) continue;
-      if (dist[Math.round((cy - y0) / step) * nx + Math.round((cx - x0) / step)] < lines[lines.length - 1] * 2) continue;
-      const k = 0.12 + ((cx * 7 + cy * 3) % 5) * 0.02;
-      ripples.push([[cx - k, cy + k], [cx + k, cy - k]]);
-    }
-    const path = (d, cls) => (d ? `<path class="${cls}" d="${d}"/>` : '');
-    return path(shore, 'shore') + path(inner, 'waterline') + path(innermost, 'waterline far') + path(this.pathData(ripples), 'waterline ripple');
+    out.wave += this.pathData([stroke(0, 0, len), stroke(len * 0.12, wave.gap, len * 0.6)], false);
   }
 
   setContours(on) {
@@ -357,27 +645,35 @@ export class Renderer {
     const { grid, terrain } = this.world;
     const m = 1.2; // same margin as the frame
     if (!this.contourLines) {
-      const elev = makeElevation(this.world.seed);
+      const elev = this.world.elevation, river = this.world.riverField;
       const wet = (x, y) => {
+        if (river && river.depth(x, y) > 0) return true;
         const n = grid.nodeAt(Math.round(x), Math.round(y));
         return n >= 0 && terrain.isWater(n) && Math.hypot(x - Math.round(x), y - Math.round(y)) < 0.75;
       };
       this.contourLines = contours(elev, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], ELEVATION, wet);
+      // drawn by hand: each line as a run of pencil strokes (see pencil())
+      this.contourStrokes = [[], [], []];
+      for (const c of this.contourLines) this.contourStrokes[c.tier].push(...pencil(c.points, c.level, PENCIL[c.tier]));
     }
-    const tiers = [[], [], []];
+    const tiers = this.contourStrokes;
     let labels = '';
     const every = 9; // grid steps of line between labels
     for (const c of this.contourLines) {
-      tiers[c.tier].push(c.points);
       if (c.tier) continue;
       let run = every / 2;
-      for (let i = 1; i < c.points.length; i++) {
+      for (let i = 1; i < c.points.length - 1; i++) {
         const [ax, ay] = c.points[i - 1], [bx, by] = c.points[i];
         run += Math.hypot(bx - ax, by - ay);
         if (run < every) continue;
         run = 0;
+        // written along the line, the right way up
         const [sx, sy] = this.project(bx, by);
-        labels += `<text class="contour-label" x="${r2(sx)}" y="${r2(sy)}">${c.level}</text>`;
+        const [px, py] = this.project(...c.points[i - 1]), [qx, qy] = this.project(...c.points[i + 1]);
+        let angle = (Math.atan2(qy - py, qx - px) * 180) / Math.PI;
+        if (angle > 90) angle -= 180;
+        if (angle < -90) angle += 180;
+        labels += `<text class="contour-label" transform="translate(${r2(sx)} ${r2(sy)}) rotate(${Math.round(angle)})">${c.level}</text>`;
       }
     }
     // thinned out with distance like the rest of the detail (d1 / d2)
@@ -397,22 +693,29 @@ export class Renderer {
     const border = this.pathData([[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]);
     const inner = this.pathData([[[x0 + 0.35, y0 + 0.35], [x1 - 0.35, y0 + 0.35], [x1 - 0.35, y1 - 0.35], [x0 + 0.35, y1 - 0.35], [x0 + 0.35, y0 + 0.35]]]);
 
-    // ticks and coordinates every 5 dots along each edge
+    // ticks every 5 dots along each edge; the bands between them are named
+    // like a chessboard's squares: files a, b, c… across, ranks counting up
+    // from the bottom edge
+    const STEP = 5;
     const ticks = [];
     let labels = '';
     const label = (x, y, text) => {
       const [sx, sy] = this.project(x, y);
       labels += `<text class="frame-label" x="${r2(sx)}" y="${r2(sy)}">${text}</text>`;
     };
-    for (let x = 0; x < w; x += 5) {
+    const mid = (a, n) => (a + Math.min(a + STEP, n - 1)) / 2; // centre of the band from a
+    const ranks = Math.ceil(h / STEP);
+    for (let x = 0; x < w; x += STEP) {
       ticks.push([[x, y0], [x, y0 - 0.3]], [[x, y1], [x, y1 + 0.3]]);
-      label(x, y0 - 0.9, x);
-      label(x, y1 + 0.9, x);
+      const file = fileName(x / STEP);
+      label(mid(x, w), y0 - 0.9, file);
+      label(mid(x, w), y1 + 0.9, file);
     }
-    for (let y = 0; y < h; y += 5) {
+    for (let y = 0; y < h; y += STEP) {
       ticks.push([[x0, y], [x0 - 0.3, y]], [[x1, y], [x1 + 0.3, y]]);
-      label(x0 - 0.9, y, y);
-      label(x1 + 0.9, y, y);
+      const rank = ranks - y / STEP;
+      label(x0 - 0.9, mid(y, h), rank);
+      label(x1 + 0.9, mid(y, h), rank);
     }
     label(x0 + 1.2, y0 - 0.9, `MAP-${mapCode(seed)}`);
     this.layers.frame.innerHTML =
@@ -453,7 +756,7 @@ export class Renderer {
       const size = Math.sqrt(world.nodesOf(s).length);
       out += this.groundEllipse(...world.centerOf(s), 0.42 * size, 'unconnected');
     }
-    this.layers.markers.innerHTML = out;
+    if (out !== this.markersHTML) this.layers.markers.innerHTML = this.markersHTML = out;
   }
 
   // Network linework as ink items (see ink.js): `add(key, cls, line, a, b)`
@@ -461,7 +764,7 @@ export class Renderer {
   inkItems(sway) {
     const items = [];
     const add = (key, cls, line, a, b) => {
-      const [pts] = this.screenLines([line], true, sway);
+      const [pts] = this.screenLines([line], true, sway, true);
       if (pts.length > 1) items.push({ key, cls, pts, a, b });
     };
     return { items, add };
@@ -494,11 +797,12 @@ export class Renderer {
     // (its sidewalk carries on). Dead ends are closed, but not where a
     // path runs on into a park or square as its walkway.
     const { world } = this;
-    const onRoad = roadway(world, this.config.road);
+    const onRoad = roadway(world, this.config.road, this.config.lane);
     const intoSite = (n) => world.coarseAround(n).some((c) => STRUCTURE_TYPES[world.structureAt(c)?.type]?.site);
     for (const { key, line, a, b } of roadEdges(layer, this.config.path, this.config.path.edge, [], (n) => !intoSite(n))) {
       keepRuns(line, (q) => !onRoad(q)).forEach((run, i) => add(`p${key}${i ? `:${i}` : ''}`, 'footpath', run, a, b));
     }
+    this.addBridges('path', add);
     this.ink.paths.update(items, { rankOf: this.rankOf(layer) });
   }
 
@@ -514,6 +818,7 @@ export class Renderer {
       add(`fade${node}`, 'rail-exit', fade, node, node);
     }
     for (const { node, line } of buffers) add(`b${node}`, 'rail-buffer', line, node, node);
+    this.addBridges('rail', add);
     // stations' own tracks, drawn with the line so they meet it exactly
     for (const s of world.structures.values()) {
       const def = STRUCTURE_TYPES[s.type];
@@ -533,6 +838,10 @@ export class Renderer {
     const { world } = this;
     const layer = world.networks.road, curve = this.config.road;
     const { items, add } = this.inkItems(true);
+    // The road and kerb lines depend on the networks only, not on the
+    // buildings (which redraw the roads for their driveways): kept until
+    // a network, the terrain or the view changes.
+    const cached = this.roadLines;
 
     // Driveways: from the building edge at its door to the road's edge.
     for (const s of world.structures.values()) {
@@ -542,23 +851,32 @@ export class Renderer {
       const [dx, dy] = world.grid.xy(access.door);
       const [rx, ry] = world.grid.xy(access.road);
       const len = Math.hypot(rx - dx, ry - dy);
-      const t = STRUCTURE_PAD / len, u = 1 - curve.edge / len;
+      const t = STRUCTURE_PAD / len, u = 1 - world.roadHalfWidth(access.road) / len;
       add(`d${s.id}`, 'driveway', [[dx + (rx - dx) * t, dy + (ry - dy) * t], [dx + (rx - dx) * u, dy + (ry - dy) * u]]);
     }
 
-    // The road as its two edges, with corners at junctions, rounded dead
-    // ends, and at map exits carried on past the edge, then faded out.
-    for (const { key, kind, line, a, b } of roadEdges(layer, curve, curve.edge, world.roadExits())) {
-      add(`r${key}`, kind === 'fade' ? 'road-exit' : 'road', line, a, b);
-    }
+    if (cached) items.push(...cached);
+    else {
+      const from = items.length;
+      // The road as its two edges, with corners at junctions, rounded dead
+      // ends, and at map exits carried on past the edge, then faded out.
+      // Lanes are narrower, and widen into the road where they meet one.
+      const lane = this.config.lane;
+      const width = (a, b) => (world.isLane(a, b) ? lane.edge : curve.edge);
+      for (const { key, kind, line, a, b } of roadEdges(layer, curve, width, world.roadExits(), undefined, lane.taper)) {
+        add(`r${key}`, kind === 'fade' ? 'road-exit' : 'road', line, a, b);
+      }
 
-    // kerbs, open where a footpath comes in
-    const paths = pathIndex(world, this.config);
-    const open = (q) => paths.distance(q, this.config.path.edge + PATH_OPENING) === Infinity;
-    for (const { a, b, lines } of streetKerbPairs(world, curve, curve.kerb)) {
-      lines.forEach((line, i) => {
-        keepRuns(line, open).forEach((run, j) => add(`k${i}${edgeKey(a, b)}${j ? `:${j}` : ''}`, 'kerb', run, a, b));
-      });
+      // kerbs, open where a footpath comes in
+      const paths = pathIndex(world, this.config);
+      const open = (q) => paths.distance(q, this.config.path.edge + PATH_OPENING) === Infinity;
+      for (const { a, b, lines } of streetKerbPairs(world, curve, curve.kerb)) {
+        lines.forEach((line, i) => {
+          keepRuns(line, open).forEach((run, j) => add(`k${i}${edgeKey(a, b)}${j ? `:${j}` : ''}`, 'kerb', run, a, b));
+        });
+      }
+      this.addBridges('road', add);
+      this.roadLines = items.slice(from);
     }
     this.ink.roads.update(items, { rankOf: this.rankOf(layer) });
   }
@@ -566,7 +884,7 @@ export class Renderer {
   // Pan and zoom. Redrawing the SVGs at a new view re-lays-out and repaints
   // every element, too slow to do on every frame of a pan or zoom. So while
   // the camera moves, the last drawing (`drawn`) is only shifted / stretched
-  // on the GPU with a CSS transform on their wrapper (#view), and redrawn
+  // on the GPU with a CSS transform on their wrappers (.view), and redrawn
   // when the camera rests –
   // or early, when the moved drawing would no longer cover the window. It
   // reaches OVERSCAN of the window past each edge, so there is picture to
@@ -578,7 +896,7 @@ export class Renderer {
     if (W !== this.winW || H !== this.winH) {
       [this.winW, this.winH] = [W, H];
       [this.ox, this.oy] = [Math.round(W * OVERSCAN), Math.round(H * OVERSCAN)];
-      Object.assign(this.svg.parentNode.style, { left: `${-this.ox}px`, top: `${-this.oy}px`, width: `${W + 2 * this.ox}px`, height: `${H + 2 * this.oy}px`, transformOrigin: `${this.ox}px ${this.oy}px` });
+      for (const w of this.wrappers) Object.assign(w.style, { left: `${-this.ox}px`, top: `${-this.oy}px`, width: `${W + 2 * this.ox}px`, height: `${H + 2 * this.oy}px`, transformOrigin: `${this.ox}px ${this.oy}px` });
       this.drawn = null;
     }
     const view = `${cam.zoom} ${cam.panX} ${cam.panY}`;
@@ -599,18 +917,30 @@ export class Renderer {
         this.drawn = { view, zoom: cam.zoom, panX: cam.panX, panY: cam.panY };
         const t = `translate(${cam.panX + ox} ${cam.panY + oy}) scale(${cam.zoom})`;
         for (const scene of this.scenes) scene.setAttribute('transform', t);
+        // the drawn area (the window and the overscan past it) in scene px
+        this.viewBox = [(-ox - cam.panX) / cam.zoom, (-oy - cam.panY) / cam.zoom, (W + ox - cam.panX) / cam.zoom, (H + oy - cam.panY) / cam.zoom];
+        this.cull();
+        this.cullMeadow();
       }
     }
     if (css !== this.css) {
       this.css = css;
       // on the wrapper, not the SVGs: a transform on an <svg> itself makes
       // Chrome recompute every non-scaling stroke in it
-      this.svg.parentNode.style.transform = css;
+      for (const w of this.wrappers) w.style.transform = css;
     }
   }
 
   updateLod(z) {
     const { medium, far } = this.config.render.lod;
+    // meadow detail tiers (meadow.js), on its own layer: a class on the
+    // whole <svg> would restyle everything in it
+    const tier = z >= MEADOW.close ? 2 : z >= medium ? 1 : 0;
+    if (tier !== this.meadowTier) {
+      this.layers.meadow.classList.remove(`mz${this.meadowTier}`);
+      this.layers.meadow.classList.add(`mz${tier}`);
+      this.meadowTier = tier;
+    }
     // parked cars switch between dots and models (src/render/vehicles.js)
     const close = z >= VEHICLES.minZoom;
     if (close !== this.carsClose) {
@@ -629,6 +959,10 @@ export class Renderer {
   renderObjects() {
     const { world } = this;
     let keys = this.objsDirty;
+    this.objsDirty = new Set(); // (cull() may add to it while we go)
+    // Only the view changed (rotation…): objects out of sight are just
+    // placed, and drawn once they come into view (cull()).
+    const lazy = this.objsAll && !this.worldAll && this.cullOn;
     if (this.objsAll) {
       keys = new Set(this.objs.keys());
       for (const id of world.structures.keys()) keys.add(`s${id}`);
@@ -655,12 +989,21 @@ export class Renderer {
     let orderChanged = false;
     for (const key of keys) {
       const id = Number(key.slice(1));
-      const built = key[0] === 's' ? this.buildStructure(world.structures.get(id)) : this.buildFeature(world.features.get(id));
       let entry = this.objs.get(key);
+      if (lazy && entry?.at && !this.born.has(key) && (key[0] === 's' ? world.structures : world.features).has(id)) {
+        const { bounds, box } = this.placeOf(entry.at);
+        if (!this.inView(box)) {
+          if (['minX', 'maxX', 'minY', 'maxY'].some((k) => entry.bounds[k] !== bounds[k])) orderChanged = true;
+          Object.assign(entry, { bounds, box, stale: true });
+          this.cull([entry]);
+          continue;
+        }
+      }
+      const built = key[0] === 's' ? this.buildStructure(world.structures.get(id)) : this.buildFeature(world.features.get(id));
       if (!built) {
         if (entry) {
           this.objs.delete(key);
-          if (erasing && this.dying.has(key)) {
+          if (erasing && this.dying.has(key) && entry.shown !== false) {
             // erase from where the pen got to, if it was still drawing it in
             const t = this.born.get(key);
             this.ghosts.set(key, entry);
@@ -683,10 +1026,11 @@ export class Renderer {
       }
       const s = key[0] === 's' && world.structures.get(id);
       const sig = s && `${s.type}|${s.level}|${s.seed}`;
-      if (sig !== entry.sig && entry.sig && animate && swaps < DRAW.cap && !this.born.has(key)) {
+      if (sig !== entry.sig && entry.sig && animate && swaps < DRAW.cap && !this.born.has(key) && entry.shown !== false) {
         // the old drawing is erased as a ghost, the new one drawn after it
         swaps++;
-        this.ghosts.set(`${key}~${now}`, { g: entry.g, lg: entry.lg, bounds: entry.bounds });
+        this.ghosts.set(`${key}~${now}`, { g: entry.g, lg: entry.lg, bounds: entry.bounds, box: entry.box, shown: entry.shown });
+        entry.shown = undefined; // new elements below
         sketch.push({ entry: this.ghosts.get(`${key}~${now}`), reverse: true, drawnFor: Infinity, then: key });
         entry.g = document.createElementNS(SVGNS, 'g');
         entry.lg = entry.lg.parentNode.insertBefore(document.createElementNS(SVGNS, 'g'), entry.lg.nextSibling);
@@ -699,6 +1043,11 @@ export class Renderer {
       const b = built.bounds;
       if (!entry.bounds || ['minX', 'maxX', 'minY', 'maxY'].some((k) => entry.bounds[k] !== b[k])) orderChanged = true;
       entry.bounds = b;
+      entry.box = built.box;
+      entry.at = built.at;
+      entry.stale = false;
+      this.cull([entry]);
+      if (this.born.has(key) && !entry.shown) this.born.delete(key); // out of sight: no pen
       if (this.born.has(key)) {
         if (!drawing) this.born.delete(key);
         else {
@@ -707,31 +1056,29 @@ export class Renderer {
         }
       }
     }
-    this.objsDirty = new Set();
-    this.objsAll = false;
+    this.objsAll = this.worldAll = false;
     this.dying.clear();
 
     if (orderChanged) {
       const order = isoSort([...this.objs.values(), ...this.ghosts.values()].map((e) => ({ ...e.bounds, entry: e }))).map((i) => i.entry);
-      const same = order.length === this.order.length && order.every((e, i) => e === this.order[i]);
-      if (!same) for (const e of order) this.layers.objects.appendChild(e.g);
+      placeInOrder(this.layers.objects, order.map((e) => e.g));
       this.order = order;
     }
 
     // after the DOM is in place: the pen needs computed styles and lengths
-    const tile = this.camera.tile;
+    const tile = this.camera.tile, scale = this.drawn.zoom;
     sketch.sort((a, b) => !!b.reverse - !!a.reverse); // erasing first: a swap waits for it
     for (const { entry, key, reverse, drawnFor, then } of sketch) {
       const groups = [entry.lg, entry.g];
       if (reverse) {
-        const left = eraseOut(groups, { drawn: drawnFor, tile, speed: then ? DRAW.swap : 1 });
+        const left = eraseOut(groups, { drawn: drawnFor, tile, scale, speed: then ? DRAW.swap : 1 });
         entry.until = now + left;
         if (then) {
           // the new drawing starts when the old one is half erased
           this.born.set(then, now + left / 2);
           sketch.push({ entry: this.objs.get(then), key: then });
         }
-      } else if (drawIn(groups, { elapsed: now - this.born.get(key), tile }) <= 0) {
+      } else if (drawIn(groups, { elapsed: now - this.born.get(key), tile, scale }) <= 0) {
         this.born.delete(key); // done
       }
     }
@@ -767,7 +1114,7 @@ export class Renderer {
     const painter = new Painter(camera, { x, y, z: world.terrain.heightAt(x, y) }, 0, Math.imul(f.id, 2654435761) ^ f.node);
     painter.rigid = [x, y];
     def.draw(painter, f);
-    return { svg: painter.toSVG(), ground: '', bounds: this.viewBounds([[x, y]], FEATURE_PAD) };
+    return { svg: mergeRuns(painter.toSVG()), ground: '', ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
   }
 
   buildStructure(s) {
@@ -825,7 +1172,7 @@ export class Renderer {
       painter.merge(pp);
     }
 
-    return { svg: painter.toSVG(), ground: painter.toGroundSVG(), bounds: this.viewBounds(points, STRUCTURE_PAD) };
+    return { svg: mergeRuns(painter.toSVG()), ground: mergeRuns(painter.toGroundSVG()), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
   }
 
   // The plot around a structure, in world axes relative to its anchor dot.
@@ -878,27 +1225,43 @@ export class Renderer {
     };
   }
 
-  renderParked() {
+  // Parked cars, a group per lot. `ids`: only these lots (a car came or
+  // went), else all of them.
+  renderParked(ids = null) {
     const { world, parking } = this;
     const r = THEME.agentRadius;
     // close up car models (src/render/vehicles.js) nosed into their stalls,
     // further out square dots
     const close = this.camera.zoom >= VEHICLES.minZoom;
-    let out = '';
-    for (const [id, spots] of parking.spots) {
+    const lots = ids ? [...ids].filter((id) => parking.spots.has(id)) : [...parking.spots.keys()];
+    for (const id of ids ?? this.parkedEls.keys()) {
+      if (parking.spots.has(id)) continue;
+      this.parkedEls.get(id)?.g.remove();
+      this.parkedEls.delete(id);
+    }
+    for (const id of lots) {
       const s = world.structures.get(id);
-      if (!s) continue;
-      for (const [x, y, angle = 0] of spots.slice(0, parking.count(s))) {
-        const [sx, sy] = this.project(x, y, close ? 0 : 0.02);
-        if (close) {
-          const { name, hand } = modelFor(`${id}:${r2(x)}:${r2(y)}`);
-          out += `<g class="parked-car" transform="translate(${r2(sx)} ${r2(sy)})">${vehicleSVG(this.camera, name, headingIndex(angle), hand)}</g>`;
-        } else {
-          out += `<rect class="parked" x="${r2(sx - r)}" y="${r2(sy - r)}" width="${2 * r}" height="${2 * r}"/>`;
+      const spots = parking.spots.get(id);
+      let out = '';
+      if (s) {
+        for (const [x, y, angle = 0] of spots.slice(0, parking.count(s))) {
+          const [sx, sy] = this.project(x, y, close ? 0 : 0.02);
+          if (close) {
+            const { name, hand } = modelFor(`${id}:${r2(x)}:${r2(y)}`);
+            out += `<g class="parked-car" transform="translate(${r2(sx)} ${r2(sy)})">${vehicleSVG(this.camera, name, headingIndex(angle), hand)}</g>`;
+          } else {
+            out += `<rect class="parked" x="${r2(sx - r)}" y="${r2(sy - r)}" width="${2 * r}" height="${2 * r}"/>`;
+          }
         }
       }
+      let el = this.parkedEls.get(id);
+      if (!el) {
+        el = { g: this.layers.parked.appendChild(document.createElementNS(SVGNS, 'g')), html: '' };
+        this.parkedEls.set(id, el);
+      }
+      if (el.html !== out) el.g.innerHTML = el.html = out;
     }
-    this.layers.parked.innerHTML = out;
+    this.parkedDirty.clear();
   }
 
   // Where and how a structure's surroundings are drawn, or null.
@@ -953,6 +1316,53 @@ export class Renderer {
     return { door: row[Math.floor(row.length / 2)], dir, road: -1 };
   }
 
+  // An object's place in the current view, from where it stands in the
+  // world (`at`: its points, `pad` around them and the height `top` it is
+  // drawn to – none of which change with the view): its ground bounds for
+  // the depth order and its box on screen for cull().
+  placeOf(at) {
+    return { at, bounds: this.viewBounds(at.points, at.pad), box: this.sceneBox(at.points, at.pad + 0.1, at.top) };
+  }
+
+  // Where an object may draw, in scene px: its ground area (world points
+  // `pad` around) on screen, raised by the height it was drawn to, plus a
+  // margin for what leans out (tree crowns, overshooting strokes) – for
+  // cull(), so it errs on the large side.
+  sceneBox(points, pad, top = 0) {
+    const t = this.camera.tile;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [px, py] of points) {
+      for (const [dx, dy] of [[-pad, -pad], [pad, -pad], [pad, pad], [-pad, pad]]) {
+        const [sx, sy] = this.project(px + dx, py + dy);
+        x0 = Math.min(x0, sx); x1 = Math.max(x1, sx);
+        y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+      }
+    }
+    return [x0 - t, y0 - top * this.camera.zScale * t - 2 * t, x1 + t, y1 + t];
+  }
+
+  // Hide the objects (and their ground drawing) that lie outside the drawn
+  // view: the browser then skips them when the view is redrawn (every
+  // shape's line width is kept constant on screen, so every shown one has
+  // to be laid out and painted again at each new zoom) and when the detail
+  // level changes. All of them, or just `entries`.
+  cull(entries = [...this.objs.values(), ...this.ghosts.values()]) {
+    if (!this.viewBox) return;
+    for (const e of entries) {
+      const show = !e.box || !this.cullOn || this.inView(e.box);
+      if (show === e.shown) continue;
+      e.shown = show;
+      if (show && e.stale) this.objsDirty.add(e.key); // drawn for an old view: redraw (renderObjects)
+      e.g.style.display = e.lg.style.display = show ? '' : 'none';
+    }
+  }
+
+  // Does a scene box overlap the drawn view?
+  inView(b) {
+    const v = this.viewBox;
+    return !v || (b[0] < v[2] && b[2] > v[0] && b[1] < v[3] && b[3] > v[1]);
+  }
+
   // Ground rectangle of an object in view-aligned axes (both grow towards the viewer).
   viewBounds(points, pad) {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -968,7 +1378,8 @@ export class Renderer {
 
   // Trains: a filled square per carriage, coupled by a line; lowered
   // barriers across roads at closed level crossings. Carriages beyond
-  // where the exits fade out are left out.
+  // where the exits fade out are left out. The trains go on the canvas
+  // (agentCanvas.js), the barriers, which rarely change, stay in the SVG.
   renderTrains() {
     const bars = this.pathData(this.trains.barriers());
     if (bars !== this.lastBarriers) {
@@ -984,55 +1395,46 @@ export class Renderer {
     for (const t of this.trains.visible()) {
       seen.add(t.id);
       let el = this.trainEls.get(t.id);
-      if (!el) {
-        el = document.createElementNS(SVGNS, 'g');
-        el.setAttribute('class', 'train');
-        this.layers.trains.appendChild(el);
-        this.trainEls.set(t.id, el);
-      }
+      if (!el) this.trainEls.set(t.id, el = {});
       this.placeTrain(el, t.points.map((p, i) => ({ i, p })).filter(({ p }) => onMap(p)));
     }
-    for (const [id, el] of this.trainEls) {
-      if (!seen.has(id)) {
-        el.remove();
-        this.trainEls.delete(id);
-      }
-    }
+    for (const id of this.trainEls.keys()) if (!seen.has(id)) this.trainEls.delete(id);
   }
 
   // People and vehicles grow out of the building they leave and shrink back
   // into the one they reach (a car parking, a walker getting into a car…).
+  // Each agent keeps a little record (`el`) of what it looks like: its
+  // shapes, where it stands, which way it faces.
   renderAgents() {
     const seen = new Set();
     const now = performance.now();
     const pop = drawEnabled() && this.agentsShown;
     for (const a of this.agents.visible()) {
       seen.add(a.id);
-      const kind = a.truck ? 'truck' : a.trip.mode === 'drive' ? 'car' : a.trip.mode === 'cycle' ? 'cyclist' : 'walker';
+      const kind = a.bus ? 'bus' : a.truck ? 'truck' : a.trip.mode === 'drive' ? 'car' : a.trip.mode === 'cycle' ? 'cyclist' : 'walker';
       let el = this.agentEls.get(a.id);
-      if (el && el.dataset.kind !== kind) {
+      if (el && el.kind !== kind) {
         this.agentGone(el, now, pop);
         el = null;
       }
       if (!el) {
-        el = agentShape(kind, a.id);
-        el.born = pop ? now : -Infinity;
-        this.layers.agents.appendChild(el);
+        el = { kind, born: pop ? now : -Infinity };
         this.agentEls.set(a.id, el);
       }
       const k = growScale(now - el.born);
-      if (kind === 'truck') {
-        this.placeTruck(el, a);
-        scaleAgent(el, k);
+      if (kind === 'truck' || kind === 'bus') {
+        this.placeVehicle(el, a, kind === 'bus' ? 'bus' : truckFor(a.id));
+        this.drawAgent(el, k);
         continue;
       }
       const [wx, wy] = wobble(a.x, a.y); // on the swaying road
-      const [sx, sy] = this.project(a.x + wx, a.y + wy, 0.04);
+      const [sx, sy] = this.projectDeck(a.x + wx, a.y + wy, 0.04);
       if (kind === 'car') this.placeCar(el, a);
       // facing left: mirrored
-      const mirror = kind !== 'car' && this.placePerson(el, a, kind, sx);
-      el.at0 = `translate(${r2(sx)} ${r2(sy)})${mirror ? ' scale(-1 1)' : ''}`;
-      scaleAgent(el, k);
+      el.mirror = kind !== 'car' && this.placePerson(el, a, kind, sx);
+      el.sx = sx;
+      el.sy = sy;
+      this.drawAgent(el, k);
     }
     for (const [id, el] of this.agentEls) {
       if (!seen.has(id)) {
@@ -1042,36 +1444,44 @@ export class Renderer {
     }
     for (const el of this.agentGhosts) {
       const k = shrinkScale(now - el.gone);
-      if (k > 0) scaleAgent(el, k);
-      else {
-        el.remove();
-        this.agentGhosts.delete(el);
-      }
+      if (k > 0) this.drawAgent(el, k);
+      else this.agentGhosts.delete(el);
     }
     this.agentsShown = true;
   }
 
   agentGone(el, now, pop) {
-    if (!pop) return el.remove();
+    if (!pop) return;
     el.gone = now;
     this.agentGhosts.add(el);
+  }
+
+  // Draw an agent at size k, scaled about its foot. A truck or bus far out
+  // is one path in scene coordinates and fades instead.
+  drawAgent(el, k) {
+    const pen = this.pen;
+    if (el.kind !== 'truck' && el.kind !== 'bus') return pen.draw(el.shapes, el.sx, el.sy, k, el.mirror);
+    if (el.key === 'dot') {
+      if (el.path && pen.onScreen(el.dot[0], el.dot[1])) pen.drawScene(AGENT_STYLES.truck, el.path, k < 1 ? Math.max(0, k) : 1);
+      return;
+    }
+    for (const p of el.parts) pen.draw(p.shapes, p.sx, p.sy, k);
   }
 
   // A train: close up a locomotive and coaches (src/render/vehicles.js),
   // each turned along the track and drawn back to front, further out a line
   // of square dots. `cars`: [{ i (index in the train), p: [x, y, dx, dy] }].
   placeTrain(el, cars) {
-    const cam = this.camera;
+    const cam = this.camera, pen = this.pen;
+    if (!cars.length) return;
     if (cam.zoom < VEHICLES.minZoom) {
-      if (el.dataset.key !== 'dot') {
-        el.dataset.key = 'dot';
-        el.innerHTML = '<path/>';
-      }
       const r = THEME.carriageRadius;
-      const pts = cars.map(({ p: [x, y] }) => this.project(x, y, 0.04));
-      let d = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x)} ${r2(y)}`).join('');
-      for (const [x, y] of pts) d += rect(x - r, y - r, 2 * r, 2 * r);
-      el.firstChild.setAttribute('d', d);
+      const pts = cars.map(({ p: [x, y] }) => this.projectDeck(x, y, 0.04));
+      if (!pts.some(([x, y]) => pen.onScreen(x, y))) return;
+      const path = new Path2D();
+      pts.forEach(([x, y], i) => (i ? path.lineTo(x, y) : path.moveTo(x, y)));
+      for (const [x, y] of pts) path.rect(x - r, y - r, 2 * r, 2 * r);
+      pen.drawScene(AGENT_STYLES.train, path);
       return;
     }
     const len = r2(this.config.trains.carSpacing - 0.02);
@@ -1079,54 +1489,52 @@ export class Renderer {
       .map(({ i, p: [x, y, dx, dy] }) => ({ i, x, y, h: headingIndex(Math.atan2(dy, dx)), depth: cam.depth(x, y) }))
       .sort((a, b) => a.depth - b.depth);
     const key = `${cam.rotation}|${order.map((c) => `${c.i}:${c.h}`).join(',')}`;
-    if (el.dataset.key !== key) {
-      el.dataset.key = key;
-      el.innerHTML = order.map((c) => `<g>${vehicleSVG(cam, `${c.i ? 'coach' : 'loco'}:${len}`, c.h, c.i % VEHICLES.hands)}</g>`).join('');
+    if (el.key !== key) {
+      el.key = key;
+      el.shapes = order.map((c) => shapesOf(vehicleSVG(cam, `${c.i ? 'coach' : 'loco'}:${len}`, c.h, c.i % VEHICLES.hands)));
     }
     order.forEach((c, k) => {
-      const [sx, sy] = this.project(c.x, c.y, 0);
-      el.children[k].setAttribute('transform', `translate(${r2(sx)} ${r2(sy)})`);
+      const [sx, sy] = this.projectDeck(c.x, c.y, 0);
+      pen.draw(el.shapes[k], sx, sy);
     });
   }
 
-  // A truck: close up a cab and a trailer (src/render/vehicles.js), the cab
-  // facing the way it moves, the trailer towards the cab, so the truck bends
-  // at corners; further out two square dots coupled like carriages.
-  placeTruck(el, a) {
+  // A bus or truck: close up one rigid model `name` (src/render/vehicles.js)
+  // between its front (a.x / a.y) and back (a.tx / a.ty), turned the way it
+  // goes; further out a long box.
+  placeVehicle(el, a, name) {
     const cam = this.camera;
     const [wx, wy] = wobble(a.x, a.y), [vx, vy] = wobble(a.tx, a.ty); // on the swaying road
-    const cab = [a.x + wx, a.y + wy], trailer = [a.tx + vx, a.ty + vy];
-    const [sx, sy] = this.project(...cab, 0.04), [tx, ty] = this.project(...trailer, 0.04);
-    const pull = Math.hypot(cab[0] - trailer[0], cab[1] - trailer[1]) > 1e-4 ? headingIndex(Math.atan2(cab[1] - trailer[1], cab[0] - trailer[0])) : null;
-    if (el.at) {
-      const dx = a.x - el.at[0], dy = a.y - el.at[1];
-      if (dx * dx + dy * dy > 1e-8) el.heading = headingIndex(Math.atan2(dy, dx));
-    }
-    el.at = [a.x, a.y];
+    const front = [a.x + wx, a.y + wy], back = [a.tx + vx, a.ty + vy];
+    if (Math.hypot(front[0] - back[0], front[1] - back[1]) > 1e-4) el.heading = headingIndex(Math.atan2(front[1] - back[1], front[0] - back[0]));
+    const [sx, sy] = this.projectDeck((front[0] + back[0]) / 2, (front[1] + back[1]) / 2, 0.04);
     if (cam.zoom < VEHICLES.minZoom) {
-      if (el.dataset.key !== 'dot') {
-        el.dataset.key = 'dot';
-        el.innerHTML = '<path/>';
-      }
-      const r = THEME.truckRadius;
-      el.firstChild.setAttribute('d', `M${r2(sx)} ${r2(sy)}L${r2(tx)} ${r2(ty)}` + rect(sx - r, sy - r, 2 * r, 2 * r) + rect(tx - r, ty - r, 2 * r, 2 * r));
+      el.key = 'dot';
+      el.dot = [sx, sy];
+      if (!this.pen.onScreen(sx, sy)) return;
+      const [ax, ay] = this.projectDeck(...front, 0.04), [bx, by] = this.projectDeck(...back, 0.04);
+      const r = THEME.truckRadius, l = Math.hypot(ax - bx, ay - by) || 1;
+      const ux = ((ax - bx) / l) * r, uy = ((ay - by) / l) * r; // along, half a square
+      const path = el.path = new Path2D();
+      path.moveTo(ax + ux - uy, ay + uy + ux);
+      path.lineTo(ax + ux + uy, ay + uy - ux);
+      path.lineTo(bx - ux + uy, by - uy - ux);
+      path.lineTo(bx - ux - uy, by - uy + ux);
+      path.closePath();
       return;
     }
-    const cabH = el.heading ?? pull ?? 0, trailerH = pull ?? cabH;
+    const heading = el.heading ?? 0;
     const hand = (el.model ??= modelFor(a.id)).hand;
-    const cabFirst = cam.depth(...cab) < cam.depth(...trailer); // the one further back first
-    const key = `${cam.rotation}|${cabH}|${trailerH}|${cabFirst}`;
-    if (el.dataset.key !== key) {
-      el.dataset.key = key;
-      const parts = [`<g>${vehicleSVG(cam, 'cab', cabH, hand)}</g>`, `<g>${vehicleSVG(cam, 'trailer', trailerH, hand)}</g>`];
-      el.innerHTML = cabFirst ? parts.join('') : parts.reverse().join('');
+    const key = `${cam.rotation}|${heading}|${name}`;
+    if (el.key !== key) {
+      el.key = key;
+      el.body = { shapes: shapesOf(vehicleSVG(cam, name, heading, hand)) };
     }
-    const [c, t] = cabFirst ? el.children : [el.children[1], el.children[0]];
-    c.at0 = `translate(${r2(sx)} ${r2(sy)})`; // set by scaleAgent
-    t.at0 = `translate(${r2(tx)} ${r2(ty)})`;
+    Object.assign(el.body, { sx, sy });
+    el.parts = [el.body];
   }
 
-  // Fill a walker's or cyclist's group: close up a pen figure
+  // A walker's or cyclist's shapes: close up a pen figure
   // (src/render/people.js), further out a plain mark. Returns whether it
   // should be mirrored (walking to the left of the screen). `sx`: its screen x.
   placePerson(el, a, kind, sx) {
@@ -1137,22 +1545,21 @@ export class Renderer {
       if (Math.abs(sx - el.sx) > 1e-3) el.left = sx < el.sx;
     }
     el.at = [a.x, a.y];
-    el.sx = sx;
     const close = cam.zoom >= VEHICLES.minZoom;
     const body = (el.body ??= bodyFor(a.id));
     const heading = el.heading ?? 0;
     const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.rotation}` : `w${body}`;
-    if (el.dataset.key !== key) {
-      el.dataset.key = key;
-      el.innerHTML = !close ? `<path d="${personMark(kind, a.id)}"/>`
-        : kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body);
+    if (el.key !== key) {
+      el.key = key;
+      el.shapes = !close ? [shape(kind, personMark(kind, a.id))]
+        : shapesOf(kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body));
     }
     // cyclists' wheels already follow the way they ride
     return close && kind === 'walker' && !!el.left;
   }
 
-  // Fill a car's group: close up a model (src/render/vehicles.js) facing the
-  // way it last moved, further out a square dot. Redrawn only when that changes.
+  // A car's shapes: close up a model (src/render/vehicles.js) facing the
+  // way it last moved, further out a square dot. Rebuilt only when that changes.
   placeCar(el, a) {
     if (el.at) {
       const dx = a.x - el.at[0], dy = a.y - el.at[1];
@@ -1163,29 +1570,23 @@ export class Renderer {
     const model = (el.model ??= modelFor(a.id));
     const heading = el.heading ?? 0;
     const key = close ? `${model.name}|${heading}|${this.camera.rotation}` : 'dot';
-    if (el.dataset.key === key) return;
-    el.dataset.key = key;
-    const r = THEME.agentRadius;
-    el.innerHTML = close ? vehicleSVG(this.camera, model.name, heading, model.hand) : `<path d="${rect(-r, -r, 2 * r, 2 * r)}"/>`;
+    if (el.key === key) return;
+    el.key = key;
+    el.shapes = close ? shapesOf(vehicleSVG(this.camera, model.name, heading, model.hand)) : (CAR_MARK ??= [shape('car', carMark())]);
   }
 }
+
+// The plain mark for a car far out: a square dot.
+let CAR_MARK = null;
+const carMark = () => {
+  const r = THEME.agentRadius;
+  return rect(-r, -r, 2 * r, 2 * r);
+};
 
 // Moving dots, each drawn around its origin: cars are squares, pedestrians
 // an upright half-width rectangle standing on it, cyclists a small triangle
 // – drawn by hand, so each one's corners sit a little differently (from the
 // agent's id).
-// Place an agent's group at its spot (`at0`, set by renderAgents / placeTruck)
-// at size k, scaled about its foot. A truck far out is one absolute path and
-// fades instead.
-function scaleAgent(el, k) {
-  const s = k === 1 ? '' : ` scale(${Math.max(0, k).toFixed(3)})`;
-  if (el.dataset.kind !== 'truck') return el.setAttribute('transform', el.at0 + s);
-  const dot = el.dataset.key === 'dot';
-  const opacity = dot && k < 1 ? Math.max(0, k).toFixed(3) : ''; // cleared when zoomed in mid-way
-  if (el.style.opacity !== opacity) el.style.opacity = opacity;
-  if (!dot) for (const c of el.children) if (c.at0) c.setAttribute('transform', c.at0 + s);
-}
-
 const rect = (x, y, w, h) => `M${r2(x)} ${r2(y)}h${r2(w)}v${r2(h)}h${r2(-w)}z`;
 
 function triangle(r, id) {
@@ -1207,6 +1608,78 @@ export function agentShape(kind, id = 0) {
 function personMark(kind, id) {
   const r = kind === 'cyclist' ? THEME.cyclistRadius : THEME.walkerRadius;
   return kind === 'cyclist' ? triangle(r * 1.2, id) : rect(-r / 2, -2 * r, r, 2 * r);
+}
+
+// Fewer elements for the same drawing: a run of neighbouring <path>s of the
+// same class that draw lines only – no fill (ln, glyph, gnd), or one in
+// the stroke's own colour (ink) – becomes one <path> with all their
+// subpaths. Nothing else is drawn between them, so it looks the same, and
+// the page has far fewer elements to style, lay out and repaint (a city
+// has tens of thousands of these). Filled faces are left alone: each
+// one's fill must cover the lines drawn before it. Tree glyphs (all one
+// colour, no fill) take turns by class – trunk, limb, leaf… – so between
+// other elements they are gathered by class, whatever their order.
+const RUN = /<path d="(M[^"]*)" class="([^"]*)"\/>/g;
+const LINES = /(^| )(ln|glyph|gnd)( |$)/;
+export function mergeRuns(svg) {
+  let out = '', last = 0;
+  const runs = new Map(); // class -> path data, in order of first use
+  const flush = () => {
+    for (const [cls, d] of runs) out += `<path d="${d}" class="${cls}"/>`;
+    runs.clear();
+  };
+  for (const m of svg.matchAll(RUN)) {
+    if (m.index !== last) {
+      flush();
+      out += svg.slice(last, m.index);
+    }
+    last = m.index + m[0].length;
+    const cls = m[2];
+    if (!LINES.test(cls) || cls.includes('filled')) {
+      flush();
+      out += m[0];
+      continue;
+    }
+    // other line classes merge only with the one right before them
+    const glyph = cls.startsWith('glyph');
+    if (!runs.has(cls) && runs.size && !(glyph && [...runs.keys()].every((k) => k.startsWith('glyph')))) flush();
+    else if (!glyph && runs.size > 1) flush();
+    runs.set(cls, (runs.get(cls) ?? '') + m[1]);
+  }
+  flush();
+  return out + svg.slice(last);
+}
+
+// Put `parent`'s children `els` in this order, moving as few as possible:
+// the longest run of them already in order stays, the rest are moved in
+// around it. (Moving an element makes the browser restyle and lay it out
+// again, and there are thousands of buildings.)
+export function placeInOrder(parent, els) {
+  const at = new Map();
+  let i = 0;
+  for (let c = parent.firstChild; c; c = c.nextSibling) at.set(c, i++);
+  // longest increasing subsequence of the current positions (patience sort)
+  const tails = [], prev = new Array(els.length);
+  els.forEach((el, k) => {
+    const p = at.get(el);
+    if (p === undefined) return;
+    let lo = 0, hi = tails.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (at.get(els[tails[mid]]) < p) lo = mid + 1; else hi = mid;
+    }
+    prev[k] = lo ? tails[lo - 1] : -1;
+    tails[lo] = k;
+  });
+  const keep = new Set();
+  for (let k = tails.length ? tails[tails.length - 1] : -1; k >= 0; k = prev[k]) keep.add(els[k]);
+  // back to front: each one goes right before the one after it
+  let next = null;
+  for (let k = els.length - 1; k >= 0; k--) {
+    const el = els[k];
+    if (!keep.has(el) && (el.parentNode !== parent || el.nextSibling !== next)) parent.insertBefore(el, next);
+    next = el;
+  }
 }
 
 // Painter's-algorithm order for objects with rectangular ground areas of any

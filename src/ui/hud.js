@@ -1,28 +1,39 @@
-// Screen furniture: stats (top-left), controls (top-right), the active
-// tool's actions (bottom centre), Build menu (bottom-right, see
-// buildMenu.js). Tapping the stats box folds it away.
+// Screen furniture: the town's name and numbers (top-left), controls
+// (top-right), the active tool's actions (bottom centre), Build menu
+// (bottom-right, see buildMenu.js), app name and version (bottom-left).
+// The name can be edited in place; the arrow beside it folds the numbers away.
+// The numbers change only every few seconds, so they don't flicker.
+
+const REFRESH_MS = 5000;
 
 import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
 import { BuildMenu } from './buildMenu.js';
-import { mapCode } from '../render/renderer.js';
+import { statIcon } from './icons.js';
+import { CONFIG } from '../config.js';
+
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+// one number with its drawing; the label shows on hover
+const stat = (icon, label, v, cls = '') => `<span class="stat ${cls}" title="${label}">${statIcon(icon)}<b>${v}</b></span>`;
 
 export class Hud {
-  constructor(root, { world, tools, agents, trains, clock, actions }) {
+  constructor(root, { world, tools, agents, trains, actions }) {
     this.world = world;
     this.trains = trains;
     this.tools = tools;
     this.agents = agents;
-    this.clock = clock;
 
     root.insertAdjacentHTML('beforeend', `
-      <div class="hud"><div class="title"><span>Urbanismus</span><small>MAP-${mapCode(world.seed)}</small></div><div class="stats cells"></div><div class="traffic strip"></div></div>
+      <div class="hud">
+        <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="Town name"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close fold" title="Fold away the numbers" aria-expanded="true">–</button></div>
+        <div class="stats row"></div>
+        <div class="traffic row"></div>
+        <div class="split"><i class="walk"></i><i class="cycle"></i><i class="drive"></i></div>
+      </div>
+      <div class="credit">${CONFIG.app.name} <span>v${CONFIG.app.version}</span> · ${CONFIG.app.author}</div>
       <div class="controls">
-        <button data-act="rotateLeft" title="Rotate (Q)">⟲</button>
-        <button data-act="rotateRight" title="Rotate (E)">⟳</button>
-        <button data-act="speed" title="Simulation speed (T)"><span class="long">Speed: </span><span class="val"></span></button>
-        <button data-act="pause" title="Pause (P)">Pause</button>
         <button data-act="terrain" title="Terrain contour lines">Terrain</button>
-        <button data-act="colors" title="Color scheme: click for the next one"></button>
+        <button data-act="colors" title="Colors"></button>
+        <button data-act="assets" title="All the buildings and structures in the game">Assets</button>
         <button data-act="debug" title="Debug panel: drawing switches and frame rate">Debug</button>
         <button data-act="newMap" title="Discard this city and generate a new map">New map</button>
       </div>
@@ -32,13 +43,42 @@ export class Hud {
 
     this.statsEl = root.querySelector('.hud .stats');
     this.trafficEl = root.querySelector('.hud .traffic');
-    this.trafficTimer = 0;
-    this.pauseBtn = root.querySelector('[data-act="pause"]');
-    this.speedBtn = root.querySelector('[data-act="speed"]');
-    this.speedVal = this.speedBtn.querySelector('.val');
+    this.trafficAt = -Infinity; // ms of the last traffic count
+    this.statsAt = -Infinity;   // ms of the last stats count
 
+    this.splitEl = root.querySelector('.hud .split');
     const hudEl = root.querySelector('.hud');
-    hudEl.addEventListener('click', () => hudEl.classList.toggle('folded'));
+    const foldBtn = root.querySelector('.hud .fold');
+    foldBtn.addEventListener('click', () => {
+      const folded = hudEl.classList.toggle('folded');
+      foldBtn.setAttribute('aria-expanded', String(!folded));
+      foldBtn.title = folded ? 'Show the numbers' : 'Fold away the numbers';
+      foldBtn.textContent = folded ? '+' : '–';
+    });
+
+    // the town's name: typed over in place, kept in the save
+    const nameEl = root.querySelector('.hud input.name');
+    // an invisible copy of the text sets the box's width: inputs can't hug their text
+    const sizerEl = root.querySelector('.hud .sizer');
+    const fitName = () => { sizerEl.textContent = nameEl.value || ' '; };
+    nameEl.addEventListener('input', fitName);
+    const showName = () => {
+      fitName();
+      document.title = `${world.name} · ${CONFIG.app.name}`;
+    };
+    const commit = () => {
+      world.rename(nameEl.value);
+      nameEl.value = world.name; // an empty name puts the old one back
+      showName();
+    };
+    nameEl.addEventListener('change', commit);
+    nameEl.addEventListener('keydown', (e) => {
+      e.stopPropagation(); // no hotkeys while typing
+      if (e.key === 'Enter') nameEl.blur();
+      if (e.key === 'Escape') { nameEl.value = world.name; fitName(); nameEl.blur(); }
+    });
+    nameEl.addEventListener('focus', () => nameEl.select());
+    showName();
 
     this.actionsEl = root.querySelector('.actions');
     this.actionsEl.addEventListener('click', (e) => {
@@ -62,7 +102,8 @@ export class Hud {
 
     this.buildMenu = new BuildMenu(root, tools);
 
-    world.events.on('*', () => (this.statsDirty = true));
+    // (cars parking change nothing here, and happen all the time)
+    world.events.on('*', (type) => { if (type !== 'parking:changed') this.statsDirty = true; });
     this.statsDirty = true;
   }
 
@@ -76,32 +117,40 @@ export class Hud {
         .map((a, i) => `<button data-i="${i}">${a.key ? `<span class="key">${a.key}</span>` : ''}${a.label}</button>`)
         .join('');
     }
-    const { paused, speed } = this.clock;
-    this.pauseBtn.classList.toggle('on', paused);
-    this.pauseBtn.textContent = paused ? 'Paused' : 'Pause';
-    if (this.speedVal.textContent !== speed.name) this.speedVal.textContent = speed.name;
-    this.speedBtn.classList.toggle('on', speed.scale !== 1);
-    if (this.statsDirty) this.renderStats();
-    if (this.trafficTimer-- <= 0) {
-      this.trafficTimer = 20;
+    // touch the DOM only on a change: any write restyles the page (the
+    // map's SVGs included), too slow to do every frame
+    const now = performance.now();
+    if (this.statsDirty && now - this.statsAt >= REFRESH_MS) {
+      this.statsAt = now;
+      this.renderStats();
+    }
+    if (now - this.trafficAt >= REFRESH_MS) {
+      this.trafficAt = now;
       const count = { walk: 0, cycle: 0, drive: 0 };
-      let trucks = 0;
+      let trucks = 0, buses = 0;
       for (const a of this.agents.visible()) {
-        if (a.truck) trucks++;
-        else count[a.trip.mode === 'stroll' ? 'walk' : a.trip.mode]++;
+        if (a.bus) buses++;
+        else if (a.truck) trucks++;
+        else count[a.trip.mode === 'drive' || a.trip.mode === 'cycle' ? a.trip.mode : 'walk']++;
       }
       const visitors = this.agents.visitorCount();
       const commute = this.agents.commuterCount();
-      const flow = this.agents.flow ?? 1;
-      const traffic = !count.drive && !trucks ? '' : flow > 0.85 ? 'flowing' : flow > 0.55 ? 'busy' : 'jammed';
-      const item = (k, v) => `<span>${k}<b>${v}</b></span>`;
-      this.trafficEl.innerHTML = item('On foot', count.walk) + item('Cycling', count.cycle) + item('Driving', count.drive)
-        + (trucks ? item('Trucks', trucks) : '')
-        + (traffic ? item('Traffic', `${traffic} ${Math.round(flow * 100)}%`) : '')
-        + (visitors ? item('Visitors', visitors) : '')
-        + (commute.inbound ? item('Commuting in', commute.inbound) : '')
-        + (commute.outbound ? item('Working outside', commute.outbound) : '')
-        + (this.trains.count ? item('Trains', this.trains.count) : '');
+      const extra = [
+        visitors && `${visitors} visiting`,
+        commute.inbound && `${commute.inbound} commuting in`,
+        commute.outbound && `${commute.outbound} working outside`,
+        this.trains.count && `${this.trains.count} ${this.trains.count === 1 ? 'train' : 'trains'}`,
+      ].filter(Boolean);
+      const html = stat('walk', 'On foot', count.walk) + stat('cycle', 'Cycling', count.cycle)
+        + stat('drive', 'Driving', count.drive) + (trucks ? stat('truck', 'Trucks', trucks) : '')
+        + (buses ? stat('bus', 'Buses', buses) : '')
+        + (extra.length ? `<span class="extra" title="${extra.join(', ')}">+${extra.length}</span>` : '');
+      const moving = count.walk + count.cycle + count.drive;
+      for (const [i, k] of ['walk', 'cycle', 'drive'].entries()) {
+        this.splitEl.children[i].style.flexGrow = moving ? count[k] : 0;
+      }
+      this.splitEl.classList.toggle('empty', !moving);
+      if (html !== this.trafficHTML) this.trafficEl.innerHTML = this.trafficHTML = html;
     }
   }
 
@@ -118,15 +167,10 @@ export class Hud {
       const def = STRUCTURE_TYPES[s.type];
       for (const [k, v] of Object.entries(levelOf(def, s).stats ?? {})) totals[k] = (totals[k] ?? 0) + v;
     }
-    const cells = [
-      ['Residents', totals.residents ?? 0],
-      ['Jobs', totals.jobs ?? 0],
-      ['Buildings', world.structures.size],
-      ['Road', world.roads.edgeCount],
-      ['Paths', world.paths.edgeCount],
-    ];
-    if (world.rails.edgeCount) cells.push(['Rail', world.rails.edgeCount]);
-    if (unconnected) cells.push(['Cut off', unconnected]);
-    this.statsEl.innerHTML = cells.map(([k, v]) => `<div class="cell"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+    const html = stat('residents', 'Residents', totals.residents ?? 0)
+      + stat('jobs', 'Jobs', totals.jobs ?? 0)
+      + stat('buildings', 'Buildings', world.structures.size)
+      + (unconnected ? stat('cutoff', `${unconnected} cut off from the roads`, unconnected, 'warn') : '');
+    if (html !== this.statsHTML) this.statsEl.innerHTML = this.statsHTML = html;
   }
 }

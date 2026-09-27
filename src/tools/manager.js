@@ -15,6 +15,7 @@
 //                                  //   the same dot clicks (bool or () -> bool)
 //     hint() -> string,
 //     overlay(kit, hoverNode) -> svg string,
+//     cursor(kit, hoverNode) -> svg string,  // replaces the default hover ring
 //   }
 //
 // New tool: write a factory in src/tools/, register it in main.js.
@@ -117,6 +118,8 @@ export class ToolManager {
 
   overlay(kit) {
     const custom = this.active?.overlay?.(kit, this.hoverNode) ?? '';
-    return (this.active?.snap ? '' : kit.ring(this.hoverNode, 0.32)) + custom;
+    const t = this.active;
+    const cursor = t?.cursor ? t.cursor(kit, this.hoverNode) : t?.snap ? '' : kit.ring(this.hoverNode, 0.32);
+    return cursor + custom;
   }
 }

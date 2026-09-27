@@ -2,14 +2,15 @@
 // click an end dot. The route goes diagonal then straight (or the reverse –
 // toggle with Tab). If anything blocks it, nothing is built. After a
 // successful build the next segment starts from the end point, so lines can
-// be chained.
+// be chained. Roads come as two tools: roads and single-track lanes
+// (`lane`); drawing one over the other converts it.
 
 import { planRoute, validateRoute, BEND } from '../roads/routing.js';
 import { isTouch } from '../ui/device.js';
 
-// options: { kind, label, hotkey, group (Build menu group), blurb, fineGrid, curve (config key), hoverRadius }
+// options: { kind, id (default: kind), lane (roads: build lanes), label, hotkey, group (Build menu group), blurb, fineGrid, curve (config key), hoverRadius }
 export function createNetworkTool({ world, config }, options) {
-  const { kind, label, hotkey, fineGrid = false, hoverRadius = 0.32 } = options;
+  const { kind, label, hotkey, lane = false, fineGrid = false, hoverRadius = 0.32 } = options;
   const layer = world.networks[kind];
   const curve = config[options.curve ?? kind];
   const noun = label.toLowerCase();
@@ -23,12 +24,25 @@ export function createNetworkTool({ world, config }, options) {
   };
 
   // Footpath dots on or right beside a road (where a stroke becomes sidewalks).
-  const nearAnyRoad = (f) => layer.grid.neighbors(f).some((g) => world.roadBeside(f, g));
+  // (Lanes get no sidewalks: people walk on the lane itself.)
+  const streetBeside = (f, g) => {
+    const road = world.roadBeside(f, g);
+    return road && !world.isLane(...road);
+  };
+  const nearAnyRoad = (f) => layer.grid.neighbors(f).some((g) => streetBeside(f, g));
   const sidewalkNote = (plan) => {
     if (kind !== 'path' || !plan?.check.ok) return '';
-    const along = plan.nodes.some((n, i) => i > 0 && world.roadBeside(plan.nodes[i - 1], n));
+    const along = plan.nodes.some((n, i) => i > 0 && streetBeside(plan.nodes[i - 1], n));
     return along ? 'Along the road it becomes sidewalks · ' : '';
   };
+  // Roads and lanes drawn over each other: what changes.
+  const convertNote = (plan) => {
+    if (kind !== 'road' || !plan?.check.ok) return '';
+    const over = plan.nodes.some((n, i) => i > 0 && world.roads.hasEdge(plan.nodes[i - 1], n) && world.isLane(plan.nodes[i - 1], n) !== lane);
+    if (!over) return '';
+    return lane ? 'Narrows the road to a lane · ' : 'Widens the lane to a road · ';
+  };
+  const note = (plan) => sidewalkNote(plan) || convertNote(plan);
 
   const currentPlan = () => {
     if (start < 0 || hover < 0 || hover === start) return null;
@@ -37,7 +51,7 @@ export function createNetworkTool({ world, config }, options) {
   };
 
   return {
-    id: kind,
+    id: options.id ?? kind,
     group: options.group,
     blurb: options.blurb ?? '',
     label,
@@ -70,7 +84,7 @@ export function createNetworkTool({ world, config }, options) {
         start = -1;
         return;
       }
-      const result = world.buildNetwork(kind, planRoute(layer.grid, start, node, bend));
+      const result = world.buildNetwork(kind, planRoute(layer.grid, start, node, bend), { lane });
       if (result.ok) start = node;
     },
 
@@ -93,18 +107,20 @@ export function createNetworkTool({ world, config }, options) {
 
     hint() {
       if (isTouch()) {
-        if (start < 0) return `Tap a dot to start a ${noun}${kind === 'path' ? ' · draw along a road to give it sidewalks' : ''}`;
+        if (start < 0) return `Tap a dot to start a ${noun}${kind === 'path' ? ' · draw along a road to give it sidewalks' : lane ? ' · draw over a road or footpath to make it a lane' : ''}`;
         const plan = currentPlan();
         if (!plan) return 'Tap where it should end';
-        return plan.check.ok ? 'Tap again to build' : plan.check.reason;
+        return plan.check.ok ? `${note(plan)}Tap again to build` : plan.check.reason;
       }
       if (start < 0) {
         const nearRoad = kind === 'path' && hover >= 0 && nearAnyRoad(hover);
         if (nearRoad) return 'Draw along a road to give it sidewalks';
-        return kind === 'rail' ? 'Click a dot to start a railway · run it off the map edge for trains' : `Click a dot to start a ${noun}`;
+        if (kind === 'rail') return 'Click a dot to start a railway · run it off the map edge for trains';
+        if (lane) return 'Click a dot to start a lane · draw over a road or footpath to make it a lane';
+        return `Click a dot to start a ${noun}`;
       }
       const plan = currentPlan();
-      const status = plan && !plan.check.ok ? `${plan.check.reason} · ` : sidewalkNote(plan);
+      const status = plan && !plan.check.ok ? `${plan.check.reason} · ` : note(plan);
       return `${status}Click to end · Tab: ${bend} · right-click to stop`;
     },
 
@@ -115,7 +131,7 @@ export function createNetworkTool({ world, config }, options) {
       const plan = currentPlan();
       if (!plan) return out;
       const points = plan.nodes.map((n) => layer.pos(n));
-      out += kit.path(points, `preview ${kind}${plan.check.ok ? '' : ' invalid'}`, curve);
+      out += kit.path(points, `preview ${kind}${lane ? ' lane' : ''}${plan.check.ok ? '' : ' invalid'}`, curve);
       for (const n of new Set(plan.check.blocked)) out += kit.crossAt(...layer.pos(n), 0.16 * Math.sqrt(layer.scale));
       return out;
     },

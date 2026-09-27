@@ -107,7 +107,7 @@ function wagons(g, x0, y, n, big = false) {
 export default {
   id: 'mine',
   name: 'Coal mine',
-  blurb: 'Headframes and spoil heaps · jobs',
+  blurb: 'Headframes, spoil heaps',
   hotkey: 'm',
   category: 'zone',
   tags: ['industrial'],

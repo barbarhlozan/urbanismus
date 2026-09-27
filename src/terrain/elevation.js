@@ -2,20 +2,56 @@
 // from the map seed (so it needs no saving) and is only drawn for now –
 // nothing stands higher for it (that is Terrain.height).
 //
-//   makeElevation(seed)  (x, y) -> metres, smooth hills plus a little roughness
+//   makeElevation(seed, rivers, hilliness)  (x, y) -> metres, smooth hills
+//                                plus a little roughness, with river valleys
+//                                cut in (use World.elevation, which caches it)
 //   contours(elev, box, opts)  polylines of equal elevation (marching squares)
 
 import { valueNoise2D } from '../core/random.js';
+import { RIVER } from './rivers.js';
 
 export const ELEVATION = {
   relief: 160,   // metres from the lowest to the highest possible point
-  interval: 2,   // metres between contour lines
+  interval: 5,   // metres between contour lines
   index: 4,      // every n-th line is an index line (brighter, labelled);
                  // every other line is kept at mid zoom, the rest only close up
   step: 0.2,     // sampling step in grid units (smaller = smoother, slower)
 };
 
-export function makeElevation(seed) {
+// `rivers`: a riverField (terrain/rivers.js) or null. Around a river the
+// ground is shaped into a valley: flat at the water across the channel,
+// then rising by RIVER.wall per step. Higher ground is cut down to it,
+// blended in softly and fading out by RIVER.reach – so the contour lines
+// bend upstream where they cross – and ground lower than the water is
+// banked up right beside the channel, so no river runs along a hillside.
+// `hilliness` scales the hills (1 = as generated, below 1 flatter, above
+// steeper; chosen for a new map, kept in the save).
+export function makeElevation(seed, rivers = null, hilliness = 1) {
+  const hills = makeHills(seed, hilliness);
+  if (!rivers) return hills;
+  const { wall, reach } = RIVER;
+  const fade = (d, from, to) => {
+    const t = Math.min(Math.max((d - from) / (to - from), 0), 1);
+    return 1 - t * t * (3 - 2 * t);
+  };
+  return (x, y) => {
+    const e = hills(x, y);
+    const r = rivers.at(x, y);
+    if (!r || r.d >= reach) return e;
+    const bank = rivers.halfWidth(x, y);
+    const valley = r.z + Math.max(0, r.d - bank) * wall;
+    if (e < valley) return e + (valley - e) * fade(r.d, bank, bank + 2);
+    return e - (e - softMin(e, valley, 4)) * fade(r.d, reach / 2, reach);
+  };
+}
+
+// min(a, b), rounded off where they are within k of each other
+function softMin(a, b, k) {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - (h * h * k) / 4;
+}
+
+function makeHills(seed, k = 1) {
   // octaves: big hills, spurs, small knolls, then roughness for wiggly lines
   const octaves = [[18, 1], [8, 0.5], [3.5, 0.22], [1.3, 0.07]]
     .map(([cell, amp], i) => [valueNoise2D(seed + 911 + i * 37, cell), amp]);
@@ -26,7 +62,8 @@ export function makeElevation(seed) {
     // stretch the middle apart, so slopes are steep and tops / bottoms flatter
     const t = v / total;
     const s = t * t * (3 - 2 * t);
-    return (0.35 * t + 0.65 * s) * ELEVATION.relief;
+    // flatter land sits at mid height rather than at the bottom
+    return ((0.35 * t + 0.65 * s) * k + Math.max(0, (1 - k) / 2)) * ELEVATION.relief;
   };
 }
 

@@ -76,14 +76,55 @@ function sharpBends(layer, nodes) {
   return out;
 }
 
+// Water on a route is allowed only as bridges (layer.bridge): straight runs
+// of at most `span` water dots, all river, with land at both ends, crossing
+// nothing on the way. { clear: water dots that are fine, problem: the first
+// run that isn't, as { reason, nodes } }.
+function bridgeSpans(layer, nodes) {
+  const clear = new Set();
+  let problem = null;
+  const { bridge } = layer;
+  if (!bridge) return { clear, problem };
+  for (let i = 0; i < nodes.length; i++) {
+    if (!bridge.water(nodes[i])) continue;
+    let j = i;
+    while (j + 1 < nodes.length && bridge.water(nodes[j + 1])) j++;
+    const run = nodes.slice(i, j + 1);
+    const reason = spanProblem(layer, nodes, i, j);
+    if (!reason) run.forEach((n) => clear.add(n));
+    else problem ??= { reason, nodes: run };
+    i = j;
+  }
+  return { clear, problem };
+}
+
+function spanProblem(layer, nodes, i, j) {
+  const { bridge, graph, grid } = layer;
+  if (i === 0 || j === nodes.length - 1) return 'A bridge needs land at both ends';
+  if (!nodes.slice(i, j + 1).every(bridge.river)) return 'Bridges only cross rivers';
+  if (j - i + 1 > bridge.span) return 'Too wide to bridge';
+  const step = (a, b) => {
+    const [ax, ay] = grid.xy(a), [bx, by] = grid.xy(b);
+    return `${bx - ax},${by - ay}`;
+  };
+  const dir = step(nodes[i - 1], nodes[i]);
+  for (let k = i; k <= j; k++) if (step(nodes[k], nodes[k + 1]) !== dir) return 'A bridge has to be straight';
+  for (let k = i; k <= j; k++) {
+    if (bridge.taken(nodes[k])) return 'Crosses another line';
+    for (const m of graph.neighbors(nodes[k])) if (m !== nodes[k - 1] && m !== nodes[k + 1]) return 'Crosses another line';
+  }
+  return null;
+}
+
 export function validateRoute(layer, nodes) {
   const blocked = [];
   if (!nodes || nodes.length < 2) return { ok: false, blocked, reason: 'Too short' };
 
+  const spans = bridgeSpans(layer, nodes);
   for (const n of nodes) {
-    if (layer.isBlocked(n)) blocked.push(n);
+    if (!spans.clear.has(n) && layer.isBlocked(n)) blocked.push(n);
   }
-  let reason = 'Something is in the way';
+  let reason = spans.problem?.reason ?? 'Something is in the way';
   for (let i = 0; i < nodes.length - 1; i++) {
     if (crossesDiagonal(layer, nodes[i], nodes[i + 1])) {
       reason = 'Crosses another line';

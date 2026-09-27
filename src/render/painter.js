@@ -52,6 +52,9 @@
 // g.lod sets the default for what follows; opts.lod overrides it. Lines on
 // walls (opts.facing), floors and mullions are level 2 automatically.
 //
+// Facing – g.facing([nx, ny, nz]) is true when a surface with that local
+// normal is turned towards the viewer.
+//
 // Free space – g.free(x, y, r) is false where a footpath or road is within r
 // (footpaths have priority over lots). Props in kit.js check it themselves.
 //
@@ -170,6 +173,7 @@ export class Painter {
     this.join = { left: false, right: false }; // set by the renderer, see structures/index.js
     this.current = null;
     this.rigid = null;    // world [x, y]: move as one piece, see _project()
+    this.top = 0;         // highest z drawn at (local), for the renderer's screen box
   }
 
   // ----- internals -----
@@ -182,6 +186,7 @@ export class Painter {
   }
 
   _world(x, y, z) {
+    if (z > this.top) this.top = z;
     const [lx, ly] = rotateQuarter(x, y, this.rotation);
     return [this.ox + lx, this.oy + ly, this.oz + z];
   }
@@ -811,6 +816,12 @@ export class Painter {
     return this;
   }
 
+  // Does a surface with local normal n face the viewer? (For drawings that
+  // outline curved or broken shapes themselves.)
+  facing(n) {
+    return this._facing(n);
+  }
+
   isFree(x, y, r = 0) {
     return !this.free || this.free(x, y, r);
   }
@@ -825,6 +836,7 @@ export class Painter {
 
   // Combine another painter's output (same camera) into this one.
   merge(other) {
+    this.top = Math.max(this.top, other.top + other.oz - this.oz);
     this.solids.push(...other.solids);
     this.ground.push(...other.ground);
     this.spots.push(...other.spots);

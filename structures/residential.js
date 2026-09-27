@@ -6,8 +6,9 @@
 //   hotkey      keyboard shortcut for its build tool
 //   footprint   grid offsets it occupies, relative to its anchor dot
 //               ([[0,0]] = one dot, [[0,0],[1,0],[0,1],[1,1]] = 2×2)
-//   sim         agent behaviour: where its dots travel to, and how often
-//               they just go for a walk (strollChance, 0–1)
+//   sim         agent behaviour: which activity weights its dots use
+//               (activities, config.activities), where they work
+//               (destinations) and relax (leisure)
 //   levels      one entry per development level (1 = low, 2 = medium, 3 = high):
 //     name      shown in the click menu
 //     stats     free-form numbers read by the HUD / future economy
@@ -51,7 +52,7 @@ export default {
   hotkey: '1',
   category: 'zone',
   footprint: [[0, 0]],
-  sim: { destinations: ['business', 'industrial', 'farm'], leisure: ['park', 'square', 'heritage', 'cemetery'], strollChance: 0.3 },
+  sim: { activities: 'resident', destinations: ['business', 'industrial', 'farm'], leisure: ['park', 'square', 'heritage', 'cemetery'] },
   plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
 
   levels: [

@@ -227,7 +227,7 @@ export const small = {
   ...common,
   id: 'park',
   name: 'Park',
-  blurb: 'Homes nearby grow faster',
+  blurb: 'Trees and paths',
   hotkey: '4',
   footprint: [[0, 0]],
   levels: [

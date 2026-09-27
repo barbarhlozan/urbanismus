@@ -49,15 +49,19 @@ const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced
 export const drawEnabled = () => DRAW.on && !reduced?.matches;
 
 // Strokes to draw in `groups` (ground first), with their share of the time.
-// `tile` converts screen px to grid units for the overall duration.
-function plan(groups, tile, speed) {
+// `tile` converts screen px to grid units for the overall duration; `scale`
+// is screen px per unit of the groups' drawing (measured when not given –
+// which makes the browser lay out the page there and then).
+function plan(groups, tile, speed, scale) {
   const phases = [[], [], []];
   groups.forEach((root, gi) => {
     if (!root?.isConnected) return;
     // non-scaling strokes dash in screen px: path lengths are measured in
     // the group's units, so scale them
-    const m = root.getScreenCTM?.();
-    const scale = m ? Math.hypot(m.a, m.b) : 1;
+    if (scale == null) {
+      const m = root.getScreenCTM?.();
+      scale = m ? Math.hypot(m.a, m.b) : 1;
+    }
     for (const el of root.querySelectorAll(SHAPES)) {
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden') continue;
@@ -98,19 +102,19 @@ function run(el, kf, a, b, { T, reverse, elapsed, easing = 'ease-in-out' }) {
 
 // Sketch the groups in, `elapsed` ms into the drawing. Returns the ms left
 // (<= 0 when done or there is nothing to draw).
-export function drawIn(groups, { elapsed = 0, tile = 32 } = {}) {
-  return animate(groups, tile, false, () => elapsed);
+export function drawIn(groups, { elapsed = 0, tile = 32, scale } = {}) {
+  return animate(groups, tile, false, () => elapsed, 1, scale);
 }
 
 // Erase the groups: the drawing backwards. `drawn` is how long it had been
 // drawing in, so a half-drawn object is erased from as far as it got.
 // `speed` < 1 erases faster.
-export function eraseOut(groups, { drawn = Infinity, tile = 32, speed = 1 } = {}) {
-  return animate(groups, tile, true, (T) => Math.max(0, T - drawn * speed), speed);
+export function eraseOut(groups, { drawn = Infinity, tile = 32, speed = 1, scale } = {}) {
+  return animate(groups, tile, true, (T) => Math.max(0, T - drawn * speed), speed, scale);
 }
 
-function animate(groups, tile, reverse, skip, speed = 1) {
-  const p = plan(groups, tile, speed);
+function animate(groups, tile, reverse, skip, speed = 1, scale) {
+  const p = plan(groups, tile, speed, scale);
   if (!p) return 0;
   const elapsed = skip(p.T);
   if (elapsed >= p.T) return 0;

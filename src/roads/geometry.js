@@ -194,9 +194,20 @@ export function streetKerbPairs(world, curve, width) {
 // exit node); keys stay put while the pieces do (for the pen, ink.js).
 // Works for any network (footpaths too); `capAt(node)` false leaves a dead
 // end open (a footpath carrying on as a park's walkway).
-export function roadEdges(layer, curve, width, exits = [], capAt = () => true) {
+// `width` may be a function (a, b) -> width of that segment (lanes and
+// roads): runs are split where it changes, and the edges widen over
+// `taper` there, going from the narrower segment into the wider one.
+export function roadEdges(layer, curve, width, exits = [], capAt = () => true, taper = 0) {
   const { graph } = layer;
   const out = [];
+  const widthOf = typeof width === 'function' ? width : () => width;
+  // dots where exactly two segments of different widths meet
+  const change = (n) => {
+    if (graph.degree(n) !== 2) return false;
+    const [a, b] = graph.neighbors(n);
+    return widthOf(n, a) !== widthOf(n, b);
+  };
+  const widest = (n) => Math.max(...[...graph.neighbors(n)].map((m) => widthOf(n, m)));
   const arms = new Map(); // junction / dead end -> [{ to, dir, ends: [p, p] }]
   const exitAt = new Map(exits.map((e) => [e.node, e.dir]));
   // How far an edge stops short of a junction n, on the side of the road
@@ -209,7 +220,9 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true) {
     return Math.atan2(ty - y, tx - x);
   };
   const trimAt = (n, to, turn) => {
+    if (change(n)) return widthOf(n, to) < widest(n) ? taper : 0;
     if (graph.degree(n) <= 2) return 0;
+    const width = widest(n);
     const own = angleTo(n, to);
     let gap = Math.PI * 2;
     for (const m of graph.neighbors(n)) {
@@ -221,7 +234,8 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true) {
     return Math.max(width * 1.25, meet + width * 0.4);
   };
   const pairKey = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
-  for (const chain of networkChains(graph)) {
+  for (const chain of networkChains(graph, change)) {
+    const width = widthOf(chain[0], chain[1]);
     // centre line of the run, remembering where each segment starts
     const centre = [], starts = [];
     for (let i = 1; i < chain.length; i++) {
@@ -234,7 +248,7 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true) {
     starts.push(centre.length - 1);
     if (centre.length < 2) continue;
     const [first, last] = [chain[0], chain[chain.length - 1]];
-    const closed = first === last && graph.degree(first) === 2;
+    const closed = first === last && graph.degree(first) === 2 && !change(first);
     const sides = [offsetPolyline(centre, width), offsetPolyline(centre, -width)];
     // side 0 (offset +w) faces the next road round at the start of the run,
     // the one before at its end; side 1 the other way
@@ -275,6 +289,7 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true) {
     const cross = ([dx, dy], [px, py]) => dx * (py - y) - dy * (px - x);
     if (list.length === 1) {
       const { to, dir: [dx, dy], ends: [e0, e1] } = list[0];
+      const width = widthOf(n, to);
       const out0 = exitAt.get(n);
       if (out0) {
         // carry the edges on off the map, then fade out
@@ -314,15 +329,21 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true) {
 // (a street's sidewalk belongs to the street). Footpaths are drawn up to
 // there and no further, so one joining a road ends at its edge, one
 // joining a street at its kerb.
-export function roadway(world, curve) {
+// The test says which: 'street', 'road' or 'lane' (a single-track lane,
+// between its narrower edges), or false.
+export function roadway(world, curve, lane) {
   const layer = world.networks.road;
-  const streets = [], plain = [];
+  const streets = [], plain = [], lanes = [];
   for (const [a, b] of layer.graph.edges()) {
     const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-    (world.sidewalks.has(key) ? streets : plain).push(edgeCurve(layer, curve, a, b));
+    (world.sidewalks.has(key) ? streets : world.lanes.has(key) ? lanes : plain).push(edgeCurve(layer, curve, a, b));
   }
-  const s = new SegmentIndex(streets), p = new SegmentIndex(plain);
-  return ([x, y]) => s.distance([x, y], curve.kerb) !== Infinity || p.distance([x, y], curve.edge) !== Infinity;
+  const s = new SegmentIndex(streets), p = new SegmentIndex(plain), l = new SegmentIndex(lanes);
+  return (q) => {
+    if (s.distance(q, curve.kerb) !== Infinity) return 'street';
+    if (p.distance(q, curve.edge) !== Infinity) return 'road';
+    return l.distance(q, lane.edge) !== Infinity ? 'lane' : false;
+  };
 }
 
 // The parts of a polyline where keep(point) holds, as polylines: the
@@ -363,14 +384,15 @@ export function chainEdges(graph) {
 // through dots where exactly two segments meet, so each run can be drawn
 // as one continuous line (dash patterns don't restart at every dot). Loops
 // with no junction come out as one run starting and ending on the same dot.
-export function networkChains(graph) {
+// `breakAt(node)`: also end runs at these dots.
+export function networkChains(graph, breakAt = () => false) {
   const seen = new Set();
   const key = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
   const walk = (a, b) => {
     const chain = [a, b];
     seen.add(key(a, b));
     let prev = a, cur = b;
-    while (graph.degree(cur) === 2) {
+    while (graph.degree(cur) === 2 && !breakAt(cur)) {
       const next = [...graph.neighbors(cur)].find((m) => m !== prev);
       if (next === undefined || seen.has(key(cur, next))) break;
       seen.add(key(cur, next));
@@ -382,7 +404,7 @@ export function networkChains(graph) {
   };
   const chains = [];
   for (const n of graph.nodes()) {
-    if (graph.degree(n) === 2) continue;
+    if (graph.degree(n) === 2 && !breakAt(n)) continue;
     for (const m of graph.neighbors(n)) if (!seen.has(key(n, m))) chains.push(walk(n, m));
   }
   for (const [a, b] of graph.edges()) if (!seen.has(key(a, b))) chains.push(walk(a, b));

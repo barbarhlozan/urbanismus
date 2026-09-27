@@ -57,7 +57,7 @@ function barnDoor(g, x, y, w, h) {
 export default {
   id: 'farm',
   name: 'Farm',
-  blurb: 'Cowsheds and fields · jobs',
+  blurb: 'Fields and cowsheds',
   hotkey: 'j',
   category: 'zone',
   tags: ['farm'],

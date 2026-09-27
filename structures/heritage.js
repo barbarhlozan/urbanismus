@@ -8,7 +8,7 @@
 //
 // 2×2 ones: local area covers x, y from about -0.4 to 1.4, front on -y.
 
-import { door, panel, paving, star, flagpole, flowerBed, tree, fountain, heap, roundWindows, FRAME, outward } from './kit.js';
+import { door, panel, paving, star, flagpole, flowerBed, tree, fountain, heap, roundWindows, FRAME, outward, statue, figure } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -73,7 +73,7 @@ export const chapel = {
   ...common,
   id: 'chapel',
   name: 'Chapel',
-  blurb: 'Homes and offices nearby grow faster',
+  blurb: 'Wayside chapel',
   footprint: [[0, 0]],
   levels: [
     {
@@ -106,7 +106,7 @@ export const church = {
   ...common,
   id: 'church',
   name: 'Church',
-  blurb: 'Homes and offices nearby grow faster',
+  blurb: 'Village church',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   levels: [
     {
@@ -145,7 +145,7 @@ export const townHall = {
   ...common,
   id: 'town-hall',
   name: 'Town hall',
-  blurb: 'Homes and offices nearby grow faster',
+  blurb: 'Old town hall',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   plot: { props: 'green', boundary: 0.2, kinds: ['hedge'], density: 0.2 },
   levels: [
@@ -194,7 +194,7 @@ export const column = {
   id: 'plague-column',
   name: 'Plague column',
   size: 'Plague column',
-  blurb: 'Homes and offices nearby grow faster',
+  blurb: 'Baroque column',
   footprint: [[0, 0]],
   plot: { props: 'green', boundary: 0, density: 0.2 },
   levels: [
@@ -222,11 +222,6 @@ export const column = {
 
 // ----- memorials, town gates, castles -----
 
-// A little figure on a pedestal top at z: body, head (and a rifle).
-function figure(g, x, y, z, s = 1) {
-  g.lathe(x, y, z, [[0.022 * s, 0], [0.02 * s, 0.07 * s], [0.012 * s, 0.085 * s], [0.014 * s, 0.1 * s], [0, 0.115 * s]], 6);
-  g.detailed(2, () => g.line([[x + 0.025 * s, y, z], [x + 0.03 * s, y, z + 0.13 * s]]));
-}
 
 // A tank on its plinth top at z, gun pointing along -x and up a little.
 function tankOn(g, x, y, z) {
@@ -241,7 +236,7 @@ export const memorial = {
   id: 'memorial',
   name: 'Memorial',
   size: 'Memorial',
-  blurb: 'Homes and offices nearby grow faster',
+  blurb: 'Stone memorial',
   footprint: [[0, 0]],
   plot: { props: 'green', boundary: 0, density: 0.3 },
   levels: [
@@ -251,7 +246,17 @@ export const memorial = {
       agents: 0,
       yards: ['plaza', 'trees'],
       draw(g) {
-        const kind = g.pick(['soldier', 'tank', 'pylon']);
+        const kind = g.pick(['soldier', 'tank', 'pylon', 'group', 'equestrian', 'partisan']);
+        if (kind === 'group' || kind === 'equestrian' || kind === 'partisan') {
+          // a statue on a big stepped pedestal in a paved square: a worker
+          // and farm woman raising hammer and sheaf, a rider (a Hussite
+          // captain, a legionnaire), or a partisan with a flag
+          paving(g, [[-0.3, -0.3], [0.3, -0.3], [0.3, 0.3], [-0.3, 0.3]], 0.1, { lod: 1 });
+          g.box(-0.22, -0.16, 0, 0.44, 0.32, 0.025);
+          statue(g, 0, 0, { group: 'pair', equestrian: 'equestrian', partisan: 'flag' }[kind], 1.5);
+          for (const x of [-0.3, 0.3]) flowerBed(g, x, 0.25, 0.05);
+          return;
+        }
         if (kind === 'tank') {
           // liberation memorial: a tank on a tall plinth, flowers below
           g.box(-0.24, -0.14, 0, 0.48, 0.28, 0.03);
@@ -277,7 +282,7 @@ export const memorial = {
         g.box(-0.15, -0.15, 0, 0.3, 0.3, 0.03);
         g.box(-0.08, -0.08, 0.03, 0.16, 0.16, 0.22);
         panel(g, -0.05, 0.05, -0.08, 0.08, 0.18);
-        figure(g, 0, 0, 0.25, 1.3);
+        figure(g, 0, 0, 0.25, 0.17, 'soldier');
         g.detailed(2, () => {
           const c = 0.2, pts = [[-c, -c], [c, -c], [c, c], [-c, c], [-c, -c]];
           g.solid(0, -c, 0.02);
@@ -328,7 +333,7 @@ export const townGate = {
   ...common,
   id: 'town-gate',
   name: 'Gate tower',
-  blurb: 'Homes and offices nearby grow faster',
+  blurb: 'Old town gate',
   footprint: [[0, 0]],
   plot: { props: 'green', boundary: 0, density: 0.2 },
   levels: [
@@ -371,17 +376,12 @@ export const townGate = {
 // cone roof ('cone'), battlements ('crenel') or broken masonry ('broken').
 // Returns the height of its walls.
 function roundTower(g, x, y, r, h, roof = 'cone') {
-  g.lathe(x, y, 0, [[r * 1.08, 0], [r, 0.08], [r, h]], 24, { smooth: true, rings: [1] });
-  g.detailed(1, () => roundWindows(g, x, y, r, 0.22, h - 0.1, 0.18, 5, { phase: g.random() }));
+  // a broken keep: the shaft stops lower, its ragged crown rises from there
+  const hs = roof === 'broken' ? h - 0.14 : h;
+  g.lathe(x, y, 0, [[r * 1.08, 0], [r, 0.08], [r, hs]], 24, { smooth: true, rings: [1] });
+  g.detailed(1, () => roundWindows(g, x, y, r, 0.22, hs - (hs < h ? 0.04 : 0.1), 0.18, 5, { phase: g.random() }));
   if (roof === 'broken') {
-    // the top crumbled away: stumps of the parapet round the rim
-    g.detailed(1, () => {
-      for (let i = 0; i < 12; i++) {
-        if (g.chance(0.4)) continue;
-        const a = (i / 12) * Math.PI * 2, s = 0.035;
-        g.box(x + Math.cos(a) * r * 0.86 - s / 2, y + Math.sin(a) * r * 0.86 - s / 2, h, s, s, g.range(0.015, 0.07));
-      }
-    });
+    brokenCrown(g, x, y, r, hs);
     return h;
   }
   // corbelled parapet, a little wider than the shaft
@@ -401,6 +401,92 @@ function roundTower(g, x, y, r, h, roof = 'cone') {
   return h;
 }
 
+// A stretch of ruined wall from a to b (2D, along x or y), d thick: one
+// solid whose top runs ragged, highest (hmax) in the middle and crumbling
+// down to stumps at both ends.
+function ruinWall(g, a, b, hmax, d = 0.07) {
+  const alongX = Math.abs(b[1] - a[1]) < 1e-9;
+  const [u0, u1] = alongX ? [Math.min(a[0], b[0]), Math.max(a[0], b[0])] : [Math.min(a[1], b[1]), Math.max(a[1], b[1])];
+  const v = alongX ? a[1] : a[0];
+  if (u1 - u0 < 0.08) return;
+  // masonry breaks in courses: the top steps up and down in whole courses
+  // (a random walk), full height along the middle, falling away steeply
+  // at the ends; each step is a flat run then a vertical drop
+  const n = Math.max(3, Math.round((u1 - u0) / 0.07)), course = 0.03;
+  const prof = [];
+  let walk = 0;
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n, reach = Math.min(1, 2.6 * Math.sin(Math.PI * t));
+    walk = Math.max(-0.3, Math.min(0, walk + g.range(-0.15, 0.15)));
+    const h = Math.max(course, Math.round((hmax * reach * (1 + walk)) / course) * course);
+    const ua = u0 + ((u1 - u0) * i) / n, ub = u0 + ((u1 - u0) * (i + 1)) / n;
+    prof.push([ua, h], [ub, h]);
+  }
+  const P = (u, side, z) => (alongX ? [u, v + (side * d) / 2, z] : [v + (side * d) / 2, u, z]);
+  const c = alongX ? [(u0 + u1) / 2, v, hmax / 3] : [v, (u0 + u1) / 2, hmax / 3];
+  g.solid(...c);
+  for (const side of [-1, 1]) {
+    g.face(outward([P(u0, side, 0), P(u1, side, 0), ...prof.slice().reverse().map(([u, z]) => P(u, side, z))], c));
+  }
+  // tops of the runs, the risers between them, the two ends
+  for (let i = 0; i < prof.length - 1; i++) {
+    const [[ua, za], [ub, zb]] = [prof[i], prof[i + 1]];
+    if (ua === ub && za === zb) continue;
+    if (ua === ub) g.face(outward([P(ua, -1, Math.min(za, zb)), P(ua, 1, Math.min(za, zb)), P(ua, 1, Math.max(za, zb)), P(ua, -1, Math.max(za, zb))], c));
+    else g.face(outward([P(ua, -1, za), P(ub, -1, zb), P(ub, 1, zb), P(ua, 1, za)], c));
+  }
+  for (const [u, z] of [prof[0], prof[prof.length - 1]]) g.face(outward([P(u, -1, 0), P(u, 1, 0), P(u, 1, z), P(u, -1, z)], c));
+}
+
+// The broken top of a round tower from h0 up: its wall (0.035 thick)
+// breaks off unevenly, in whole courses, with a breach or two, and the
+// inside of the far wall shows through. Faces fill without outlines; the
+// edges are drawn so only the true outline and the steps show.
+function brokenCrown(g, x, y, r, h0) {
+  const n = 20, t = 0.035, course = 0.03, ri = r - t;
+  const tops = [];
+  let walk = g.range(0.1, 0.2);
+  const breaches = [g.int(0, n - 1), g.chance(0.5) ? g.int(0, n - 1) : -1];
+  for (let j = 0; j < n; j++) {
+    walk = Math.max(0.03, Math.min(0.27, walk + g.range(-0.05, 0.05)));
+    const breach = breaches.some((b) => b >= 0 && Math.min(Math.abs(j - b), n - Math.abs(j - b)) <= 1);
+    tops.push(h0 + (breach ? 0 : Math.round(walk / course) * course));
+  }
+  const ang = (j) => (j / n) * Math.PI * 2;
+  const at = (rad, j, z) => [x + Math.cos(ang(j)) * rad, y + Math.sin(ang(j)) * rad, z];
+  const fill = { stroke: 'none' };
+  const pen = { stroke: 'main', width: 1.2 };
+  const out = [], inn = [];
+  g.solid(x, y, h0 + 0.1);
+  for (let j = 0; j < n; j++) {
+    const m = ang(j + 0.5), z = tops[j];
+    out.push(g.facing([Math.cos(m), Math.sin(m), 0]));
+    inn.push(g.facing([-Math.cos(m), -Math.sin(m), 0]));
+    if (z <= h0) continue;
+    g.face([at(r, j, h0), at(r, j + 1, h0), at(r, j + 1, z), at(r, j, z)], fill);          // outside
+    g.face([at(ri, j + 1, h0), at(ri, j, h0), at(ri, j, z), at(ri, j + 1, z)], fill);      // inside
+    g.face([at(ri, j, z), at(r, j, z), at(r, j + 1, z), at(ri, j + 1, z)], fill);          // top
+  }
+  for (let j = 0; j < n; j++) {
+    const z = tops[j], k = (j + 1) % n, zk = tops[k];
+    // top edges of this piece: the outer one on the near side, the inner
+    // one on the far side
+    if (z > h0) {
+      if (out[j]) g.line([at(r, j, z), at(r, j + 1, z)], pen);
+      if (inn[j]) g.line([at(ri, j, z), at(ri, j + 1, z)], pen);
+    }
+    // the step down to the next piece (a riser across the wall)
+    if (z !== zk) {
+      const [lo, hi] = [Math.min(z, zk), Math.max(z, zk)];
+      if (out[j] || out[k]) g.line([at(r, j + 1, lo), at(r, j + 1, hi)], pen);
+      else g.line([at(ri, j + 1, lo), at(ri, j + 1, hi)], pen);
+      g.line([at(ri, j + 1, hi), at(r, j + 1, hi)], pen);
+    }
+    // the outline where the near side turns away
+    if (out[j] !== out[k] && Math.max(z, zk) > h0) g.line([at(r, j + 1, h0), at(r, j + 1, out[j] ? z : zk)], pen);
+  }
+}
+
 // Arrow slits on the front of a wall at depth y.
 function slits(g, x0, x1, y, z) {
   g.detailed(2, () => {
@@ -412,7 +498,7 @@ export const castle = {
   ...common,
   id: 'castle',
   name: 'Castle',
-  blurb: 'Homes and offices nearby grow faster',
+  blurb: 'Ruin, castle or chateau',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   plot: { props: 'green', boundary: 0.2, kinds: ['hedge'], density: 0.45 },
   levels: [
@@ -470,23 +556,22 @@ export const castle = {
         // ruin: a keep with a broken top, a curtain wall crumbling to
         // stumps and gaps, the roofless palace with one gable standing
         roundTower(g, 1.0, 0.95, 0.18, g.range(0.65, 0.8), 'broken');
+        // what is left of the curtain wall: a stretch or two on each side,
+        // each one piece with a ragged top crumbling down at its ends, gaps
+        // between them with fallen stones
         const ring = [[-0.34, -0.3], [1.34, -0.3], [1.34, 1.3], [-0.34, 1.3], [-0.34, -0.3]];
-        const seg = 0.14, d = 0.07;
         for (let i = 0; i < 4; i++) {
           const [a, b] = [ring[i], ring[i + 1]];
-          const len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.round(len / seg);
-          let hgt = g.range(0.12, 0.3);
-          for (let k = 0; k < n; k++) {
-            hgt = Math.min(0.32, Math.max(0.03, hgt + g.range(-0.08, 0.08)));
-            if (g.chance(0.15)) continue; // a breach
-            const t0 = k / n, t1 = (k + 1) / n;
-            const x0 = a[0] + (b[0] - a[0]) * t0, y0 = a[1] + (b[1] - a[1]) * t0;
-            const x1 = a[0] + (b[0] - a[0]) * t1, y1 = a[1] + (b[1] - a[1]) * t1;
-            const [bx, by] = [Math.min(x0, x1) - (y0 === y1 ? 0 : d / 2), Math.min(y0, y1) - (x0 === x1 ? 0 : d / 2)];
-            g.box(bx, by, 0, Math.abs(x1 - x0) || d, Math.abs(y1 - y0) || d, hgt);
+          const at = (t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+          const spans = g.chance(0.5)
+            ? [[g.range(0, 0.25), g.range(0.55, 1)]]
+            : [[g.range(0, 0.12), g.range(0.3, 0.45)], [g.range(0.58, 0.7), g.range(0.88, 1)]];
+          for (const [t0, t1] of spans) ruinWall(g, at(t0), at(t1), g.range(0.22, 0.34));
+          for (let k = 0; k < spans.length; k++) {
+            const gap = k + 1 < spans.length ? (spans[k][1] + spans[k + 1][0]) / 2 : spans[k][1] < 0.9 ? (spans[k][1] + 1) / 2 : null;
+            if (gap !== null) heap(g, ...at(gap), 0.05);
           }
         }
-        slits(g, 0.0, 1.0, -0.335, 0.06);
         // roofless palace: walls with window holes, gable standing
         g.box(-0.2, 0.55, 0, 0.7, 0.07, 0.36);
         g.windows(-0.2, 0.55, 0.7, 0.07, 0.12, 0.36, 0.12, 0.14, { skip: ['left', 'right', 'back'] });

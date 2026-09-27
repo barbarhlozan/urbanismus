@@ -1,10 +1,10 @@
 // Boot: create / load the world, wire systems together, run the loop.
 
 import { CONFIG } from './config.js';
-import { applyTheme, nextScheme, SCHEMES, schemeIndex } from './theme.js';
+import { applyTheme } from './theme.js';
 import { STYLE } from './render/style.js';
 import { makeWarp, makeLift } from './render/warp.js';
-import { ELEVATION, makeElevation } from './terrain/elevation.js';
+import { ELEVATION } from './terrain/elevation.js';
 import { Annotations } from './ui/annotations.js';
 import { World } from './core/world.js';
 import { generateWorld } from './terrain/generate.js';
@@ -24,6 +24,9 @@ import { createBulldozeTool } from './tools/bulldoze.js';
 import { Popup } from './ui/popup.js';
 import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
+import { ColorMenu } from './ui/colorMenu.js';
+import { NewMapMenu } from './ui/newMapMenu.js';
+import { AssetsPage } from './ui/assetsPage.js';
 import { sketchFrames } from './ui/sketchFrame.js';
 import { attachInput } from './ui/input.js';
 import { BUILD_FAMILIES } from '../structures/index.js';
@@ -32,16 +35,28 @@ applyTheme();
 
 // ---------- world ----------
 
+// Set up in the New map menu, handed over across the reload (see newMap).
+const PENDING_KEY = 'urbanismus.pendingMap';
+
 function loadWorld() {
+  let pending = null;
   try {
-    const raw = localStorage.getItem(CONFIG.storageKey);
-    if (raw) return World.fromJSON(JSON.parse(raw));
-  } catch (err) {
-    console.warn('Could not load save, starting fresh.', err);
+    pending = JSON.parse(localStorage.getItem(PENDING_KEY));
+    localStorage.removeItem(PENDING_KEY);
+  } catch {
+    // storage unavailable or garbled: no settings
   }
-  const seed = CONFIG.seed ?? Math.floor(Math.random() * 1e9);
-  const world = new World({ ...CONFIG.grid, seed });
-  generateWorld(world, CONFIG);
+  if (!pending) {
+    try {
+      const raw = localStorage.getItem(CONFIG.storageKey);
+      if (raw) return World.fromJSON(JSON.parse(raw));
+    } catch (err) {
+      console.warn('Could not load save, starting fresh.', err);
+    }
+  }
+  const seed = pending?.seed ?? CONFIG.seed ?? Math.floor(Math.random() * 1e9);
+  const world = new World({ ...CONFIG.grid, seed, name: pending?.name, hilliness: pending?.hilliness });
+  generateWorld(world, { ...CONFIG, terrain: { ...CONFIG.terrain, ...pending?.terrain } });
   return world;
 }
 
@@ -68,7 +83,7 @@ const uiRoot = document.getElementById('ui');
 
 const camera = new Camera(world.grid, CONFIG.camera);
 camera.warp = makeWarp(world.seed, STYLE.warp, STYLE.tremor);
-camera.lift = makeLift(makeElevation(world.seed), ELEVATION.relief, STYLE.relief,
+camera.lift = makeLift(world.elevation, ELEVATION.relief, STYLE.relief,
   [-3, -3, world.grid.width + 2, world.grid.height + 2]);
 camera.centerOn(camera.cx, camera.cy, innerWidth, innerHeight);
 
@@ -88,6 +103,7 @@ const agents = new AgentSystem(world, CONFIG, parking);
 const growth = new GrowthSystem(world, CONFIG);
 const trains = new TrainSystem(world, CONFIG);
 agents.trains = trains;
+trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
 const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, parking, config: CONFIG });
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);
@@ -97,9 +113,10 @@ agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos)
 const tools = new ToolManager(world.grid, 'inspect');
 const ctx = { world, camera, tools, popup, growth, config: CONFIG };
 tools.register(createInspectTool(ctx));
-tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', hotkey: 'r', group: 'transport', blurb: 'Cars, bikes and people' }));
-tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', hotkey: 'f', fineGrid: true, group: 'transport', blurb: 'People and bikes · along a road makes a street' }));
-tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', hotkey: 'l', group: 'transport', blurb: 'Off the map edge brings trains' }));
+tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', hotkey: 'r', group: 'transport', blurb: 'Cars and people' }));
+tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, label: 'Lane', hotkey: 'n', group: 'transport', blurb: 'Single track, slow cars' }));
+tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', hotkey: 'f', fineGrid: true, group: 'transport', blurb: 'People and bikes' }));
+tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', hotkey: 'l', group: 'transport', blurb: 'Trains from the map edge' }));
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createBulldozeTool(ctx));
 
@@ -110,26 +127,34 @@ const actions = {
   pause: () => { clock.paused = !clock.paused; },
   speed: () => clock.cycleSpeed(),
   terrain: () => setContours(!renderer.contours),
-  colors: () => { colorsButton().textContent = nextScheme().name; },
-  newMap: () => {
-    if (!confirm('Discard this city and generate a new map?')) return;
-    world.events.off('*', scheduleSave);
-    clearTimeout(saveTimer);
-    localStorage.removeItem(CONFIG.storageKey);
-    location.reload();
-  },
+  colors: () => colorMenu.toggle(),
+  assets: () => assetsPage.toggle(),
+  newMap: () => newMapMenu.toggle(),
 };
 
-const hud = new Hud(uiRoot, { world, tools, agents, trains, clock, actions });
+// Discard this city and start over with the New map menu's settings.
+function newMap(settings) {
+  world.events.off('*', scheduleSave);
+  clearTimeout(saveTimer);
+  try {
+    localStorage.removeItem(CONFIG.storageKey);
+    localStorage.setItem(PENDING_KEY, JSON.stringify(settings));
+  } catch {
+    // storage unavailable: the reload rolls a map of its own
+  }
+  location.reload();
+}
+
+const hud = new Hud(uiRoot, { world, tools, agents, trains, actions });
 const debugPanel = new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
 debugPanel.onToggle = (open) => uiRoot.querySelector('[data-act="debug"]').classList.toggle('on', open);
+const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"]'));
+const assetsPage = new AssetsPage(uiRoot);
+const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMap"]'), { onCreate: newMap });
 // pen-drawn frames on every UI box, to match the sketched map
-sketchFrames(uiRoot, '.hud, .controls, .actions, .popup, .feed, .bm-panel, .bm-toggle, .debug-panel');
+sketchFrames(uiRoot, '.hud, .controls, .actions, .popup, .feed, .bm-panel, .bm-toggle, .debug-panel, .color-panel, .newmap-panel');
 
 // Terrain contour lines: off unless switched on (remembered in this browser).
-// Color scheme: the button shows the one in use (applied at boot, above).
-const colorsButton = () => uiRoot.querySelector('[data-act="colors"]');
-colorsButton().textContent = SCHEMES[schemeIndex].name;
 
 const CONTOURS_KEY = 'urbanismus.contours';
 function setContours(on) {
@@ -170,13 +195,13 @@ function pickUp() {
   if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation }];
   else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
   else if (world.hasRail(node)) tool = tools.registry.get('rail');
-  else if (world.hasRoad(node)) tool = tools.registry.get('road');
+  else if (world.hasRoad(node)) tool = tools.registry.get(world.laneOnly(node) ? 'lane' : 'road');
   if (!tool) return;
   hud.buildMenu.fold(false);
   tools.use(tool.id, params);
 }
 
-attachInput(svg, {
+attachInput(document.getElementById('input'), {
   camera,
   onPointer: (x, y) => tools.pointer(x, y),
   onClick: (e) => tools.click(e),

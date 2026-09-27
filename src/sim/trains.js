@@ -53,8 +53,9 @@ export class TrainSystem {
     this.rail = config.rail;
     this.trains = new Map();
     this.seq = 0;
-    this.timer = 6;
+    this.timer = 17;
     this.log = () => {}; // (text, [x, y]) – set by main to feed annotations
+    this.onCall = () => {}; // (station id) – a train stopped there; set by main
     world.events.on('rails:changed', () => this.revalidate());
   }
 
@@ -336,10 +337,10 @@ export class TrainSystem {
     const stop = run.stops[t.stop];
     const target = stop ? stop.at : run.poly.total;
     const dist = Math.max(0, target - t.s);
-    let limit = Math.sqrt(2 * cfg.accel * dist) + 0.15;
+    let limit = Math.sqrt(2 * cfg.accel * dist) + 0.05;
     if (this.blocked(t, run)) {
       t.wait += dt;
-      if (t.wait < 8) limit = 0; // give up waiting eventually, rather than lock up
+      if (t.wait < 23) limit = 0; // give up waiting eventually, rather than lock up
     } else {
       t.wait = 0;
     }
@@ -355,8 +356,11 @@ export class TrainSystem {
     const st = this.world.structures.get(stop.station);
     t.state = 'stopped';
     t.speed = 0;
-    t.timer = st ? cfg.dwell * (0.7 + Math.random() * 0.6) : 0.5;
-    if (st) this.log(`${t.code} calls at ${codeOf(st)}`, this.world.centerOf(st));
+    t.timer = st ? cfg.dwell * (0.7 + Math.random() * 0.6) : 1.5;
+    if (st) {
+      this.log(`${t.code} calls at ${codeOf(st)}`, this.world.centerOf(st));
+      this.onCall(st.id);
+    }
   }
 
   // Another train's carriage just ahead of the head, going roughly the same

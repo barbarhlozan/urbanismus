@@ -7,8 +7,12 @@
 //   fine – twice as dense (footpaths). Fine node (2x, 2y) sits on main dot (x, y).
 
 import { EventBus } from './events.js';
+import { CONFIG } from '../config.js';
+import { townName } from './townName.js';
 import { Grid, ORTHO, DIAG } from './grid.js';
 import { Terrain } from '../terrain/terrain.js';
+import { makeElevation } from '../terrain/elevation.js';
+import { riverField } from '../terrain/rivers.js';
 import { RoadNetwork, edgeKey } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
 import { validateRoute } from '../roads/routing.js';
@@ -19,8 +23,10 @@ import { FEATURE_TYPES } from '../../features/index.js';
 export const SAVE_VERSION = 2;
 
 export class World {
-  constructor({ width, height, seed = 1 }) {
+  constructor({ width, height, seed = 1, name, hilliness = 1 }) {
     this.seed = seed;
+    this.hilliness = hilliness; // scales the seed's hills (terrain/elevation.js)
+    this.name = name || townName(seed); // what the player calls the town (older saves: from the seed)
     this.events = new EventBus();
     this.grid = new Grid(width, height);
     this.fine = new Grid(2 * width - 1, 2 * height - 1);
@@ -32,6 +38,7 @@ export class World {
     this.nextId = 1;
 
     this.sidewalks = new Set(); // edgeKey of road segments that are streets (have sidewalks)
+    this.lanes = new Set();     // edgeKey of road segments that are single-track lanes (never streets)
 
     this.networks = {
       road: new NetworkLayer({
@@ -41,7 +48,10 @@ export class World {
         isBlocked: (n) => this.isRoadBlocked(n),
         conflicts: (a, b) => this.rails.hasEdge(a, b),
         coarseOf: (n) => n,
+        // drivers weigh a lane by the time it takes (CONFIG.lane.speed)
+        cost: (a, b) => this.grid.distance(a, b) / (this.isLane(a, b) ? CONFIG.lane.speed : 1),
         event: 'roads:changed',
+        bridge: this.bridgeRule(2, (n) => this.rails.hasNode(n)),
       }),
       // Railways cross roads on a shared dot (a level crossing) but never
       // share a segment with one.
@@ -54,6 +64,7 @@ export class World {
         maxTurn: Math.PI / 4,
         coarseOf: (n) => n,
         event: 'rails:changed',
+        bridge: this.bridgeRule(2, (n) => this.roads.hasNode(n)),
       }),
       path: new NetworkLayer({
         id: 'path',
@@ -62,8 +73,52 @@ export class World {
         isBlocked: (f) => this.isPathBlocked(f),
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'paths:changed',
+        // a dense dot is over water if a main dot around it is; a two-dot
+        // river takes up to five of them
+        bridge: {
+          water: (f) => this.coarseAround(f).some((c) => this.terrain.isWater(c)),
+          river: (f) => this.coarseAround(f).every((c) => !this.terrain.isWater(c) || this.terrain.isRiver(c)),
+          span: 5,
+          taken: () => false,
+        },
       }),
     };
+  }
+
+  // Bridges for roads and railways (NetworkLayer.bridge): over river dots,
+  // `span` of them at most; `taken(n)`: the other network is there.
+  bridgeRule(span, taken) {
+    return {
+      water: (n) => this.terrain.isWater(n),
+      river: (n) => this.terrain.isRiver(n),
+      span,
+      taken,
+    };
+  }
+
+  // After part of a network is removed: bridges it cut (water dots no
+  // longer reaching land at both ends) go too – the whole span. Returns the
+  // dots removed.
+  pruneBridges(layer, touched) {
+    const { bridge, graph } = layer;
+    if (!bridge) return [];
+    const gone = [];
+    const seen = new Set();
+    for (const start of touched) {
+      if (seen.has(start) || !graph.hasNode(start) || !bridge.water(start)) continue;
+      const span = [start], ends = new Set();
+      seen.add(start);
+      for (let k = 0; k < span.length; k++) {
+        for (const m of graph.neighbors(span[k])) {
+          if (!bridge.water(m)) ends.add(m);
+          else if (!seen.has(m)) { seen.add(m); span.push(m); }
+        }
+      }
+      if (ends.size >= 2) continue;
+      for (const n of span) graph.removeNode(n);
+      gone.push(...span, ...ends);
+    }
+    return gone;
   }
 
   get roads() {
@@ -147,6 +202,27 @@ export class World {
     return this.footprintNodes(s.type, s.node, s.rotation);
   }
 
+  // Ground height in metres at a world position: the seed's hills with the
+  // river valleys cut in (terrain/elevation.js). `riverField` is the rivers'
+  // distance field (terrain/rivers.js), null without rivers. Both are worked
+  // out once per set of rivers.
+  get elevation() {
+    return this.relief().elevation;
+  }
+
+  get riverField() {
+    return this.relief().field;
+  }
+
+  relief() {
+    const rivers = this.terrain.rivers;
+    if (this._relief?.rivers !== rivers) {
+      const field = riverField(rivers);
+      this._relief = { rivers, field, elevation: makeElevation(this.seed, field, this.hilliness) };
+    }
+    return this._relief;
+  }
+
   // Middle of a structure in world coordinates.
   centerOf(s) {
     const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
@@ -225,7 +301,7 @@ export class World {
       for (const n of nodes) {
         for (const [dx, dy] of dirs) {
           const m = this.grid.offset(n, dx, dy);
-          if (m >= 0 && this.hasRoad(m)) return { door: n, road: m };
+          if (m >= 0 && this.hasRoad(m) && !this.terrain.isWater(m)) return { door: n, road: m }; // not off a bridge
         }
       }
     }
@@ -497,8 +573,9 @@ export class World {
 
   // `nodes` is an ordered list of adjacent nodes on that layer's grid.
   // Footpaths drawn on or right beside a road become that road's sidewalks
-  // (see absorbSidewalks).
-  buildNetwork(kind, nodes) {
+  // (see absorbSidewalks). Roads: `lane` builds single-track lanes; drawn
+  // over existing road, a lane narrows it and a road widens a lane.
+  buildNetwork(kind, nodes, { lane = false } = {}) {
     const layer = this.networks[kind];
     const check = validateRoute(layer, nodes);
     if (!check.ok) return check;
@@ -506,7 +583,15 @@ export class World {
       const c = layer.coarseOf(n);
       if (c >= 0) this.clearFeaturesAt(c);
     }
-    for (let i = 0; i < nodes.length - 1; i++) layer.graph.addEdge(nodes[i], nodes[i + 1]);
+    for (let i = 0; i < nodes.length - 1; i++) {
+      layer.graph.addEdge(nodes[i], nodes[i + 1]);
+      if (kind !== 'road') continue;
+      const key = edgeKey(nodes[i], nodes[i + 1]);
+      if (lane) {
+        this.lanes.add(key);
+        this.sidewalks.delete(key);
+      } else this.lanes.delete(key);
+    }
     this.absorbSidewalks(kind !== 'path'); // a path build announces itself below
     layer.version++;
     this.events.emit(layer.event, { layer, nodes });
@@ -517,8 +602,13 @@ export class World {
     const layer = this.networks[kind];
     if (!layer.graph.hasNode(node)) return false;
     const nodes = [node, ...layer.graph.neighbors(node)];
-    if (kind === 'road') for (const m of nodes) this.sidewalks.delete(edgeKey(node, m));
     layer.graph.removeNode(node);
+    nodes.push(...this.pruneBridges(layer, nodes));
+    if (kind === 'road') {
+      for (const set of [this.sidewalks, this.lanes]) {
+        for (const k of [...set]) if (!this.roads.hasEdge(...k.split('-').map(Number))) set.delete(k);
+      }
+    }
     layer.version++;
     this.events.emit(layer.event, { layer, nodes });
     return true;
@@ -530,17 +620,22 @@ export class World {
   // dense dots right beside it – are really sidewalks: remove them from the
   // footpaths and make those road segments streets instead. Runs after every
   // build and on load, so it doesn't matter which was drawn first.
+  // Lanes get no sidewalks: people walk on the lane itself, so a footpath
+  // right on one is taken in by it (a lane drawn over a footpath upgrades
+  // it), and one beside it stays a footpath.
   absorbSidewalks(notify = true) {
     const streets = [];
     const gone = [];
     for (const [f, g] of this.paths.edges()) {
       const road = this.roadBeside(f, g);
       if (!road) continue;
-      streets.push(road);
+      if (this.isLane(...road)) {
+        if (!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g))) continue;
+      } else streets.push(road);
       gone.push(f, g);
       this.paths.removeEdge(f, g);
     }
-    if (!streets.length) return false;
+    if (!gone.length) return false;
     for (const [a, b] of streets) this.sidewalks.add(edgeKey(a, b));
     this.networks.road.version++;
     if (notify) {
@@ -582,6 +677,21 @@ export class World {
     return this.sidewalks.has(edgeKey(a, b));
   }
 
+  isLane(a, b) {
+    return this.lanes.has(edgeKey(a, b));
+  }
+
+  // Road dot where only lanes meet.
+  laneOnly(node) {
+    const ms = [...this.roads.neighbors(node)];
+    return ms.length > 0 && ms.every((m) => this.isLane(node, m));
+  }
+
+  // Half the width of the road at a dot: its widest segment there.
+  roadHalfWidth(node) {
+    return this.laneOnly(node) ? CONFIG.lane.edge : CONFIG.road.edge;
+  }
+
   // Road segments at a road dot that are streets.
   sidewalksAt(node) {
     return [...this.roads.neighbors(node)].filter((m) => this.hasSidewalk(node, m)).map((m) => [node, m]);
@@ -591,7 +701,7 @@ export class World {
     let changed = false;
     for (const [a, b] of edges) {
       const key = edgeKey(a, b);
-      if (on === this.sidewalks.has(key) || (on && !this.roads.hasEdge(a, b))) continue;
+      if (on === this.sidewalks.has(key) || (on && (!this.roads.hasEdge(a, b) || this.lanes.has(key)))) continue;
       if (on) this.sidewalks.add(key);
       else this.sidewalks.delete(key);
       changed = true;
@@ -603,8 +713,8 @@ export class World {
     return true;
   }
 
-  buildRoad(nodes) {
-    return this.buildNetwork('road', nodes);
+  buildRoad(nodes, options) {
+    return this.buildNetwork('road', nodes, options);
   }
 
   removeRoadAt(node) {
@@ -629,16 +739,26 @@ export class World {
     this.featureAtNode.set(f.node, f.id);
   }
 
+  rename(name) {
+    name = name.trim();
+    if (!name || name === this.name) return;
+    this.name = name;
+    this.events.emit('world:renamed', name);
+  }
+
   toJSON() {
     return {
       version: SAVE_VERSION,
       seed: this.seed,
+      name: this.name,
+      hilliness: this.hilliness,
       width: this.grid.width,
       height: this.grid.height,
       nextId: this.nextId,
       terrain: this.terrain.toJSON(),
       networks: Object.fromEntries(Object.entries(this.networks).map(([k, l]) => [k, l.graph.toJSON()])),
       sidewalks: [...this.sidewalks],
+      lanes: [...this.lanes],
       structures: [...this.structures.values()],
       features: [...this.features.values()],
     };
@@ -657,9 +777,13 @@ export class World {
       }
     }
 
+    for (const key of data.lanes ?? []) {
+      const [a, b] = key.split('-').map(Number);
+      if (world.roads.hasEdge(a, b)) world.lanes.add(key);
+    }
     for (const key of data.sidewalks ?? []) {
       const [a, b] = key.split('-').map(Number);
-      if (world.roads.hasEdge(a, b)) world.sidewalks.add(key);
+      if (world.roads.hasEdge(a, b) && !world.lanes.has(key)) world.sidewalks.add(key);
     }
     world.absorbSidewalks(false); // footpaths drawn beside roads before streets existed
 

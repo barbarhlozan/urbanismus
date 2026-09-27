@@ -8,7 +8,7 @@ A little black-and-white isometric city builder. Plain JS, no build step.
 python3 serve.py
 ```
 
-Then open http://localhost:8173. The city saves itself in the browser; **New map** starts over.
+Then open http://localhost:8173. The city saves itself in the browser; **New map** starts over, after you pick the new town's name, lakes, forests, hills and river.
 
 ## Controls
 
@@ -25,6 +25,10 @@ another look, bend…) are buttons above the bottom edge.
 - Draw a footpath **along a road** (on it or right beside it) to make it a street with sidewalks (kerb lines on both
   sides). People only walk along streets and footpaths; cyclists and cars use every road.
   Erasing a street removes its sidewalks first.
+- **N** lanes – single-track roads, narrower than a road. Cars drive them slowly (and avoid
+  them when a road will do); people walk and cycle on them as on a footpath, so they get no
+  sidewalks. Draw a lane over a road or footpath to turn it into a lane, a road over a lane
+  to widen it.
 - **L** railways – drawn like roads, but bends can be at most 45° per dot. They cross roads
   and footpaths (level crossings) but can't share a stretch with a road. Run a line off the map
   edge and trains start coming through. Cars, cyclists and pedestrians wait at a crossing while
@@ -36,6 +40,8 @@ another look, bend…) are buttons above the bottom edge.
   extra tracks are for show – trains only use the line itself. They turn to face the track. Trains
   stop at every station they pass, and turn round at the last one when there's no other way off the
   map. With a road behind, a station gets a forecourt (or parking) towards it.
+- **B** – bus stop (1×1), beside a road, facing it: a shelter, the stop sign, a bench. Buses only
+  come when a road leads off the map: in through an exit, a few stops (nearest next), out again.
 - **1 2 3** – residential / business / industrial (**Tab** rotates, **C** tries another look)
 - **I** – small (1×1) industry (the industry tool's small size)
 - **M** – coal mine (pit → colliery → deep mine), **J** – farm (farmstead → JZD → cooperative)
@@ -64,11 +70,11 @@ folded there and folds again once you pick a tool.
 - Neighbouring apartments and shops facing the same road often share a wall and form a
   street front; panel blocks join into one long block built in sections.
 - The **Landmarks** group has the old town (a chapel, a church, a town hall, a plague column or
-  war memorial, a gate tower, a castle) and the new one (a house of culture, a stadium or Sokol
-  hall, and a TV tower or lookout, which only goes on a hilltop). They make nearby apartments
+  war memorial, a gate tower, a castle) and the new one (a stadium or Sokol hall, and a TV
+  tower or lookout, which only goes on a hilltop). They make nearby apartments
   and offices grow faster, and a church sometimes appears by itself in a big enough
   neighbourhood without one.
-- **Public** also has a cemetery. Parks
+- **Public** also has a house of culture and a cemetery. Parks
   and squares have era layouts among their looks: a koupaliště, a summer cinema, a sports
   ground, a forest park with a lookout, a shopping precinct, a bus station, a parade square.
 - Each building gets a random seed, so it always looks the same, but **C** / **Change look**
@@ -79,6 +85,8 @@ folded there and folds again once you pick a tool.
 - Trucks (a cab and a trailer) belong to industrial buildings: most runs export goods off the
   map through a road exit and come back later, the rest are service runs to businesses and
   other industry. Delivery trucks also drive in from outside. See `trucks` in `src/config.js`.
+- Buses (one long box) call at up to four bus stops, wait a few seconds at each, turn round at a
+  dead end and leave the map. See `buses` in `src/config.js`.
 - Cars slow down on crowded roads (`traffic` in `src/config.js`). Pedestrians and cyclists
   aren't affected. The stats panel shows how well traffic flows.
 - The look is fixed, modelled on instrument approach charts: thin white lines that keep

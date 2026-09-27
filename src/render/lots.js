@@ -13,7 +13,7 @@ import { rotateQuarter } from '../core/grid.js';
 import { SegmentIndex } from '../core/geom2d.js';
 import { networkPolylines, streetKerbs } from '../roads/geometry.js';
 
-const ROAD_GAP = 0.1;   // clearance from the road centre line
+const ROAD_GAP = 0.11;  // clearance from the road centre line
 const STEP = 0.05;      // sampling along plot edges
 const YARD_MAX = -0.92; // yards never reach past this (just short of the road dot)
 const YARD_OPEN = -0.62; // depth where no road is in front
@@ -40,6 +40,10 @@ export function roadIndex(world, config) {
 
 export function pathIndex(world, config) {
   return networkIndex(world, config, 'path');
+}
+
+export function railIndex(world, config) {
+  return networkIndex(world, config, 'rail');
 }
 
 // World-space test: is a circle of radius r at (x, y) clear of footpaths and

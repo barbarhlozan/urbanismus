@@ -5,7 +5,7 @@
 // brutalist towers with a heavy crown.
 // Front (shop window, entrance) is the -y side.
 
-import { door, panel, frontage, shared, hips, aerials, flagpole, star } from './kit.js';
+import { door, panel, frontage, shared, hips, aerials, flagpole, star, crates, bikeRack, bench } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -33,7 +33,7 @@ export default {
   id: 'business',
   access: 'any', // a footpath will do: people walk or cycle
   name: 'Business',
-  blurb: 'Shops and offices · jobs',
+  blurb: 'Shops and offices',
   hotkey: '2',
   category: 'zone',
   footprint: [[0, 0]],
@@ -49,8 +49,35 @@ export default {
       join: { group: 'street', chance: 0.6 },
       draw(g) {
         const joined = g.join.left || g.join.right;
-        const kind = joined ? 'townhouse' : g.pick(['pavilion', 'pavilion', 'village', 'townhouse']);
-        if (kind === 'townhouse') {
+        const kind = joined ? 'townhouse' : g.pick(['pavilion', 'pavilion', 'village', 'townhouse', 'jednota', 'tuzex']);
+        if (kind === 'jednota') {
+          // Jednota village shop, 70s: one storey under a flat roof, a deep
+          // fascia with the co-op's sign board, shop windows, the store room
+          // beside it, crates at the side and a bench by the door
+          const w = g.range(0.42, 0.48), d = 0.34, x = -0.3, y = -0.18, h = 0.16;
+          g.box(x, y, 0, w, d, h);
+          g.windows(x, y, w, d, 0, h, h, 0.1, { ribbon: true, h: 0.55, skip: ['back', 'left'] });
+          g.box(x - 0.015, y - 0.02, h, w + 0.03, d + 0.035, 0.045); // fascia
+          g.box(x + w * 0.2, y - 0.025, h + 0.008, w * 0.6, 0.006, 0.03); // sign board
+          door(g, x + w * 0.78, y, 0.06, 0.11);
+          g.box(x + w, y + 0.06, 0, 0.16, d - 0.06, 0.12);                 // store room
+          g.windows(x + w, y + 0.06, 0.16, d - 0.06, 0, 0.12, 0.12, 0.1, { skip: ['left'], h: 0.4 });
+          crates(g, 0.34, 0.26);
+          bench(g, x + w * 0.35, y - 0.1, true, -1);
+          bikeRack(g, 0.2, 0.32, -0.3);
+        } else if (kind === 'tuzex') {
+          // Tuzex (hard-currency shop), 70s: a glazed ground floor under a
+          // cantilevered canopy, a closed upper floor clad in panels, and a
+          // blade sign on the corner
+          const w = g.range(0.5, 0.56), d = 0.38, x = -w / 2, y = -d / 2, h0 = 0.16, h = h0 + 0.14;
+          g.box(x, y, 0, w, d, h);
+          g.windows(x, y, w, d, 0, h0, h0, 0.1, { ribbon: true, h: 0.7, skip: ['back'] });
+          g.mullions(x, y, w, d, h0, h, 0.07, { skip: ['back'] });
+          g.box(x - 0.02, y - 0.08, h0, w + 0.04, 0.08, 0.015);            // canopy
+          g.box(x + w - 0.01, y - 0.06, h0 + 0.02, 0.01, 0.05, 0.18);      // blade sign
+          door(g, 0, y, 0.08, 0.12);
+          g.box(x + 0.06, y + 0.08, h, w - 0.12, d - 0.16, 0.03);          // roof plant
+        } else if (kind === 'townhouse') {
           // two storeys over a shop front
           const [x0, x1] = frontage(g, g.range(0.5, 0.58));
           const w = x1 - x0, d = 0.38, y = -d / 2, fh = 0.15, h = fh * 2;

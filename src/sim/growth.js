@@ -30,45 +30,68 @@ export class GrowthSystem {
     this.config = config.growth;
     this.timer = 0;
     this.log = () => {}; // (text, [x, y]) – set by main to feed annotations
+    // Footprints and structures by type, for the distance checks: built
+    // when first needed, dropped whenever a structure comes, goes, moves or
+    // changes type (not on a new level: levels are read as they are).
+    this.index = null;
+    for (const type of ['structure:added', 'structure:removed']) world.events.on(type, () => (this.index = null));
+    world.events.on('structure:changed', (s) => {
+      if (this.index?.foot.get(s.id)?.sig !== footSig(s)) this.index = null;
+    });
   }
 
+  // A check of every building every `interval`, spread over the frames of
+  // that interval (a whole city at once would stall a frame): each frame
+  // takes the next share of the buildings listed when the round began.
   update(dt) {
+    if (!(dt > 0)) return;
     this.timer += dt;
+    this.round ??= { list: [...this.world.structures.values()], done: 0 };
+    const { list } = this.round;
+    const upTo = Math.min(list.length, Math.ceil((list.length * this.timer) / this.config.interval));
+    while (this.round.done < upTo) {
+      const s = list[this.round.done++];
+      if (this.world.structures.get(s.id) === s) this.check1(s);
+    }
     if (this.timer < this.config.interval) return;
     this.timer = 0;
-    this.step();
+    this.round = null;
+    this.spawnChurch();
   }
 
+  // One round in one go.
   step() {
-    const { interval, upTime, downTime } = this.config;
-    for (const s of [...this.world.structures.values()]) {
-      if (s.data.locked) continue;
-      const def = STRUCTURE_TYPES[s.type];
-      const target = this.targetLevel(s);
-      const jitter = 0.5 + Math.random(); // 0.5–1.5, averages 1
-      let g = s.data.growth ?? 0;
-      if (target > s.level) {
-        const next = def.levels[s.level];
-        const time = next.growTime ?? upTime[s.level + 1];
-        g = Math.max(g, 0) + (interval / time) * jitter * this.boost(s, next.grow);
-      } else if (target < s.level) {
-        g = Math.min(g, 0) - (interval / downTime) * jitter;
-      } else {
-        g *= 0.8;
-      }
-
-      const report = (verb) => this.log(`${codeOf(s)} ${verb} · ${levelOf(def, s).name}`, this.world.centerOf(s));
-      if (g >= 1) {
-        this.world.setStructureLevel(s.id, s.level + 1);
-        report('grows');
-      } else if (g <= -1) {
-        this.world.setStructureLevel(s.id, s.level - 1);
-        report('declines');
-      } else {
-        s.data.growth = g;
-      }
-    }
+    for (const s of [...this.world.structures.values()]) this.check1(s);
     this.spawnChurch();
+  }
+
+  check1(s) {
+    const { interval, upTime, downTime } = this.config;
+    if (s.data.locked) return;
+    const def = STRUCTURE_TYPES[s.type];
+    const target = this.targetLevel(s);
+    const jitter = 0.5 + Math.random(); // 0.5–1.5, averages 1
+    let g = s.data.growth ?? 0;
+    if (target > s.level) {
+      const next = def.levels[s.level];
+      const time = next.growTime ?? upTime[s.level + 1];
+      g = Math.max(g, 0) + (interval / time) * jitter * this.boost(s, next.grow);
+    } else if (target < s.level) {
+      g = Math.min(g, 0) - (interval / downTime) * jitter;
+    } else {
+      g *= 0.8;
+    }
+
+    const report = (verb) => this.log(`${codeOf(s)} ${verb} · ${levelOf(def, s).name}`, this.world.centerOf(s));
+    if (g >= 1) {
+      this.world.setStructureLevel(s.id, s.level + 1);
+      report('grows');
+    } else if (g <= -1) {
+      this.world.setStructureLevel(s.id, s.level - 1);
+      report('declines');
+    } else {
+      s.data.growth = g;
+    }
   }
 
   // Maybe build a church: on free land where its front (local -y) faces a
@@ -86,12 +109,25 @@ export class GrowthSystem {
     }
     if (homes.length < rule.minHomes) return;
 
+    // homes in any rectangle of dots from a table of running sums
+    const W = grid.width + 1;
+    const sums = new Int32Array(W * (grid.height + 1));
+    for (const [hx, hy] of homes) sums[(hy + 1) * W + hx + 1]++;
+    for (let y = 1; y <= grid.height; y++) for (let x = 1; x < W; x++) sums[y * W + x] += sums[(y - 1) * W + x] + sums[y * W + x - 1] - sums[(y - 1) * W + x - 1];
+    const homesIn = (x0, y0, x1, y1) => {
+      [x0, y0] = [Math.max(x0, 0), Math.max(y0, 0)];
+      [x1, y1] = [Math.min(x1, grid.width - 1), Math.min(y1, grid.height - 1)];
+      if (x0 > x1 || y0 > y1) return 0;
+      return sums[(y1 + 1) * W + x1 + 1] - sums[y0 * W + x1 + 1] - sums[(y1 + 1) * W + x0] + sums[y0 * W + x0];
+    };
+
     let best = null;
     for (let n = 0; n < grid.size; n++) {
       const [x, y] = grid.xy(n);
       const cx = x + 0.5, cy = y + 0.5;
       if (churches.some(([px, py]) => Math.max(Math.abs(px - cx), Math.abs(py - cy)) <= rule.spacing)) continue;
-      const count = homes.filter(([hx, hy]) => Math.max(Math.abs(hx - cx), Math.abs(hy - cy)) <= rule.radius).length;
+      // homes (on whole dots) within rule.radius of (cx, cy)
+      const count = homesIn(Math.ceil(cx - rule.radius), Math.ceil(cy - rule.radius), Math.floor(cx + rule.radius), Math.floor(cy + rule.radius));
       if (count < rule.minHomes || (best && count < best.count)) continue;
       for (let rotation = 0; rotation < 4; rotation++) {
         if (!world.canPlaceStructure('church', n, rotation).ok) continue;
@@ -149,33 +185,76 @@ export class GrowthSystem {
     return k;
   }
 
-  // Footprint-to-footprint grid distance (Chebyshev).
-  distance(a, b) {
+  // Every structure's footprint dots and their bounding box, and the
+  // structures matching each type or tag (filled in as asked for).
+  getIndex() {
+    if (this.index) return this.index;
     const { world } = this;
-    const pa = world.nodesOf(a).map((n) => world.grid.xy(n));
-    let best = Infinity;
-    for (const n of world.nodesOf(b)) {
-      const [x, y] = world.grid.xy(n);
-      for (const [ax, ay] of pa) best = Math.min(best, Math.max(Math.abs(ax - x), Math.abs(ay - y)));
+    const foot = new Map();
+    for (const o of world.structures.values()) {
+      const pts = world.nodesOf(o).map((n) => world.grid.xy(n));
+      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+      foot.set(o.id, { sig: footSig(o), pts, x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) });
     }
-    return best;
+    return (this.index = { foot, byType: new Map() });
   }
 
-  // Structures matching `type` (at least `minLevel`) within `radius` of s.
+  ofType(type) {
+    const { byType } = this.getIndex();
+    let entry = byType.get(type);
+    if (!entry) {
+      const list = [...this.world.structures.values()].filter((o) => matches(STRUCTURE_TYPES[o.type], type));
+      byType.set(type, entry = { list, ids: new Set(list.map((o) => o.id)) });
+    }
+    return entry;
+  }
+
+  // Is the footprint-to-footprint grid distance (Chebyshev) at most r? The
+  // bounding boxes rule out most pairs; the dots decide the rest.
+  within(a, b, r) {
+    const { foot } = this.getIndex();
+    const fa = foot.get(a.id), fb = foot.get(b.id);
+    if (Math.max(fa.x0 - fb.x1, fb.x0 - fa.x1, fa.y0 - fb.y1, fb.y0 - fa.y1) > r) return false;
+    for (const [x, y] of fb.pts) {
+      for (const [ax, ay] of fa.pts) if (Math.max(Math.abs(ax - x), Math.abs(ay - y)) <= r) return true;
+    }
+    return false;
+  }
+
+  // Structures matching `type` (at least `minLevel`) within `radius` of s:
+  // from the dots around s when there are fewer of them than such
+  // structures, else from the list of those.
   countNear(s, type, radius, minLevel = 1) {
+    const { list, ids } = this.ofType(type);
+    const { world } = this;
+    const f = this.getIndex().foot.get(s.id);
     let count = 0;
-    for (const o of this.world.structures.values()) {
-      if (o.id === s.id || o.level < minLevel || !matches(STRUCTURE_TYPES[o.type], type)) continue;
-      if (this.distance(s, o) <= radius) count++;
+    if ((f.x1 - f.x0 + 2 * radius + 1) * (f.y1 - f.y0 + 2 * radius + 1) < list.length) {
+      const seen = new Set();
+      for (let y = f.y0 - radius; y <= f.y1 + radius; y++) {
+        for (let x = f.x0 - radius; x <= f.x1 + radius; x++) {
+          const n = world.grid.nodeAt(x, y);
+          const id = n >= 0 ? world.structureAtNode.get(n) : undefined;
+          if (id === undefined || id === s.id || !ids.has(id) || seen.has(id)) continue;
+          seen.add(id);
+          const o = world.structures.get(id);
+          if (o.level >= minLevel && this.within(s, o, radius)) count++;
+        }
+      }
+      return count;
+    }
+    for (const o of list) {
+      if (o.id === s.id || o.level < minLevel) continue;
+      if (this.within(s, o, radius)) count++;
     }
     return count;
   }
 
   isCovered(s, type) {
-    for (const o of this.world.structures.values()) {
+    for (const o of this.ofType(type).list) {
+      if (o.id === s.id) continue;
       const def = STRUCTURE_TYPES[o.type];
-      if (o.id === s.id || !matches(def, type) || !this.world.isServed(o)) continue;
-      if (this.distance(s, o) <= (levelOf(def, o).coverage ?? 0)) return true;
+      if (this.within(s, o, levelOf(def, o).coverage ?? 0) && this.world.isServed(o)) return true;
     }
     return false;
   }
@@ -199,3 +278,5 @@ export class GrowthSystem {
     return { trend, missing, keep, boosts, progress: Math.abs(s.data.growth ?? 0) };
   }
 }
+
+const footSig = (s) => `${s.type}|${s.node}|${s.rotation}`;
