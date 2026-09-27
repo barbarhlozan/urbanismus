@@ -154,6 +154,8 @@ export class Renderer {
     this.top = document.getElementById('objects');
     this.wrappers = [svg.parentNode, this.top.parentNode];
     this.pen = new AgentCanvas(document.getElementById('agents'));
+    // over the buildings: carriages nothing nearer could hide (see screened)
+    this.penTop = new AgentCanvas(document.getElementById('trains-top'));
     this.parking = parking;
     this.world = world;
     this.camera = camera;
@@ -316,11 +318,13 @@ export class Renderer {
     if (this.ghosts.size) this.reapGhosts();
     if (this.showAgents) {
       this.pen.begin(this.camera);
-      this.renderTrains(); // under the people and cars
+      this.penTop.begin(this.camera);
+      this.renderTrains(); // under the people and cars (or over everything)
       this.renderAgents();
     } else {
       this.agentsShown = false;
       this.pen.clear();
+      this.penTop.clear();
       this.agentGhosts.clear();
       this.agentEls.clear();
       this.trainEls.clear();
@@ -1471,17 +1475,24 @@ export class Renderer {
   // A train: close up a locomotive and coaches (src/render/vehicles.js),
   // each turned along the track and drawn back to front, further out a line
   // of square dots. `cars`: [{ i (index in the train), p: [x, y, dx, dy] }].
+  // Each carriage goes on the canvas over the buildings (penTop) unless
+  // something nearer could hide it (screened), else on the one under them.
   placeTrain(el, cars) {
     const cam = this.camera, pen = this.pen;
     if (!cars.length) return;
+    const penFor = (x, y) => (this.screened(x, y) ? pen : this.penTop);
     if (cam.zoom < VEHICLES.minZoom) {
       const r = THEME.carriageRadius;
       const pts = cars.map(({ p: [x, y] }) => this.projectDeck(x, y, 0.04));
       if (!pts.some(([x, y]) => pen.onScreen(x, y))) return;
-      const path = new Path2D();
-      pts.forEach(([x, y], i) => (i ? path.lineTo(x, y) : path.moveTo(x, y)));
-      for (const [x, y] of pts) path.rect(x - r, y - r, 2 * r, 2 * r);
-      pen.drawScene(AGENT_STYLES.train, path);
+      const under = new Path2D(), over = new Path2D();
+      pts.forEach(([x, y], i) => (i ? under.lineTo(x, y) : under.moveTo(x, y)));
+      cars.forEach(({ p }, i) => {
+        const [x, y] = pts[i];
+        (penFor(p[0], p[1]) === pen ? under : over).rect(x - r, y - r, 2 * r, 2 * r);
+      });
+      pen.drawScene(AGENT_STYLES.train, under);
+      this.penTop.drawScene(AGENT_STYLES.train, over);
       return;
     }
     const len = r2(this.config.trains.carSpacing - 0.02);
@@ -1495,8 +1506,26 @@ export class Renderer {
     }
     order.forEach((c, k) => {
       const [sx, sy] = this.projectDeck(c.x, c.y, 0);
-      pen.draw(el.shapes[k], sx, sy);
+      penFor(c.x, c.y).draw(el.shapes[k], sx, sy);
     });
+  }
+
+  // Could a building or tree nearer the camera than (x, y), within a couple
+  // of dots in front of it, hide what stands there?
+  screened(x, y) {
+    const { world, camera } = this;
+    const [ax, ay] = camera.rotated(x, y);
+    const gx0 = Math.round(x), gy0 = Math.round(y);
+    for (let gy = gy0 - 2; gy <= gy0 + 2; gy++) {
+      for (let gx = gx0 - 2; gx <= gx0 + 2; gx++) {
+        if (!world.grid.inBounds(gx, gy)) continue;
+        const n = world.grid.index(gx, gy);
+        if (!world.structureAtNode.has(n) && !world.featureAt(n)) continue;
+        const [rx, ry] = camera.rotated(gx, gy);
+        if (rx + ry > ax + ay + 0.35 && Math.abs(rx - ry - (ax - ay)) < 1.3) return true;
+      }
+    }
+    return false;
   }
 
   // A bus or truck: close up one rigid model `name` (src/render/vehicles.js)

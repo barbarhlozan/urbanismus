@@ -15,14 +15,31 @@
 import { rotateQuarter } from '../src/core/grid.js';
 import { door, lamp, chimney, bench, flowerBed, bikeRack, tree } from './kit.js';
 
-// The track dots in front of the footprint's front row, if they are one
-// straight stretch of railway; else null.
+// The railway's (dense-grid) dots in front of the footprint's front row,
+// from the dot before its first dot to the one before its last, if they
+// are one straight stretch of railway; else null. A one-dot front needs the
+// track to carry on straight through the dot in front either way.
 function trackAlong(world, nodes, rotation) {
   const [fx, fy] = rotateQuarter(0, -1, rotation);
   const own = new Set(nodes);
-  const track = nodes.map((n) => world.grid.offset(n, fx, fy)).filter((t) => !own.has(t));
-  if (track.some((t) => t < 0)) return null;
-  for (let i = 1; i < track.length; i++) if (!world.rails.hasEdge(track[i - 1], track[i])) return null;
+  const front = nodes.map((n) => world.grid.offset(n, fx, fy)).filter((t) => !own.has(t));
+  if (front.some((t) => t < 0)) return null;
+  const track = [world.coarseToFine(front[0])];
+  for (let i = 1; i < front.length; i++) {
+    for (const [f, g] of world.fineSegment(front[i - 1], front[i])) {
+      if (!world.rails.hasEdge(f, g)) return null;
+      track.push(g);
+    }
+  }
+  if (track.length === 1) {
+    // along the front, both ways
+    const [ax, ay] = rotateQuarter(1, 0, rotation);
+    const [x, y] = world.fine.xy(track[0]);
+    const side = (k) => (world.fine.inBounds(x + ax * k, y + ay * k) ? world.fine.index(x + ax * k, y + ay * k) : -1);
+    const [l, r] = [side(-1), side(1)];
+    if (l < 0 || r < 0 || !world.rails.hasEdge(l, track[0]) || !world.rails.hasEdge(track[0], r)) return null;
+    return [l, track[0], r];
+  }
   return track;
 }
 
@@ -32,7 +49,7 @@ function trackAlong(world, nodes, rotation) {
 export function stationStop(world, s) {
   const track = trackAlong(world, world.nodesOf(s), s.rotation);
   if (!track) return null;
-  const pts = track.map((n) => world.grid.xy(n));
+  const pts = track.map((n) => world.networks.rail.pos(n));
   const centre = [
     pts.reduce((a, p) => a + p[0], 0) / pts.length,
     pts.reduce((a, p) => a + p[1], 0) / pts.length,

@@ -3,8 +3,9 @@
 // Everything here is plain data and round-trips through toJSON/fromJSON.
 //
 // Two grids:
-//   grid – the main dots (buildings, roads, railways)
-//   fine – twice as dense (footpaths). Fine node (2x, 2y) sits on main dot (x, y).
+//   grid – the main dots (buildings, roads)
+//   fine – twice as dense (footpaths, railways – so their curves can be
+//          gentler). Fine node (2x, 2y) sits on main dot (x, y).
 
 import { EventBus } from './events.js';
 import { CONFIG } from '../config.js';
@@ -20,7 +21,7 @@ import { STRUCTURE_TYPES, footprintOffsets, maxLevel, newSeed } from '../../stru
 import { mulberry32 } from './random.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3; // 3: railways on the fine grid
 
 export class World {
   constructor({ width, height, seed = 1, name, hilliness = 1 }) {
@@ -46,31 +47,39 @@ export class World {
         grid: this.grid,
         scale: 1,
         isBlocked: (n) => this.isRoadBlocked(n),
-        conflicts: (a, b) => this.rails.hasEdge(a, b),
+        conflicts: (a, b) => this.railAlong(a, b),
         coarseOf: (n) => n,
         // drivers weigh a lane by the time it takes (CONFIG.lane.speed)
         cost: (a, b) => this.grid.distance(a, b) / (this.isLane(a, b) ? CONFIG.lane.speed : 1),
         event: 'roads:changed',
-        bridge: this.bridgeRule(2, (n) => this.rails.hasNode(n)),
+        bridge: this.bridgeRule(2, (n) => this.railNear(n)),
       }),
-      // Railways cross roads on a shared dot (a level crossing) but never
-      // share a segment with one.
+      // Railways are on the dense grid, like footpaths, so bends (45° at
+      // most per dot) can follow each other closely enough for smooth
+      // curves. They cross roads and footpaths (level crossings) but never
+      // share a segment with one, and keep clear of buildings.
       rail: new NetworkLayer({
         id: 'rail',
-        grid: this.grid,
-        scale: 1,
-        isBlocked: (n) => this.isRoadBlocked(n),
-        conflicts: (a, b) => this.roads.hasEdge(a, b),
+        grid: this.fine,
+        scale: 0.5,
+        isBlocked: (f) => this.isRailBlocked(f),
+        conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.paths.hasEdge(f, g),
         maxTurn: Math.PI / 4,
-        coarseOf: (n) => n,
+        coarseOf: (f) => this.fineToCoarse(f),
         event: 'rails:changed',
-        bridge: this.bridgeRule(2, (n) => this.roads.hasNode(n)),
+        bridge: {
+          water: (f) => this.coarseAround(f).some((c) => this.terrain.isWater(c)),
+          river: (f) => this.coarseAround(f).every((c) => !this.terrain.isWater(c) || this.terrain.isRiver(c)),
+          span: 5,
+          taken: (f) => this.roadAtFine(f),
+        },
       }),
       path: new NetworkLayer({
         id: 'path',
         grid: this.fine,
         scale: 0.5,
         isBlocked: (f) => this.isPathBlocked(f),
+        conflicts: (f, g) => this.rails.hasEdge(f, g),
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'paths:changed',
         // a dense dot is over water if a main dot around it is; a two-dot
@@ -83,6 +92,61 @@ export class World {
         },
       }),
     };
+    this.networks.rail.pos = (f) => this.railPos(f);
+  }
+
+  // Where a railway runs at dense dot f. Track drawn as a staircase of
+  // dense dots (bends of 45° close together) is smoothed along each run
+  // into one even curve: every dot where the line just passes through is
+  // eased towards its neighbours a few times, then kept within MAX_SHIFT of
+  // its dot. Junctions, ends, bridges and the track in front of stations
+  // stay put (and straight stretches stay straight). Trains, the drawing
+  // and level crossings all use these positions; the rules (sharpest bend,
+  // straight bridges) use the dots.
+  railPos(f) {
+    const layer = this.networks.rail;
+    const key = `${layer.version}|${this.structureVersion ?? 0}`;
+    if (this._railPos?.key !== key) this._railPos = { key, pos: this.smoothRails() };
+    return this._railPos.pos.get(f) ?? layer.dot(f);
+  }
+
+  smoothRails() {
+    const RUNS = 6, MAX_SHIFT = 0.2;
+    const layer = this.networks.rail;
+    const graph = layer.graph;
+    const pinned = new Set();
+    for (const s of this.structures.values()) {
+      if (!STRUCTURE_TYPES[s.type]?.railStop) continue;
+      for (const n of this.nodesOf(s)) {
+        const [x, y] = this.grid.xy(n);
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            if (this.fine.inBounds(2 * x + dx, 2 * y + dy)) pinned.add(this.fine.index(2 * x + dx, 2 * y + dy));
+          }
+        }
+      }
+    }
+    const free = [];
+    const pos = new Map();
+    for (const f of graph.nodes()) {
+      pos.set(f, layer.dot(f));
+      if (graph.degree(f) === 2 && !pinned.has(f) && !layer.bridge.water(f)) free.push(f);
+    }
+    for (let k = 0; k < RUNS; k++) {
+      const next = new Map();
+      for (const f of free) {
+        const [a, b] = [...graph.neighbors(f)].map((m) => pos.get(m));
+        const p = pos.get(f);
+        next.set(f, [(a[0] + 2 * p[0] + b[0]) / 4, (a[1] + 2 * p[1] + b[1]) / 4]);
+      }
+      for (const [f, p] of next) pos.set(f, p);
+    }
+    for (const f of free) {
+      const [x, y] = layer.dot(f), [px, py] = pos.get(f);
+      const d = Math.hypot(px - x, py - y);
+      if (d > MAX_SHIFT) pos.set(f, [x + ((px - x) * MAX_SHIFT) / d, y + ((py - y) * MAX_SHIFT) / d]);
+    }
+    return pos;
   }
 
   // Bridges for roads and railways (NetworkLayer.bridge): over river dots,
@@ -190,8 +254,42 @@ export class World {
     return this.roads.hasNode(node);
   }
 
+  // Railway on the main dot `node`.
   hasRail(node) {
-    return this.rails.hasNode(node);
+    return this.rails.hasNode(this.coarseToFine(node));
+  }
+
+  // Railway on the dense dots at or right round main dot `node` (where it
+  // would run into a building standing there).
+  railNear(node) {
+    const [x, y] = this.grid.xy(node);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (this.fine.inBounds(2 * x + dx, 2 * y + dy) && this.rails.hasNode(this.fine.index(2 * x + dx, 2 * y + dy))) return true;
+      }
+    }
+    return false;
+  }
+
+  // Main-dot segment a–b as its two dense-grid steps: [[fa, mid], [mid, fb]].
+  fineSegment(a, b) {
+    const fa = this.coarseToFine(a), fb = this.coarseToFine(b);
+    const [ax, ay] = this.fine.xy(fa), [bx, by] = this.fine.xy(fb);
+    const mid = this.fine.index((ax + bx) / 2, (ay + by) / 2);
+    return [[fa, mid], [mid, fb]];
+  }
+
+  // Railway along road segment a–b (on the dense dots it covers).
+  railAlong(a, b) {
+    return this.fineSegment(a, b).some(([f, g]) => this.rails.hasEdge(f, g));
+  }
+
+  // A road on dense dot f: on its dot, or through it halfway along a segment.
+  roadAtFine(f) {
+    const around = this.coarseAround(f);
+    if (around.length === 1) return this.roads.hasNode(around[0]);
+    if (around.length === 2) return this.roads.hasEdge(around[0], around[1]);
+    return this.roads.hasEdge(around[0], around[3]) || this.roads.hasEdge(around[1], around[2]);
   }
 
   footprintNodes(type, node, rotation = 0) {
@@ -239,6 +337,12 @@ export class World {
     return !!f && FEATURE_TYPES[f.type]?.blocksRoad === true;
   }
 
+  // Railways keep clear of buildings: no dense dot touching one, nor a
+  // feature that blocks roads.
+  isRailBlocked(f) {
+    return this.coarseAround(f).some((c) => this.isRoadBlocked(c));
+  }
+
   isPathBlocked(f) {
     const around = this.coarseAround(f);
     if (around.some((c) => this.terrain.isWater(c))) return true;
@@ -282,7 +386,7 @@ export class World {
       const sid = this.structureAtNode.get(n);
       if (sid !== undefined && sid !== ignoreId) return { ok: false, reason: 'Occupied' };
       if (this.hasRoad(n)) return { ok: false, reason: 'Road' };
-      if (this.hasRail(n)) return { ok: false, reason: 'Railway' };
+      if (this.railNear(n)) return { ok: false, reason: 'Railway' };
       const f = this.featureAt(n);
       if (f && FEATURE_TYPES[f.type]?.clearable === false) return { ok: false, reason: 'Blocked' };
     }
@@ -415,7 +519,7 @@ export class World {
   roadExits() {
     const layer = this.networks.road;
     if (this._exits?.version === layer.version) return this._exits.list;
-    const list = this.edgeExits(this.roads);
+    const list = this.edgeExits(this.roads, this.grid);
     this._exits = { version: layer.version, list };
     return list;
   }
@@ -424,17 +528,17 @@ export class World {
   railExits() {
     const layer = this.networks.rail;
     if (this._railExits?.version === layer.version) return this._railExits.list;
-    const list = this.edgeExits(this.rails);
+    const list = this.edgeExits(this.rails, this.fine);
     this._railExits = { version: layer.version, list };
     return list;
   }
 
-  edgeExits(graph) {
-    const { width, height } = this.grid;
+  edgeExits(graph, grid) {
+    const { width, height } = grid;
     const list = [];
     for (const n of graph.nodes()) {
       if (graph.degree(n) !== 1) continue;
-      const [x, y] = this.grid.xy(n);
+      const [x, y] = grid.xy(n);
       const dir = x === 0 ? [-1, 0] : x === width - 1 ? [1, 0] : y === 0 ? [0, -1] : y === height - 1 ? [0, 1] : null;
       if (dir) list.push({ node: n, dir });
     }
@@ -580,6 +684,8 @@ export class World {
     const check = validateRoute(layer, nodes);
     if (!check.ok) return check;
     for (const n of nodes) {
+      // a railway clears the trees along its way, also between dots
+      if (kind === 'rail') this.coarseAround(n).forEach((c) => this.clearFeaturesAt(c));
       const c = layer.coarseOf(n);
       if (c >= 0) this.clearFeaturesAt(c);
     }
@@ -724,11 +830,13 @@ export class World {
   // ---------- persistence ----------
 
   _insertStructure(s) {
+    this.structureVersion = (this.structureVersion ?? 0) + 1;
     this.structures.set(s.id, s);
     for (const n of this.nodesOf(s)) this.structureAtNode.set(n, s.id);
   }
 
   _unindexStructure(s) {
+    this.structureVersion = (this.structureVersion ?? 0) + 1;
     for (const n of this.nodesOf(s)) {
       if (this.structureAtNode.get(n) === s.id) this.structureAtNode.delete(n);
     }
@@ -770,6 +878,8 @@ export class World {
     world.terrain.load(data.terrain);
 
     const networks = data.networks ?? { road: data.roads ?? [] }; // v1 had only roads
+    // before v3 railways were on the main dots: each segment spans three dense ones
+    if ((data.version ?? 1) < 3 && networks.rail) networks.rail = networks.rail.flatMap((e) => world.fineSegment(...e));
     for (const [kind, edges] of Object.entries(networks)) {
       if (world.networks[kind]) {
         world.networks[kind].graph = RoadNetwork.fromJSON(edges);

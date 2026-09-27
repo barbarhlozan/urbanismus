@@ -141,7 +141,7 @@ function menuFor(ctx, node) {
   const items = [];
   const lane = road && world.laneOnly(node);
   if (road) items.push({ label: lane ? 'Remove lane' : 'Remove road', action: () => world.removeRoadAt(node) });
-  if (rail) items.push({ label: 'Remove railway', action: () => world.removeNetworkAt('rail', node) });
+  if (rail) items.push({ label: 'Remove railway', action: () => world.removeNetworkAt('rail', fine) });
   if (path) items.push({ label: 'Remove footpath', action: () => world.removeNetworkAt('path', fine) });
   if (feature) items.push({ label: `Clear ${FEATURE_TYPES[feature.type].name.toLowerCase()}`, action: () => world.removeFeature(feature.id) });
   if (!items.length) return null; // empty ground or water: no menu

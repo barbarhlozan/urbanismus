@@ -21,6 +21,7 @@
   --line: 1px; /* UI border width */
   --radius: 6px; /* corners of UI boxes */
   --panel-w: 370px; /* one width for every window: stats, top bar, menus, debug */
+  --bar-h: 38px; /* the stats' title row and the top bar: one height */
   --bm-w: 200px; /* the Build menu, narrower to leave the map */
   --ui-font: "Basteleur", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* notches and home indicators on phones */
@@ -49,7 +50,9 @@ html, body {
 
 /* The map, back to front: #view (terrain, then the map's linework), the
    <canvas> with the moving people, vehicles and trains, #view-top (the
-   buildings, trees and tool previews). The two .view wrappers are larger
+   buildings, trees and tool previews), then #trains-top: train carriages
+   with nothing nearer in front of them, so they pass in front of stations
+   and buildings behind the track. The two .view wrappers are larger
    than the window and moved on the GPU while the camera moves (position
    and size set by Renderer.placeView); the canvas is redrawn every frame.
    #input, a bare box over all of it, takes the pointer: hit testing it is
@@ -66,7 +69,7 @@ html, body {
   display: block;
   user-select: none;
 }
-#agents { position: fixed; left: 0; top: 0; pointer-events: none; }
+#agents, #trains-top { position: fixed; left: 0; top: 0; pointer-events: none; }
 #input {
   position: fixed;
   inset: 0;
@@ -305,8 +308,7 @@ html, body {
 
 .hud {
   position: fixed;
-  width: max-content; /* hugs its numbers, up to the usual panel width */
-  min-width: 240px;
+  width: var(--panel-w); /* as wide as the top bar across from it */
   max-width: var(--panel-w);
   box-sizing: border-box;
   top: calc(16px + var(--safe-t));
@@ -316,7 +318,8 @@ html, body {
   border-radius: var(--radius);
   overflow: hidden;
 }
-.hud .title { display: flex; align-items: stretch; }
+.hud .title { display: flex; align-items: stretch; height: var(--bar-h); }
+body.touch { --bar-h: 44px; }
 .hud .name-label {
   flex: 1 1 auto;
   min-width: 0;
@@ -391,6 +394,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   top: calc(16px + var(--safe-t));
   right: calc(20px + var(--safe-r));
   width: var(--panel-w);
+  height: calc(var(--bar-h) + 2 * var(--line)); /* the stats' title row plus its borders */
   box-sizing: border-box;
   display: flex;
   border: var(--line) solid var(--fg);
@@ -398,10 +402,21 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   overflow: hidden;
   background: var(--bg);
 }
-.controls button { flex: 1 1 auto; padding: 7px 3px; white-space: nowrap; border-left: var(--line) solid var(--fg) !important; }
+.controls button { flex: 1 1 auto; min-width: 0; padding: 7px 3px; white-space: nowrap; border-left: var(--line) solid var(--fg) !important; }
 .controls button:first-child { border-left: none !important; }
-.controls { font-size: 11px; }
+.controls { font-size: 10.5px; }
 .controls button:hover, .controls button.on { background: var(--fg) !important; color: var(--bg) !important; }
+
+/* the menu button folds the rest away (src/ui/hud.js); a .close, like the
+   stats' fold button across from it */
+#ui .controls .menu-toggle { flex: 0 0 auto; width: 34px; } /* #ui: over .close's width */
+.controls .menu-icon { width: 14px; height: 14px; }
+.controls .menu-icon path { stroke-width: 1.3; stroke-linecap: round; }
+.controls .menu-icon .bars, .controls.folded .menu-icon .cross { display: none; }
+.controls.folded .menu-icon .bars { display: inline; }
+.controls.folded { width: auto; }
+.controls.folded button:not(.menu-toggle) { display: none; }
+.controls.folded .menu-toggle { border-left: none !important; }
 
 .bottom {
   position: fixed;
@@ -648,7 +663,7 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 /* three dots in a scheme's colors: on the Colors button and each menu row */
 .swatches { display: inline-flex; gap: 3px; vertical-align: middle; }
 .swatches i { width: 8px; height: 8px; border-radius: 50%; border: var(--line) solid currentColor; box-sizing: border-box; }
-.controls button[data-act="colors"] { flex: 0 0 48px; }
+.controls button[data-act="colors"] { flex: 0 0 40px; }
 
 .color-panel {
   position: fixed;
@@ -711,7 +726,6 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .color-panel .hex:focus { border-bottom-color: var(--fg); }
 @media (max-width: 640px) {
   .color-panel { top: calc(62px + var(--safe-t)); right: calc(8px + var(--safe-r)); }
-  .controls button[data-act="colors"] { flex: 0 0 40px; }
   .color-panel .hex { font-size: 16px; width: 80px; } /* 16px: no zoom-in on focus in iOS */
 }
 body.touch #ui .color-panel .scheme { min-height: 40px; }
@@ -813,21 +827,38 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 @media (max-width: 640px) {
   #ui { font-size: 11px; }
 
-  /* controls: one full-width row across the top */
+  /* controls: a menu button in the corner, opening into a list below it */
   .controls {
     top: calc(8px + var(--safe-t));
-    left: calc(8px + var(--safe-l));
     right: calc(8px + var(--safe-r));
+    width: 190px;
+    height: auto;
+    flex-direction: column;
+    z-index: 22;
   }
-  .controls { width: auto; }
-  .controls button { flex: 1 1 auto; min-width: 0; padding: 6px 2px; white-space: normal; font-size: 10px; letter-spacing: 0; }
-  .controls button[data-act="newMap"] { flex: 0 1 min-content; } /* wraps to two lines */
+  .controls.folded { width: auto; }
+  .controls button {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 8px 14px;
+    text-align: left;
+    font-size: 12px;
+    border-left: none !important;
+    border-top: var(--line) solid var(--fg) !important;
+  }
+  /* (#ui: over the .close look) the icon stays put as the list opens */
+  #ui .controls .menu-toggle { order: -1; width: 100%; min-height: var(--bar-h); justify-content: flex-end; padding: 0 16px; border-top: none !important; }
+  #ui .controls.folded .menu-toggle { width: auto; padding: 0 10px; justify-content: center; }
+  .controls .menu-icon { width: 16px; height: 16px; }
+  .controls button[data-act="colors"] { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+  .controls button[data-act="colors"]::after { content: "Colors"; }
 
-  /* stats: under the controls, smaller; tap to fold */
+  /* stats: beside the menu button, smaller; tap to fold */
   .hud {
-    top: calc(62px + var(--safe-t));
+    top: calc(8px + var(--safe-t));
     left: calc(8px + var(--safe-l));
-    max-width: calc(100vw - 16px - var(--safe-l) - var(--safe-r));
+    max-width: calc(100vw - 68px - var(--safe-l) - var(--safe-r));
+    min-width: 0;
   }
   .hud .name { font-size: 16px; }
   .hud .row { gap: 10px; padding: 3px 8px 4px; font-size: 12px; }

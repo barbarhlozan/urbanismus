@@ -29,6 +29,7 @@ import { NewMapMenu } from './ui/newMapMenu.js';
 import { AssetsPage } from './ui/assetsPage.js';
 import { sketchFrames } from './ui/sketchFrame.js';
 import { attachInput } from './ui/input.js';
+import { exportCity, pickCity } from './ui/saveFile.js';
 import { BUILD_FAMILIES } from '../structures/index.js';
 
 applyTheme();
@@ -116,7 +117,7 @@ tools.register(createInspectTool(ctx));
 tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', hotkey: 'r', group: 'transport', blurb: 'Cars and people' }));
 tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, label: 'Lane', hotkey: 'n', group: 'transport', blurb: 'Single track, slow cars' }));
 tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', hotkey: 'f', fineGrid: true, group: 'transport', blurb: 'People and bikes' }));
-tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', hotkey: 'l', group: 'transport', blurb: 'Trains from the map edge' }));
+tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', hotkey: 'l', fineGrid: true, group: 'transport', blurb: 'Trains from the map edge' }));
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createBulldozeTool(ctx));
 
@@ -130,6 +131,8 @@ const actions = {
   colors: () => colorMenu.toggle(),
   assets: () => assetsPage.toggle(),
   newMap: () => newMapMenu.toggle(),
+  export: () => exportCity(world),
+  import: () => importCity(),
 };
 
 // Discard this city and start over with the New map menu's settings.
@@ -143,6 +146,37 @@ function newMap(settings) {
     // storage unavailable: the reload rolls a map of its own
   }
   location.reload();
+}
+
+// Replace this city with one from a file (see saveFile.js): it goes in as the
+// autosave and the reload picks it up, as after newMap.
+async function importCity() {
+  const at = uiRoot.querySelector('.controls').getBoundingClientRect();
+  const say = (title, items) => popup.show(innerWidth, at.bottom, title, items);
+  let city;
+  try {
+    city = await pickCity();
+  } catch (err) {
+    return say('Could not import', [{ label: err.message, info: true }]);
+  }
+  if (!city) return;
+  const n = city.structures.size;
+  say(`Import ${city.name}?`, [
+    { label: `${n} ${n === 1 ? 'building' : 'buildings'}`, info: true },
+    { label: 'Replace this city', note: 'it will be lost', action: () => replaceCity(city) },
+    { label: 'Cancel', action: () => {} },
+  ]);
+  function replaceCity(city) {
+    world.events.off('*', scheduleSave);
+    clearTimeout(saveTimer);
+    try {
+      localStorage.setItem(CONFIG.storageKey, JSON.stringify(city.toJSON()));
+    } catch {
+      world.events.on('*', scheduleSave);
+      return say('Could not import', [{ label: 'This browser would not store the city.', info: true }]);
+    }
+    location.reload();
+  }
 }
 
 const hud = new Hud(uiRoot, { world, tools, agents, trains, actions });
@@ -194,7 +228,7 @@ function pickUp() {
   let tool = null, params = {};
   if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation }];
   else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
-  else if (world.hasRail(node)) tool = tools.registry.get('rail');
+  else if (world.rails.hasNode(world.networks.rail.nodeAt(...p))) tool = tools.registry.get('rail');
   else if (world.hasRoad(node)) tool = tools.registry.get(world.laneOnly(node) ? 'lane' : 'road');
   if (!tool) return;
   hud.buildMenu.fold(false);

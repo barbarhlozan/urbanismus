@@ -29,8 +29,10 @@ another look, bend…) are buttons above the bottom edge.
   them when a road will do); people walk and cycle on them as on a footpath, so they get no
   sidewalks. Draw a lane over a road or footpath to turn it into a lane, a road over a lane
   to widen it.
-- **L** railways – drawn like roads, but bends can be at most 45° per dot. They cross roads
-  and footpaths (level crossings) but can't share a stretch with a road. Run a line off the map
+- **L** railways – drawn on the dense dots like footpaths, bends at most 45° per dot; a
+  staircase of bends is smoothed into one even curve, so chain them for gentle turns. They
+  keep clear of buildings, cross roads and footpaths (level crossings) but can't share a
+  stretch with either. Run a line off the map
   edge and trains start coming through. Cars, cyclists and pedestrians wait at a crossing while
   a train passes (barriers come down across roads) – see `crossing` in `src/config.js`.
 - **0** – stations, beside a straight stretch of track (**S** switches size): **Station** (3×2, a

@@ -2,6 +2,9 @@
 // (top-right), the active tool's actions (bottom centre), Build menu
 // (bottom-right, see buildMenu.js), app name and version (bottom-left).
 // The name can be edited in place; the arrow beside it folds the numbers away.
+// The controls fold into their menu button: on phones they start folded and
+// open as a list, folding again once a button is used or on a tap elsewhere;
+// on wider screens they stay a row and the fold is remembered.
 // The numbers change only every few seconds, so they don't flicker.
 
 const REFRESH_MS = 5000;
@@ -10,6 +13,11 @@ import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
 import { BuildMenu } from './buildMenu.js';
 import { statIcon } from './icons.js';
 import { CONFIG } from '../config.js';
+import { isNarrow } from './device.js';
+
+const MENU_KEY = 'urbanismus.controlsFolded';
+const MENU_ICON = `<svg class="icon menu-icon" viewBox="0 0 16 16" aria-hidden="true">
+  <path class="bars" d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><path class="cross" d="M4 4l8 8M12 4l-8 8"/></svg>`;
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 // one number with its drawing; the label shows on hover
@@ -35,7 +43,10 @@ export class Hud {
         <button data-act="colors" title="Colors"></button>
         <button data-act="assets" title="All the buildings and structures in the game">Assets</button>
         <button data-act="debug" title="Debug panel: drawing switches and frame rate">Debug</button>
+        <button data-act="export" title="Download this city as a file, to open on another computer">Export</button>
+        <button data-act="import" title="Open a city from a file (replaces this one)">Import</button>
         <button data-act="newMap" title="Discard this city and generate a new map">New map</button>
+        <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
       </div>
       <div class="bottom">
         <div class="actions hidden"></div>
@@ -95,10 +106,32 @@ export class Hud {
       document.documentElement.style.setProperty('--bottom-h', `${bottomEl.offsetHeight}px`);
     }).observe(bottomEl);
 
-    root.querySelector('.controls').addEventListener('click', (e) => {
-      const act = e.target.closest('button')?.dataset.act;
-      if (act) actions[act]?.();
+    const controlsEl = root.querySelector('.controls');
+    const menuBtn = controlsEl.querySelector('.menu-toggle');
+    const fold = (folded, remember = false) => {
+      controlsEl.classList.toggle('folded', folded);
+      menuBtn.setAttribute('aria-expanded', String(!folded));
+      menuBtn.title = folded ? 'Show the menu' : 'Fold the menu away';
+      if (remember) {
+        try { localStorage.setItem(MENU_KEY, folded ? '1' : '0'); } catch { /* storage unavailable */ }
+      }
+    };
+    let folded = isNarrow();
+    if (!folded) {
+      try { folded = localStorage.getItem(MENU_KEY) === '1'; } catch { /* storage unavailable */ }
+    }
+    fold(folded);
+    controlsEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (btn === menuBtn) return fold(!controlsEl.classList.contains('folded'), !isNarrow());
+      const act = btn?.dataset.act;
+      if (!act) return;
+      if (isNarrow()) fold(true); // the list would cover the panel it opens
+      actions[act]?.();
     });
+    document.addEventListener('pointerdown', (e) => {
+      if (isNarrow() && !controlsEl.contains(e.target)) fold(true);
+    }, true);
 
     this.buildMenu = new BuildMenu(root, tools);
 

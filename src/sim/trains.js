@@ -199,7 +199,7 @@ export class TrainSystem {
     const entry = exits[Math.floor(Math.random() * exits.length)];
     const stations = this.stations();
     const beyond = (exit, d) => {
-      const [x, y] = world.grid.xy(exit.node);
+      const [x, y] = layer.pos(exit.node);
       return [x + exit.dir[0] * d, y + exit.dir[1] * d];
     };
 
@@ -220,7 +220,7 @@ export class TrainSystem {
       targets.push(stop);
       if (best.length > 1) {
         nodes = nodes.concat(best.slice(1));
-        behind = layer.pos(nodes[nodes.length - 2]);
+        behind = layer.dot(nodes[nodes.length - 2]);
       }
     }
 
@@ -260,7 +260,7 @@ export class TrainSystem {
       exit: out.exit,
     };
     this.trains.set(id, t);
-    this.log(`${t.code} ${kind} train arrives · exit ${compass(entry.dir)}`, world.grid.xy(entry.node));
+    this.log(`${t.code} ${kind} train arrives · exit ${compass(entry.dir)}`, layer.pos(entry.node));
     return true;
   }
 
@@ -274,7 +274,7 @@ export class TrainSystem {
     const pts = nodes.map((n) => layer.pos(n));
     if (from) pts.unshift(from);
     if (to) {
-      const [x, y] = world.grid.xy(to.node);
+      const [x, y] = layer.pos(to.node);
       pts.push([x + to.dir[0] * (OFF_MAP + length + 0.1), y + to.dir[1] * (OFF_MAP + length + 0.1)]);
     }
     const poly = measurePolyline(offsetPolyline(smoothPolyline(pts, rail.cornerRadius, rail.curveSamples), rail.gauge));
@@ -349,7 +349,7 @@ export class TrainSystem {
     if (t.s < target - 1e-4) return;
 
     if (!stop) {
-      this.log(`${t.code} leaves · exit ${compass(t.exit.dir)}`, this.world.grid.xy(t.exit.node));
+      this.log(`${t.code} leaves · exit ${compass(t.exit.dir)}`, this.world.networks.rail.pos(t.exit.node));
       this.trains.delete(t.id);
       return;
     }

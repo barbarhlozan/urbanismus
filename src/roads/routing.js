@@ -60,7 +60,7 @@ export function turnAngle(a, b, c) {
 function sharpBends(layer, nodes) {
   const { graph, maxTurn } = layer;
   if (maxTurn == null) return [];
-  const pos = (n) => layer.pos(n);
+  const pos = (n) => layer.dot(n); // the grid's angles, not the smoothed track's
   const ok = (a, b, c) => turnAngle(pos(a), pos(b), pos(c)) <= maxTurn + 1e-6;
   const out = [];
   for (let i = 1; i < nodes.length - 1; i++) {

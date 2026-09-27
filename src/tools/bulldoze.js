@@ -20,7 +20,10 @@ export function createBulldozeTool({ world }) {
     const sidewalks = world.hasRoad(node) ? world.sidewalksAt(node) : [];
     if (sidewalks.length) return { at: world.grid.xy(node), size: 0.2, run: () => world.setSidewalks(sidewalks, false) };
     if (world.hasRoad(node)) return { at: world.grid.xy(node), size: 0.2, run: () => world.removeRoadAt(node) };
-    if (world.hasRail(node)) return { at: world.grid.xy(node), size: 0.2, run: () => world.removeNetworkAt('rail', node) };
+    const rail = world.networks.rail.nodeAt(...point);
+    if (rail >= 0 && world.rails.hasNode(rail)) {
+      return { at: world.networks.rail.pos(rail), size: 0.16, run: () => world.removeNetworkAt('rail', rail) };
+    }
     const f = world.featureAt(node);
     if (f) return { at: world.grid.xy(node), size: 0.2, run: () => world.removeFeature(f.id) };
     return null;

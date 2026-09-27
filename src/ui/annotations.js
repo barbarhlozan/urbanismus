@@ -74,7 +74,7 @@ export class Annotations {
     const s = world.structureAt(node);
     if (s) return { pos: world.centerOf(s), height: 0.5, lines: [levelOf(STRUCTURE_TYPES[s.type], s).name] };
     if (world.roadExits().some((e) => e.node === node)) return { ...at(0.1), lines: ['Road out of town'] };
-    if (world.railExits().some((e) => e.node === node)) return { ...at(0.1), lines: ['Railway out of town'] };
+    if (world.railExits().some((e) => e.node === world.coarseToFine(node))) return { ...at(0.1), lines: ['Railway out of town'] };
     if (world.hasRail(node)) return { ...at(0.1), lines: [world.hasRoad(node) ? 'Level crossing' : 'Railway'] };
     if (world.hasRoad(node)) return { ...at(0.1), lines: [world.laneOnly(node) ? 'Lane' : 'Road'] };
     if (world.paths.hasNode(world.coarseToFine(node))) return { ...at(0.05), lines: ['Footpath'] };

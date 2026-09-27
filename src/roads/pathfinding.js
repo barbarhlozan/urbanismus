@@ -46,7 +46,7 @@ export function findTrackPath(layer, from, fromPoint, to) {
   if (!graph.hasNode(from) || !graph.hasNode(to)) return null;
   if (from === to) return [from];
   const limit = (layer.maxTurn ?? Math.PI) + 1e-6;
-  const pos = (n) => layer.pos(n);
+  const pos = (n) => layer.dot(n); // the grid's angles, not the smoothed track's
 
   // state key: prev * size + node (prev = -1 for the start, stored as size)
   const size = grid.size;

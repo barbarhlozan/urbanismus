@@ -49,8 +49,9 @@ export const CONFIG = {
     junctionRadius: 0.12, // people round turns at junctions this much
   },
 
-  // Railways: bends of at most 45° per dot (sharper ones can't be built),
-  // level crossings with roads.
+  // Railways: on the dense grid, bends of at most 45° per dot (sharper
+  // ones can't be built), smoothed along each run (World.railPos), level
+  // crossings with roads.
   rail: {
     cornerRadius: 0.5,
     curveSamples: 10,

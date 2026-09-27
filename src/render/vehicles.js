@@ -9,10 +9,13 @@
 //
 //   body    the main part (required)
 //   cabin   a glasshouse on top: every face but its roof is a window
-//   vault   { x: [x0, x1], z, rise }, an arched roof across the body's width
+//   vault   { x: [x0, x1], z, rise, segs, slope, glass }, an arched roof across
+//           the body's width (segs 3: a chamfer), its ends leaning back by
+//           slope at the top, glazed if glass
 //   top     plain roof gear (no windows), or a list of parts standing on
 //           the body (drawn back to front), each may have its own vault
 //   wheels  { x: [positions along], r }, inked discs on the near side
+//   lamps   [{ x, z, r }] round lamps on the end face at x (±, facing out)
 //   glass   (face) -> bool: body faces that are windows (when no cabin)
 //   panes   window profiles [[x, z]…] on the near side
 //
@@ -139,9 +142,9 @@ export function truckFor(id) {
 }
 
 // Railway carriages `len` long (their spacing on the track, less a gap),
-// after the ČD coaches and the class 362 locomotive: a box body under an
-// arched roof, a coach with a row of windows and a stripe below them, the
-// locomotive with slanted windscreens at both ends and roof gear on top.
+// after the ČD coaches and the class 753 diesel: a coach is a box body under
+// an arched roof with a row of windows and a stripe below them; for the
+// locomotive see below.
 // RAIL_SCALE sizes their height and details, RAIL_WIDTH their width (1 = a
 // car's).
 const RAIL_SCALE = 1.7, RAIL_WIDTH = 1.25;
@@ -153,14 +156,34 @@ function railModel(kind, len) {
   const a = 0.01 * k; // stripe inset from the ends
   const stripe = [[-h + a, 0.03 * k], [h - a, 0.03 * k], [h - a, 0.035 * k], [-h + a, 0.035 * k]];
   if (kind === 'loco') {
-    const s = 0.008 * k, b = 0.035 * k; // windscreen slant, cab window
+    // ČD class 753 / 752 ("brejlovec"), simplified: one body under an arched
+    // roof like the coaches; at each end the cab window in a frame standing
+    // out of the front; a cab side window at each end; a few lines of the
+    // livery – the stripe low down, the colour split at the windows, a band
+    // under the roof, the doors behind the cabs
+    const win = 0.05 * k, c = 0.05 * k, out = 0.005 * k, top = eaves - 0.003 * k;
+    const cabWindow = (x0, x1) => [[x0, win + 0.002 * k], [x1, win + 0.002 * k], [x1, 0.064 * k], [x0, 0.064 * k]];
+    const line = (x0, x1, z, t = 0.0012 * k) => [[x0, z], [x1, z], [x1, z + t], [x0, z + t]];
+    const upright = (x) => [[x, base + 0.006 * k], [x + 0.0012 * k, base + 0.006 * k], [x + 0.0012 * k, top], [x, top]];
+    const door = c + 0.006 * k;
     return {
-      body: { w: 0.042 * kw, profile: [[-h, base], [h, base], [h, eaves - 0.016 * k], [h - s, eaves], [-h + s, eaves], [-h, eaves - 0.016 * k]] },
-      vault: { x: [-h + s, h - s], z: eaves, rise },
+      body: { w: 0.042 * kw, profile: [[-h, base], [h, base], [h, eaves], [-h, eaves]] },
+      vault: { x: [-h, h], z: eaves, rise },
+      top: [-1, 1].map((d) => ({ w: 0.036 * kw, end: true, profile: d > 0
+        ? [[h - 0.002, win - 0.002 * k], [h + out, win - 0.002 * k], [h + out, top], [h - 0.002, top]]
+        : [[-h - out, win - 0.002 * k], [-h + 0.002, win - 0.002 * k], [-h + 0.002, top], [-h - out, top]] }))
+        // the roof gear in the middle
+        .concat({ w: 0.02 * kw, profile: [[-h * 0.4, eaves + rise * 0.7], [h * 0.4, eaves + rise * 0.7], [h * 0.4, eaves + rise + 0.008 * k], [-h * 0.4, eaves + rise + 0.008 * k]] }),
+      // a headlamp over each window, on the roof's end
+      lamps: [-1, 1].map((d) => ({ x: d * (h + 0.001), z: eaves + rise * 0.45, r: 0.0045 * k })),
       wheels,
-      glass: (face) => face.side === 0 && face.n[2] > 0.3 * Math.hypot(...face.n) && Math.abs(face.x) > h - s * 1.5, // the slanted windscreens, not the (jittered) upright fronts
-      panes: [[[h - b, z0], [h - s - 0.004, z0], [h - s - 0.004, z1], [h - b, z1]], [[-h + s + 0.004, z0], [-h + b, z0], [-h + b, z1], [-h + s + 0.004, z1]], stripe],
-      top: { w: 0.02 * kw, profile: [[-h * 0.4, eaves + rise * 0.8], [h * 0.4, eaves + rise * 0.8], [h * 0.4, eaves + rise + 0.012 * k], [-h * 0.4, eaves + rise + 0.012 * k]] },
+      // the fronts of the window frames
+      glass: (face) => face.side === 0 && Math.abs(face.n[0]) > 0.9 * Math.hypot(...face.n) && Math.abs(face.x) > h + out / 2,
+      panes: [
+        cabWindow(h - c, h - 0.012 * k), cabWindow(-h + 0.012 * k, -h + c), stripe,
+        line(-h + 0.004, h - 0.004, win), line(-h + 0.004, h - 0.004, eaves - 0.008 * k),
+        upright(h - door), upright(-h + door - 0.0012 * k),
+      ],
     };
   }
   const end = 0.025 * k; // no windows over the doors at the ends
@@ -258,15 +281,20 @@ function draw(camera, model, angle, hand) {
 
   // an arched roof (model.vault) over the body's width: strips along x
   // round the arch, closed at both ends
-  const vault = ({ x: [x0, x1], z, rise }, w, segs = 6) => {
+  // (segs 3: a chamfer – sloping sides, a flat top; slope: how far the ends
+  // lean back at the top, cap: the end faces, flagged)
+  const vault = ({ x: [x0, x1], z, rise, segs = 6, slope = 0 }, w) => {
     const arc = Array.from({ length: segs + 1 }, (_, i) => (i / segs) * Math.PI);
     const at = (t) => [w * Math.cos(t), z + rise * Math.sin(t)];
+    const lean = (t) => slope * Math.sin(t);
     const out = [];
     for (let i = 0; i < segs; i++) {
-      const [ya, za] = at(arc[i]), [yb, zb] = at(arc[i + 1]), tm = (arc[i] + arc[i + 1]) / 2;
-      out.push({ pts: [[x0, ya, za], [x1, ya, za], [x1, yb, zb], [x0, yb, zb]], n: [0, Math.cos(tm) / w, Math.sin(tm) / rise], side: 0, x: 0 });
+      const [ta, tb] = [arc[i], arc[i + 1]], [ya, za] = at(ta), [yb, zb] = at(tb), tm = (ta + tb) / 2;
+      out.push({ pts: [[x0 + lean(ta), ya, za], [x1 - lean(ta), ya, za], [x1 - lean(tb), yb, zb], [x0 + lean(tb), yb, zb]], n: [0, Math.cos(tm) / w, Math.sin(tm) / rise], side: 0, x: 0 });
     }
-    for (const [x, d] of [[x0, -1], [x1, 1]]) out.push({ pts: arc.map((t) => [x, ...at(t)]), n: [d, 0, 0], side: 0, x });
+    for (const [x, d] of [[x0, 1], [x1, -1]]) {
+      out.push({ pts: arc.map((t) => [x + d * lean(t), ...at(t)]), n: [-d, 0, slope / rise], side: 0, x, cap: true });
+    }
     return out.filter((f) => facing(f.n));
   };
 
@@ -280,8 +308,12 @@ function draw(camera, model, angle, hand) {
     return rx + ry;
   };
   const tops = [].concat(model.top ?? []).sort((a, b) => back(a) - back(b));
-  const topParts = tops.map((p) => [...faces(p), ...(p.vault ? vault(p.vault, p.w) : [])]);
-  const top = topParts.flat();
+  const partFaces = (p) => [...faces(p), ...(p.vault ? vault(p.vault, p.w) : [])];
+  // parts on an end (`end`: they stick out of it) go before the body when
+  // that end is the far one, so the body hides them
+  const behind = tops.filter((p) => p.end && back(p) < 0).map(partFaces);
+  const topParts = tops.filter((p) => !(p.end && back(p) < 0)).map(partFaces);
+  const top = [...behind, ...topParts].flat();
   // wheels on the side that shows, as inked discs
   const near = [1, -1].find((side) => facing([0, side, 0])) ?? 1; // seen head-on: either
   let wheels = '';
@@ -299,12 +331,36 @@ function draw(camera, model, angle, hand) {
   const glass = model.cabin
     ? cabin.filter((f) => f.n[2] < 0.9 * Math.hypot(...f.n))
     : [...body, ...top].filter(model.glass ?? (() => false));
-  let windows = glass.map((f) => poly(inset(f.pts, f.side ? 0.7 : 0.72))).join('');
+  // splitGlass: each window in two side by side (a face round the profile:
+  // pts [a+, b+, b-, a-], split between its + and - sides)
+  const halves = (pts) => {
+    const mid = (a, b) => a.map((v, i) => (v + b[i]) / 2);
+    const [p0, p1, p2, p3] = pts, m12 = mid(p1, p2), m30 = mid(p3, p0);
+    return [[p0, p1, m12, m30], [m30, m12, p2, p3]];
+  };
+  let windows = glass.flatMap((f) => (model.splitGlass && f.pts.length === 4 ? halves(f.pts) : [f.pts])
+    .map((pts) => poly(inset(pts, f.side ? 0.7 : 0.72)))).join('');
+  // glazed vault ends: two windscreens side by side, split down the middle
+  if (model.vault?.glass) {
+    for (const { pts } of roof.filter((f) => f.cap)) {
+      const [p0, pn] = [pts[0], pts[pts.length - 1]];
+      const mid = (a, b) => a.map((v, i) => (v + b[i]) / 2);
+      const mb = mid(p0, pn), mt = mid(pts[1], pts[pts.length - 2]);
+      windows += poly(inset([p0, pts[1], mt, mb], 0.72)) + poly(inset([mb, mt, pts[pts.length - 2], pn], 0.72));
+    }
+  }
   for (const pane of model.panes ?? []) windows += poly(pane.map(([x, z]) => [x, near * (model.body.w + 0.001), z]));
-  return `<path class="vb" d="${body.map((f) => poly(f.pts)).join('')}"/>`
+  // lamps: round, on the end faces (x) that show
+  for (const { x, z, r: lr } of model.lamps ?? []) {
+    if (!facing([Math.sign(x), 0, 0])) continue;
+    windows += poly(Array.from({ length: 12 }, (_, i) => [x, Math.cos((i / 12) * Math.PI * 2) * lr, z + Math.sin((i / 12) * Math.PI * 2) * lr]));
+  }
+  const pathOf = (fs) => `<path class="vb" d="${fs.map((f) => poly(f.pts)).join('')}"/>`;
+  return behind.map(pathOf).join('')
+    + `<path class="vb" d="${body.map((f) => poly(f.pts)).join('')}"/>`
     + `<path class="vi" d="${wheels}"/>`
     + `<path class="vb" d="${[...roof, ...cabin].map((f) => poly(f.pts)).join('')}"/>`
     // each part on top its own path, so a nearer one hides the one behind
-    + topParts.map((fs) => `<path class="vb" d="${fs.map((f) => poly(f.pts)).join('')}"/>`).join('')
+    + topParts.map(pathOf).join('')
     + `<path class="vi" d="${windows}"/>`;
 }
