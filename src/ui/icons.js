@@ -121,6 +121,8 @@ const STATS = {
   drive: '<path d="M1.5 11.5 V9 L3.6 8.4 L5.6 5.5 H10.4 L12.4 8.4 L14.5 9 V11.5 Z M5.6 8.4 H12.4"/><circle cx="4.6" cy="11.6" r="1.4"/><circle cx="11.4" cy="11.6" r="1.4"/>',
   truck: '<path d="M1.5 11.5 V4.5 H9.5 V11.5 Z M9.5 7 H12.5 L14.5 9.4 V11.5 H9.5"/><circle cx="4.4" cy="11.6" r="1.4"/><circle cx="11.8" cy="11.6" r="1.4"/>',
   bus: '<path d="M1.5 11.5 V4 H14.5 V11.5 Z M1.5 7.5 H14.5 M5 4 V7.5 M8.5 4 V7.5 M12 4 V7.5"/><circle cx="4.6" cy="11.6" r="1.4"/><circle cx="11.4" cy="11.6" r="1.4"/>',
+  // a service area: a dotted ring round a dot
+  area: '<circle cx="8" cy="8" r="1.2"/><path d="M8 2.5 A5.5 5.5 0 0 1 8 13.5 A5.5 5.5 0 0 1 8 2.5" stroke-dasharray="1.6 1.9"/>',
   pen: '<path d="M3 13 L3.6 10.4 L10.8 3.2 L12.8 5.2 L5.6 12.4 Z M9.6 4.4 L11.6 6.4"/>',
 };
 

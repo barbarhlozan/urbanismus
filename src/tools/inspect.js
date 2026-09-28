@@ -1,10 +1,13 @@
 // Default tool: click a building, road or feature to get a menu of what can
 // be done with it. Building new things is done from the Build menu.
 
-import { STRUCTURES, STRUCTURE_TYPES, levelOf, maxLevel, categoryOf, yardOf } from '../../structures/index.js';
+import { STRUCTURES, STRUCTURE_TYPES, levelOf, maxLevel, categoryOf, yardOf, matches, nameOf } from '../../structures/index.js';
 import { YARDS, YARD_STYLES } from '../../structures/yards.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { isTouch } from '../ui/device.js';
+import { statIcon, structureIcon } from '../ui/icons.js';
+
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export function createInspectTool(ctx) {
   return {
@@ -68,33 +71,62 @@ function screenBox({ world, camera }, node) {
 }
 
 const TREND = {
-  growing: 'Growing',
-  declining: 'Declining',
-  stable: 'Stable',
-  waiting: 'Waiting',
-  manual: 'Set by hand',
+  growing: 'growing',
+  declining: 'declining',
+  waiting: 'waiting',
+  manual: 'set by hand',
 };
+
+// The building at a glance, drawn rather than listed: its level as pips,
+// whether it's growing, its numbers with their little drawings (as in the
+// HUD), and what it still needs, each shown by a drawing of that building.
+function summary(def, s, level, max, { trend, needs, keep, boosts, progress }, served) {
+  const pips = Array.from({ length: max }, (_, i) => `<i class="${i < s.level ? 'on' : ''}"></i>`).join('');
+  const moving = trend === 'growing' || trend === 'declining';
+  const bar = moving && progress > 0.005 ? `<span class="bi-bar"><i style="width:${Math.round(progress * 100)}%"></i></span>` : '';
+  const arrow = trend === 'growing' ? '↗ ' : trend === 'declining' ? '↘ ' : '';
+  const stats = Object.entries(level.stats ?? {}).map(([k, v]) =>
+    `<span class="stat" title="${k[0].toUpperCase()}${k.slice(1)}">${statIcon(k)}<b>${v}</b></span>`);
+  if (level.coverage) stats.push(`<span class="stat" title="Serves everything within ${level.coverage} dots">${statIcon('area')}<b>${level.coverage}</b></span>`);
+  let html = `<div class="bi-row"><span class="bi-kind">${esc(def.name)}</span>`
+    + `<span class="bi-level" title="Level ${s.level} of ${max}">${pips}</span>${stats.join('')}`
+    // (stable, the usual state, goes unsaid)
+    + (TREND[trend] ? `<span class="bi-trend ${trend}">${arrow}${TREND[trend]}${bar}</span>` : '') + '</div>';
+
+  if (!served) {
+    html += `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${def.access === 'any' ? 'Needs a road or footpath' : 'Needs a road next to it'}</span></div>`;
+  } else if (needs.length && trend !== 'manual') {
+    html += `<div class="bi-needs"><span>${keep ? 'To stay' : 'To grow'}</span>${needs.map(need).join('')}</div>`;
+  }
+  if (boosts.length) html += `<div class="bi-boost">${boosts.map((b) => `${esc(b[0].toUpperCase() + b.slice(1))} nearby`).join(', ')} · growing faster</div>`;
+  return html;
+}
+
+// One thing a building needs: a drawing of what's asked for, how many more
+// (or none of it, crossed out), the details on hover.
+function need(n) {
+  const def = STRUCTURES.find((d) => matches(d, n.type));
+  const pic = `<span class="bi-pic">${def ? structureIcon(def) : ''}</span>`;
+  const name = nameOf(n.type);
+  if (n.kind === 'more') {
+    const title = `${n.count} more ${name}${n.minLevel > 1 ? ` of level ${n.minLevel} or up` : ''} within ${n.radius} dots`;
+    return `<span class="bi-need" title="${esc(title)}">${pic}<b>+${n.count}</b>${n.minLevel > 1 ? `<small>L${n.minLevel}+</small>` : ''}</span>`;
+  }
+  if (n.kind === 'avoid') return `<span class="bi-need avoid" title="${esc(`No ${name} within ${n.radius} dots`)}">${pic}</span>`;
+  return `<span class="bi-need" title="${esc(`Within reach of a ${name}`)}">${pic}<small>in reach</small></span>`;
+}
 
 function structureMenu({ world, growth }, s) {
   const def = STRUCTURE_TYPES[s.type];
   const level = levelOf(def, s);
   const max = maxLevel(def);
-  const { trend, missing, keep, boosts, progress } = growth.explain(s);
-  const pct = (trend === 'growing' || trend === 'declining') && progress > 0.005 ? ` ${Math.round(progress * 100)}%` : '';
+  const why = growth.explain(s);
 
-  const items = [
-    { label: `Level ${s.level} of ${max}`, note: TREND[trend] + pct, info: true },
-    ...Object.entries(level.stats ?? {}).map(([k, v]) => ({ label: k, note: String(v), info: true })),
-  ];
-  if (level.coverage) items.push({ label: 'Service area', note: `${level.coverage} dots`, info: true });
-  if (!world.isServed(s)) {
-    items.push({ label: def.access === 'any' ? 'Needs a road or footpath' : 'Needs a road next to it', info: true });
-  } else if (missing.length && trend !== 'manual') {
-    items.push({ label: keep ? 'To keep this level it needs' : 'Next level needs', info: true });
-    for (const m of missing) items.push({ label: `· ${m}`, info: true });
-  }
-  for (const b of boosts) items.push({ label: `${b[0].toUpperCase()}${b.slice(1)} nearby`, note: 'faster growth', info: true });
+  // what it is and how it's doing: to look at, not to click
+  const items = [{ block: summary(def, s, level, max, why, world.isServed(s)) }];
 
+  // making it bigger or smaller, or changing how it looks
+  items.push({ section: 'Change' });
   if (s.level < max) items.push({ label: 'Upgrade', note: def.levels[s.level].name, action: () => world.setStructureLevel(s.id, s.level + 1, { manual: true }) });
   if (s.level > 1) items.push({ label: 'Downgrade', note: def.levels[s.level - 2].name, action: () => world.setStructureLevel(s.id, s.level - 1, { manual: true }) });
   if (s.data.locked) items.push({ label: 'Let it grow on its own', action: () => world.setGrowthLocked(s.id, false) });
@@ -111,19 +143,15 @@ function structureMenu({ world, growth }, s) {
     items.push({ label: 'Surroundings', note, keepOpen: true, action: () => world.setYard(s.id, next === 'auto' ? null : next) });
   }
 
-  for (const other of STRUCTURES) {
-    if (other.id === s.type || categoryOf(other) !== categoryOf(def)) continue;
-    const check = world.canConvert(s.id, other.id);
-    items.push({
-      label: `Convert to ${other.name.toLowerCase()}`,
-      note: check.ok ? '' : check.reason,
-      disabled: !check.ok,
-      action: () => world.convertStructure(s.id, other.id),
-    });
-  }
-  items.push({ label: 'Erase', action: () => world.removeStructure(s.id) });
+  // turning it into something else of the same kind: only what fits here
+  const converts = STRUCTURES
+    .filter((other) => other.id !== s.type && categoryOf(other) === categoryOf(def) && world.canConvert(s.id, other.id).ok)
+    .map((other) => ({ label: other.name, action: () => world.convertStructure(s.id, other.id) }));
+  if (converts.length) items.push({ section: 'Turn into' }, ...converts);
 
-  return { title: `${def.name} · ${level.name}`, items };
+  items.push({ section: '' }, { label: 'Erase', action: () => world.removeStructure(s.id) });
+
+  return { title: level.name, items };
 }
 
 function menuFor(ctx, node) {

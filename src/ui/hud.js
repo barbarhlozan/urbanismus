@@ -36,7 +36,6 @@ export class Hud {
         <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="Town name"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close fold" title="Fold away the numbers" aria-expanded="true">–</button></div>
         <div class="stats row"></div>
         <div class="traffic row"></div>
-        <div class="split"><i class="walk"></i><i class="cycle"></i><i class="drive"></i></div>
       </div>
       <div class="credit">${CONFIG.app.name} <span>v${CONFIG.app.version}</span> · ${CONFIG.app.author}</div>
       <div class="controls">
@@ -58,7 +57,6 @@ export class Hud {
     this.trafficAt = -Infinity; // ms of the last traffic count
     this.statsAt = -Infinity;   // ms of the last stats count
 
-    this.splitEl = root.querySelector('.hud .split');
     const hudEl = root.querySelector('.hud');
     const foldBtn = root.querySelector('.hud .fold');
     foldBtn.addEventListener('click', () => {
@@ -173,23 +171,9 @@ export class Hud {
         else if (a.truck) trucks++;
         else count[a.trip.mode === 'drive' || a.trip.mode === 'cycle' ? a.trip.mode : 'walk']++;
       }
-      const visitors = this.agents.visitorCount();
-      const commute = this.agents.commuterCount();
-      const extra = [
-        visitors && `${visitors} visiting`,
-        commute.inbound && `${commute.inbound} commuting in`,
-        commute.outbound && `${commute.outbound} working outside`,
-        this.trains.count && `${this.trains.count} ${this.trains.count === 1 ? 'train' : 'trains'}`,
-      ].filter(Boolean);
       const html = stat('walk', 'On foot', count.walk) + stat('cycle', 'Cycling', count.cycle)
         + stat('drive', 'Driving', count.drive) + (trucks ? stat('truck', 'Trucks', trucks) : '')
-        + (buses ? stat('bus', 'Buses', buses) : '')
-        + (extra.length ? `<span class="extra" title="${extra.join(', ')}">+${extra.length}</span>` : '');
-      const moving = count.walk + count.cycle + count.drive;
-      for (const [i, k] of ['walk', 'cycle', 'drive'].entries()) {
-        this.splitEl.children[i].style.flexGrow = moving ? count[k] : 0;
-      }
-      this.splitEl.classList.toggle('empty', !moving);
+        + (buses ? stat('bus', 'Buses', buses) : '');
       if (html !== this.trafficHTML) this.trafficEl.innerHTML = this.trafficHTML = html;
     }
   }

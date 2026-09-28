@@ -377,14 +377,6 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .icon.stat-icon circle { stroke-width: 1.1 !important; }
 .hud .traffic { font-size: 12px; gap: 12px; }
 .hud .traffic .stat-icon { width: 14px; height: 14px; flex-basis: 14px; }
-.hud .extra { margin-left: auto; color: var(--detail); cursor: help; }
-/* who's moving how: on foot solid, cycling hatched, driving blank */
-.hud .split { display: flex; height: 5px; margin: 0 10px 7px; border: var(--line) solid var(--fg); border-radius: 3px; overflow: hidden; }
-.hud .split.empty { visibility: hidden; height: 0; margin-bottom: 0; border: none; }
-.hud .split i { flex: 0 1 0; min-width: 0; transition: flex-grow 0.6s; }
-.hud .split i + i { border-left: var(--line) solid var(--fg); }
-.hud .split .walk { background: var(--fg); }
-.hud .split .cycle { background: repeating-linear-gradient(-45deg, var(--fg) 0 1px, transparent 1px 3px); }
 
 /* app name, version and author: quietly in the bottom-left corner */
 .credit {
@@ -396,7 +388,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   pointer-events: none;
 }
 .credit span { font-variant-numeric: tabular-nums; }
-.hud.folded .row, .hud.folded .split { display: none; }
+.hud.folded .row { display: none; }
 
 .controls {
   position: fixed;
@@ -525,6 +517,36 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
   max-height: 60dvh;
 }
 .popup .heading { font-size: 10px; padding: 10px 12px 2px; color: var(--detail); }
+/* a line across the menu between groups of actions, with a small heading */
+.popup-section { border-top: var(--line) solid var(--fg); padding: 7px 12px 1px; font-size: 10px; color: var(--detail); letter-spacing: 0.04em; }
+.popup-section:empty { padding: 0 0 4px; }
+.popup-section + button { padding-top: 5px; }
+
+/* ---- a building at a glance (top of its menu, tools/inspect.js) ---- */
+.popup-block { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
+.bi-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bi-kind { color: var(--detail); font-size: 11px; }
+/* level: one pip per level, filled up to this one */
+.bi-level { display: inline-flex; gap: 3px; align-items: center; }
+.bi-level i { width: 7px; height: 7px; border-radius: 50%; border: var(--line) solid var(--fg); box-sizing: border-box; }
+.bi-level i.on { background: var(--fg); }
+.bi-trend { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--detail); font-size: 11px; white-space: nowrap; }
+.bi-trend.growing, .bi-trend.declining { color: var(--fg); }
+.bi-bar { width: 36px; height: 4px; border: var(--line) solid var(--fg); border-radius: 2px; overflow: hidden; }
+.bi-bar i { display: block; height: 100%; background: var(--fg); }
+.popup-block .stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.popup-block .stat b { font-weight: 700; }
+.popup-block .warn { color: var(--detail); }
+/* what it needs to grow: a little drawing of each, and how many more */
+.bi-needs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.bi-needs > span:first-child { color: var(--detail); font-size: 11px; }
+.bi-need { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; cursor: help; }
+.bi-need .bi-pic { width: 22px; height: 22px; display: inline-flex; }
+.bi-need b { font-weight: 700; }
+.bi-need small { font-size: 9px; color: var(--detail); }
+.bi-need.avoid .bi-pic { position: relative; opacity: 0.6; }
+.bi-need.avoid .bi-pic::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.3px solid var(--fg); transform: rotate(-35deg); }
+.bi-boost { color: var(--detail); font-size: 11px; }
 .popup .heading .label { text-decoration: none !important; }
 
 
@@ -877,7 +899,6 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
   .hud .name { font-size: 16px; }
   .hud .row { gap: 10px; padding: 3px 8px 4px; font-size: 12px; }
   .hud .traffic { font-size: 11px; }
-  .hud .split { margin: 0 8px 6px; }
   .credit { left: calc(10px + var(--safe-l)); bottom: calc(2px + var(--safe-b)); font-size: 9px; }
 
   .bottom {

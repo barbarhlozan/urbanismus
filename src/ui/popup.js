@@ -1,6 +1,8 @@
 // Context menu shown when clicking a dot. On narrow screens it is a sheet
 // along the bottom edge instead, within easy reach of the thumb.
 // items: [{ label, note?, disabled?, info?, heading?, unavailable?, action?, keepOpen? }]
+// or { section } – a line across with a small heading ('' for just the line)
+// or { block } – ready-made HTML (escaped by whoever builds it), e.g. a summary
 // (unavailable: can't be done here – shown crossed out in the detail colour)
 // keepOpen items leave the menu open and rebuild it with `refresh()`
 // (passed to show), e.g. to cycle through options.
@@ -79,6 +81,8 @@ export class Popup {
   render(title, items) {
     this.items = items;
     this.body.innerHTML = `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="Close">×</button></div>` + items.map((item, i) => {
+      if (item.block != null) return `<div class="popup-block">${item.block}</div>`;
+      if (item.section != null) return `<div class="popup-section">${esc(item.section)}</div>`;
       const disabled = item.disabled || item.info || !item.action;
       const cls = item.heading ? 'heading' : item.info ? 'info' : item.unavailable ? 'unavailable' : '';
       return `<button data-i="${i}" class="${cls}" ${disabled ? 'disabled' : ''}>

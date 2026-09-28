@@ -158,22 +158,32 @@ export class GrowthSystem {
     return level;
   }
 
+  // What a rule still lacks, as text and as data for the UI (`needs`):
+  // { kind: 'more', type, count, minLevel, radius } | { kind: 'avoid', type, radius }
+  // | { kind: 'cover', type }
   check(s, rule) {
-    const missing = [];
+    const missing = [], needs = [];
     for (const { type, count, radius, minLevel = 1 } of rule?.requires ?? []) {
       const have = this.countNear(s, type, radius, minLevel);
       if (have < count) {
         const what = nameOf(type) + (minLevel > 1 ? ` (level ${minLevel}+)` : '');
         missing.push(`${count - have} more ${what} within ${radius}`);
+        needs.push({ kind: 'more', type, count: count - have, minLevel, radius });
       }
     }
     for (const { type, radius } of rule?.avoid ?? []) {
-      if (this.countNear(s, type, radius) > 0) missing.push(`no ${nameOf(type)} within ${radius}`);
+      if (this.countNear(s, type, radius) > 0) {
+        missing.push(`no ${nameOf(type)} within ${radius}`);
+        needs.push({ kind: 'avoid', type, radius });
+      }
     }
     for (const type of rule?.coveredBy ?? []) {
-      if (!this.isCovered(s, type)) missing.push(`${nameOf(type)} coverage`);
+      if (!this.isCovered(s, type)) {
+        missing.push(`${nameOf(type)} coverage`);
+        needs.push({ kind: 'cover', type });
+      }
     }
-    return { ok: missing.length === 0, missing };
+    return { ok: missing.length === 0, missing, needs };
   }
 
   // Growth speed multiplier from boosts that apply.
@@ -263,9 +273,9 @@ export class GrowthSystem {
   // which boosts are currently helping.
   explain(s) {
     const def = STRUCTURE_TYPES[s.type];
-    if (s.data.locked) return { trend: 'manual', missing: [], boosts: [] };
+    if (s.data.locked) return { trend: 'manual', missing: [], needs: [], boosts: [] };
     if (!this.world.isServed(s)) {
-      return { trend: s.level > 1 ? 'declining' : 'waiting', missing: [def.access === 'any' ? 'road or footpath' : 'road access'], boosts: [] };
+      return { trend: s.level > 1 ? 'declining' : 'waiting', missing: [def.access === 'any' ? 'road or footpath' : 'road access'], needs: [], boosts: [] };
     }
     const target = this.targetLevel(s);
     const trend = target > s.level ? 'growing' : target < s.level ? 'declining' : 'stable';
@@ -274,8 +284,8 @@ export class GrowthSystem {
     // Declining: explain what the current level is missing; otherwise the next level.
     const keep = trend === 'declining';
     const rule = keep ? def.levels[s.level - 1].grow : next;
-    const missing = rule ? this.check(s, rule).missing : [];
-    return { trend, missing, keep, boosts, progress: Math.abs(s.data.growth ?? 0) };
+    const { missing, needs } = rule ? this.check(s, rule) : { missing: [], needs: [] };
+    return { trend, missing, needs, keep, boosts, progress: Math.abs(s.data.growth ?? 0) };
   }
 }
 
