@@ -424,7 +424,9 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .controls .menu-icon .bars, .controls.folded .menu-icon .cross { display: none; }
 .controls.folded .menu-icon .bars { display: inline; }
 .controls.folded { width: auto; }
-.controls.folded button:not(.menu-toggle) { display: none; }
+.controls.folded:not(.folding) button:not(.menu-toggle) { display: none; }
+/* folding away (motion.js shrink): the buttons stay until the bar has shrunk, fading */
+.controls.folding button:not(.menu-toggle) { opacity: 0; transition: opacity 100ms; }
 .controls.folded .menu-toggle { border-left: none !important; }
 
 .bottom {
@@ -589,6 +591,9 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 }
 #ui .build-menu.folded .bm-panel,
 #ui .build-menu:not(.folded) .bm-toggle { display: none; }
+/* folding away: the panel stays up until it has shrunk into the button */
+#ui .build-menu.folded.folding .bm-panel { display: flex; }
+#ui .build-menu.folded.folding .bm-toggle { display: none; }
 
 .bm-head {
   display: flex;

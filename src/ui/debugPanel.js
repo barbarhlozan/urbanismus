@@ -6,6 +6,7 @@
 
 import { STYLE } from '../render/style.js';
 import { DRAW } from '../render/draw.js';
+import { reveal, isShown } from './motion.js';
 
 export class DebugPanel {
   constructor(root, { renderer, camera }) {
@@ -65,11 +66,11 @@ export class DebugPanel {
   }
 
   get open() {
-    return !this.el.classList.contains('hidden');
+    return isShown(this.el);
   }
 
   toggle(open = !this.open) {
-    this.el.classList.toggle('hidden', !open);
+    reveal(this.el, open);
     this.onToggle?.(open);
   }
 }

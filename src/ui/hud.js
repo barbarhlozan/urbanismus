@@ -12,6 +12,7 @@ const REFRESH_MS = 5000;
 import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
 import { BuildMenu } from './buildMenu.js';
 import { statIcon } from './icons.js';
+import { resize, shrink } from './motion.js';
 import { CONFIG } from '../config.js';
 import { isNarrow } from './device.js';
 
@@ -61,7 +62,8 @@ export class Hud {
     const hudEl = root.querySelector('.hud');
     const foldBtn = root.querySelector('.hud .fold');
     foldBtn.addEventListener('click', () => {
-      const folded = hudEl.classList.toggle('folded');
+      let folded;
+      resize(hudEl, () => { folded = hudEl.classList.toggle('folded'); });
       foldBtn.setAttribute('aria-expanded', String(!folded));
       foldBtn.title = folded ? 'Show the numbers' : 'Fold away the numbers';
       foldBtn.textContent = folded ? '+' : '–';
@@ -108,8 +110,13 @@ export class Hud {
 
     const controlsEl = root.querySelector('.controls');
     const menuBtn = controlsEl.querySelector('.menu-toggle');
-    const fold = (folded, remember = false) => {
-      controlsEl.classList.toggle('folded', folded);
+    const fold = (folded, remember = false, animate = true) => {
+      const apply = () => controlsEl.classList.toggle('folded', folded);
+      // folding: the buttons fade while the bar shrinks to its menu button;
+      // unfolding: the bar grows back out of it
+      if (!animate || folded === controlsEl.classList.contains('folded')) apply();
+      else if (folded) shrink(controlsEl, apply);
+      else resize(controlsEl, apply);
       menuBtn.setAttribute('aria-expanded', String(!folded));
       menuBtn.title = folded ? 'Show the menu' : 'Fold the menu away';
       if (remember) {
@@ -120,7 +127,7 @@ export class Hud {
     if (!folded) {
       try { folded = localStorage.getItem(MENU_KEY) === '1'; } catch { /* storage unavailable */ }
     }
-    fold(folded);
+    fold(folded, false, false);
     controlsEl.addEventListener('click', (e) => {
       const btn = e.target.closest('button');
       if (btn === menuBtn) return fold(!controlsEl.classList.contains('folded'), !isNarrow());

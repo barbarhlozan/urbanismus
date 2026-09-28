@@ -12,6 +12,7 @@
 import { CATEGORIES } from '../../structures/index.js';
 import { toolIcon } from './icons.js';
 import { isNarrow } from './device.js';
+import { corner, fadeIn, slide } from './motion.js';
 
 const FOLD_KEY = 'urbanismus.buildMenuFolded';
 
@@ -46,6 +47,8 @@ export class BuildMenu {
       <button class="bm-toggle" aria-label="Open the build menu"><span>Build</span><span class="bm-current"></span></button>`;
     root.appendChild(this.el);
     this.currentEl = this.el.querySelector('.bm-current');
+    this.panelEl = this.el.querySelector('.bm-panel');
+    this.toggleEl = this.el.querySelector('.bm-toggle');
 
     this.el.addEventListener('click', (e) => {
       const btn = e.target.closest('button');
@@ -82,18 +85,38 @@ export class BuildMenu {
       const saved = localStorage.getItem(FOLD_KEY);
       if (saved != null && !isNarrow()) folded = saved === '1';
     } catch { /* storage unavailable */ }
-    this.fold(folded, false);
+    this.fold(folded, false, false);
   }
 
   get folded() {
     return this.el.classList.contains('folded');
   }
 
-  fold(folded, remember = true) {
+  fold(folded, remember = true, animate = true) {
     this.autoFolded = false;
+    const change = folded !== this.folded;
+    const button = this.toggleEl.getBoundingClientRect(); // (before it hides)
     this.el.classList.toggle('folded', folded);
+    if (animate && change) this.animateFold(folded, button);
     if (!remember || isNarrow()) return;
     try { localStorage.setItem(FOLD_KEY, folded ? '1' : '0'); } catch { /* storage unavailable */ }
+  }
+
+  // The panel grows out of the Build button, and folds back into it (kept
+  // on screen by .folding meanwhile) before the button reappears.
+  animateFold(folded, button) {
+    const size = button.width ? [button.width, button.height] : [110, 38];
+    if (!folded) {
+      this.el.classList.remove('folding');
+      corner(this.panelEl, true, size);
+      return;
+    }
+    this.el.classList.add('folding');
+    corner(this.panelEl, false, size).then((done) => {
+      if (!done || !this.el.classList.contains('folded')) return; // opened again meanwhile
+      this.el.classList.remove('folding');
+      fadeIn(this.toggleEl);
+    });
   }
 
   // Open a group (null = none). A tool from another group is put down.
@@ -102,7 +125,7 @@ export class BuildMenu {
     const active = this.tools.active;
     if (active?.group && active.group !== id) this.tools.use(this.tools.defaultId);
     for (const b of this.el.querySelectorAll('.bm-group')) b.classList.toggle('open', b.dataset.tab === id);
-    for (const g of this.el.querySelectorAll('.bm-tools')) g.classList.toggle('hidden', g.dataset.group !== id);
+    for (const g of this.el.querySelectorAll('.bm-tools')) slide(g, g.dataset.group === id);
   }
 
   toggleGroup(id) {

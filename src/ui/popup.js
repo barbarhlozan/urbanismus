@@ -8,6 +8,7 @@
 // than at the pointer: to the right if there's room, else to the left.
 
 import { isNarrow } from './device.js';
+import { reveal, isShown } from './motion.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -41,12 +42,19 @@ export class Popup {
   }
 
   get open() {
-    return !this.el.classList.contains('hidden');
+    return isShown(this.el);
   }
 
   show(x, y, title, items, refresh = null, around = null) {
+    const wasOpen = this.open;
     this.refresh = refresh;
     this.render(title, items);
+    this.place(x, y, around);
+    // arriving: a sheet rises from the bottom edge, a menu a few pixels
+    if (!wasOpen) reveal(this.el, true, { from: isNarrow() ? [0, 40] : [0, 4], force: true });
+  }
+
+  place(x, y, around) {
     this.el.classList.toggle('sheet', isNarrow());
     this.body.scrollTop = 0;
     if (isNarrow()) {
@@ -77,10 +85,12 @@ export class Popup {
         <span class="label">${esc(item.label)}</span><span class="note">${esc(item.note ?? '')}</span>
       </button>`;
     }).join('');
-    this.el.classList.remove('hidden');
+    // shown (at once, for measuring) unless it's on its way out: then
+    // show() brings it back with an entrance
+    if (!this.el.classList.contains('leaving')) this.el.classList.remove('hidden');
   }
 
   hide() {
-    this.el.classList.add('hidden');
+    reveal(this.el, false, { from: isNarrow() ? [0, 40] : [0, 4] });
   }
 }

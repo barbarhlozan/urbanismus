@@ -8,6 +8,7 @@
 //                       `terrain` overrides CONFIG.terrain for generateWorld
 
 import { townName } from '../core/townName.js';
+import { reveal, isShown } from './motion.js';
 
 // each setting: its options as [label, value]; `pick` is the default
 const SETTINGS = [
@@ -101,11 +102,11 @@ export class NewMapMenu {
   }
 
   get open() {
-    return !this.el.classList.contains('hidden');
+    return isShown(this.el);
   }
 
   toggle(open = !this.open) {
-    this.el.classList.toggle('hidden', !open);
+    reveal(this.el, open);
     this.button.classList.toggle('on', open);
     if (open) {
       this.rollName();

@@ -4,6 +4,7 @@
 // Editing a custom color switches to the custom scheme.
 
 import { SCHEMES, CUSTOM, COLOR_NAMES, applyTheme, setCustomColor, normalizeHex, schemeChoice } from '../theme.js';
+import { reveal, isShown } from './motion.js';
 
 const LABELS = { bg: 'Background', main: 'Lines', detail: 'Detail' };
 
@@ -65,11 +66,11 @@ export class ColorMenu {
   }
 
   get open() {
-    return !this.el.classList.contains('hidden');
+    return isShown(this.el);
   }
 
   toggle(open = !this.open) {
-    this.el.classList.toggle('hidden', !open);
+    reveal(this.el, open);
     this.button.classList.toggle('on', open);
     if (open) this.refresh();
   }

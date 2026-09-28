@@ -20,6 +20,7 @@ export function sketchFrame(el) {
   svg.setAttribute('class', 'sk-frame');
   svg.setAttribute('aria-hidden', 'true');
   const path = document.createElementNS(NS, 'path');
+  path.setAttribute('pathLength', '1'); // for the pen drawing it on (motion.js)
   svg.appendChild(path);
   el.classList.add('sketched');
 
