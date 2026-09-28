@@ -10,8 +10,9 @@
 // road, sidewalks or not, at no extra cost.
 //
 // Parks and squares are walkable too: their site paths (world.sitePaths) join
-// the exits on their sides through a hub, and exits facing a road connect to
-// the street's sidewalk (if it has one).
+// the exits on their sides through a hub (with a single exit there's only
+// the way in: it ends at a loop, see roads/siteWalks.js), and exits facing a
+// street or lane step onto it.
 //
 // The graph is rebuilt lazily after roads, paths or buildings change.
 
@@ -82,10 +83,8 @@ export class WalkNetwork {
       if (!STRUCTURE_TYPES[s.type]?.site) continue;
       const { hub, hubPos, exits } = world.sitePaths(s);
       for (const e of exits) {
-        link(hub, e.node, Math.hypot(e.pos[0] - hubPos[0], e.pos[1] - hubPos[1]) * 0.9);
-        if (e.road < 0) continue;
-        const walkable = this.allRoads || world.sidewalksAt(e.road).length || [...world.roads.neighbors(e.road)].some((m) => world.isLane(e.road, m));
-        if (walkable) link(e.node, world.coarseToFine(e.road), 0.5 * (this.allRoads ? 1 : this.config.sidewalkCost));
+        if (exits.length > 1) link(hub, e.node, Math.hypot(e.pos[0] - hubPos[0], e.pos[1] - hubPos[1]) * 0.9);
+        if (e.road >= 0) link(e.node, world.coarseToFine(e.road), 0.5 * (this.allRoads ? 1 : this.config.sidewalkCost));
       }
     }
     this.adj = adj;

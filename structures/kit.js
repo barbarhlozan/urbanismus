@@ -142,13 +142,15 @@ export function pallets(g, x, y) {
   g.detailed(2, () => g.box(x - 0.06, y - 0.05, 0, 0.12, 0.1, 0.04));
 }
 
-// Street lamp: a tall concrete post with its head on a bent arm.
-export function lamp(g, x, y) {
+// Street lamp, the Czechoslovak kind: a thick bullet-shaped foot, a thin
+// pole, a flat disc of a shade on top. `h`: height to the shade.
+export function lamp(g, x, y, h = 0.24) {
   if (!g.isFree(x, y, 0.03)) return;
   g.detailed(2, () => {
-    g.solid(x, y, 0.1);
-    g.line([[x, y, 0], [x, y, 0.2], [x + 0.02, y, 0.225], [x + 0.06, y, 0.23]]);
-    g.line([[x + 0.045, y, 0.225], [x + 0.08, y, 0.225]], { width: 2.2 });
+    g.lathe(x, y, 0, [[0.012, 0], [0.012, 0.04], [0.008, 0.052], [0.003, 0.056]], 8, { smooth: true });
+    g.solid(x, y, h / 2);
+    g.line([[x, y, 0.056], [x, y, h]]);
+    g.lathe(x, y, h, [[0.03, 0], [0.03, 0.012]], 12, { smooth: true });
   });
 }
 

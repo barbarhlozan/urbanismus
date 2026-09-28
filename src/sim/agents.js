@@ -57,6 +57,7 @@ import { STRUCTURE_TYPES, levelOf, matches, codeOf } from '../../structures/inde
 import { compass } from '../ui/annotations.js';
 import { findPath } from '../roads/pathfinding.js';
 import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, roadway } from '../roads/geometry.js';
+import { siteWalks, hubRadius } from '../roads/siteWalks.js';
 import { WalkNetwork } from './walking.js';
 
 // The point `len` behind s on a leg – straight back from its start while
@@ -362,17 +363,19 @@ export class AgentSystem {
     return 'linger';
   }
 
-  // Where to stand about in a park or square: along its paths from the hub
-  // to its exits, a step to either side; elsewhere (a churchyard…) near
-  // where they came in.
+  // Where to stand about in a park or square: along its walkways, a step
+  // to either side; on a green without any, round its middle; elsewhere (a
+  // churchyard…) near where they came in.
   parkSpots(place, anchor) {
     if (!place || !STRUCTURE_TYPES[place.type]?.site) return around(...anchor, 0.25);
-    const { hubPos: [hx, hy], exits } = this.world.sitePaths(place);
-    if (!exits.length) return around(hx, hy, 0.3);
+    const { lines, centre } = siteWalks(this.world.sitePaths(place));
+    if (!lines.length) return around(...centre, 0.3);
+    const walks = lines.map(measurePolyline);
+    const total = walks.reduce((sum, w) => sum + w.total, 0);
     return () => {
-      const e = exits[Math.floor(Math.random() * exits.length)];
-      const t = Math.random() * 0.8;
-      return around(hx + (e.pos[0] - hx) * t, hy + (e.pos[1] - hy) * t, 0.15)();
+      let s = Math.random() * total;
+      const w = walks.find((p) => (s -= p.total) < 0) ?? walks[walks.length - 1];
+      return around(...pointAt(w, Math.random() * w.total), 0.1)();
     };
   }
 
@@ -1004,6 +1007,12 @@ export class AgentSystem {
     const c = world.fineToCoarse(n);
     const onRoad = c >= 0 && world.roads.hasNode(c);
     const pathDeg = world.paths.degree(n);
+    if (!onRoad && pathDeg === 0) {
+      // a park's hub: as its walkways are drawn (roads/siteWalks.js)
+      const s = world.structureAt(world.coarseAround(n)[0]);
+      const paths = s && STRUCTURE_TYPES[s.type]?.site && world.sitePaths(s);
+      if (paths?.hub === n) return hubRadius(paths.exits);
+    }
     if (!onRoad) return pathDeg === 2 ? cornerRadius : junctionRadius;
     return pathDeg === 0 && world.roads.degree(c) === 2 ? cornerRadius : junctionRadius; // along a street
   }

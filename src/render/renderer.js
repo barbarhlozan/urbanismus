@@ -19,14 +19,16 @@
 //   parked   – parked cars (hollow squares) in parking lots
 //   trains   – carriages (squares) coupled by a line
 //   agents   – moving dots; sit under objects so buildings hide them correctly
-//   objects  – structures + features, depth sorted together
+//   objects  – structures, features and street lamps, depth sorted together
 //   overlay  – tool previews, hover
 //
 // To add a layer: add its name to LAYERS, write render<Name>(), and mark it
 // dirty from the events that should refresh it.
 //
 // Objects (and their ground drawing in `lots`) are kept per structure /
-// feature: a change redraws only the objects near it, then re-sorts.
+// feature / street segment (its lamp): a change redraws only the objects
+// near it, then re-sorts. Keys: 's12' structure, 'f7' feature, 'k3-4'
+// the street from road dot 3 to 4.
 //
 // New objects are sketched in and removed ones erased (see draw.js): an
 // erased object's elements stay as a ghost until the pen is done with them.
@@ -53,7 +55,11 @@ import { drawPlot } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
 import { mulberry32 } from '../core/random.js';
 import { pointInPolygon } from '../core/geom2d.js';
-import { fitYard, fitSite, freeTest, pathIndex } from './lots.js';
+import { fitYard, fitSite, freeTest, pathIndex, railIndex } from './lots.js';
+import { zebraCrossings, streetLamp, FURNITURE } from '../roads/furniture.js';
+import { lamp } from '../../structures/kit.js';
+import { networkPolylines } from '../roads/geometry.js';
+import { SegmentIndex } from '../core/geom2d.js';
 import { densify } from './warp.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { ELEVATION, contours } from '../terrain/elevation.js';
@@ -198,7 +204,7 @@ export class Renderer {
     this.leaving = this.layers.overlay.parentNode.appendChild(document.createElementNS(SVGNS, 'g'));
     this.leaving.setAttribute('class', 'overlay leaving');
     this.ink = {
-      roads: new InkLayer(this.layers.roads, ['driveway', 'road', 'kerb', 'road-exit', 'bridge', 'bridge-post']),
+      roads: new InkLayer(this.layers.roads, ['driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
       paths: new InkLayer(this.layers.paths, ['footpath', 'bridge', 'bridge-post']),
       rails: new InkLayer(this.layers.rails, ['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'bridge', 'bridge-post']),
     };
@@ -231,6 +237,8 @@ export class Renderer {
       world.events.on(`${kind}:removed`, (o) => this.dying.add(`${k}${o.id}`));
     }
     on('roads:changed', 'roads', 'markers');
+    // street lamps: new streets get theirs drawn in, gone ones erased
+    for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) world.events.on(type, () => this.touchStreets());
     on('paths:changed', 'paths', 'markers');
     on('rails:changed', 'rails');
     for (const type of ['roads:changed', 'paths:changed']) world.events.on(type, () => (this.roadLines = null));
@@ -879,6 +887,10 @@ export class Renderer {
           keepRuns(line, open).forEach((run, j) => add(`k${i}${edgeKey(a, b)}${j ? `:${j}` : ''}`, 'kerb', run, a, b));
         });
       }
+      // zebra crossings where streets meet a junction
+      for (const { node, a, b, stripes } of zebraCrossings(world, curve)) {
+        stripes.forEach((line, i) => add(`z${node}:${edgeKey(a, b)}.${i}`, 'zebra', line, a, b));
+      }
       this.addBridges('road', add);
       this.roadLines = items.slice(from);
     }
@@ -971,6 +983,7 @@ export class Renderer {
       keys = new Set(this.objs.keys());
       for (const id of world.structures.keys()) keys.add(`s${id}`);
       for (const id of world.features.keys()) keys.add(`f${id}`);
+      for (const key of world.sidewalks) keys.add(`k${key}`);
     } else {
       // a street front shares one lift (buildStructure): redraw whole rows
       for (const key of [...keys]) {
@@ -979,6 +992,7 @@ export class Renderer {
       }
     }
     this.free = freeTest(world, this.config);
+    this.lampRoom = null; // (buildStreet: worked out again when needed)
     if (this.objsAll) this.reapGhosts(true); // drawn for the old view
 
     const now = performance.now();
@@ -994,7 +1008,7 @@ export class Renderer {
     for (const key of keys) {
       const id = Number(key.slice(1));
       let entry = this.objs.get(key);
-      if (lazy && entry?.at && !this.born.has(key) && (key[0] === 's' ? world.structures : world.features).has(id)) {
+      if (lazy && entry?.at && !this.born.has(key) && this.exists(key)) {
         const { bounds, box } = this.placeOf(entry.at);
         if (!this.inView(box)) {
           if (['minX', 'maxX', 'minY', 'maxY'].some((k) => entry.bounds[k] !== bounds[k])) orderChanged = true;
@@ -1003,7 +1017,9 @@ export class Renderer {
           continue;
         }
       }
-      const built = key[0] === 's' ? this.buildStructure(world.structures.get(id)) : this.buildFeature(world.features.get(id));
+      const built = key[0] === 's' ? this.buildStructure(world.structures.get(id))
+        : key[0] === 'f' ? this.buildFeature(world.features.get(id))
+          : this.buildStreet(key.slice(1));
       if (!built) {
         if (entry) {
           this.objs.delete(key);
@@ -1104,6 +1120,51 @@ export class Renderer {
   attachFree(painter) {
     painter.free = (x, y, r) => this.free(...painter.toWorld(x, y), r);
     return painter;
+  }
+
+  // Is the thing an object key stands for still there?
+  exists(key) {
+    const { world } = this;
+    if (key[0] === 'k') return world.sidewalks.has(key.slice(1));
+    return (key[0] === 's' ? world.structures : world.features).has(Number(key.slice(1)));
+  }
+
+  // Street lamps come and go with the streets (and move for footpaths
+  // and railways): redraw every street's, sketching in the new ones.
+  touchStreets() {
+    const { world } = this;
+    for (const key of world.sidewalks) {
+      const k = `k${key}`;
+      if (!this.objs.has(k)) this.born.set(k, null);
+      this.objsDirty.add(k);
+    }
+    for (const k of this.objs.keys()) {
+      if (k[0] !== 'k' || world.sidewalks.has(k.slice(1))) continue;
+      this.dying.add(k);
+      this.objsDirty.add(k);
+    }
+  }
+
+  // A street segment's lamp (roads/furniture.js), or null where it has none.
+  buildStreet(key) {
+    const { world, camera, config } = this;
+    if (!world.sidewalks.has(key)) return null;
+    if (!this.lampRoom) {
+      const paths = pathIndex(world, config), rails = railIndex(world, config);
+      const clear = FURNITURE.lamp.clear;
+      this.lampRoom = {
+        clear: (q) => paths.distance(q, clear) === Infinity && rails.distance(q, clear) === Infinity,
+        roads: new SegmentIndex(networkPolylines(world.networks.road, config.road)),
+      };
+    }
+    const [a, b] = key.split('-').map(Number);
+    const at = streetLamp(world, config.road, a, b, this.lampRoom.clear, this.lampRoom.roads);
+    if (!at) return null;
+    const [x, y] = at;
+    const painter = new Painter(camera, { x, y, z: world.terrain.heightAt(x, y) }, 0, a * 7919 + b);
+    painter.rigid = [x, y];
+    lamp(painter, 0, 0);
+    return { svg: mergeRuns(painter.toSVG()), ground: '', ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
   }
 
   buildFeature(f) {

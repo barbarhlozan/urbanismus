@@ -444,36 +444,114 @@ export class World {
     };
   }
 
-  // Walkable paths through a site (park, square): exits in the middle of the
-  // footprint's sides, on the footpath grid, joined at a hub in the middle.
-  // Sides facing a road or touched by a footpath always get an exit; the
-  // rest are picked by seed, more with level (1 + level, max 4).
-  //   { hub, exits: [{ node, pos: [x, y], dir: [dx, dy], road }] }
-  // node = fine-grid index; road = main-grid road node the exit leads to, or -1.
+  // Walkable paths through a site (park, square), joined at a hub in the
+  // middle. There are exits only where something arrives, on the footpath
+  // grid on the footprint's sides:
+  //   - a footpath reaching the side (every one coming in; one running just
+  //     along the side gets a single exit, the nearest to the middle)
+  //   - a street (sidewalks) or lane along it: in the middle of the side
+  //   - a neighbouring site: in the middle of the stretch they share, so
+  //     their walkways meet – but only when that group of sites has a way
+  //     in of its own
+  // With none the site is left without walkways (see roads/siteWalks.js).
+  //   { hub, hubPos, half, exits: [{ node, pos: [x, y], dir: [dx, dy], road, site }] }
+  // node = fine-grid index; road = the street / lane dot it leads to, or -1;
+  // site = the neighbouring site's id, or -1; half = half the footprint's
+  // narrower side, plus half a dot (1x1: 0.5, 2x2: 1).
   sitePaths(s) {
+    const own = this.siteExits(s);
+    if (!own.exits.some((e) => e.site >= 0) || this.siteGroupOpen(s)) return own;
+    return { ...own, exits: own.exits.filter((e) => e.site < 0) };
+  }
+
+  // Does the group of touching sites `s` belongs to have a way in (an exit
+  // that isn't just to another site of the group)?
+  siteGroupOpen(s) {
+    const seen = new Set([s.id]);
+    const queue = [s];
+    while (queue.length) {
+      const { exits } = this.siteExits(queue.pop());
+      for (const e of exits) {
+        if (e.site < 0) return true;
+        if (seen.has(e.site)) continue;
+        seen.add(e.site);
+        const o = this.structures.get(e.site);
+        if (o) queue.push(o);
+      }
+    }
+    return false;
+  }
+
+  // A site's exits before sitePaths drops those to a closed group; cached
+  // until the roads, footpaths or structures change.
+  siteExits(s) {
+    const stamp = `${this.networks.road.version}|${this.networks.path.version}|${this.structureVersion}`;
+    if (this.siteCache?.stamp !== stamp) this.siteCache = { stamp, map: new Map() };
+    const key = `${s.id}|${s.type}|${s.node}|${s.rotation}`; // (previews have no id of their own)
+    const hit = this.siteCache.map.get(key);
+    if (hit) return hit;
+
     const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
     const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
     const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
     const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
     const fineAt = (x, y) => (this.fine.inBounds(2 * x, 2 * y) ? this.fine.index(2 * x, 2 * y) : -1);
+    const walkable = (n) => n >= 0 && this.hasRoad(n) && !this.terrain.isWater(n) &&
+      [...this.roads.neighbors(n)].some((m) => this.hasSidewalk(n, m) || this.isLane(n, m));
 
+    const exits = [];
+    const add = (pos, dir, road, site) => {
+      const node = fineAt(...pos);
+      if (node < 0 || exits.some((e) => e.node === node)) return;
+      exits.push({ node, pos, dir, road, site });
+    };
+    // each side: where along it (t) is which point on it
     const sides = [
-      { pos: [x0 - 0.5, cy], dir: [-1, 0] },
-      { pos: [x1 + 0.5, cy], dir: [1, 0] },
-      { pos: [cx, y0 - 0.5], dir: [0, -1] },
-      { pos: [cx, y1 + 0.5], dir: [0, 1] },
-    ].map((e) => {
-      const node = fineAt(...e.pos);
-      const r = this.grid.nodeAt(e.pos[0] + e.dir[0] * 0.5, e.pos[1] + e.dir[1] * 0.5);
-      return { ...e, node, road: r >= 0 && this.hasRoad(r) ? r : -1 };
-    }).filter((e) => e.node >= 0);
-
-    const rng = mulberry32(s.seed ^ 0x7a11);
-    const order = sides.map((e) => ({ e, k: (e.road >= 0 || this.paths.hasNode(e.node) ? -1 : 0) + rng() }));
-    order.sort((a, b) => a.k - b.k);
-    const forced = order.filter((o) => o.k < 0).length;
-    const exits = order.slice(0, Math.max(forced, Math.min(4, 1 + (s.level ?? 1)))).map((o) => o.e);
-    return { hub: fineAt(cx, cy), hubPos: [cx, cy], exits };
+      { dir: [-1, 0], at: (t) => [x0 - 0.5, t], span: [y0, y1] },
+      { dir: [1, 0], at: (t) => [x1 + 0.5, t], span: [y0, y1] },
+      { dir: [0, -1], at: (t) => [t, y0 - 0.5], span: [x0, x1] },
+      { dir: [0, 1], at: (t) => [t, y1 + 0.5], span: [x0, x1] },
+    ];
+    for (const { dir: [dx, dy], at, span: [a, b] } of sides) {
+      const mid = (a + b) / 2;
+      // footpaths: coming in from outside, or else only running along (a
+      // corner counts only for one coming in diagonally, from both sides)
+      const arriving = [], along = [];
+      for (let t = a - 0.5; t <= b + 0.5; t += 0.5) {
+        const f = fineAt(...at(t));
+        if (f < 0 || !this.paths.hasNode(f)) continue;
+        const [fx, fy] = this.fine.xy(f);
+        const corner = t < a || t > b;
+        const [ox, oy] = !corner ? [0, 0] : dx ? [0, t < a ? -1 : 1] : [t < a ? -1 : 1, 0];
+        const comes = [...this.paths.neighbors(f)].some((m) => {
+          const [mx, my] = this.fine.xy(m);
+          return (mx - fx) * dx + (my - fy) * dy > 0 && (!corner || (mx - fx) * ox + (my - fy) * oy > 0);
+        });
+        if (comes) arriving.push(t);
+        else if (!corner) along.push(t);
+      }
+      const near = along.sort((p, q) => Math.abs(p - mid) - Math.abs(q - mid)).slice(0, 1);
+      for (const t of arriving.length ? arriving : near) add(at(t), [dx, dy], -1, -1);
+      // the dots just outside: a street or lane, neighbouring sites
+      const outside = [];
+      for (let t = a; t <= b; t++) {
+        const [px, py] = at(t);
+        outside.push({ t, n: this.grid.nodeAt(px + dx * 0.5, py + dy * 0.5) });
+      }
+      const road = outside.find((o) => walkable(o.n));
+      if (road) add(at(mid), [dx, dy], road.n, -1);
+      const shared = new Map();
+      for (const { t, n } of outside) {
+        const o = n >= 0 ? this.structureAt(n) : null;
+        if (!o || o.id === s.id || !STRUCTURE_TYPES[o.type]?.site) continue;
+        if (!shared.has(o.id)) shared.set(o.id, []);
+        shared.get(o.id).push(t);
+      }
+      for (const [id, ts] of shared) add(at((Math.min(...ts) + Math.max(...ts)) / 2), [dx, dy], -1, id);
+    }
+    const out = { hub: fineAt(cx, cy), hubPos: [cx, cy], half: Math.min(x1 - x0, y1 - y0) / 2 + 0.5, exits };
+    this.siteCache.map.set(key, out);
+    return out;
   }
 
   // Which way a structure's front looks: { door, dir: [dx, dy], road }.

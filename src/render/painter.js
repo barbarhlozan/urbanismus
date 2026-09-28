@@ -78,6 +78,7 @@
 import { rotateQuarter } from './camera.js';
 import { color } from '../theme.js';
 import { mulberry32 } from '../core/random.js';
+import { siteWalks } from '../roads/siteWalks.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -349,13 +350,22 @@ export class Painter {
     return this;
   }
 
-  // Site paths (world.sitePaths) in local coordinates:
-  // g.site.paths = { hub: [x, y], exits: [{ pos: [x, y], dir: [dx, dy], road }] }
-  setSitePaths({ hubPos, exits }) {
+  // Site paths (world.sitePaths) and the walkways they make
+  // (roads/siteWalks.js) in local coordinates:
+  // g.site.paths = { hub: [x, y], exits: [{ pos: [x, y], dir: [dx, dy], road, site }],
+  //                  lines: [[[x, y]…]…], plaza, loop, centre: [x, y] }
+  // road / site: the exit leads onto a street / into a neighbouring site.
+  setSitePaths(paths) {
+    const { hubPos, exits } = paths;
     const local = ([x, y]) => rotateQuarter(x - this.ox, y - this.oy, -this.rotation);
+    const walks = siteWalks({ half: 0.5, ...paths });
     this.site.paths = {
       hub: local(hubPos),
-      exits: exits.map((e) => ({ pos: local(e.pos), dir: rotateQuarter(e.dir[0], e.dir[1], -this.rotation), road: e.road >= 0 })),
+      exits: exits.map((e) => ({ pos: local(e.pos), dir: rotateQuarter(e.dir[0], e.dir[1], -this.rotation), road: e.road >= 0, site: (e.site ?? -1) >= 0 })),
+      lines: walks.lines.map((line) => line.map(local)),
+      plaza: walks.plaza,
+      loop: walks.loop,
+      centre: local(walks.centre),
     };
     return this;
   }

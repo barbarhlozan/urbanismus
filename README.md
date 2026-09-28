@@ -15,7 +15,8 @@ Then open http://localhost:8173. The city saves itself in the browser; **New map
 Everything you can build is in the **Build** menu, bottom right: Transport, Zones, Public and
 Landmarks, plus Erase. Open a group to see its tools; click a tool to pick it up and click it
 again (or close its group, or **Esc**) to put it down. The **–** folds the menu into a single
-Build button. Things that come in two sizes or kinds (parks, squares, services, industry,
+Build button; picking a tool folds it too, out of the way, and it comes back when you put the
+tool down. Things that come in two sizes or kinds (parks, squares, services, industry,
 station / stop, plague column / memorial) are one tool with a **Size** button (**S**). While a tool is in hand, its options (size, rotate,
 another look, bend…) are buttons above the bottom edge.
 
@@ -23,8 +24,8 @@ another look, bend…) are buttons above the bottom edge.
   themselves only show while building
 - **R** roads, **F** footpaths – click start, click end; **Tab** flips the bend
 - Draw a footpath **along a road** (on it or right beside it) to make it a street with sidewalks (kerb lines on both
-  sides). People only walk along streets and footpaths; cyclists and cars use every road.
-  Erasing a street removes its sidewalks first.
+  sides, street lamps, zebra crossings at junctions). People only walk along streets and footpaths; cyclists and
+  cars use every road. Erasing a street removes its sidewalks first.
 - **N** lanes – single-track roads, narrower than a road. Cars drive them slowly (and avoid
   them when a road will do); people walk and cycle on them as on a footpath, so they get no
   sidewalks. Draw a lane over a road or footpath to turn it into a lane, a road over a lane
@@ -79,6 +80,10 @@ folded there and folds again once you pick a tool.
 - **Public** also has a house of culture and a cemetery. Parks
   and squares have era layouts among their looks: a koupaliště, a summer cinema, a sports
   ground, a forest park with a lookout, a shopping precinct, a bus station, a parade square.
+- A park only gets walkways where people can come in: a footpath reaching it, a street
+  (sidewalks) or lane along it, or a neighbouring park that has a way in. One way in runs to
+  a loop, two curve into each other, more meet at a little plaza; with none it stays a plain
+  green. People walk the walkways as drawn.
 - Each building gets a random seed, so it always looks the same, but **C** / **Change look**
   rerolls it.
 - People walk, cycle or drive, depending on distance. Cyclists use footpaths and roads and take

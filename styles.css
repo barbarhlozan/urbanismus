@@ -125,6 +125,14 @@ html, body {
   stroke-linecap: round;
 }
 
+/* zebra crossings: short stripes across a street at a junction */
+.zebra {
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 1.6;
+  stroke-linecap: butt;
+}
+
 .road-exit {
   fill: none;
   stroke: var(--fg);
@@ -236,7 +244,8 @@ html, body {
 .lod-2 .d1,
 .lod-2 .d2,
 #world.lod-2 .layer-parked,
-#world.lod-2 .driveway { display: none; }
+#world.lod-2 .driveway,
+#world.lod-2 .zebra { display: none; }
 
 .unconnected {
   fill: none;

@@ -231,7 +231,6 @@ function pickUp() {
   else if (world.rails.hasNode(world.networks.rail.nodeAt(...p))) tool = tools.registry.get('rail');
   else if (world.hasRoad(node)) tool = tools.registry.get(world.laneOnly(node) ? 'lane' : 'road');
   if (!tool) return;
-  hud.buildMenu.fold(false);
   tools.use(tool.id, params);
 }
 

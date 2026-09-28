@@ -5,8 +5,9 @@
 //
 // Only one group is open at a time. Clicking the active tool again, or
 // closing its group, puts the tool down: that's select mode (the default
-// tool has no entry). On narrow screens the panel starts folded and folds
-// itself again once a tool is picked, to give the map back.
+// tool has no entry). Picking a tool (here or by its key) folds the panel,
+// to give the map back; on a wide screen it opens again when the tool is
+// put down. On narrow screens it starts folded and stays so.
 
 import { CATEGORIES } from '../../structures/index.js';
 import { toolIcon } from './icons.js';
@@ -57,7 +58,6 @@ export class BuildMenu {
       if (tools.active?.id === id) return tools.use(tools.defaultId);
       if (!btn.dataset.group) this.openGroup(null);
       tools.use(id);
-      if (isNarrow()) this.fold(true);
     });
 
     tools.onChange((tool) => {
@@ -68,6 +68,13 @@ export class BuildMenu {
       const picked = tool.id !== tools.defaultId;
       this.currentEl.textContent = picked ? tool.label : '';
       this.el.classList.toggle('has-tool', picked);
+      // out of the way while building, back when done (unless it was folded before)
+      if (picked && !this.folded) {
+        this.fold(true, false);
+        this.autoFolded = !isNarrow();
+      } else if (!picked && this.autoFolded) {
+        this.fold(false, false);
+      }
     });
 
     let folded = isNarrow();
@@ -83,6 +90,7 @@ export class BuildMenu {
   }
 
   fold(folded, remember = true) {
+    this.autoFolded = false;
     this.el.classList.toggle('folded', folded);
     if (!remember || isNarrow()) return;
     try { localStorage.setItem(FOLD_KEY, folded ? '1' : '0'); } catch { /* storage unavailable */ }
