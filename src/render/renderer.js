@@ -245,8 +245,9 @@ export class Renderer {
     // bridges come and go with the networks; the water breaks under them
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
       world.events.on(type, () => {
-        const before = this.bridgeKey;
-        if (this.bridgeState().key !== before) this.dirty.add('terrain');
+        // (only when the bridges changed: the water is costly to draw)
+        this.bridgeState();
+        if (this.bridgeKey !== this.waterBridges) this.dirty.add('terrain');
       });
     }
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
@@ -269,6 +270,7 @@ export class Renderer {
       this.objsAll = this.worldAll = true; // (not just the view: draw them all now)
       this.roadLines = null;
       this.contourLines = null; // water breaks them
+      this.waterLines = null;
     });
   }
 
@@ -500,18 +502,27 @@ export class Renderer {
   // body of water is worked out on its own, over just its own box.
   renderWater() {
     const { world } = this;
-    const out = { shore: '', bank: '', wave: '' };
-    const elev = world.elevation, field = world.riverField;
-    for (const cells of this.waterBodies()) {
-      if (field && world.terrain.isRiver(world.grid.nodeAt(...cells[0]))) {
-        this.renderWaterBody(cells, (x, y) => field.depth(x, y), out, field);
-      } else {
-        const level = this.waterLevel(cells, elev);
-        this.renderWaterBody(cells, (x, y) => (level - elev(x, y)) / WATER.metres, out);
+    const { list: bridges, deck } = this.bridgeState();
+    this.waterBridges = this.bridgeKey; // drawn broken under these (see the constructor)
+    // The lines in world units, traced once per terrain (the costly part)…
+    if (!this.waterLines) {
+      this.waterLines = { shore: [], bank: [], wave: [] };
+      const elev = world.elevation, field = world.riverField;
+      for (const cells of this.waterBodies()) {
+        if (field && world.terrain.isRiver(world.grid.nodeAt(...cells[0]))) {
+          this.renderWaterBody(cells, (x, y) => field.depth(x, y), this.waterLines, field);
+        } else {
+          const level = this.waterLevel(cells, elev);
+          this.renderWaterBody(cells, (x, y) => (level - elev(x, y)) / WATER.metres, this.waterLines);
+        }
       }
     }
-    const path = (d, cls) => (d ? `<path class="${cls}" d="${d}"/>` : '');
-    return path(out.shore, 'shore') + path(out.bank, 'bank') + path(out.wave, 'wave');
+    // …then broken where a bridge deck passes over, and put on screen
+    const { shore, bank, wave } = this.waterLines;
+    const hidden = bridges.length ? hiddenUnder(bridges, deck, this.camera) : null;
+    const open = (lines) => (hidden ? lines.flatMap((pts) => keepRuns(pts, (q) => !hidden(...q), 0.04)) : lines);
+    const path = (lines, cls) => (lines.length ? `<path class="${cls}" d="${this.pathData(lines, false)}"/>` : '');
+    return path(open(shore), 'shore') + path(open(bank), 'bank') + path(wave, 'wave');
   }
 
   // Water dots grouped into lakes (touching, diagonals too), as [[x, y]…] each.
@@ -552,7 +563,7 @@ export class Renderer {
   // `below(x, y)`: grid units inside the shore (negative on land), kept
   // within reach of the water dots. With `river` (its field) it is worked
   // out to the map frame, past the dots at the edges.
-  renderWaterBody(cells, below, out, river = null) {
+  renderWaterBody(cells, below, out, river = null) { // (out: lines in world units, by class)
     const { radius, soft, step, wave } = WATER;
     const { width, height } = this.world.grid;
     const xs = cells.map((c) => c[0]), ys = cells.map((c) => c[1]);
@@ -595,13 +606,8 @@ export class Renderer {
       return j * nx + i;
     };
     const field = (x, y) => Math.min(wet[sample(x, y)] / 0.06, 0.5);
-    // broken where a bridge deck passes over
-    const bridges = this.bridgeState().list;
-    const hidden = hiddenUnder(bridges, this.bridgeState().deck, this.camera);
     for (const c of contours(field, box, { step, interval: 1, index: 99 })) {
-      if (c.level !== 0) continue;
-      const runs = bridges.length ? keepRuns(c.points, (q) => !hidden(...q), 0.04) : [c.points];
-      out[river ? 'bank' : 'shore'] += this.pathData(runs, false);
+      if (c.level === 0) out[river ? 'bank' : 'shore'].push(c.points);
     }
     if (river) return;
     // Waves: at the point furthest from the shore (a two-pass chamfer
@@ -643,7 +649,7 @@ export class Renderer {
       const px = cx + ux * along - uy * off, py = cy + uy * along + ux * off;
       return [[px - ux * l / 2, py - uy * l / 2], [px + ux * l / 2, py + uy * l / 2]];
     };
-    out.wave += this.pathData([stroke(0, 0, len), stroke(len * 0.12, wave.gap, len * 0.6)], false);
+    out.wave.push(stroke(0, 0, len), stroke(len * 0.12, wave.gap, len * 0.6));
   }
 
   setContours(on) {
