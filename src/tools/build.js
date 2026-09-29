@@ -84,7 +84,11 @@ export function createBuildTool({ world }, defs) {
         }
         return out;
       }
-      return world.footprintNodes(d.id, hover, rotation).map((n) => kit.cross(n)).join('');
+      // it can't go here: still show it where it would stand, faded, with
+      // a cross on each of its dots
+      const nodes = world.footprintNodes(d.id, hover, rotation);
+      const ghost = nodes.includes(-1) ? '' : kit.ghost(d, hover, world.facingRotation(d.id, hover, rotation), 1, seed, { blocked: true });
+      return ghost + nodes.map((n) => kit.cross(n)).join('');
     },
   };
 }

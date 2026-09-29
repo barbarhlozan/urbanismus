@@ -222,6 +222,12 @@ html, body {
 .layer-meadow .ink { fill: var(--detail); stroke-width: 0.4; }
 .mz0 .t1, .mz0 .t2, .mz1 .t2 { display: none; }
 .ghost .gnd { fill: none; stroke-width: 0.8; }
+/* the build preview: all in the detail pen, solid lines (the dashed .ghost
+   look above is for buildings being erased); faded where it can't go */
+.overlay .ghost polygon, .overlay .ghost circle, .overlay .ghost .filled { stroke: var(--detail); }
+.overlay .ghost polygon, .overlay .ghost polyline, .overlay .ghost .sk { stroke-dasharray: none; }
+.overlay .ghost .ink { fill: var(--detail); stroke: var(--detail); }
+.overlay .ghost.blocked { opacity: 0.5; }
 
 .agent { fill: var(--fg); }
 .agent.truck { stroke: var(--fg); stroke-width: 0.9; stroke-linejoin: round; }
@@ -276,9 +282,14 @@ html, body {
   from { stroke-dashoffset: var(--len); }
   to { stroke-dashoffset: 0; }
 }
+/* the build preview (OverlayKit.ghost) grows in about the building's base,
+   quickly, and shrinks away the same way (Renderer.letGo) */
+.overlay .ghost-anim { transform-origin: 0 0; animation: ghost-in 0.16s ease-out both; }
+@keyframes ghost-in { from { opacity: 0; transform: scale(0.85); } }
 @media (prefers-reduced-motion: reduce) {
   .overlay .hover { animation: none; stroke-dasharray: none; }
   .overlay .tag-group { animation-duration: 0s; }
+  .overlay .ghost-anim { animation: none; }
 }
 .overlay .preview {
   fill: none;

@@ -75,8 +75,14 @@ export class OverlayKit {
     return `<path class="${cls}" d="${d}"/>`;
   }
 
-  // Dashed preview of a structure at a node.
-  ghost(def, node, rotation = 0, level = 1, seed = 1) {
+  // Preview of a structure at a node, drawn in the detail pen. `blocked`:
+  // it can't go there – faded, so what's in the way shows through (the
+  // build tool adds crosses). It grows in when it appears and shrinks away
+  // when it goes (a new spot, turn or look): the outer group stands at the
+  // footprint's middle, so the animated one scales about the building's
+  // base; data-anim keeps the animation going across overlay redraws
+  // (Renderer.keepAnimating) and plays the exit (Renderer.letGo).
+  ghost(def, node, rotation = 0, level = 1, seed = 1, { blocked = false } = {}) {
     const [x, y] = this.world.grid.xy(node);
     const instance = { type: def.id, node, rotation, level, seed, data: {} };
     const painter = new Painter(this.camera, { x, y, z: this.world.terrain.heightAt(x, y) }, rotation, drawSeed(instance));
@@ -90,7 +96,10 @@ export class OverlayKit {
     }
     painter.setTilt(tiltOf(def, instance));
     levelOf(def, instance).draw(painter, instance);
-    return `<g class="ghost">${painter.toGroundSVG()}${painter.toSVG()}</g>`;
+    const [sx, sy] = this.camera.project(...painter.rigid, this.world.terrain.heightAt(...painter.rigid)).map(r2);
+    const key = `ghost:${def.id}:${node}:${rotation}:${level}:${seed}:${blocked ? 1 : 0}`;
+    return `<g transform="translate(${sx} ${sy})"><g class="ghost-anim" data-anim="${key}">`
+      + `<g class="ghost${blocked ? ' blocked' : ''}" transform="translate(${-sx} ${-sy})">${painter.toGroundSVG()}${painter.toSVG()}</g></g></g>`;
   }
 
   // Photo mode (tools/photo.js): the photographer at (x, y), the camera icon,

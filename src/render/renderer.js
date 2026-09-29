@@ -357,16 +357,22 @@ export class Renderer {
       if (next.has(el.dataset.anim)) continue;
       const cs = getComputedStyle(el);
       const ring = el.classList.contains('hover');
+      const ghost = el.classList.contains('ghost-anim');
       const len = parseFloat(cs.getPropertyValue('--len'));
       const from = ring ? parseFloat(cs.strokeDashoffset) : parseFloat(cs.opacity);
       if (still || (ring ? from >= len - 1 : from < 0.01)) continue; // never got drawn
+      const scale = ghost ? new DOMMatrix(cs.transform).a : 1;
       el.style.animation = 'none';
-      this.leaving.appendChild(el);
+      // a preview keeps its place: its parent group puts it there
+      const moved = ghost ? el.parentNode : el;
+      this.leaving.appendChild(moved);
       const frames = ring
         ? [{ strokeDashoffset: `${from}px` }, { strokeDashoffset: `${-len}px` }]
-        : [{ opacity: from }, { opacity: 0 }];
-      el.animate(frames, { duration: ring ? 220 : 150, easing: 'ease-in', fill: 'forwards' })
-        .finished.then(() => el.remove(), () => el.remove());
+        : ghost
+          ? [{ opacity: from, transform: `scale(${scale})` }, { opacity: 0, transform: 'scale(0.85)' }]
+          : [{ opacity: from }, { opacity: 0 }];
+      el.animate(frames, { duration: ring ? 220 : ghost ? 130 : 150, easing: 'ease-in', fill: 'forwards' })
+        .finished.then(() => moved.remove(), () => moved.remove());
     }
   }
 
