@@ -78,6 +78,7 @@
 import { rotateQuarter } from './camera.js';
 import { color } from '../theme.js';
 import { mulberry32 } from '../core/random.js';
+import { MinHeap } from '../core/heap.js';
 import { siteWalks } from '../roads/siteWalks.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -138,6 +139,51 @@ function newellNormal(points) {
   return [nx, ny, nz];
 }
 
+// Back-to-front order of solids. Mostly by depth (the centre), but where two
+// solids stand clear of each other along a view axis – one entirely on the
+// far side of the other – and overlap on screen, the far one goes first. The
+// centre alone gets that wrong beside long solids: a shed by the end of a
+// long barn can have its centre nearer than the barn's and be drawn over it.
+// Everything else keeps its depth order: each step draws the farthest solid
+// whose solids behind are all drawn (so a roof stays after its walls, a
+// chimney after its roof). Pairs are found like isoSort in renderer.js, by a
+// sweep over the screen extents.
+function orderSolids(solids) {
+  const items = solids.map((s) => {
+    const [x0, y0, x1, y1] = s.box ?? [0, 0, 0, 0];
+    return { s, x0, y0, x1, y1, left: x0 - y1, right: x1 - y0, behind: [], ahead: [], wait: 0 };
+  }).sort((a, b) => a.s.depth - b.s.depth);
+  items.forEach((it, i) => { it.i = i; });
+  // a is entirely on the far side of b along x or y (a single point that
+  // coincides with the other is not "clear" of it)
+  const clear = (a, b) => (a.x1 <= b.x0 && a.x0 < b.x1) || (a.y1 <= b.y0 && a.y0 < b.y1);
+  const byLeft = items.slice().sort((a, b) => a.left - b.left);
+  for (let i = 0; i < byLeft.length; i++) {
+    const a = byLeft[i];
+    for (let j = i + 1; j < byLeft.length && byLeft[j].left < a.right; j++) {
+      const b = byLeft[j];
+      if (clear(a, b)) { a.ahead.push(b); b.wait++; }
+      else if (clear(b, a)) { b.ahead.push(a); a.wait++; }
+    }
+  }
+  const out = [], ready = new MinHeap();
+  for (const it of items) if (!it.wait) ready.push(it, it.i);
+  let next = 0; // for breaking a cycle: the farthest solid not yet drawn
+  while (out.length < items.length) {
+    let it;
+    if (ready.size) it = ready.pop();
+    else {
+      while (items[next].done) next++;
+      it = items[next];
+    }
+    if (it.done) continue;
+    it.done = true;
+    out.push(it.s);
+    for (const b of it.ahead) if (--b.wait === 0 && !b.done) ready.push(b, b.i);
+  }
+  return out;
+}
+
 function attrs(opts, lod = 0, base = '') {
   let style = '';
   if (opts.fill) style += `fill:${color(opts.fill)};`;
@@ -169,7 +215,7 @@ export class Painter {
     this.rotation = rotation;
     this.solids = [];
     this.ground = [];
-    this.groundAt = [];   // world [x, y] of each ground entry (its middle), for photo.js
+    this.groundAt = [];   // world [x, y] of each ground entry, for photo.js (its nearest point to a perspective camera)
     this.site = null;
     this.spots = [];
     this.lod = 0;
@@ -390,7 +436,10 @@ export class Painter {
     return opts.lod ?? this.lod;
   }
 
+  // Every primitive calls this with its footprint just before starting its
+  // solid, which takes it as its ground area for sorting (see solid()).
   _grow(points) {
+    this._footprint = points;
     for (const [x, y] of points) {
       if (!this.bounds) this.bounds = [x, y, x, y];
       const b = this.bounds;
@@ -460,15 +509,47 @@ export class Painter {
 
   // ----- public API -----
 
+  // A solid's `box` is its ground area in view axes ([x0, y0, x1, y1], both
+  // growing towards the viewer), used by toSVG() to sort: a primitive's
+  // footprint (`fixed`), or else the point it starts at, grown by the faces
+  // and lines drawn into it.
   solid(x, y, z) {
     const [wx, wy, wz] = this._world(x, y, z);
-    this.current = { depth: this.camera.depth(wx, wy) + wz * 1e-3, parts: [], at: [wx, wy, wz] };
+    const foot = this._footprint;
+    this._footprint = null;
+    const box = foot ? this._viewBox(foot.length === 2 ? [foot[0], [foot[1][0], foot[0][1]], foot[1], [foot[0][0], foot[1][1]]] : foot)
+      : this._viewBox([[x, y]]);
+    this.current = { depth: this.camera.depth(wx, wy) + wz * 1e-3, parts: [], at: [wx, wy, wz], box, fixed: !!foot };
     this.solids.push(this.current);
     return this;
   }
 
+  // View-axis bounding box of local ground points (null for a camera
+  // without view axes: the photo's perspective one sorts by its own depth).
+  _viewBox(points) {
+    if (!this.camera.rotated) return null;
+    let b = null;
+    for (const [x, y] of points) {
+      const [wx, wy] = this._world(x, y, 0);
+      const [rx, ry] = this.camera.rotated(wx, wy);
+      if (!b) b = [rx, ry, rx, ry];
+      else { b[0] = Math.min(b[0], rx); b[1] = Math.min(b[1], ry); b[2] = Math.max(b[2], rx); b[3] = Math.max(b[3], ry); }
+    }
+    return b;
+  }
+
+  // Grow the current solid's box by what is drawn into it (solids without a
+  // primitive's footprint: plates, props made of faces and lines).
+  _spread(points) {
+    const c = this.current;
+    if (c.fixed || !c.box) return;
+    const b = this._viewBox(points);
+    c.box = [Math.min(c.box[0], b[0]), Math.min(c.box[1], b[1]), Math.max(c.box[2], b[2]), Math.max(c.box[3], b[3])];
+  }
+
   face(points, opts = {}) {
     this._ensure(...points[0]);
+    this._spread(points);
     if (!this._facing(newellNormal(points), points[0])) return this;
     this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
     return this;
@@ -649,7 +730,7 @@ export class Painter {
     // The roof is its own solid just in front of the walls, so window lines
     // drawn on the walls afterwards stay under the eaves.
     const walls = this.current;
-    this.current = { depth: walls.depth + 1e-6, parts: [], at: walls.at };
+    this.current = { depth: walls.depth + 1e-6, parts: [], at: walls.at, box: walls.box, fixed: true };
     this.solids.push(this.current);
     const onWalls = (fn) => { const roofSolid = this.current; this.current = walls; fn(); this.current = roofSolid; };
 
@@ -871,8 +952,17 @@ export class Painter {
       }
     }
     if (this.ground.length > n) {
-      const mx = points.reduce((a, p) => a + p[0], 0) / points.length, my = points.reduce((a, p) => a + p[1], 0) / points.length;
-      const at = this.toWorld(mx, my);
+      const cam = this.camera;
+      let at;
+      if (cam.perspective) {
+        // the nearest point in front, so the photo's nearer ground bands
+        // don't cover part of it
+        for (const [px, py] of points) {
+          const w = this.toWorld(px, py), a = cam.ahead(...w);
+          if (a >= cam.near && (!at || a < cam.ahead(...at))) at = w;
+        }
+      }
+      if (!at) at = this.toWorld(points.reduce((a, p) => a + p[0], 0) / points.length, points.reduce((a, p) => a + p[1], 0) / points.length);
       while (this.groundAt.length < this.ground.length) this.groundAt.push(at);
     }
     return this;
@@ -944,6 +1034,7 @@ export class Painter {
 
   line(points, opts = {}) {
     this._ensure(...points[0]);
+    this._spread(points);
     if (opts.facing && !this._facing(opts.facing, points[0])) return this;
     const lod = opts.lod ?? (opts.facing ? Math.max(2, this.lod) : this.lod);
     this.current.parts.push(this._outline(points, false, opts, lod));
@@ -1003,9 +1094,6 @@ export class Painter {
   }
 
   toSVG() {
-    return this.solids
-      .sort((a, b) => a.depth - b.depth)
-      .map((s) => s.parts.join(''))
-      .join('');
+    return orderSolids(this.solids).map((s) => s.parts.join('')).join('');
   }
 }

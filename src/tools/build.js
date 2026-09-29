@@ -57,7 +57,7 @@ export function createBuildTool({ world }, defs) {
 
     key(e) {
       if (e.key === 'Tab') rotate();
-      else if (keyOf(e) === '.') reroll();
+      else if (keyOf(e) === ' ') reroll();
       else if (e.key === 'Shift' && !e.repeat && defs.length > 1) resize();
       else return false;
       return true;
@@ -66,7 +66,7 @@ export function createBuildTool({ world }, defs) {
     actions: () => [
       ...(defs.length > 1 ? [{ label: `Size: ${sizeOf(def())}`, key: 'Shift', run: resize }] : []),
       { label: 'Rotate', key: 'Tab', run: rotate },
-      { label: 'Another look', key: '.', run: reroll },
+      { label: 'Another look', key: 'Space', run: reroll },
     ],
 
     overlay(kit, hover) {

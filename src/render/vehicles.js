@@ -233,27 +233,49 @@ export function vehicleSVG(camera, name, heading, hand) {
   const key = `${name}|${heading}|${hand}|${camera.rotation}|${camera.tile}|${camera.zScale}`;
   let svg = cache.get(key);
   if (svg === undefined) {
-    svg = draw(camera, model(name), (heading / VEHICLES.headings) * Math.PI * 2, hand);
+    svg = draw(isoView(camera), model(name), (heading / VEHICLES.headings) * Math.PI * 2, hand);
     cache.set(key, svg);
   }
   return svg;
 }
 
+// The same drawing through any view (not cached), e.g. the photo camera
+// (photo.js). `angle`: heading in radians, world axes. A view takes world
+// offsets from the vehicle's ground point:
+//   project(o) -> [x, y] on screen
+//   facing(n, o) -> is a surface with world normal n through o seen
+//   depth(o) -> larger = nearer the viewer
+export function vehicleSVGIn(view, name, angle, hand) {
+  return draw(view, model(name), angle, hand);
+}
+
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
 
-function draw(camera, model, angle, hand) {
+// The map's isometric view, around the origin in scene px.
+function isoView(camera) {
+  return {
+    project([wx, wy, wz]) {
+      const [rx, ry] = rotateQuarter(wx, wy, camera.rotation);
+      return [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile - wz * camera.zScale * camera.tile];
+    },
+    facing: (n) => camera.facing(n),
+    depth([wx, wy]) {
+      const [rx, ry] = rotateQuarter(wx, wy, camera.rotation);
+      return rx + ry;
+    },
+  };
+}
+
+function draw(view, model, angle, hand) {
   const rnd = mulberry32(hand * 7919 + 17);
   const j = () => (rnd() - 0.5) * 2 * VEHICLES.jitter;
   const [c, s] = [Math.cos(angle), Math.sin(angle)];
-  // model (x forward, y left, z up) -> world offset -> scene px
+  // model (x forward, y left, z up) -> world offset -> screen
   const toWorld = ([x, y, z]) => [x * c - y * s, x * s + y * c, z];
-  const project = (p) => {
-    const [wx, wy, wz] = toWorld(p);
-    const [rx, ry] = rotateQuarter(wx, wy, camera.rotation);
-    return [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile - wz * camera.zScale * camera.tile];
-  };
-  const facing = ([x, y, z]) => camera.facing(toWorld([x, y, z]));
+  const project = (p) => view.project(toWorld(p));
+  // `p` (model coordinates): a point on the surface, for views in perspective
+  const facing = (n, p = [0, 0, 0]) => view.facing(toWorld(n), toWorld(p));
   const poly = (pts) => `M${pts.map((p) => project(p).map(r2).join(' ')).join('L')}Z`;
 
   // a part's visible faces: { pts, n, side (±1 for the flat sides, 0 for the
@@ -270,7 +292,7 @@ function draw(camera, model, angle, hand) {
       if (nx * ((ax + bx) / 2 - cx) + nz * ((az + bz) / 2 - cz) < 0) [nx, nz] = [-nx, -nz];
       out.push({ pts: [[ax, w, az], [bx, w, bz], [bx, -w, bz], [ax, -w, az]], n: [nx, 0, nz], side: 0, x: (ax + bx) / 2, z: (az + bz) / 2 });
     }
-    return out.filter((f) => facing(f.n));
+    return out.filter((f) => facing(f.n, f.pts[0]));
   };
 
   // shrink a face towards its middle (window panes)
@@ -295,7 +317,7 @@ function draw(camera, model, angle, hand) {
     for (const [x, d] of [[x0, 1], [x1, -1]]) {
       out.push({ pts: arc.map((t) => [x + d * lean(t), ...at(t)]), n: [-d, 0, slope / rise], side: 0, x, cap: true });
     }
-    return out.filter((f) => facing(f.n));
+    return out.filter((f) => facing(f.n, f.pts[0]));
   };
 
   const body = faces(model.body);
@@ -304,8 +326,7 @@ function draw(camera, model, angle, hand) {
   // parts on top, the one further back first
   const back = (p) => {
     const cx = p.profile.reduce((a, q) => a + q[0], 0) / p.profile.length;
-    const [rx, ry] = rotateQuarter(...toWorld([cx, 0, 0]).slice(0, 2), camera.rotation);
-    return rx + ry;
+    return view.depth(toWorld([cx, 0, 0])) - view.depth([0, 0, 0]);
   };
   const tops = [].concat(model.top ?? []).sort((a, b) => back(a) - back(b));
   const partFaces = (p) => [...faces(p), ...(p.vault ? vault(p.vault, p.w) : [])];
@@ -315,7 +336,7 @@ function draw(camera, model, angle, hand) {
   const topParts = tops.filter((p) => !(p.end && back(p) < 0)).map(partFaces);
   const top = [...behind, ...topParts].flat();
   // wheels on the side that shows, as inked discs
-  const near = [1, -1].find((side) => facing([0, side, 0])) ?? 1; // seen head-on: either
+  const near = [1, -1].find((side) => facing([0, side, 0], [0, side * model.body.w, 0])) ?? 1; // seen head-on: either
   let wheels = '';
   const { r } = model.wheels;
   for (const wx of model.wheels.x) {
@@ -352,7 +373,7 @@ function draw(camera, model, angle, hand) {
   for (const pane of model.panes ?? []) windows += poly(pane.map(([x, z]) => [x, near * (model.body.w + 0.001), z]));
   // lamps: round, on the end faces (x) that show
   for (const { x, z, r: lr } of model.lamps ?? []) {
-    if (!facing([Math.sign(x), 0, 0])) continue;
+    if (!facing([Math.sign(x), 0, 0], [x, 0, z])) continue;
     windows += poly(Array.from({ length: 12 }, (_, i) => [x, Math.cos((i / 12) * Math.PI * 2) * lr, z + Math.sin((i / 12) * Math.PI * 2) * lr]));
   }
   const pathOf = (fs) => `<path class="vb" d="${fs.map((f) => poly(f.pts)).join('')}"/>`;

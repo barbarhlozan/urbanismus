@@ -49,7 +49,7 @@ where the key sits (a US keyboard), so they work the same on a Czech or German l
   map. With a road behind, a station gets a forecourt (or parking) towards it.
 - **6** – bus stop (1×1), beside a road, facing it: a shelter, the stop sign, a bench. Buses only
   come when a road leads off the map: in through an exit, a few stops (nearest next), out again.
-- **Q W E** – residential / business / industrial (**Tab** rotates, **.** tries another look;
+- **Q W E** – residential / business / industrial (**Tab** rotates, **Space** tries another look;
   **Shift** switches industry to its small 1×1 size)
 - **R** – coal mine (pit → colliery → deep mine), **T** – farm (farmstead → JZD → cooperative)
 - **A S D** – parks, squares, services, small and large (**Shift** switches size); **F** –
@@ -65,7 +65,7 @@ where the key sits (a US keyboard), so they work the same on a Czech or German l
   footpath) to build more of it
 - **Middle click** – same as **Tab** (rotate what you're placing, flip a line's bend)
 - **Drag / wheel** – pan / zoom, **[ / ]** – rotate view
-- **Space** – pause, **`** (backtick) – speed, **Terrain** button – contour lines (off by default,
+- **L** – pause, **`** (backtick) – speed, **Terrain** button – contour lines (off by default,
   they are the most expensive thing to draw)
 
 On a phone it's all taps: tap once to preview, tap again to confirm. The Build menu starts

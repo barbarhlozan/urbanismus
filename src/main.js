@@ -218,8 +218,8 @@ try {
 setContours(savedContours === null ? STYLE.contours : savedContours === '1');
 tools.onChange((tool) => {
   uiRoot.querySelector('[data-act="photo"]').classList.toggle('on', tool.id === 'photo');
-  // dots only while building; Select shows the bare map
-  svg.classList.toggle('show-grid', tool.id !== 'inspect');
+  // dots only while building; Select and Photo show the bare map
+  svg.classList.toggle('show-grid', tool.id !== 'inspect' && tool.id !== 'photo');
   svg.classList.toggle('show-fine', !!tool.fineGrid);
 });
 tools.use('inspect');
@@ -274,7 +274,8 @@ window.addEventListener('keydown', (e) => {
   const k = keyOf(e);
   if (k === '[') return actions.rotateLeft();
   if (k === ']') return actions.rotateRight();
-  if (k === ' ') { e.preventDefault(); return actions.pause(); }
+  if (k === 'l') return actions.pause();
+  if (k === ' ') e.preventDefault(); // (Space: another look, while building; not a page scroll)
   if (k === '`') return actions.speed();
   if (k === 'backspace') e.preventDefault(); // (Erase: not the browser's Back)
   const tool = tools.list().find((t) => t.hotkey === k || t.hotkeys?.includes(k));

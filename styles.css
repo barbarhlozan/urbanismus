@@ -1065,6 +1065,7 @@ body.scaling-strokes .scene * { vector-effect: none; }
 svg.photo .photo-sky { fill: var(--bg); }
 svg.photo .photo-ground { fill: var(--bg); stroke: none; }
 svg.photo .photo-horizon { fill: none; stroke: var(--detail); stroke-width: 0.8; }
+svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: 0.6; stroke-linejoin: round; }
 svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: 0.8; stroke-linejoin: round; }
 svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
 svg.photo .photo-hatch { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; opacity: 0.7; }

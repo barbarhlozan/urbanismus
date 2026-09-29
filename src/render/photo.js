@@ -16,6 +16,9 @@ import { PerspectiveCamera } from './perspective.js';
 import { meadowGround, plant } from './meadow.js';
 import { mulberry32 } from '../core/random.js';
 import { freeTest } from './lots.js';
+import { BRIDGE } from './bridges.js';
+import { VEHICLES, vehicleSVGIn, modelFor, truckFor } from './vehicles.js';
+import { wobble } from './painter.js';
 
 export const PHOTO = {
   width: 480,
@@ -97,9 +100,10 @@ export function takePhoto(renderer, shot) {
   // ----- roads, footpaths and railways -----
 
   // the renderer's ink items through this camera, each point carrying how
-  // far ahead it is, so the lines can be cut up between the bands
+  // far ahead it is, so the lines can be cut up between the bands, and
+  // whether it is up on a bridge (above the ground there)
   const deep = Object.create(cam);
-  deep.project = (px, py, pz, at) => [...cam.project(px, py, pz, at), cam.ahead(px, py)];
+  deep.project = (px, py, pz, at) => [...cam.project(px, py, pz, at), cam.ahead(px, py), pz - terrain.heightAt(px, py) > 0.01];
   let items;
   renderer.camera = deep;
   try {
@@ -107,10 +111,21 @@ export function takePhoto(renderer, shot) {
   } finally {
     renderer.camera = base;
   }
+  // up on a bridge: each piece sorted on its own with the decks (below),
+  // so the deck hides what is under it and not what is on it
+  const raised = [];
   for (const { cls, pts } of items) {
     let run = [pts[0]], band = -1;
     for (let i = 1; i < pts.length; i++) {
-      const b = bands.of((pts[i - 1][2] + pts[i][2]) / 2);
+      if (pts[i - 1][3] && pts[i][3]) {
+        raised.push({ depth: -(pts[i - 1][2] + pts[i][2]) / 2 + 0.02, svg: `<path class="${cls}" d="M${pt(pts[i - 1])}L${pt(pts[i])}"/>` });
+        if (run.length > 1) bands.line(band, cls, run);
+        run = [pts[i]];
+        band = -1;
+        continue;
+      }
+      // the band of its nearer end: nearer bands (drawn later) never cover it
+      const b = bands.of(Math.min(pts[i - 1][2], pts[i][2]));
       if (band >= 0 && b !== band) {
         bands.line(band, cls, run);
         run = [pts[i - 1]];
@@ -130,7 +145,7 @@ export function takePhoto(renderer, shot) {
   const layers = solids
     .filter((so) => !so.at || Math.hypot(so.at[0] - x, so.at[1] - y) > PHOTO.clear)
     .map((so) => ({ depth: so.depth, svg: so.parts.join('') }));
-  layers.push(...bands.layers());
+  layers.push(...bands.layers(), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen));
   layers.sort((a, b) => a.depth - b.depth);
 
   return `<svg class="photo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">`
@@ -265,6 +280,102 @@ function groundMarks(world, config, cam, bands, seen) {
       }
     }
   }
+}
+
+// Vehicles as they are at the moment of the photo, the same models as on
+// the map (vehicles.js) drawn through the photo camera: cars driving
+// (turned the way the map last drew them), buses and trucks (between their
+// front and back), cars parked in the lots, and trains, carriage by
+// carriage.
+function vehicles(renderer, cam, seen) {
+  const { world, agents, parking, trains } = renderer;
+  const { terrain } = world;
+  const deck = renderer.bridgeState().deck;
+  const out = [];
+  // `size`: about half the vehicle's length, for what counts as in view
+  const add = (x, y, angle, name, hand, cls = '', size = 0.1) => {
+    if (!seen(x, y, size + 0.1) || cam.ahead(x, y) < 0.15 + size) return;
+    const z = terrain.heightAt(x, y) + deck(x, y);
+    const view = {
+      project: ([ox, oy, oz]) => cam.project(x + ox, y + oy, z + oz, [x, y]),
+      facing: (n, [ox, oy, oz]) => cam.facingAt(n, [x + ox, y + oy, z + oz], [x, y]),
+      depth: ([ox, oy]) => -cam.ahead(x + ox, y + oy),
+    };
+    const svg = vehicleSVGIn(view, name, angle, hand);
+    out.push({ depth: -cam.ahead(x, y), svg: cls ? `<g class="${cls}">${svg}</g>` : svg });
+  };
+
+  for (const a of agents.visible()) {
+    if (a.bus || a.truck) {
+      // between its front (x, y) and back (tx, ty), on the swaying road
+      const [wx, wy] = wobble(a.x, a.y), [vx, vy] = wobble(a.tx, a.ty);
+      const fx = a.x + wx, fy = a.y + wy, bx = a.tx + vx, by = a.ty + vy;
+      const angle = Math.hypot(fx - bx, fy - by) > 1e-4 ? Math.atan2(fy - by, fx - bx) : ((renderer.agentEls.get(a.id)?.heading ?? 0) / VEHICLES.headings) * Math.PI * 2;
+      add((fx + bx) / 2, (fy + by) / 2, angle, a.bus ? 'bus' : truckFor(a.id), modelFor(a.id).hand, '', 0.2);
+      continue;
+    }
+    if (a.trip?.mode !== 'drive') continue;
+    const [wx, wy] = wobble(a.x, a.y); // on the swaying road, as on the map
+    const heading = renderer.agentEls.get(a.id)?.heading ?? 0;
+    const { name, hand } = modelFor(a.id);
+    add(a.x + wx, a.y + wy, (heading / VEHICLES.headings) * Math.PI * 2, name, hand);
+  }
+  // trains: each carriage [x, y, dx, dy], the first the locomotive (as in
+  // Renderer.placeTrain)
+  const len = Math.round((renderer.config.trains.carSpacing - 0.02) * 100) / 100;
+  for (const t of trains.visible()) {
+    t.points.forEach(([px, py, dx, dy], i) => add(px, py, Math.atan2(dy, dx), `${i ? 'coach' : 'loco'}:${len}`, i % VEHICLES.hands, '', len / 2));
+  }
+  // (the model is picked by the stall, as in Renderer.renderParked)
+  const r2s = (n) => Math.round(n * 100) / 100;
+  for (const [id, spots] of parking.spots) {
+    const s = world.structures.get(id);
+    if (!s) continue;
+    for (const [x, y, angle = 0] of spots.slice(0, parking.count(s))) {
+      const { name, hand } = modelFor(`${id}:${r2s(x)}:${r2s(y)}`);
+      add(x, y, angle, name, hand, 'parked-car');
+    }
+  }
+  return out;
+}
+
+// The bridges' decks as solid slabs – top and sides, in short pieces along
+// the span so each sorts by its own distance – under the linework the map
+// draws for them (railings, the road on the deck), which comes up on top.
+function bridgeDecks(renderer, cam, seen) {
+  const { list, deck } = renderer.bridgeState();
+  const { terrain } = renderer.world;
+  const out = [];
+  const T = BRIDGE.thickness, t0 = 0.12, t1 = 0.88; // (as bridgeLines)
+  const face = (pts) => {
+    const c = cam.clip(pts, true);
+    return c ? `<path class="photo-deck" d="M${c.map((p) => pt(cam.project(...p))).join('L')}Z"/>` : '';
+  };
+  for (const { a, b, half } of list) {
+    const vx = b[0] - a[0], vy = b[1] - a[1], len = Math.hypot(vx, vy);
+    if (!len || !seen((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, len / 2 + 1)) continue;
+    const nx = -vy / len, ny = vx / len;
+    const level = (t) => deck(a[0] + vx * t, a[1] + vy * t);
+    const Q = (t, side, dz = 0) => {
+      const x = a[0] + vx * t + nx * side, y = a[1] + vy * t + ny * side;
+      return [x, y, terrain.heightAt(x, y) + level(t) + dz];
+    };
+    const n = Math.max(2, Math.ceil(((t1 - t0) * len) / 0.1));
+    for (let i = 0; i < n; i++) {
+      const u0 = t0 + ((t1 - t0) * i) / n, u1 = t0 + ((t1 - t0) * (i + 1)) / n, um = (u0 + u1) / 2;
+      const mid = Q(um, 0);
+      if (!cam.isAhead(mid[0], mid[1]) && !cam.isAhead(...Q(u0, 0).slice(0, 2)) && !cam.isAhead(...Q(u1, 0).slice(0, 2))) continue;
+      let svg = '';
+      for (const side of [-half, half]) {
+        if (cam.facingAt([nx * Math.sign(side), ny * Math.sign(side), 0], Q(um, side))) {
+          svg += face([Q(u0, side, -T), Q(u1, side, -T), Q(u1, side), Q(u0, side)]);
+        }
+      }
+      if (cam.facingAt([0, 0, 1], mid)) svg += face([Q(u0, -half), Q(u1, -half), Q(u1, half), Q(u0, half)]);
+      if (svg) out.push({ depth: -cam.ahead(mid[0], mid[1]), svg });
+    }
+  }
+  return out;
 }
 
 // The far edge of the ground: for each column of the picture, the highest
