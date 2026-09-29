@@ -7,6 +7,8 @@ import { Painter } from './painter.js';
 import { levelOf, drawSeed, tiltOf } from '../../structures/index.js';
 import { fitSite } from './lots.js';
 import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
+import { mulberry32 } from '../core/random.js';
+import { controlArt } from '../ui/icons.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -89,6 +91,43 @@ export class OverlayKit {
     painter.setTilt(tiltOf(def, instance));
     levelOf(def, instance).draw(painter, instance);
     return `<g class="ghost">${painter.toGroundSVG()}${painter.toSVG()}</g>`;
+  }
+
+  // Photo mode (tools/photo.js): the photographer at (x, y), the camera icon,
+  // and, with `yaw`, the wedge of ground their camera sees, `fov` degrees
+  // wide and `len` grid steps long – no outline, only loose pencil strokes
+  // across it, irregular in spacing, slant, length and where they start
+  // (seeded by the spot, so they hold still while aiming).
+  photographer(x, y, yaw = null, fov = 42, len = 3) {
+    const k = 1 / this.camera.zoom;
+    let out = '';
+    if (yaw != null) {
+      const rnd = mulberry32(seedOf(x, y, 7));
+      const half = (fov * Math.PI) / 360, tan = Math.tan(half);
+      const at = (t, w, a) => {
+        const c = Math.cos(yaw + a), s = Math.sin(yaw + a);
+        return this.project(x + c * t - s * w, y + s * t + c * w);
+      };
+      let d = '';
+      for (let t = 0.1 + rnd() * 0.05; t < len; t += 0.05 + rnd() * 0.1) {
+        const w = Math.min(t * tan, Math.sqrt(Math.max(0, len * len - t * t)));
+        if (w < 0.02 || rnd() < 0.12) continue;
+        // a stroke need not cross the whole wedge: it starts and stops at
+        // random, now and then two short ones instead of one
+        const slant = (rnd() - 0.5) * 0.35;
+        const parts = rnd() < 0.2 ? [[-1, -0.1 + rnd() * 0.3], [0.1 + rnd() * 0.3, 1]] : [[-1, 1]];
+        for (const [p, q] of parts) {
+          const a = w * (p + rnd() * 0.3), b = w * (q - rnd() * 0.35);
+          if (b - a < w * 0.15) continue;
+          d += sketchLine(at(t, a, slant * 0.2), at(t + (b - a) * slant * 0.5, b, slant * 0.2), seedOf(x, y, t * 100), { k, over: 0.6 + rnd() * 1.5, bow: 2.5 });
+        }
+      }
+      out += `<path class="photo-cone-hatch" d="${d}"/>`;
+    }
+    const [sx, sy] = this.project(x, y);
+    // the camera from the Photo button up top, standing on the spot
+    const s = 0.24 * (this.camera.tile / 32);
+    return out + `<g class="photo-cam" transform="translate(${r2(sx - 8 * s)} ${r2(sy - 12.6 * s)}) scale(${r2(s)})">${controlArt('photo')}</g>`;
   }
 
   // Outline of a rectangle on the ground (world coordinates).

@@ -430,6 +430,7 @@ export class Renderer {
     const onDeck = deck ? this.bridgeState().deck : null;
     // under a warp or relief (or the sway), long straight pieces get extra points so they bend too
     if ((this.camera.warp || this.camera.lift || sway || onDeck) && dense) lines = lines.map((pts) => (pts[0]?.length > 2 ? pts : densify(pts)));
+    if (this.camera.clip) lines = lines.flatMap((pts) => this.camera.clip(pts, false));
     return lines.map((pts) => pts.map(([x, y, z]) => {
       const lift = z ?? (onDeck ? onDeck(x, y) : 0);
       if (sway) {
@@ -782,8 +783,8 @@ export class Renderer {
   inkItems(sway) {
     const items = [];
     const add = (key, cls, line, a, b) => {
-      const [pts] = this.screenLines([line], true, sway, true);
-      if (pts.length > 1) items.push({ key, cls, pts, a, b });
+      // (one line, or its parts in front of a photo camera)
+      for (const pts of this.screenLines([line], true, sway, true)) if (pts.length > 1) items.push({ key, cls, pts, a, b });
     };
     return { items, add };
   }
@@ -808,6 +809,11 @@ export class Renderer {
   }
 
   renderPaths() {
+    this.ink.paths.update(this.pathItems(), { rankOf: this.rankOf(this.world.networks.path) });
+  }
+
+  // The footpaths' ink items (for the current camera).
+  pathItems() {
     const layer = this.world.networks.path;
     const { items, add } = this.inkItems(true);
     // Footpaths as two narrow edges, like small roads (roadEdges), stopping
@@ -821,10 +827,14 @@ export class Renderer {
       keepRuns(line, (q) => !onRoad(q)).forEach((run, i) => add(`p${key}${i ? `:${i}` : ''}`, 'footpath', run, a, b));
     }
     this.addBridges('path', add);
-    this.ink.paths.update(items, { rankOf: this.rankOf(layer) });
+    return items;
   }
 
   renderRails() {
+    this.ink.rails.update(this.railItems(), { rankOf: this.rankOf(this.world.networks.rail) });
+  }
+
+  railItems() {
     const { world } = this;
     const layer = world.networks.rail;
     const { edges, exits, buffers } = railParts(layer, this.config.rail, world.railExits());
@@ -849,17 +859,23 @@ export class Renderer {
         add(`bs${s.id}.${i}`, 'rail-buffer', [[bx + nx, by + ny], [bx - nx, by - ny]], s.node, s.node);
       });
     }
-    this.ink.rails.update(items, { rankOf: this.rankOf(layer) });
+    return items;
   }
 
   renderRoads() {
+    this.ink.roads.update(this.roadItems(), { rankOf: this.rankOf(this.world.networks.road) });
+  }
+
+  // `cache`: keep the road and kerb lines between calls (the map's own
+  // camera only).
+  roadItems(cache = true) {
     const { world } = this;
     const layer = world.networks.road, curve = this.config.road;
     const { items, add } = this.inkItems(true);
     // The road and kerb lines depend on the networks only, not on the
     // buildings (which redraw the roads for their driveways): kept until
     // a network, the terrain or the view changes.
-    const cached = this.roadLines;
+    const cached = cache ? this.roadLines : null;
 
     // Driveways: from the building edge at its door to the road's edge.
     for (const s of world.structures.values()) {
@@ -898,9 +914,9 @@ export class Renderer {
         stripes.forEach((line, i) => add(`z${node}:${edgeKey(a, b)}.${i}`, 'zebra', line, a, b));
       }
       this.addBridges('road', add);
-      this.roadLines = items.slice(from);
+      if (cache) this.roadLines = items.slice(from);
     }
-    this.ink.roads.update(items, { rankOf: this.rankOf(layer) });
+    return items;
   }
 
   // Pan and zoom. Redrawing the SVGs at a new view re-lays-out and repaints
@@ -1153,7 +1169,17 @@ export class Renderer {
 
   // A street segment's lamp (roads/furniture.js), or null where it has none.
   buildStreet(key) {
-    const { world, camera, config } = this;
+    const out = this.paintStreet(key);
+    if (!out) return null;
+    const { painter, x, y } = out;
+    return { svg: mergeRuns(painter.toSVG()), ground: '', ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
+  }
+
+  // The painters behind buildStreet / buildFeature / buildStructure, for any
+  // camera (the photo camera too, see photo.js). `live`: the map's own
+  // drawing, which also updates the parking spots.
+  paintStreet(key, camera = this.camera) {
+    const { world, config } = this;
     if (!world.sidewalks.has(key)) return null;
     if (!this.lampRoom) {
       const paths = pathIndex(world, config), rails = railIndex(world, config);
@@ -1170,14 +1196,21 @@ export class Renderer {
     const painter = new Painter(camera, { x, y, z: world.terrain.heightAt(x, y) }, 0, a * 7919 + b);
     painter.rigid = [x, y];
     lamp(painter, 0, 0);
-    return { svg: mergeRuns(painter.toSVG()), ground: '', ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
+    return { painter, x, y };
   }
 
   buildFeature(f) {
+    const out = this.paintFeature(f);
+    if (!out) return null;
+    const { painter, x, y } = out;
+    return { svg: mergeRuns(painter.toSVG()), ground: '', ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
+  }
+
+  paintFeature(f, camera = this.camera) {
     if (!f) return null;
     const def = FEATURE_TYPES[f.type];
     if (!def) return null;
-    const { world, camera } = this;
+    const { world } = this;
     const [nx, ny] = world.grid.xy(f.node);
     const x = nx + f.ox;
     const y = ny + f.oy;
@@ -1185,14 +1218,22 @@ export class Renderer {
     const painter = new Painter(camera, { x, y, z: world.terrain.heightAt(x, y) }, 0, Math.imul(f.id, 2654435761) ^ f.node);
     painter.rigid = [x, y];
     def.draw(painter, f);
-    return { svg: mergeRuns(painter.toSVG()), ground: '', ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
+    return { painter, x, y };
   }
 
   buildStructure(s) {
+    const out = this.paintStructure(s);
+    if (!out) return null;
+    const { painter, points } = out;
+    return { svg: mergeRuns(painter.toSVG()), ground: mergeRuns(painter.toGroundSVG()), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
+  }
+
+  paintStructure(s, camera = this.camera) {
     if (!s) return null;
     const def = STRUCTURE_TYPES[s.type];
     if (!def) return null;
-    const { world, camera } = this;
+    const { world } = this;
+    const live = camera === this.camera;
     const [x, y] = world.grid.xy(s.node);
     const z = world.terrain.heightAt(x, y);
     const painter = this.attachFree(new Painter(camera, { x, y, z }, world.facingRotation(s.type, s.node, s.rotation), drawSeed(s)));
@@ -1225,12 +1266,12 @@ export class Renderer {
       yp.rigid = rigid;
       yp.lod = 1;
       YARDS[yard.style].draw(yp, yard, s);
-      if (yp.spots.length) this.parking.setSpots(s, yp.spots);
-      else this.parking.spots.delete(s.id);
+      if (live && yp.spots.length) this.parking.setSpots(s, yp.spots);
+      else if (live) this.parking.spots.delete(s.id);
       painter.merge(yp);
       yardWorld = yard.outline.map(([lx, ly]) => yp.toWorld(lx, ly));
       for (const [lx, ly] of [[yard.x0, yard.y0], [yard.x1, yard.y0]]) points.push(yp.toWorld(lx, ly));
-    } else {
+    } else if (live) {
       this.parking.spots.delete(s.id);
     }
 
@@ -1243,8 +1284,7 @@ export class Renderer {
       drawPlot(pp, this.plotFor(s, plotDef, painter, core, yardWorld));
       painter.merge(pp);
     }
-
-    return { svg: mergeRuns(painter.toSVG()), ground: mergeRuns(painter.toGroundSVG()), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
+    return { painter, points };
   }
 
   // The plot around a structure, in world axes relative to its anchor dot.

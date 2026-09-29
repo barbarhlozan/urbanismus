@@ -21,6 +21,9 @@ import { createInspectTool } from './tools/inspect.js';
 import { createNetworkTool } from './tools/network.js';
 import { createBuildTool } from './tools/build.js';
 import { createBulldozeTool } from './tools/bulldoze.js';
+import { createPhotoTool } from './tools/photo.js';
+import { takePhoto } from './render/photo.js';
+import { PhotoPrint } from './ui/photoPrint.js';
 import { Popup } from './ui/popup.js';
 import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
@@ -31,6 +34,7 @@ import { sketchFrames } from './ui/sketchFrame.js';
 import { attachInput } from './ui/input.js';
 import { exportCity, pickCity } from './ui/saveFile.js';
 import { BUILD_FAMILIES } from '../structures/index.js';
+import { keyOf } from './ui/keys.js';
 
 applyTheme();
 
@@ -114,12 +118,16 @@ agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos)
 const tools = new ToolManager(world.grid, 'inspect');
 const ctx = { world, camera, tools, popup, growth, config: CONFIG };
 tools.register(createInspectTool(ctx));
-tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', hotkey: 'r', group: 'transport', blurb: 'Cars and people' }));
-tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, label: 'Lane', hotkey: 'n', group: 'transport', blurb: 'Single track, slow cars' }));
-tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', hotkey: 'f', fineGrid: true, group: 'transport', blurb: 'People and bikes' }));
-tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', hotkey: 'l', fineGrid: true, group: 'transport', blurb: 'Trains from the map edge' }));
+tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', hotkey: '1', group: 'transport', blurb: 'Cars and people' }));
+tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, label: 'Lane', hotkey: '2', group: 'transport', blurb: 'Single track, slow cars' }));
+tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', hotkey: '3', fineGrid: true, group: 'transport', blurb: 'People and bikes' }));
+tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', hotkey: '4', fineGrid: true, group: 'transport', blurb: 'Trains from the map edge' }));
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createBulldozeTool(ctx));
+const photoPrint = new PhotoPrint(uiRoot);
+tools.register(createPhotoTool(ctx, {
+  shoot: (shot) => photoPrint.show(takePhoto(renderer, shot), `${world.name} · ${shot.lens}`),
+}));
 
 const actions = {
   debug: () => debugPanel.toggle(),
@@ -131,6 +139,7 @@ const actions = {
   colors: () => colorMenu.toggle(),
   assets: () => assetsPage.toggle(),
   newMap: () => newMapMenu.toggle(),
+  photo: () => tools.use(tools.active?.id === 'photo' ? 'inspect' : 'photo'),
   export: () => exportCity(world),
   import: () => importCity(),
 };
@@ -208,6 +217,7 @@ try {
 }
 setContours(savedContours === null ? STYLE.contours : savedContours === '1');
 tools.onChange((tool) => {
+  uiRoot.querySelector('[data-act="photo"]').classList.toggle('on', tool.id === 'photo');
   // dots only while building; Select shows the bare map
   svg.classList.toggle('show-grid', tool.id !== 'inspect');
   svg.classList.toggle('show-fine', !!tool.fineGrid);
@@ -250,7 +260,8 @@ attachInput(document.getElementById('input'), {
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Escape') {
-    if (popup.open) popup.hide();
+    if (photoPrint.open) photoPrint.hide();
+    else if (popup.open) popup.hide();
     else tools.cancel();
     return;
   }
@@ -258,11 +269,14 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
-  const k = e.key.toLowerCase();
-  if (k === 'q') return actions.rotateLeft();
-  if (k === 'e') return actions.rotateRight();
-  if (k === 'p' || k === ' ') { e.preventDefault(); return actions.pause(); }
-  if (k === 't') return actions.speed();
+  // by place on the keyboard (ui/keys.js): the letter and number rows are
+  // build tools, in Build menu order
+  const k = keyOf(e);
+  if (k === '[') return actions.rotateLeft();
+  if (k === ']') return actions.rotateRight();
+  if (k === ' ') { e.preventDefault(); return actions.pause(); }
+  if (k === '`') return actions.speed();
+  if (k === 'backspace') e.preventDefault(); // (Erase: not the browser's Back)
   const tool = tools.list().find((t) => t.hotkey === k || t.hotkeys?.includes(k));
   if (tool) {
     popup.hide();

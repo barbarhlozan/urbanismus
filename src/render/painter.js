@@ -169,6 +169,7 @@ export class Painter {
     this.rotation = rotation;
     this.solids = [];
     this.ground = [];
+    this.groundAt = [];   // world [x, y] of each ground entry (its middle), for photo.js
     this.site = null;
     this.spots = [];
     this.lod = 0;
@@ -224,8 +225,13 @@ export class Painter {
   // little, like a line drawn by hand. Closed outlines big enough also get
   // LOOK.overshoot: their edges run on a little past the corners.
   _outline(points, closed, opts, lod) {
-    if (!LOOK.sketch) return `<${closed ? 'polygon' : 'polyline'} points="${points.map((p) => this._proj(p)).join(' ')}"${attrs(opts, lod)}/>`;
+    if (!LOOK.sketch) {
+      return this._screenRuns(points, closed)
+        .map((run) => `<${closed ? 'polygon' : 'polyline'} points="${run.map(([x, y]) => `${r2(x)},${r2(y)}`).join(' ')}"${attrs(opts, lod)}/>`)
+        .join('');
+    }
     const { d, pts, size } = this._sketch(points, closed, opts.wobble ?? 1);
+    if (!d) return '';
     // the overshoots go in the same path: open strokes have no area, so the
     // fill ignores them, and it saves an element per face
     let ticks = '';
@@ -246,9 +252,30 @@ export class Painter {
 
   // Sketchy path data through 3D points: { d, pts (jittered screen points,
   // each [x, y, x0, y0]), size (longest edge on screen) }.
+  // With a perspective camera an open line may come apart into several
+  // runs where it passes behind the eye; `pts` then holds the last one.
   _sketch(points, closed, wobble = 1) {
+    const runs = this._screenRuns(points, closed);
+    if (runs.length > 1) {
+      const parts = runs.map((run) => this._sketchScreen(run, false, wobble));
+      return { d: parts.map((p) => p.d).join(''), pts: parts[parts.length - 1].pts, size: Math.max(...parts.map((p) => p.size)) };
+    }
+    if (!runs.length) return { d: '', pts: [], size: 0 };
+    return this._sketchScreen(runs[0], closed, wobble);
+  }
+
+  // World points -> lists of screen points: one list, or with a perspective
+  // camera the parts in front of the eye (none when all is behind it).
+  _screenRuns(points, closed) {
+    const w = points.map((p) => this._world(p[0], p[1], p[2]));
+    if (!this.camera.clip) return [w.map((p) => this._project(...p))];
+    const c = this.camera.clip(w, closed);
+    const runs = closed ? (c ? [c] : []) : c;
+    return runs.map((run) => run.map((p) => this._project(...p)));
+  }
+
+  _sketchScreen(scr, closed, wobble) {
     const amp = LOOK.sketch * this.camera.tile / 32 * wobble;
-    const scr = points.map((p) => this._project(...this._world(p[0], p[1], p[2])));
     // small shapes (windows) wobble less than walls and roofs
     let size = 0;
     for (let i = 1; i < scr.length; i++) size = Math.max(size, Math.hypot(scr[i][0] - scr[i - 1][0], scr[i][1] - scr[i - 1][1]));
@@ -274,7 +301,7 @@ export class Painter {
   // all in one <path>. Each stroke stops a little short of the edges, by a
   // seeded amount.
   _hatch(pts, normal) {
-    if (!LOOK.hatch || !this._facing(normal)) return;
+    if (!LOOK.hatch || !this._facing(normal, pts[0])) return;
     const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     const unit = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
@@ -329,13 +356,34 @@ export class Painter {
   // facing test, before its sign is taken).
   _view([nx, ny, nz]) {
     const [wx, wy] = this._turn(nx, ny);
+    if (this.camera.perspective && this.current?.at) {
+      const [vx, vy, vz] = this.camera.toEye(...this.current.at, this.rigid);
+      return (wx * vx + wy * vy + nz * vz) / (Math.hypot(vx, vy, vz) || 1);
+    }
     const [rx, ry] = rotateQuarter(wx, wy, this.camera.rotation);
     return rx + ry + nz / this.camera.zScale;
   }
 
-  _facing([nx, ny, nz]) {
+  // `p` (local, optional): a point on the surface. A perspective camera
+  // needs it – what faces the eye depends on where the surface is – and
+  // falls back to the middle of the current solid.
+  _facing([nx, ny, nz], p = null) {
     const [rx, ry] = this._turn(nx, ny);
+    if (this.camera.perspective) {
+      const at = p ? this._world(p[0], p[1], p[2]) : this.current?.at;
+      if (at) return this.camera.facingAt([rx, ry, nz], at, this.rigid);
+    }
     return this.camera.facing([rx, ry, nz]);
+  }
+
+  // Screen position and pixels per world unit at a local point, for
+  // screen-facing shapes; null when it is behind a perspective camera.
+  _anchor(x, y, z) {
+    const w = this._world(x, y, z);
+    const cam = this.camera;
+    if (cam.perspective && !cam.isAhead(w[0], w[1])) return null;
+    const [sx, sy] = this._project(...w);
+    return [sx, sy, cam.scaleAt ? cam.scaleAt(w[0], w[1]) : cam.tile];
   }
 
   _lod(opts) {
@@ -414,14 +462,14 @@ export class Painter {
 
   solid(x, y, z) {
     const [wx, wy, wz] = this._world(x, y, z);
-    this.current = { depth: this.camera.depth(wx, wy) + wz * 1e-3, parts: [] };
+    this.current = { depth: this.camera.depth(wx, wy) + wz * 1e-3, parts: [], at: [wx, wy, wz] };
     this.solids.push(this.current);
     return this;
   }
 
   face(points, opts = {}) {
     this._ensure(...points[0]);
-    if (!this._facing(newellNormal(points))) return this;
+    if (!this._facing(newellNormal(points), points[0])) return this;
     this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
     return this;
   }
@@ -601,7 +649,7 @@ export class Painter {
     // The roof is its own solid just in front of the walls, so window lines
     // drawn on the walls afterwards stay under the eaves.
     const walls = this.current;
-    this.current = { depth: walls.depth + 1e-6, parts: [] };
+    this.current = { depth: walls.depth + 1e-6, parts: [], at: walls.at };
     this.solids.push(this.current);
     const onWalls = (fn) => { const roofSolid = this.current; this.current = walls; fn(); this.current = roofSolid; };
 
@@ -691,7 +739,7 @@ export class Painter {
         else pts.push(at(0, 0, h0));
         if (r1 > 0) pts.push(at(r1, j + 1, h1), at(r1, j, h1));
         else pts.push(at(0, 0, h1));
-        seen[i].push(pts.length >= 3 && this._facing(newellNormal(pts)));
+        seen[i].push(pts.length >= 3 && this._facing(newellNormal(pts), pts[0]));
         if (pts.length >= 3) this.face(pts, side);
       }
     }
@@ -804,22 +852,40 @@ export class Painter {
 
   // Ground lines wobble like everything else with LOOK.sketch.
   groundLine(points, opts = {}) {
-    this.ground.push(LOOK.sketch
-      ? `<path d="${this._sketch(points.map(([x, y]) => [x, y, 0]), false).d}"${attrs(opts, this._lod(opts), 'gnd')}/>`
-      : `<polyline points="${points.map(([x, y]) => this._proj([x, y, 0])).join(' ')}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
-    return this;
+    return this._groundOutline(points, false, opts);
   }
 
   groundPoly(points, opts = {}) {
-    this.ground.push(LOOK.sketch
-      ? `<path d="${this._sketch(points.map(([x, y]) => [x, y, 0]), true).d}"${attrs(opts, this._lod(opts), 'gnd')}/>`
-      : `<polygon points="${points.map(([x, y]) => this._proj([x, y, 0])).join(' ')}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
+    return this._groundOutline(points, true, opts);
+  }
+
+  _groundOutline(points, closed, opts) {
+    const pts = points.map(([x, y]) => [x, y, 0]);
+    const n = this.ground.length;
+    if (LOOK.sketch) {
+      const { d } = this._sketch(pts, closed);
+      if (d) this.ground.push(`<path d="${d}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
+    } else {
+      for (const run of this._screenRuns(pts, closed)) {
+        this.ground.push(`<${closed ? 'polygon' : 'polyline'} points="${run.map(([sx, sy]) => `${r2(sx)},${r2(sy)}`).join(' ')}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
+      }
+    }
+    if (this.ground.length > n) {
+      const mx = points.reduce((a, p) => a + p[0], 0) / points.length, my = points.reduce((a, p) => a + p[1], 0) / points.length;
+      const at = this.toWorld(mx, my);
+      while (this.groundAt.length < this.ground.length) this.groundAt.push(at);
+    }
     return this;
   }
 
   groundCircle(x, y, r, opts = {}) {
+    if (this.camera.perspective) {
+      const ring = Array.from({ length: 16 }, (_, i) => [x + Math.cos((i / 16) * Math.PI * 2) * r, y + Math.sin((i / 16) * Math.PI * 2) * r]);
+      return this.groundPoly(ring, opts);
+    }
     const [sx, sy] = this._project(...this._world(x, y, 0));
     const [rx, ry] = this.camera.groundEllipse(r);
+    this.groundAt.push(this.toWorld(x, y));
     this.ground.push(`<ellipse cx="${r2(sx)}" cy="${r2(sy)}" rx="${r2(rx)}" ry="${r2(ry)}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
     return this;
   }
@@ -871,13 +937,14 @@ export class Painter {
     this.top = Math.max(this.top, other.top + other.oz - this.oz);
     this.solids.push(...other.solids);
     this.ground.push(...other.ground);
+    this.groundAt.push(...other.groundAt);
     this.spots.push(...other.spots);
     return this;
   }
 
   line(points, opts = {}) {
     this._ensure(...points[0]);
-    if (opts.facing && !this._facing(opts.facing)) return this;
+    if (opts.facing && !this._facing(opts.facing, points[0])) return this;
     const lod = opts.lod ?? (opts.facing ? Math.max(2, this.lod) : this.lod);
     this.current.parts.push(this._outline(points, false, opts, lod));
     return this;
@@ -885,15 +952,18 @@ export class Painter {
 
   disc(x, y, z, r, opts = {}) {
     this._ensure(x, y, z);
-    const [sx, sy] = this._project(...this._world(x, y, z));
-    this.current.parts.push(`<circle cx="${r2(sx)}" cy="${r2(sy)}" r="${r2(r * this.camera.tile)}"${attrs(opts, this._lod(opts))}/>`);
+    const a = this._anchor(x, y, z);
+    if (!a) return this;
+    const [sx, sy, t] = a;
+    this.current.parts.push(`<circle cx="${r2(sx)}" cy="${r2(sy)}" r="${r2(r * t)}"${attrs(opts, this._lod(opts))}/>`);
     return this;
   }
 
   shape(x, y, z, points, opts = {}) {
     this._ensure(x, y, z);
-    const [sx, sy] = this._project(...this._world(x, y, z));
-    const t = this.camera.tile;
+    const a = this._anchor(x, y, z);
+    if (!a) return this;
+    const [sx, sy, t] = a;
     const p = points.map(([u, v]) => [r2(sx + u * t), r2(sy - v * t)]);
     if (!opts.smooth) {
       this.current.parts.push(`<polygon points="${p.map((q) => q.join(',')).join(' ')}"${attrs(opts, this._lod(opts))}/>`);
@@ -915,12 +985,13 @@ export class Painter {
     groups = groups.filter((gr) => gr.lines.length);
     if (!groups.length) return this;
     this._ensure(groups[0].x, groups[0].y, groups[0].z);
-    const t = this.camera.tile;
     // one decimal is plenty for these small glyphs, and keeps the markup small
     const r1 = (n) => Math.round(n * 10) / 10;
     let d = '';
     for (const { x, y, z, lines } of groups) {
-      const [sx, sy] = this._project(...this._world(x, y, z));
+      const a = this._anchor(x, y, z);
+      if (!a) continue;
+      const [sx, sy, t] = a;
       for (const pts of lines) d += pts.map(([u, v], i) => `${i ? 'L' : 'M'}${r1(sx + u * t)} ${r1(sy - v * t)}`).join('');
     }
     this.current.parts.push(`<path d="${d}"${attrs(opts, this._lod(opts), 'glyph')}/>`);

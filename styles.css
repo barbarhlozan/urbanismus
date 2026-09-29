@@ -653,7 +653,6 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 
 .bm-icon { flex: 0 0 32px; height: 32px; display: flex; }
 .bm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.bm-blurb { font-size: 9px; color: var(--detail); text-transform: none; letter-spacing: 0.04em; }
 .bm-tool .key { font-size: 10px; color: var(--detail); white-space: nowrap; }
 
 #ui .bm-toggle {
@@ -700,6 +699,19 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .swatches { display: inline-flex; gap: 3px; vertical-align: middle; }
 .swatches i { width: 8px; height: 8px; border-radius: 50%; border: var(--line) solid currentColor; box-sizing: border-box; }
 .controls button[data-act="colors"] { flex: 0 0 40px; }
+/* on a wide screen the bar is icons only (the names are in the tooltips);
+   the phone list below shows both */
+.controls button { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.controls .ctl-icon { flex: 0 0 15px; width: 15px; height: 15px; }
+.controls .ctl-icon path, .controls .ctl-icon circle { stroke-width: 1.1 !important; fill: none !important; }
+@media (min-width: 641px) {
+  .controls { width: auto; }
+  /* a set width, not just a flex basis: Safari sizes the bar from its
+     buttons' widths and would clip the last ones */
+  .controls button[data-act] { flex: 0 0 36px; width: 36px; padding: 8px 0; }
+  .controls button[data-act="colors"] { flex-basis: 44px; width: 44px; }
+  .controls button[data-act] .label { display: none; }
+}
 
 .color-panel {
   position: fixed;
@@ -888,6 +900,7 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
   .controls .menu-icon { width: 16px; height: 16px; }
   .controls button[data-act="colors"] { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
   .controls button[data-act="colors"]::after { content: "Colors"; }
+  .controls button[data-act] { justify-content: flex-start; }
 
   /* stats: beside the menu button, smaller; tap to fold */
   .hud {
@@ -1017,5 +1030,42 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 body.scaling-strokes .scene * { vector-effect: none; }
 
 /* secondary text on highlighted rows / buttons takes the row's text colour */
-#ui .bm-tool.active .bm-blurb, #ui .bm-tool.active .key,
+#ui .bm-tool.active .key,
 .actions button:hover .key { color: inherit; opacity: 0.7; }
+
+/* ---------- Photo mode (tools/photo.js, render/photo.js) ---------- */
+
+.overlay .photo-cone-hatch { fill: none; stroke: var(--main); stroke-width: 0.75; stroke-linecap: round; }
+.overlay .photo-cam path, .overlay .photo-cam circle { fill: var(--bg); stroke: var(--main); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+
+
+
+.photo-print {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  box-sizing: border-box;
+  width: min(760px, calc(100vw - 32px));
+  padding: 14px 14px 10px;
+  background: var(--bg);
+  border: var(--line) solid var(--fg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.photo-frame { border: var(--line) solid var(--fg); line-height: 0; }
+.photo-print svg.photo { width: 100%; height: auto; display: block; }
+.photo-caption { font-size: 13px; text-align: center; padding: 2px 0; }
+.photo-buttons { display: flex; justify-content: center; gap: 8px; }
+.photo-buttons button { padding: 6px 14px; border: var(--line) solid var(--fg); }
+.photo-buttons button:hover { background: var(--fg) !important; color: var(--bg) !important; }
+
+svg.photo .photo-sky { fill: var(--bg); }
+svg.photo .photo-ground { fill: var(--bg); stroke: none; }
+svg.photo .photo-horizon { fill: none; stroke: var(--detail); stroke-width: 0.8; }
+svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: 0.8; stroke-linejoin: round; }
+svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+svg.photo .photo-hatch { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; opacity: 0.7; }
+svg.photo .photo-ripples { fill: none; stroke: var(--main); stroke-width: 0.7; stroke-linecap: round; opacity: 0.8; }
