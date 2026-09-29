@@ -6,6 +6,7 @@
 
 import { footprintCenter, newSeed, categoryOf } from '../../structures/index.js';
 import { isTouch } from '../ui/device.js';
+import { keyOf } from '../ui/keys.js';
 
 // Label of a variant for the Size button: its own `size`, else by footprint.
 const sizeOf = (def) => def.size ?? (def.footprint.length > 1 ? 'Large' : 'Small');
@@ -55,18 +56,17 @@ export function createBuildTool({ world }, defs) {
     },
 
     key(e) {
-      const k = e.key.toLowerCase();
       if (e.key === 'Tab') rotate();
-      else if (k === 'c') reroll();
-      else if (k === 's' && defs.length > 1) resize();
+      else if (keyOf(e) === '.') reroll();
+      else if (e.key === 'Shift' && !e.repeat && defs.length > 1) resize();
       else return false;
       return true;
     },
 
     actions: () => [
-      ...(defs.length > 1 ? [{ label: `Size: ${sizeOf(def())}`, key: 'S', run: resize }] : []),
+      ...(defs.length > 1 ? [{ label: `Size: ${sizeOf(def())}`, key: 'Shift', run: resize }] : []),
       { label: 'Rotate', key: 'Tab', run: rotate },
-      { label: 'Another look', key: 'C', run: reroll },
+      { label: 'Another look', key: '.', run: reroll },
     ],
 
     overlay(kit, hover) {

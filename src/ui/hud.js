@@ -11,7 +11,7 @@ const REFRESH_MS = 5000;
 
 import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
 import { BuildMenu } from './buildMenu.js';
-import { statIcon } from './icons.js';
+import { statIcon, controlIcon } from './icons.js';
 import { resize, shrink } from './motion.js';
 import { CONFIG } from '../config.js';
 import { isNarrow } from './device.js';
@@ -39,13 +39,14 @@ export class Hud {
       </div>
       <div class="credit">${CONFIG.app.name} <span>v${CONFIG.app.version}</span> · ${CONFIG.app.author}</div>
       <div class="controls">
-        <button data-act="terrain" title="Terrain contour lines">Terrain</button>
+        <button data-act="photo" title="Photo: stand somewhere on the map and take a picture (P)">${controlIcon('photo')}<span class="label">Photo</span></button>
+        <button data-act="terrain" title="Terrain contour lines">${controlIcon('terrain')}<span class="label">Terrain</span></button>
         <button data-act="colors" title="Colors"></button>
-        <button data-act="assets" title="All the buildings and structures in the game">Assets</button>
-        <button data-act="debug" title="Debug panel: drawing switches and frame rate">Debug</button>
-        <button data-act="export" title="Download this city as a file, to open on another computer">Export</button>
-        <button data-act="import" title="Open a city from a file (replaces this one)">Import</button>
-        <button data-act="newMap" title="Discard this city and generate a new map">New map</button>
+        <button data-act="assets" title="All the buildings and structures in the game">${controlIcon('assets')}<span class="label">Assets</span></button>
+        <button data-act="debug" title="Debug panel: drawing switches and frame rate">${controlIcon('debug')}<span class="label">Debug</span></button>
+        <button data-act="export" title="Download this city as a file, to open on another computer">${controlIcon('export')}<span class="label">Export</span></button>
+        <button data-act="import" title="Open a city from a file (replaces this one)">${controlIcon('import')}<span class="label">Import</span></button>
+        <button data-act="newMap" title="Discard this city and generate a new map">${controlIcon('newMap')}<span class="label">New map</span></button>
         <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
       </div>
       <div class="bottom">

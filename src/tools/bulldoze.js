@@ -32,7 +32,7 @@ export function createBulldozeTool({ world }) {
   return {
     id: 'bulldoze',
     label: 'Erase',
-    hotkey: 'x',
+    hotkey: 'backspace', // (the keyboard's rows are build tools, see ui/keys.js)
     blurb: 'Remove anything',
     touchConfirm: true,
 

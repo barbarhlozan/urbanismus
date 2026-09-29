@@ -293,7 +293,7 @@ export const small = {
   id: 'park',
   name: 'Park',
   blurb: 'Trees and paths',
-  hotkey: '4',
+  hotkey: 'a',
   footprint: [[0, 0]],
   levels: [
     {
@@ -408,7 +408,6 @@ export const large = {
   ...common,
   id: 'park-large',
   name: 'Large park',
-  hotkey: '5',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   levels: [
     {

@@ -13,12 +13,11 @@ export function createInspectTool(ctx) {
   return {
     id: 'inspect',
     label: 'Select',
-    hotkey: 'v',
     toolbar: false, // it's what you're in when no tool is picked
 
     hint: () => isTouch()
       ? 'Tap the map · drag to pan · pinch to zoom'
-      : 'Click the map · right-click: build more of what’s there · drag to pan · scroll to zoom · Q / E rotate',
+      : 'Click the map · right-click: build more of what’s there · drag to pan · scroll to zoom · [ / ] rotate',
 
     click(node, event) {
       const menu = node < 0 ? null : menuFor(ctx, node);

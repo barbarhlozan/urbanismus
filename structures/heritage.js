@@ -72,6 +72,7 @@ const common = {
 export const chapel = {
   ...common,
   id: 'chapel',
+  hotkey: 'z',
   name: 'Chapel',
   blurb: 'Wayside chapel',
   footprint: [[0, 0]],
@@ -105,6 +106,7 @@ export const chapel = {
 export const church = {
   ...common,
   id: 'church',
+  hotkey: 'x',
   name: 'Church',
   blurb: 'Village church',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
@@ -144,6 +146,7 @@ export const church = {
 export const townHall = {
   ...common,
   id: 'town-hall',
+  hotkey: 'c',
   name: 'Town hall',
   blurb: 'Old town hall',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
@@ -192,6 +195,7 @@ export const townHall = {
 export const column = {
   ...common,
   id: 'plague-column',
+  hotkey: 'v',
   name: 'Plague column',
   size: 'Plague column',
   blurb: 'Baroque column',
@@ -332,6 +336,7 @@ function curtain(g, [x0, y0], [x1, y1], h, d = 0.07) {
 export const townGate = {
   ...common,
   id: 'town-gate',
+  hotkey: 'b',
   name: 'Gate tower',
   blurb: 'Old town gate',
   footprint: [[0, 0]],
@@ -497,6 +502,7 @@ function slits(g, x0, x1, y, z) {
 export const castle = {
   ...common,
   id: 'castle',
+  hotkey: 'n',
   name: 'Castle',
   blurb: 'Ruin, castle or chateau',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],

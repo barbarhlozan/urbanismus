@@ -35,6 +35,7 @@ function columns(g, x0, x1, y, h, n) {
 export const cultureHouse = {
   ...common,
   id: 'culture-house',
+  hotkey: 'g',
   name: 'House of culture',
   blurb: 'Cinema and dance hall',
   // a public building rather than a landmark (Build menu: Public); it
@@ -146,6 +147,7 @@ function latticeMast(g, x, y, h, b, t, n = 10) {
 export const tvTower = {
   ...common,
   id: 'tv-tower',
+  hotkey: 'm',
   name: 'Tower',
   blurb: 'On a hilltop',
   footprint: [[0, 0]],
@@ -253,6 +255,7 @@ function track(g, x0, y0, x1, y1) {
 export const stadium = {
   ...common,
   id: 'stadium',
+  hotkey: ',',
   name: 'Stadium',
   blurb: 'Sports ground',
   // 3×2: local x from about -0.4 to 2.4, y from -0.4 to 1.4

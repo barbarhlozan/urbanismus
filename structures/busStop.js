@@ -77,7 +77,7 @@ export const busStop = {
   name: 'Bus stop',
   blurb: 'Beside a road',
   category: 'transport',
-  hotkey: 'b',
+  hotkey: '6',
   code: 'BS',
   busStop: true,
   sim: { destinations: [] },

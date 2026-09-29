@@ -12,6 +12,7 @@
 import { CATEGORIES } from '../../structures/index.js';
 import { toolIcon } from './icons.js';
 import { isNarrow } from './device.js';
+import { keyLabel } from './keys.js';
 import { corner, fadeIn, slide } from './motion.js';
 
 const FOLD_KEY = 'urbanismus.buildMenuFolded';
@@ -27,8 +28,8 @@ export class BuildMenu {
     const row = (t) => `
       <button class="bm-tool" data-tool="${t.id}" data-group="${t.group ?? ''}">
         <span class="bm-icon">${toolIcon(t)}</span>
-        <span class="bm-text"><span class="bm-name">${esc(t.label)}</span><span class="bm-blurb">${esc(t.blurb ?? '')}</span></span>
-        <span class="key">${esc((t.hotkeys?.join(' ') || t.hotkey || '').toUpperCase())}</span>
+        <span class="bm-text"><span class="bm-name">${esc(t.label)}</span></span>
+        <span class="key">${esc(t.hotkey ? keyLabel(t.hotkey) : '')}</span>
       </button>`;
     const groups = CATEGORIES.filter((c) => shown.some((t) => t.group === c.id));
 

@@ -129,3 +129,26 @@ const STATS = {
 export function statIcon(id) {
   return `<svg class="icon stat-icon" viewBox="0 0 16 16" aria-hidden="true">${STATS[id] ?? ''}</svg>`;
 }
+
+// Pen drawings for the buttons in the top-right bar, on a 16×16 box.
+const CONTROLS = {
+  photo: '<path d="M2 5.5 H5 L6.2 3.6 H9.8 L11 5.5 H14 V12.6 H2 Z"/><circle cx="8" cy="9" r="2.3"/>',
+  // little hills: a tall one behind, a low one in front, on the ground line
+  terrain: '<path d="M5 12.5 C7 5.5 10.5 4 13.8 12.5 M1.8 12.5 C3.4 8.6 6.4 8.2 8.6 12.5 M1 12.5 H15"/>',
+  assets: '<path d="M2.5 2.5 H7 V7 H2.5 Z M9 2.5 H13.5 V7 H9 Z M2.5 9 H7 V13.5 H2.5 Z M9 9 H13.5 V13.5 H9 Z"/>',
+  debug: '<path d="M5.5 6.6 C5.5 3.8 10.5 3.8 10.5 6.6 V10 C10.5 13.6 5.5 13.6 5.5 10 Z M8 6.6 V13.2 M5.5 8.2 H2.6 M10.5 8.2 H13.4 M5.5 10.8 L3.2 12.6 M10.5 10.8 L12.8 12.6 M6.4 4.8 L4.6 2.8 M9.6 4.8 L11.4 2.8"/>',
+  export: '<path d="M8 2.5 V10 M5 7 L8 10 L11 7 M2.5 10.5 V13.5 H13.5 V10.5"/>',
+  import: '<path d="M8 10 V2.5 M5 5.5 L8 2.5 L11 5.5 M2.5 10.5 V13.5 H13.5 V10.5"/>',
+  // a folded map, and a plus: a new one
+  newMap: '<path d="M1.5 4 L5 2.5 L8.5 4 L12 2.5 V8 M1.5 4 V12.5 L5 11 L8.5 12.5 M5 2.5 V11 M8.5 4 V12.5 M12.5 10 V15 M10 12.5 H15"/>',
+};
+
+// A top-bar icon's drawing on its 16×16 box, without the <svg> (e.g. the
+// photographer's camera on the map, render/overlay.js).
+export function controlArt(id) {
+  return CONTROLS[id] ?? '';
+}
+
+export function controlIcon(id) {
+  return `<svg class="icon ctl-icon" viewBox="0 0 16 16" aria-hidden="true">${CONTROLS[id] ?? ''}</svg>`;
+}

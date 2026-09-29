@@ -33,7 +33,7 @@ export const small = {
   id: 'services',
   name: 'Services',
   blurb: 'Police, clinic, hospital',
-  hotkey: '8',
+  hotkey: 'd',
   footprint: [[0, 0]],
   levels: [
     {
@@ -98,7 +98,6 @@ export const large = {
   ...common,
   id: 'services-large',
   name: 'Large services',
-  hotkey: '9',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   levels: [
     {

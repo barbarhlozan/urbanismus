@@ -108,7 +108,7 @@ export default {
   id: 'mine',
   name: 'Coal mine',
   blurb: 'Headframes, spoil heaps',
-  hotkey: 'm',
+  hotkey: 'r',
   category: 'zone',
   tags: ['industrial'],
   code: 'M',

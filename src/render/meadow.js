@@ -162,6 +162,8 @@ export function plant(world, ground, cx, cy) {
 
 // A chunk's SVG: its dots' glyphs, anchored at `project(x, y)` (scene px),
 // one <path> per tier and pen. `tile`: scene px per grid step.
+// `project` may return null (not in the picture) and `tile` may be a
+// function (x, y) -> px per grid unit, for the photo camera (photo.js).
 export function chunkSVG(world, ground, x0, y0, project, tile) {
   const size = MEADOW.chunk;
   const runs = new Map(); // `${tier} ${pen}` -> path data
@@ -169,12 +171,15 @@ export function chunkSVG(world, ground, x0, y0, project, tile) {
   for (let cy = y0; cy < y0 + size; cy++) {
     for (let cx = x0; cx < x0 + size; cx++) {
       for (const { x, y, tier, parts } of plant(world, ground, cx, cy)) {
-        const [sx, sy] = project(x, y);
+        const at = project(x, y);
+        if (!at) continue;
+        const [sx, sy] = at;
+        const t = typeof tile === 'function' ? tile(x, y) : tile;
         for (const [lines, pen] of parts) {
           if (!lines.length) continue;
           const key = `${tier} ${pen}`;
           let d = runs.get(key) ?? '';
-          for (const pts of lines) d += pts.map(([u, v], i) => `${i ? 'L' : 'M'}${r1(sx + u * tile)} ${r1(sy - v * tile)}`).join('');
+          for (const pts of lines) d += pts.map(([u, v], i) => `${i ? 'L' : 'M'}${r1(sx + u * t)} ${r1(sy - v * t)}`).join('');
           runs.set(key, d);
         }
       }

@@ -58,7 +58,7 @@ export default {
   id: 'farm',
   name: 'Farm',
   blurb: 'Fields and cowsheds',
-  hotkey: 'j',
+  hotkey: 't',
   category: 'zone',
   tags: ['farm'],
   code: 'F',

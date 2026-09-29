@@ -178,7 +178,7 @@ export const station = {
   name: 'Station',
   size: 'Station',
   blurb: 'Beside straight track',
-  hotkey: '0',
+  hotkey: '5',
   code: 'ST',
   // front row along the line, the house in the back row
   footprint: [[-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]],

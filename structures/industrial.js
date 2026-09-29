@@ -85,7 +85,7 @@ export default {
   id: 'industrial',
   name: 'Industrial',
   blurb: 'Factories and yards',
-  hotkey: '3',
+  hotkey: 'e',
   category: 'zone',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   plot: { props: 'works', boundary: 0.7, kinds: ['tall'], density: 0.4 },
@@ -310,7 +310,6 @@ export default {
 export const small = {
   id: 'industrial-small',
   name: 'Small industry',
-  hotkey: 'i',
   category: 'zone',
   tags: ['industrial'],
   footprint: [[0, 0]],

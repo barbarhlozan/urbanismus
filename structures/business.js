@@ -34,7 +34,7 @@ export default {
   access: 'any', // a footpath will do: people walk or cycle
   name: 'Business',
   blurb: 'Shops and offices',
-  hotkey: '2',
+  hotkey: 'w',
   category: 'zone',
   footprint: [[0, 0]],
   sim: { destinations: ['residential'] },

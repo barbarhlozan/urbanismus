@@ -19,6 +19,7 @@ function graves(g, x0, x1, y0, y1) {
 
 export const cemetery = {
   id: 'cemetery',
+  hotkey: 'f',
   name: 'Cemetery',
   blurb: 'A quiet walk',
   category: 'civic',

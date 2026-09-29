@@ -92,7 +92,7 @@ export default {
   access: 'any', // a footpath will do: people walk or cycle
   name: 'Residential',
   blurb: 'Homes',
-  hotkey: '1',
+  hotkey: 'q',
   category: 'zone',
   footprint: [[0, 0]],
   sim: { activities: 'resident', destinations: ['business', 'industrial', 'farm'], leisure: ['park', 'square', 'heritage', 'cemetery'] },

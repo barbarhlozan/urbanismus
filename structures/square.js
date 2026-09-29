@@ -67,7 +67,7 @@ export const small = {
   id: 'square',
   name: 'Square',
   blurb: 'A paved plaza',
-  hotkey: '6',
+  hotkey: 's',
   footprint: [[0, 0]],
   levels: [
     {
@@ -135,7 +135,6 @@ export const large = {
   ...common,
   id: 'square-large',
   name: 'Large square',
-  hotkey: '7',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   levels: [
     {
