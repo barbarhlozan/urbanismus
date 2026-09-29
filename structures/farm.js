@@ -86,9 +86,14 @@ export default {
         g.gableY(1.25, -0.1, 0, 0.34, 1.46, 0.15, 0.13);
         g.gable(0.04, 0.9, 0, 1.21, 0.46, 0.2, 0.22);
         barnDoor(g, 0.55, 0.9, 0.22, 0.17);
-        g.box(0.06, -0.3, 0, 1.19, 0.05, 0.12); // yard wall
-        g.box(0.58, -0.32, 0, 0.06, 0.09, 0.2);  // gate piers
+        // yard wall from the house to the gateway and on to the side range
+        // (it sits further back, so the wall turns back to meet it): pieces
+        // side by side, not overlapping, so each sorts in depth on its own
+        g.box(0.06, -0.3, 0, 0.52, 0.05, 0.12);
+        g.box(0.58, -0.32, 0, 0.06, 0.09, 0.2); // gate piers, the gateway open between
         g.box(0.84, -0.32, 0, 0.06, 0.09, 0.2);
+        g.box(0.9, -0.3, 0, 0.35, 0.05, 0.12);
+        g.box(1.25, -0.3, 0, 0.05, 0.2, 0.12);
         heap(g, 0.35, 0.6, 0.08);
         tree(g, 0.9, 0.35, 1.1, 'spreading');
         field(g, 1.75, 2.36, -0.32, 0.7);
