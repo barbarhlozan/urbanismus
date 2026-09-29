@@ -33,15 +33,16 @@ function seedFor(n, index, from = 1) {
 }
 
 const level = (type, i) => (g) => STRUCTURE_TYPES[type].levels[i].draw(g, {});
-const HOUSE_KINDS = ['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard'];
+const HOUSE_KINDS = ['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard', 'farmstead', 'farmstead']; // as in residential.js
 const house = (kind, from) => ({ seed: seedFor(HOUSE_KINDS.length, HOUSE_KINDS.indexOf(kind), from), draw: level('residential', 0) });
 
 const ICONS = {
-  'house-street': house('street', 3),
+  'house-street': { seed: 12, draw: level('residential', 0) }, // pinned: also the tab icon
   'house-cube': house('cube'),
   'house-villa': house('villa'),
   'house-farm': house('farm'),
   'house-mansard': house('mansard'),
+  'house-farmstead': house('farmstead'),
   'apartments': { seed: seedFor(4, 0), draw: level('residential', 1) },
   'panel-block': { seed: seedFor(3, 0), draw: level('residential', 2) },
   'church': { seed: 7, draw: (g) => heritage.church.levels[0].draw(g, {}) },

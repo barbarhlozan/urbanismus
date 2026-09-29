@@ -25,6 +25,8 @@
 //     yards     surroundings styles it may get (structures/yards.js)
 //     join      { group, chance }: may share walls with its neighbours
 //               (see joinSides in structures/index.js and g.join)
+//     tilt      true: may stand a little askew when on its own
+//               (see tiltOf in structures/index.js and LOOK.tilt)
 //   plot        sides and back of the building (structures/plots.js); a level
 //               can override parts of it with its own `plot`
 //     growTime  optional: ~seconds to grow into this level (default: config)
@@ -38,10 +40,51 @@
 //               solids side by side rather than overlapping.
 
 import { door, panel, chimney, aerials, frontage, shared, hips } from './kit.js';
+import { LOOK } from '../src/render/painter.js';
+
+const FRONT = [0, -1, 0];
 
 // A few windows high up in a street-facing gable (ridge along y).
 function gableWindow(g, x, y, z, s = 0.035) {
   panel(g, x - s / 2, x + s / 2, y, z, z + s * 1.3);
+}
+
+// One window on the front (-y) wall at depth y, like g.windows() draws
+// them: an ink block (LOOK.ink) or an outline. (cx, z): bottom middle.
+function frontWindow(g, cx, y, z, w, h) {
+  g.line([[cx - w / 2, y, z], [cx + w / 2, y, z], [cx + w / 2, y, z + h], [cx - w / 2, y, z + h], [cx - w / 2, y, z]],
+    { facing: FRONT, cls: LOOK.ink ? 'ink' : undefined });
+}
+
+// South Bohemian farmstead (Holašovice): a one-storey house with a steep
+// gable to the street and its door on the side; a trim along the gable's
+// edge, windows in the gable and quoins on the corners.
+function farmstead(g) {
+  const side = g.pick([-1, 1]); // the side the door is on: local -x or +x
+  const w = g.range(0.26, 0.3), d = g.range(0.42, 0.48), h = g.range(0.15, 0.17), r = g.range(0.26, 0.31);
+  const cx = 0, x0 = cx - w / 2, x1 = cx + w / 2, y = -d / 2;
+  const line = (pts) => g.line(pts, { facing: FRONT });
+
+  // the house: three windows to the street, a plinth and a cornice
+  g.roofed(x0, y, 0, w, d, h, { h: r, ridge: 'y' });
+  g.windows(x0, y, w, d, 0, h, h, 0.085, { h: 0.42, skip: ['front'] });
+  for (const k of [-1, 0, 1]) frontWindow(g, cx + k * w * 0.29, y, h * 0.36, 0.034, h * 0.38);
+  line([[x0, y, 0.025], [x1, y, 0.025]]);
+  line([[x0 - 0.008, y, h], [x1 + 0.008, y, h]]);
+  // quoins: short courses up both corners
+  for (let z = 0.04; z < h - 0.01; z += 0.03) {
+    line([[x0, y, z], [x0 + 0.022, y, z]]);
+    line([[x1 - 0.022, y, z], [x1, y, z]]);
+  }
+  // trim along the gable's edge, windows in the gable
+  line([[x0 + 0.02, y, h + 0.012], [cx, y, h + r - 0.035], [x1 - 0.02, y, h + 0.012]]);
+  for (const k of [-1, 1]) frontWindow(g, cx + k * w * 0.2, y, h + 0.035, 0.03, 0.045);
+  frontWindow(g, cx, y, h + r * 0.5, 0.026, 0.04);
+  chimney(g, cx + g.range(-0.02, 0.02), g.range(0.02, 0.12), h + r * 0.4, r * 0.75);
+
+  // the door on the side, near the front
+  const xd = side > 0 ? x1 : x0, yd = y + d * 0.3;
+  g.line([[xd, yd - 0.025, 0], [xd, yd - 0.025, 0.1], [xd, yd + 0.025, 0.1], [xd, yd + 0.025, 0]], { facing: [side, 0, 0] });
 }
 
 export default {
@@ -58,14 +101,18 @@ export default {
   levels: [
     {
       // Family houses: the 70s "cube" with a pyramid roof, village houses
-      // with their gable to the street, long farmhouses, villas.
+      // with their gable to the street, long farmhouses, villas, and old
+      // farmsteads with their gable to the street.
       name: 'House',
       stats: { residents: 4 },
       agents: 1,
       yards: ['garden', 'garden', 'trees'],
+      tilt: true,
       draw(g) {
-        const kind = g.pick(['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard']);
-        if (kind === 'cube') {
+        const kind = g.pick(['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard', 'farmstead', 'farmstead']);
+        if (kind === 'farmstead') {
+          farmstead(g);
+        } else if (kind === 'cube') {
           const s = g.range(0.36, 0.42), h = 0.3, r = g.range(0.07, 0.1);
           g.roofed(-s / 2, -s / 2, 0, s, s, h, { h: r, hip: s / 2 });
           g.windows(-s / 2, -s / 2, s, s, 0, h, h / 2, 0.11, { h: 0.4 });

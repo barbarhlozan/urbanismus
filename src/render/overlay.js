@@ -4,7 +4,7 @@
 
 import { smoothPolyline } from '../roads/geometry.js';
 import { Painter } from './painter.js';
-import { levelOf, drawSeed } from '../../structures/index.js';
+import { levelOf, drawSeed, tiltOf } from '../../structures/index.js';
 import { fitSite } from './lots.js';
 import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 
@@ -86,6 +86,7 @@ export class OverlayKit {
       const s = { id: -1, type: def.id, node, rotation, level, seed, data: {} };
       painter.setSitePaths(this.world.sitePaths(s));
     }
+    painter.setTilt(tiltOf(def, instance));
     levelOf(def, instance).draw(painter, instance);
     return `<g class="ghost">${painter.toGroundSVG()}${painter.toSVG()}</g>`;
   }

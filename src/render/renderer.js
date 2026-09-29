@@ -49,7 +49,7 @@ import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
 import { AgentCanvas, AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
 import { stationTracks } from '../../structures/station.js';
-import { STRUCTURE_TYPES, levelOf, drawSeed, yardOf, joinSides, joinedRow } from '../../structures/index.js';
+import { STRUCTURE_TYPES, levelOf, drawSeed, yardOf, joinSides, joinedRow, tiltOf } from '../../structures/index.js';
 import { YARDS } from '../../structures/yards.js';
 import { drawPlot } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
@@ -412,7 +412,7 @@ export class Renderer {
   addBridges(kind, add) {
     const { list, deck } = this.bridgeState();
     list.filter((b) => b.kind === kind).forEach((b, i) => {
-      bridgeLines(b, deck).forEach(({ cls, line }, j) => add(`br${kind}${b.a}${b.b}.${j}`, cls, line));
+      bridgeLines(b, deck, (n) => this.camera.facing(n)).forEach(({ cls, line }, j) => add(`br${kind}${b.a}${b.b}.${j}`, cls, line));
     });
   }
 
@@ -1211,6 +1211,7 @@ export class Renderer {
       points.push([x0 + STRUCTURE_PAD, y0 + STRUCTURE_PAD], [x1 - STRUCTURE_PAD, y1 - STRUCTURE_PAD]);
     }
     painter.join = joinSides(world, s);
+    painter.setTilt(tiltOf(def, s, painter.join));
     levelOf(def, s).draw(painter, s);
     const core = painter.bounds;
 
@@ -1254,13 +1255,14 @@ export class Renderer {
     const xs = pts.map((p) => p[0] - ax), ys = pts.map((p) => p[1] - ay);
     const cell = [Math.min(...xs) - 0.5, Math.min(...ys) - 0.5, Math.max(...xs) + 0.5, Math.max(...ys) + 0.5];
 
-    // Building footprint as drawn (painter's local bounds -> anchor-relative world axes).
-    const corners = [[core[0], core[1]], [core[2], core[3]]].map(([lx, ly]) => {
+    // Building footprint as drawn (painter's local bounds -> anchor-relative
+    // world axes; all four corners, as a tilted building is turned).
+    const corners = [[core[0], core[1]], [core[2], core[1]], [core[2], core[3]], [core[0], core[3]]].map(([lx, ly]) => {
       const [wx, wy] = painter.toWorld(lx, ly);
       return [wx - ax, wy - ay];
     });
-    const bx0 = Math.min(corners[0][0], corners[1][0]), bx1 = Math.max(corners[0][0], corners[1][0]);
-    const by0 = Math.min(corners[0][1], corners[1][1]), by1 = Math.max(corners[0][1], corners[1][1]);
+    const bx0 = Math.min(...corners.map((c) => c[0])), bx1 = Math.max(...corners.map((c) => c[0]));
+    const by0 = Math.min(...corners.map((c) => c[1])), by1 = Math.max(...corners.map((c) => c[1]));
     const yardLocal = yardWorld?.map(([wx, wy]) => [wx - ax, wy - ay]);
 
     const onBuilding = (x, y, r) => x > bx0 - r - 0.03 && x < bx1 + r + 0.03 && y > by0 - r - 0.03 && y < by1 + r + 0.03;

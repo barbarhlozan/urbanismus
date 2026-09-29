@@ -96,9 +96,12 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //   floors  draw g.floors() lines (storey bands); off for the sparer sketch look
 //   roads   how far roads, paths and what moves on them stray from the ruler
 //           line, in grid units (0 = straight; see wobble())
+//   tilt    houses stand askew by up to this many degrees either way (levels
+//           with `tilt: true`, see tiltOf in structures/index.js; 0 = square)
 export const LOOK = {
   eave: 0.03, fascia: 0, sill: false, tall: true, sketch: 5,
   overshoot: 1.5, ink: true, thin: 1.4, hatch: 0.03, ground: 0.04, floors: false, roads: 0.035,
+  tilt: 10,
 };
 
 // The hand-drawn sway of roads: a smooth shift [dx, dy] of the map at
@@ -175,6 +178,19 @@ export class Painter {
     this.current = null;
     this.rigid = null;    // world [x, y]: move as one piece, see _project()
     this.top = 0;         // highest z drawn at (local), for the renderer's screen box
+    this.tilt = 0;        // extra turn in radians on top of `rotation`, see setTilt()
+    this._tc = 1;
+    this._ts = 0;
+  }
+
+  // Turn the whole drawing by a small angle (radians, counter-clockwise
+  // seen from above) on top of its quarter-turn rotation – houses standing a
+  // little askew (tiltOf in structures/index.js). Call before drawing.
+  setTilt(angle) {
+    this.tilt = angle;
+    this._tc = Math.cos(angle);
+    this._ts = Math.sin(angle);
+    return this;
   }
 
   // ----- internals -----
@@ -186,9 +202,15 @@ export class Painter {
     return this.camera.project(x, y, z, this.rigid);
   }
 
+  // A local direction or offset turned into world axes (tilt, then rotation).
+  _turn(x, y) {
+    if (this.tilt) [x, y] = [x * this._tc - y * this._ts, x * this._ts + y * this._tc];
+    return rotateQuarter(x, y, this.rotation);
+  }
+
   _world(x, y, z) {
     if (z > this.top) this.top = z;
-    const [lx, ly] = rotateQuarter(x, y, this.rotation);
+    const [lx, ly] = this._turn(x, y);
     return [this.ox + lx, this.oy + ly, this.oz + z];
   }
 
@@ -306,13 +328,13 @@ export class Painter {
   // How squarely a local normal faces the viewer (the camera's linear
   // facing test, before its sign is taken).
   _view([nx, ny, nz]) {
-    const [wx, wy] = rotateQuarter(nx, ny, this.rotation);
+    const [wx, wy] = this._turn(nx, ny);
     const [rx, ry] = rotateQuarter(wx, wy, this.camera.rotation);
     return rx + ry + nz / this.camera.zScale;
   }
 
   _facing([nx, ny, nz]) {
-    const [rx, ry] = rotateQuarter(nx, ny, this.rotation);
+    const [rx, ry] = this._turn(nx, ny);
     return this.camera.facing([rx, ry, nz]);
   }
 
@@ -839,7 +861,7 @@ export class Painter {
   // `dir`: the way a car parked there faces (local; default nose to +y).
   spot(x, y, dir = [0, 1]) {
     const [wx, wy] = this._world(x, y, 0);
-    const [dx, dy] = rotateQuarter(dir[0], dir[1], this.rotation);
+    const [dx, dy] = this._turn(dir[0], dir[1]);
     this.spots.push([wx, wy, Math.atan2(dy, dx)]);
     return this;
   }

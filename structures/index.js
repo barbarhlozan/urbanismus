@@ -22,12 +22,14 @@
 //   busStop    true = buses call here (src/sim/agents.js, updateBuses)
 //   tracks     [{ pts, buffer }] extra railway drawn with the real lines, in
 //              local coordinates (stations' passing tracks and sidings)
+//   levels[i].tilt       true = may stand a little askew on its dot (see tiltOf)
 //   levels[i].coverage   service radius in dots (services)
 //   levels[i].yards      surroundings styles it may get (see yards.js)
 
 import { rotateQuarter } from '../src/core/grid.js';
 import { mulberry32 } from '../src/core/random.js';
 import { YARDS } from './yards.js';
+import { LOOK } from '../src/render/painter.js';
 import residential from './residential.js';
 import business from './business.js';
 import industrial, { small as industrialSmall } from './industrial.js';
@@ -124,6 +126,16 @@ export function yardOf(def, s, { cars = true } = {}) {
   const options = (levelOf(def, s).yards ?? []).filter((y) => cars || !YARDS[y].cars);
   if (!options.length) return null;
   return options[Math.floor(mulberry32(drawSeed(s) ^ 0x51ed)() * options.length)];
+}
+
+// A small turn (radians) for a building standing on its own, so a street of
+// houses doesn't line up like a grid: up to LOOK.tilt degrees either way,
+// seeded like the rest of its look. Only single-dot levels with `tilt: true`,
+// and never while sharing a wall with a neighbour (the walls must meet).
+export function tiltOf(def, s, join = { left: false, right: false }) {
+  if (!LOOK.tilt || !levelOf(def, s).tilt || (def.footprint ?? [[0, 0]]).length !== 1 || join.left || join.right) return 0;
+  const r = mulberry32(drawSeed(s) ^ 0x7117)();
+  return (r * 2 - 1) * LOOK.tilt * Math.PI / 180;
 }
 
 // Joined buildings: neighbouring single-dot buildings facing the same road
