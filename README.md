@@ -58,7 +58,7 @@ where the key sits (a US keyboard), so they work the same on a Czech or German l
   castle, tower, stadium
 - **Backspace** – erase
 - **P** – photo: click where to stand, aim with the pointer, click to take a picture of the
-  town from street level (**.** lens: 28 / 42 / 80 mm);
+  town from street level (**Shift** lens: 28 / 42 / 80 mm);
   it opens as a print you can save as a PNG
 - **Esc / right-click** – back to select; **right-click** with nothing in hand picks up
   what's under the pointer (same building, size and rotation, or the road / railway /

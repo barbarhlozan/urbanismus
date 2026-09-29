@@ -6,7 +6,6 @@
 
 import { PHOTO } from '../render/photo.js';
 import { isTouch } from '../ui/device.js';
-import { keyOf } from '../ui/keys.js';
 
 const LENSES = PHOTO.lenses;
 
@@ -60,13 +59,13 @@ export function createPhotoTool({ world }, { shoot }) {
     },
 
     key(e) {
-      if (keyOf(e) === '.') cycleLens();
+      if (e.key === 'Shift' && !e.repeat) cycleLens(); // like Size while building
       else return false;
       return true;
     },
 
     actions: () => [
-      { label: `Lens: ${LENSES[lens].label}`, key: '.', run: cycleLens },
+      { label: `Lens: ${LENSES[lens].label}`, key: 'Shift', run: cycleLens },
       ...(spot ? [{ label: 'Move', run: () => { spot = null; } }] : []),
     ],
 
