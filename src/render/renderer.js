@@ -11,7 +11,6 @@
 //   subgrid  – the dense footpath dots (only visible while drawing footpaths)
 //   lots     – flat ground drawing of structures and their surroundings
 //              (lawns, paving, parking lines); built together with objects
-//   markers  – ground indicators (unconnected buildings…)
 //   paths    – footpaths
 //   rails    – railways: the map symbol, a solid line with dashes inside
 //   roads    – roads + driveways (for buildings without surroundings);
@@ -66,7 +65,7 @@ import { ELEVATION, contours } from '../terrain/elevation.js';
 import { findBridges, makeDeck, bridgeLines, hiddenUnder } from './bridges.js';
 import { MEADOW, meadowGround, chunkSVG } from './meadow.js';
 
-const LAYERS = ['terrain', 'frame', 'meadow', 'grid', 'subgrid', 'lots', 'markers', 'paths', 'rails', 'roads', 'parked', 'trains', 'agents', 'objects', 'overlay'];
+const LAYERS = ['terrain', 'frame', 'meadow', 'grid', 'subgrid', 'lots', 'paths', 'rails', 'roads', 'parked', 'trains', 'agents', 'objects', 'overlay'];
 const TOP = ['objects', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -218,7 +217,7 @@ export class Renderer {
     const on = (type, ...layers) => world.events.on(type, () => layers.forEach((l) => this.dirty.add(l)));
     const near = (s) => this.touchAround(world.nodesOf(s).map((n) => world.grid.xy(n)));
     for (const type of ['structure:added', 'structure:removed', 'structure:changed']) {
-      on(type, 'markers', 'roads', 'rails'); // stations draw tracks with the rails
+      on(type, 'roads', 'rails'); // stations draw tracks with the rails
       world.events.on(type, (s) => {
         this.objsDirty.add(`s${s.id}`);
         near(s); // neighbours' plots, sites and yards depend on it
@@ -236,10 +235,10 @@ export class Renderer {
       world.events.on(`${kind}:added`, (o) => this.born.set(`${k}${o.id}`, null));
       world.events.on(`${kind}:removed`, (o) => this.dying.add(`${k}${o.id}`));
     }
-    on('roads:changed', 'roads', 'markers');
+    on('roads:changed', 'roads');
     // street lamps: new streets get theirs drawn in, gone ones erased
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) world.events.on(type, () => this.touchStreets());
-    on('paths:changed', 'paths', 'markers');
+    on('paths:changed', 'paths');
     on('rails:changed', 'rails');
     for (const type of ['roads:changed', 'paths:changed']) world.events.on(type, () => (this.roadLines = null));
     // bridges come and go with the networks; the water breaks under them
@@ -265,7 +264,7 @@ export class Renderer {
     }
     // a car parking redraws only its own lot (renderParked)
     world.events.on('parking:changed', (s) => this.parkedDirty.add(s.id));
-    on('terrain:changed', 'terrain', 'meadow', 'grid', 'subgrid', 'paths', 'rails', 'roads', 'markers');
+    on('terrain:changed', 'terrain', 'meadow', 'grid', 'subgrid', 'paths', 'rails', 'roads');
     world.events.on('terrain:changed', () => {
       this.objsAll = this.worldAll = true; // (not just the view: draw them all now)
       this.roadLines = null;
@@ -445,12 +444,6 @@ export class Renderer {
       }
       return this.project(x, y, lift);
     }));
-  }
-
-  groundEllipse(x, y, r, cls) {
-    const [sx, sy] = this.project(x, y);
-    const [rx, ry] = this.camera.groundEllipse(r);
-    return `<ellipse class="${cls}" cx="${r2(sx)}" cy="${r2(sy)}" rx="${r2(rx)}" ry="${r2(ry)}"/>`;
   }
 
   // ----- layers -----
@@ -771,17 +764,6 @@ export class Renderer {
       out += `<circle class="fine-dot" cx="${r2(sx)}" cy="${r2(sy)}" r="${THEME.fineDotRadius}"/>`;
     }
     this.layers.subgrid.innerHTML = out;
-  }
-
-  renderMarkers() {
-    const { world } = this;
-    let out = '';
-    for (const s of world.structures.values()) {
-      if (world.isServed(s)) continue;
-      const size = Math.sqrt(world.nodesOf(s).length);
-      out += this.groundEllipse(...world.centerOf(s), 0.42 * size, 'unconnected');
-    }
-    if (out !== this.markersHTML) this.layers.markers.innerHTML = this.markersHTML = out;
   }
 
   // Network linework as ink items (see ink.js): `add(key, cls, line, a, b)`

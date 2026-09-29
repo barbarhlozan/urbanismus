@@ -253,15 +253,6 @@ html, body {
 #world.lod-2 .driveway,
 #world.lod-2 .zebra { display: none; }
 
-.unconnected {
-  fill: none;
-  stroke: var(--fg);
-  stroke-width: 1;
-  stroke-dasharray: 2 3;
-  animation: blink 1.4s steps(2, jump-none) infinite;
-}
-@keyframes blink { 50% { visibility: hidden; } }
-
 .overlay .hover, .overlay .anchor {
   fill: none;
   stroke: var(--fg);
