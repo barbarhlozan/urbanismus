@@ -41,9 +41,8 @@ export class PerspectiveCamera {
     return (x - this.ex) * this.fx + (y - this.ey) * this.fy;
   }
 
-  project(x, y, z = 0, at = null) {
-    const [ax, ay] = at ?? [x, y];
-    if (this.lift) z += this.lift(ax, ay);
+  project(x, y, z = 0, at = null, liftAt = at) {
+    if (this.lift) z += this.lift(...(liftAt ?? [x, y]));
     const cz = Math.max(this.ahead(x, y), 1e-4);
     const cx = (x - this.ex) * this.rx + (y - this.ey) * this.ry;
     const cy = z - this.ez;

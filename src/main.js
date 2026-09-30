@@ -126,7 +126,7 @@ for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createBulldozeTool(ctx));
 const photoPrint = new PhotoPrint(uiRoot);
 tools.register(createPhotoTool(ctx, {
-  shoot: (shot) => photoPrint.show(takePhoto(renderer, shot), `${world.name} · ${shot.lens}`),
+  shoot: (shot) => photoPrint.show(takePhoto(renderer, shot), world.name),
 }));
 
 const actions = {
@@ -142,7 +142,22 @@ const actions = {
   photo: () => tools.use(tools.active?.id === 'photo' ? 'inspect' : 'photo'),
   export: () => exportCity(world),
   import: () => importCity(),
+  fullscreen: () => toggleFullscreen(),
 };
+
+// Full screen: the whole page, UI and all. Safari wants its own prefixed
+// names, and on an iPhone there's no full screen for pages at all: the
+// button hides.
+const fs = {
+  enabled: () => document.fullscreenEnabled || document.webkitFullscreenEnabled,
+  element: () => document.fullscreenElement ?? document.webkitFullscreenElement,
+  enter: () => (document.documentElement.requestFullscreen ?? document.documentElement.webkitRequestFullscreen)?.call(document.documentElement),
+  exit: () => (document.exitFullscreen ?? document.webkitExitFullscreen)?.call(document),
+};
+function toggleFullscreen() {
+  const p = fs.element() ? fs.exit() : fs.enter();
+  p?.catch?.(() => { /* refused (not from a click, or not allowed here) */ });
+}
 
 // Discard this city and start over with the New map menu's settings.
 function newMap(settings) {
@@ -189,6 +204,19 @@ async function importCity() {
 }
 
 const hud = new Hud(uiRoot, { world, tools, agents, trains, actions });
+// the full-screen button: hidden where there's no full screen, its icon and name following the state
+{
+  const btn = uiRoot.querySelector('[data-act="fullscreen"]');
+  if (!fs.enabled()) btn.hidden = true;
+  const show = () => {
+    const full = !!fs.element();
+    btn.classList.toggle('full', full);
+    btn.title = full ? 'Leave full screen' : 'Full screen';
+    btn.querySelector('.label').textContent = full ? 'Leave full screen' : 'Full screen';
+  };
+  document.addEventListener('fullscreenchange', show);
+  document.addEventListener('webkitfullscreenchange', show);
+}
 const debugPanel = new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
 debugPanel.onToggle = (open) => uiRoot.querySelector('[data-act="debug"]').classList.toggle('on', open);
 const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"]'));
@@ -294,6 +322,9 @@ function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  // the New map dialog: the town stands still behind it (nobody's watching,
+  // and a still picture is cheap to blur), and carries on when it closes
+  if (newMapMenu.open) return;
   try {
     const simDt = clock.step(dt);
     agents.update(simDt);

@@ -158,26 +158,86 @@ export function trimStart(points, d) {
   return [];
 }
 
-// Kerb lines on both sides of every street segment (road segments with
-// sidewalks), `width` from the centre line. They stop short of junctions so
-// they don't cut across the other roads there.
-export function streetKerbs(world, curve, width) {
-  return streetKerbPairs(world, curve, width).flatMap((k) => k.lines);
+// Footpaths carrying on from a road's dead end (drawn from its last dot):
+// the road stays open there and its edges narrow into the footpath's.
+// Map road dot -> { fine, to, line: [[left], [right]] }: the footpath's
+// dot there and its next one (the most straight-on, if it branches), and
+// the two joining lines, from the road's edges to the footpath's `reach`
+// along it (the footpath is drawn from there on).
+export const JOIN_REACH = 0.16;
+export function pathJoins(world, curve, lane, pathCurve) {
+  const roads = world.networks.road, paths = world.networks.path;
+  const out = new Map();
+  for (const n of roads.graph.nodes()) {
+    if (roads.graph.degree(n) !== 1) continue;
+    const f = world.coarseToFine(n);
+    if (!world.paths.hasNode(f)) continue;
+    const [m] = roads.graph.neighbors(n);
+    const [x, y] = roads.pos(n), [mx, my] = roads.pos(m);
+    const l = Math.hypot(x - mx, y - my) || 1;
+    const u = [(x - mx) / l, (y - my) / l];
+    // the footpath going on ahead (not back along the road)
+    let best = null;
+    for (const g of world.paths.neighbors(f)) {
+      const [gx, gy] = paths.pos(g);
+      const k = Math.hypot(gx - x, gy - y) || 1;
+      const v = [(gx - x) / k, (gy - y) / k];
+      const ahead = u[0] * v[0] + u[1] * v[1];
+      if (ahead > 0.3 && (!best || ahead > best.ahead)) best = { g, v, ahead };
+    }
+    if (!best) continue;
+    const w = world.isLane(n, m) ? lane.edge : curve.edge, pw = pathCurve.edge, { v } = best;
+    const ahead = [x + v[0] * JOIN_REACH, y + v[1] * JOIN_REACH];
+    // side +1 / -1 (as offsetPolyline +w / -w, of the way along)
+    const line = [1, -1].map((s) => {
+      const e = [x - u[1] * w * s, y + u[0] * w * s];
+      const p = [ahead[0] - v[1] * pw * s, ahead[1] + v[0] * pw * s];
+      // bend where the road's edge, carried on, meets the footpath's (when
+      // it turns), else halfway
+      let c = [e[0] + u[0] * JOIN_REACH * 0.5, e[1] + u[1] * JOIN_REACH * 0.5];
+      const det = u[0] * v[1] - u[1] * v[0];
+      if (Math.abs(det) > 0.2) {
+        const k = ((p[0] - e[0]) * v[1] - (p[1] - e[1]) * v[0]) / det;
+        if (k > 0 && k < JOIN_REACH) c = [e[0] + u[0] * k, e[1] + u[1] * k];
+        else if (k <= 0) c = e;
+      }
+      const pts = [];
+      for (let i = 0; i <= 8; i++) {
+        const t = i / 8, a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, d = t * t;
+        pts.push([a * e[0] + b * c[0] + d * p[0], a * e[1] + b * c[1] + d * p[1]]);
+      }
+      return pts;
+    });
+    out.set(n, { fine: f, to: best.g, line });
+  }
+  return out;
 }
 
-// The same per street segment: [{ a, b, lines: [left, right] }], both lines
-// running from a to b.
-export function streetKerbPairs(world, curve, width) {
+// Kerb lines: along every side of a road segment with a sidewalk (both
+// sides of a street, the sides of a lane that have one, world.hasKerb),
+// `curve.kerb` / `lane.kerb` from the centre line. They are the road's
+// edges pushed out to the kerb (roadEdges), so where two sidewalks meet
+// at a junction they round the corner like the road does, and a street's
+// dead end is walked round. Next to a road side without one they stop
+// short, clear of the other road.
+// Returns [{ key, line, a, b }] (keys as roadEdges', for the pen).
+// `joins` (pathJoins): dead ends a footpath carries on from stay open.
+export function streetKerbs(world, curve, lane, joins = new Map()) {
   const layer = world.networks.road;
-  const { graph } = layer;
+  const width = (a, b) => {
+    if (world.hasSidewalk(a, b)) return curve.kerb;
+    if (!world.isLane(a, b)) return curve.edge;
+    return world.laneWalks.has(a < b ? `${a}-${b}` : `${b}-${a}`) ? lane.kerb : lane.edge;
+  };
+  // a side key from roadEdges: the segment's key, then 0 / 1 for the side
+  const kerbed = (k) => {
+    const [a, b] = k.slice(0, -1).split('-').map(Number);
+    return world.hasKerb(a, b, Number(k.slice(-1)));
+  };
   const out = [];
-  for (const key of world.sidewalks) {
-    const [a, b] = key.split('-').map(Number);
-    let line = edgeCurve(layer, curve, a, b);
-    if (graph.degree(a) > 2) line = trimStart(line, width * 1.5);
-    if (graph.degree(b) > 2) line = trimStart(line.reverse(), width * 1.5).reverse();
-    if (line.length < 2) continue;
-    out.push({ a, b, lines: [offsetPolyline(line, width), offsetPolyline(line, -width)] });
+  for (const { key, kind, line, a, b, sides } of roadEdges(layer, curve, width, world.roadExits(), (n) => !joins.has(n))) {
+    const keep = kind === 'edge' ? kerbed(key) : (kind === 'corner' || kind === 'end') && sides.every(kerbed);
+    if (keep) out.push({ key, line, a, b });
   }
   return out;
 }
@@ -192,6 +252,7 @@ export function streetKerbPairs(world, curve, width) {
 // Returns [{ key, kind, line, a, b }]: kind 'edge' (a -> b the segment),
 // 'corner' / 'end' (a the node, b a neighbour), 'exit' / 'fade' (a = b the
 // exit node); keys stay put while the pieces do (for the pen, ink.js).
+// Corners and ends also give `sides`: the keys of the edges they join.
 // Works for any network (footpaths too); `capAt(node)` false leaves a dead
 // end open (a footpath carrying on as a park's walkway).
 // `width` may be a function (a, b) -> width of that segment (lanes and
@@ -266,14 +327,17 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true, t
     }
     if (closed) continue;
     const ends = sides.map((l, k) => [trimStart(l, cut[k][0])[0], trimStart(l.slice().reverse(), cut[k][1])[0]]);
-    const arm = (n, to, pts) => {
+    // (with the edge pieces' keys of the end segment's sides)
+    // (`flip`: the run goes from the higher dot of that segment)
+    const arm = (n, to, pts, flip) => {
       if (pts.some((p) => !p)) return;
       const [x, y] = layer.pos(n), [tx, ty] = layer.pos(to);
       const l = Math.hypot(tx - x, ty - y) || 1;
-      (arms.get(n) ?? arms.set(n, []).get(n)).push({ to, dir: [(tx - x) / l, (ty - y) / l], ends: pts });
+      const keys = pts.map((_, k) => `${pairKey(n, to)}${k ^ flip}`);
+      (arms.get(n) ?? arms.set(n, []).get(n)).push({ to, dir: [(tx - x) / l, (ty - y) / l], ends: pts, keys });
     };
-    arm(first, chain[1], ends.map((e) => e[0]));
-    arm(last, chain[chain.length - 2], ends.map((e) => e[1]));
+    arm(first, chain[1], ends.map((e) => e[0]), first > chain[1] ? 1 : 0);
+    arm(last, chain[chain.length - 2], ends.map((e) => e[1]), chain[chain.length - 2] > last ? 1 : 0);
   }
 
   const quad = (p, c, q, n = 8) => {
@@ -288,7 +352,7 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true, t
     const [x, y] = layer.pos(n);
     const cross = ([dx, dy], [px, py]) => dx * (py - y) - dy * (px - x);
     if (list.length === 1) {
-      const { to, dir: [dx, dy], ends: [e0, e1] } = list[0];
+      const { to, dir: [dx, dy], ends: [e0, e1], keys } = list[0];
       const width = widthOf(n, to);
       const out0 = exitAt.get(n);
       if (out0) {
@@ -299,7 +363,7 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true, t
           out.push({ key: `f${n}:${k}`, kind: 'fade', line: [[ex + ox * 0.8, ey + oy * 0.8], [ex + ox * 1.9, ey + oy * 1.9]], a: n, b: n });
         });
       } else if (capAt(n)) {
-        out.push({ key: `end${n}`, kind: 'end', line: quad(e0, [x - dx * width * 1.3, y - dy * width * 1.3], e1), a: n, b: to });
+        out.push({ key: `end${n}`, kind: 'end', line: quad(e0, [x - dx * width * 1.3, y - dy * width * 1.3], e1), a: n, b: to, sides: keys });
       }
       continue;
     }
@@ -307,8 +371,9 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true, t
     list.sort((a, b) => Math.atan2(a.dir[1], a.dir[0]) - Math.atan2(b.dir[1], b.dir[0]));
     for (let i = 0; i < list.length; i++) {
       const a = list[i], b = list[(i + 1) % list.length];
-      const p = a.ends.find((e) => cross(a.dir, e) > 0) ?? a.ends[0];
-      const q = b.ends.find((e) => cross(b.dir, e) < 0) ?? b.ends[1];
+      const ip = Math.max(0, a.ends.findIndex((e) => cross(a.dir, e) > 0));
+      const iq = b.ends.findIndex((e) => cross(b.dir, e) < 0);
+      const [p, q] = [a.ends[ip], b.ends[iq < 0 ? 1 : iq]];
       // the two edges, followed back in towards the junction, meet at the
       // corner; roads straight across (or turning away): a straight line
       const det = a.dir[0] * b.dir[1] - a.dir[1] * b.dir[0];
@@ -318,7 +383,7 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true, t
         const u = ((q[0] - p[0]) * a.dir[1] - (q[1] - p[1]) * a.dir[0]) / det;
         if (s < 0 && u < 0) c = [p[0] + a.dir[0] * s, p[1] + a.dir[1] * s];
       }
-      out.push({ key: `c${n}:${a.to}:${b.to}`, kind: 'corner', line: quad(p, c, q), a: n, b: b.to });
+      out.push({ key: `c${n}:${a.to}:${b.to}`, kind: 'corner', line: quad(p, c, q), a: n, b: b.to, sides: [a.keys[ip], b.keys[iq < 0 ? 1 : iq]] });
     }
   }
   return out;
@@ -334,15 +399,17 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true, t
 export function roadway(world, curve, lane) {
   const layer = world.networks.road;
   const streets = [], plain = [], lanes = [];
+  const walked = []; // lanes with a sidewalk (either side: up to its kerb)
   for (const [a, b] of layer.graph.edges()) {
     const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-    (world.sidewalks.has(key) ? streets : world.lanes.has(key) ? lanes : plain).push(edgeCurve(layer, curve, a, b));
+    const list = world.sidewalks.has(key) ? streets : !world.lanes.has(key) ? plain : world.laneWalks.has(key) ? walked : lanes;
+    list.push(edgeCurve(layer, curve, a, b));
   }
-  const s = new SegmentIndex(streets), p = new SegmentIndex(plain), l = new SegmentIndex(lanes);
+  const s = new SegmentIndex(streets), p = new SegmentIndex(plain), l = new SegmentIndex(lanes), w = new SegmentIndex(walked);
   return (q) => {
     if (s.distance(q, curve.kerb) !== Infinity) return 'street';
     if (p.distance(q, curve.edge) !== Infinity) return 'road';
-    return l.distance(q, lane.edge) !== Infinity ? 'lane' : false;
+    return l.distance(q, lane.edge) !== Infinity || w.distance(q, lane.kerb) !== Infinity ? 'lane' : false;
   };
 }
 

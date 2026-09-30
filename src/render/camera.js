@@ -32,9 +32,11 @@ export class Camera {
   // `at` (optional, world [x, y]): move the point by the relief and warp
   // found there instead of at the point itself – so a whole building moves
   // as one piece and stays square instead of bending with the ground.
-  project(x, y, z = 0, at = null) {
+  // `liftAt` takes the relief somewhere else than the warp (null: at the
+  // point) – yards keep their building's warp but follow the ground.
+  project(x, y, z = 0, at = null, liftAt = at) {
+    if (this.lift) z += this.lift(...(liftAt ?? [x, y]));
     const [ax, ay] = at ?? [x, y];
-    if (this.lift) z += this.lift(ax, ay);
     if (this.warp) {
       const [wx, wy] = this.warp(ax, ay);
       x += wx - ax;

@@ -17,7 +17,11 @@
 //   canPlace(world, nodes, rotation) -> { ok, reason }
 //              extra placement rule on top of free ground (stations need track)
 //              When it fails, the build tool also tries the footprint turned
-//              half round on the same dots (World.placementFor).
+//              half round on the same dots (World.placementFor). It may
+//              return { ok, lay } – something placing will build (a
+//              station's own track); the other way round is preferred if it
+//              needs no `lay`.
+//   placed(world, s)  called once a new structure stands (a station lays its track)
 //   railStop   true = trains stop here (stations, src/sim/trains.js)
 //   busStop    true = buses call here (src/sim/agents.js, updateBuses)
 //   tracks     [{ pts, buffer }] extra railway drawn with the real lines, in
@@ -30,9 +34,9 @@ import { rotateQuarter } from '../src/core/grid.js';
 import { mulberry32 } from '../src/core/random.js';
 import { YARDS } from './yards.js';
 import { LOOK } from '../src/render/painter.js';
-import residential from './residential.js';
-import business from './business.js';
-import industrial, { small as industrialSmall } from './industrial.js';
+import residential, { wide as residentialWide } from './residential.js';
+import business, { wide as businessWide } from './business.js';
+import industrial, { medium as industrialMedium, small as industrialSmall } from './industrial.js';
 import * as park from './park.js';
 import * as square from './square.js';
 import * as services from './services.js';
@@ -54,7 +58,7 @@ export const CATEGORIES = [
 ];
 
 export const STRUCTURES = [
-  residential, business, industrial, industrialSmall, mine, farm,
+  residential, residentialWide, business, businessWide, industrial, industrialMedium, industrialSmall, mine, farm,
   park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.main, station.stop, busStop,
   grounds.cemetery,
   heritage.chapel, heritage.church, heritage.townHall, heritage.column, heritage.memorial, heritage.townGate, heritage.castle,
@@ -65,7 +69,7 @@ export const STRUCTURES = [
 // the first is the default). Every structure must be in exactly one.
 export const BUILD_FAMILIES = [
   [station.station, station.main, station.stop], [busStop],
-  [residential], [business], [industrial, industrialSmall], [mine], [farm],
+  [residential, residentialWide], [business, businessWide], [industrial, industrialMedium, industrialSmall], [mine], [farm],
   [park.small, park.large], [square.small, square.large], [services.small, services.large],
   [grounds.cemetery], [landmarks.cultureHouse],
   [heritage.chapel], [heritage.church], [heritage.townHall], [heritage.column, heritage.memorial],

@@ -22,8 +22,8 @@
 // frame `closed` holds the ids of the crossings a train is near
 // (config.crossing); AgentSystem makes people wait in front of those.
 //
-// The renderer reads trains.visible() -> { points: [[x, y, dx, dy]…] } and the
-// closed road crossings (barriers()).
+// The renderer reads trains.visible() -> { points: [[x, y, dx, dy]…] }, and
+// crossingList() with `closed` for the signs at crossings (render/crossings.js).
 
 // Where segments p–q and r–s cross (endpoints included), or null.
 function intersect(p, q, r, s) {
@@ -36,7 +36,7 @@ function intersect(p, q, r, s) {
 }
 
 import { findTrackPath } from '../roads/pathfinding.js';
-import { smoothPolyline, offsetPolyline, measurePolyline, pointAt } from '../roads/geometry.js';
+import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, networkPolylines } from '../roads/geometry.js';
 import { STRUCTURE_TYPES, codeOf } from '../../structures/index.js';
 import { stationStop } from '../../structures/station.js';
 import { compass } from '../ui/annotations.js';
@@ -46,6 +46,7 @@ const OFF_MAP = 1.9; // where the exits fade out (render/renderer.js)
 export class TrainSystem {
   constructor(world, config) {
     this.world = world;
+    this.curves = { road: config.road, path: config.path }; // how roads and paths are drawn round bends
     this.config = config.trains;
     this.crossing = config.crossing;
     this.closed = new Set(); // ids of level crossings closed right now
@@ -86,8 +87,11 @@ export class TrainSystem {
     return `${road.version}.${path.version}.${rail.version}`;
   }
 
-  // [{ id, pos: [x, y], road: [ux, uy] | null }] – road = direction of the
-  // road there (for barriers), null for footpaths.
+  // [{ id, pos: [x, y], kind, dir: [ux, uy], near }] – kind: 'road', 'lane'
+  // or 'path' (a road wins over a path at the same spot), dir: its
+  // direction, near: its drawn segments [[p, q]…] round the crossing.
+  // Found on the roads' and paths' curves as drawn (rounded at bends), so
+  // the signs and the queues stand where the road really crosses.
   crossingList() {
     const version = this.crossingVersion;
     if (this._crossings?.version === version) return this._crossings.list;
@@ -95,9 +99,23 @@ export class TrainSystem {
     const rail = world.networks.rail;
     const railSegs = [...world.rails.edges()].map(([a, b]) => [rail.pos(a), rail.pos(b)]);
     const found = new Map();
+    const rank = { road: 2, lane: 1, path: 0 };
+    // a lane or a road: the kind of the road segment nearest to point x
+    const kindAt = ([x, y]) => {
+      let best = Infinity, lane = false;
+      for (const [a, b] of world.roads.edges()) {
+        const [p, q] = [world.networks.road.pos(a), world.networks.road.pos(b)];
+        const [dx, dy] = [q[0] - p[0], q[1] - p[1]];
+        const t = Math.max(0, Math.min(1, ((x - p[0]) * dx + (y - p[1]) * dy) / (dx * dx + dy * dy || 1)));
+        const d = Math.hypot(p[0] + dx * t - x, p[1] + dy * t - y);
+        if (d < best) [best, lane] = [d, world.isLane(a, b)];
+      }
+      return lane ? 'lane' : 'road';
+    };
     const scan = (layer, isRoad) => {
-      for (const [a, b] of layer.graph.edges()) {
-        const p = layer.pos(a), q = layer.pos(b);
+      const segs = networkPolylines(layer, this.curves[isRoad ? 'road' : 'path'])
+        .flatMap((line) => line.slice(1).map((q, i) => [line[i], q]));
+      for (const [p, q] of segs) {
         for (const [r, s] of railSegs) {
           if (Math.max(p[0], q[0]) < Math.min(r[0], s[0]) || Math.min(p[0], q[0]) > Math.max(r[0], s[0])) continue;
           if (Math.max(p[1], q[1]) < Math.min(r[1], s[1]) || Math.min(p[1], q[1]) > Math.max(r[1], s[1])) continue;
@@ -106,9 +124,13 @@ export class TrainSystem {
           const id = `${Math.round(x[0] * 20)}:${Math.round(x[1] * 20)}`;
           const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
           const dir = [(q[0] - p[0]) / l, (q[1] - p[1]) / l];
+          const kind = isRoad ? kindAt(x) : 'path';
           const known = found.get(id);
-          if (!known) found.set(id, { id, pos: x, road: isRoad ? dir : null });
-          else if (isRoad && !known.road) known.road = dir;
+          if (!known || rank[kind] > rank[known.kind]) {
+            // the road's drawn pieces nearby, for the signs to follow it round a bend
+            const near = segs.filter(([u, v]) => Math.hypot((u[0] + v[0]) / 2 - x[0], (u[1] + v[1]) / 2 - x[1]) < 1);
+            found.set(id, { id, pos: x, kind, dir, near });
+          }
         }
       }
     };
@@ -155,21 +177,6 @@ export class TrainSystem {
         if (c.at > t.s - t.length - clear && c.at < t.s + approach) this.closed.add(c.id);
       }
     }
-  }
-
-  // Barriers across the road at closed road crossings: world-space bars.
-  barriers() {
-    const out = [];
-    if (!this.closed.size) return out;
-    for (const c of this.crossingList()) {
-      if (!c.road || !this.closed.has(c.id)) continue;
-      const [ux, uy] = c.road;
-      for (const side of [-1, 1]) {
-        const x = c.pos[0] + ux * 0.26 * side, y = c.pos[1] + uy * 0.26 * side;
-        out.push([[x - uy * 0.1, y + ux * 0.1], [x + uy * 0.1, y - ux * 0.1]]);
-      }
-    }
-    return out;
   }
 
   // ----- planning -----

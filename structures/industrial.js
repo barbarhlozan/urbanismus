@@ -1,15 +1,18 @@
-// Industry. Two types:
-//   industrial        2×2: workshop -> factory -> plant. Local area covers x, y
-//                     from about -0.4 to 1.4 (four dots: 0 and 1).
+// Industry. Three types:
+//   industrial        2×3: workshop -> factory -> plant. Local area covers x
+//                     from about -0.4 to 1.4 and y from -0.4 to 2.4 (two dots
+//                     wide, three deep); the back third holds stores, sheds
+//                     and a siding (backRange).
+//   industrial-medium 2×1: workshops -> works -> small plants along the road.
 //   industrial-small  1×1: small workshops -> works -> small plants (a boiler
-//                     house, brewery, gasworks…). Tagged 'industrial', so growth
-//                     rules and trips treat both the same.
+//                     house, brewery, gasworks…). The smaller two are tagged
+//                     'industrial', so growth rules and trips treat all the same.
 // Brick halls with sawtooth or vaulted roofs, tapered chimneys, water towers,
 // gasometers, silos, cooling towers, sawmills with gantry cranes; a
 // glassworks, a panel plant, a coal power station, a lime works, a dairy and
 // a Benzina petrol station. Coal mines are in mine.js.
 
-import { stack, door, panel, timber, heap, tank, barrels, gantry, pipes, transformer, gallery, crates, roundWindows, hoops, fenceAlong, FRAME } from './kit.js';
+import { stack, door, panel, timber, heap, tank, barrels, gantry, pipes, transformer, gallery, crates, roundWindows, hoops, fenceAlong, wagons, woodpile, trailer, bricks, concreteRings, FRAME } from './kit.js';
 
 // Water tower: a drum on a column (the mushroom kind).
 function waterTower(g, x, y, h) {
@@ -17,7 +20,7 @@ function waterTower(g, x, y, h) {
 }
 
 // Hyperboloid cooling tower.
-function coolingTower(g, x, y, h, r = 0.3) {
+export function coolingTower(g, x, y, h, r = 0.3) {
   g.lathe(x, y, 0, [[r, 0], [r * 0.8, h * 0.4], [r * 0.64, h * 0.8], [r * 0.66, h]], 14);
 }
 
@@ -81,20 +84,66 @@ function loadingDoor(g, x, y, w, h) {
   g.line([[x, y, 0], [x, y, h], [x + w, y, h], [x + w, y, 0]], { facing: [0, -1, 0] });
 }
 
+// The back third of the 2×3 works (y from about 1.5 to 2.4), behind the
+// main buildings: stores, open sheds, heaps and a railway siding, bigger
+// with each level (1–3).
+function backRange(g, level) {
+  const kind = g.pick([['store', 'shed', 'heaps'], ['hall', 'store', 'siding'], ['store', 'tanks', 'siding']][level - 1]);
+  if (kind === 'store') {
+    // a long store with loading doors onto the yard
+    const w = level === 1 ? 0.95 : 1.6, h = 0.18 + level * 0.05;
+    g.gable(-0.3, 1.65, 0, w, 0.6, h, 0.14);
+    g.windows(-0.3, 1.65, w, 0.6, 0, h, h, 0.14, { skip: ['front'], h: 0.4 });
+    loadingDoor(g, -0.05, 1.65, 0.22, h * 0.7);
+    if (level > 1) loadingDoor(g, 0.75, 1.65, 0.22, h * 0.7);
+    else {
+      timber(g, 1.05, 1.85, false);
+      woodpile(g, 1.05, 2.25, true);
+    }
+  } else if (kind === 'shed') {
+    openShed(g, -0.25, 1.65, 0.8, 0.6, 0.2);
+    timber(g, 0.95, 1.8, false);
+    trailer(g, 1.05, 2.22, true);
+  } else if (kind === 'heaps') {
+    // sand and gravel, a shed for the mixer and the tools
+    heap(g, -0.05, 1.95, 0.14);
+    heap(g, 0.4, 2.15, 0.1);
+    g.gable(0.75, 1.7, 0, 0.5, 0.45, 0.18, 0.12);
+    loadingDoor(g, 0.9, 1.7, 0.18, 0.13);
+    concreteRings(g, 0.35, 1.7);
+    bricks(g, 1.0, 2.3);
+  } else if (kind === 'hall') {
+    g.gable(-0.3, 1.6, 0, 1.6, 0.65, 0.26, 0.16);
+    g.windows(-0.3, 1.6, 1.6, 0.65, 0, 0.26, 0.26, 0.13, { w: 0.5, h: 0.55 });
+    loadingDoor(g, 0.4, 1.6, 0.24, 0.18);
+  } else if (kind === 'tanks') {
+    for (const x of [-0.15, 0.2, 0.55]) tank(g, x, 1.8, 0.1, 0.22);
+    silos(g, 0.85, 2.05, 2, 0.12, g.range(0.55, 0.7));
+    pipes(g, [-0.25, 2.2], [0.7, 2.2]);
+  } else {
+    // a siding along the back with wagons, the goods shed on its ramp
+    g.gable(-0.3, 1.55, 0, 1.1, 0.34, 0.2, 0.12);
+    loadingDoor(g, 0.1, 1.55, 0.22, 0.15);
+    g.box(-0.3, 1.89, 0, 1.1, 0.1, 0.05);                              // ramp
+    wagons(g, -0.25, 2.2, 5, true);
+    if (level === 3) gantry(g, [0.95, 1.6], [0.95, 2.35], 0.32);
+  }
+}
+
 export default {
   id: 'industrial',
   name: 'Industrial',
   blurb: 'Factories and yards',
   hotkey: 'e',
   category: 'zone',
-  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  footprint: [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2], [1, 2]],
   plot: { props: 'works', boundary: 0.7, kinds: ['tall'], density: 0.4 },
   sim: { destinations: ['residential'] },
 
   levels: [
     {
       name: 'Workshop',
-      stats: { jobs: 8 },
+      stats: { jobs: 10 },
       agents: 1,
       yards: ['depot', 'parking'],
       draw(g) {
@@ -129,11 +178,12 @@ export default {
           barrels(g, 1.05, 0.5);
           if (g.chance(0.5)) tank(g, 1.05, 0.95, 0.07, 0.15);
         }
+        backRange(g, 1);
       },
     },
     {
       name: 'Factory',
-      stats: { jobs: 20 },
+      stats: { jobs: 26 },
       agents: 2,
       yards: ['parking', 'depot'],
       grow: {
@@ -187,11 +237,12 @@ export default {
           if (g.chance(0.5)) g.box(annexX, 1.0, 0, 0.45, 0.3, 0.2);
           else waterTower(g, annexX + 0.2, 1.15, g.range(0.5, 0.65));
         }
+        backRange(g, 2);
       },
     },
     {
       name: 'Plant',
-      stats: { jobs: 45 },
+      stats: { jobs: 55 },
       agents: 3,
       yards: ['depot', 'parking'],
       grow: {
@@ -299,6 +350,7 @@ export default {
           }
           if (g.chance(0.6)) g.box(0.95, 0.95, 0, 0.4, 0.4, g.range(0.2, 0.32));
         }
+        backRange(g, 3);
       },
     },
   ],
@@ -453,10 +505,17 @@ export const small = {
           g.box(-0.36, -0.36, 0, 0.26, 0.16, 0.14);
           stack(g, -0.3, 0.3, 0.55, 0.04);
         } else if (kind === 'silo') {
-          // concrete silo tower with a head house, a low hall in front
-          silos(g, -0.2, 0.18, 2, 0.1, 0.8);
-          g.roofed(-0.2, 0.08, 0.8, 0.4, 0.2, 0.12, { h: 0.05, hip: 0.05 });
-          g.roofed(-0.32, -0.34, 0, 0.64, 0.3, 0.2, { h: 0.1 });
+          // grain silo: two concrete bins with conical caps, the elevator
+          // tower beside them (not on top: solids must stand side by side
+          // to sort in depth), a low hall in front
+          const sh = g.range(0.7, 0.8);
+          for (const x of [-0.24, -0.04]) {
+            g.lathe(x, 0.2, 0, [[0.1, 0], [0.1, sh], [0.03, sh + 0.07], [0, sh + 0.07]], 16, { smooth: true, rings: [1] });
+            hoops(g, x, 0.2, 0.1, [0.2, 0.4, 0.6]);
+          }
+          g.roofed(0.08, 0.12, 0, 0.18, 0.18, sh + 0.2, { h: 0.1, hip: 0.09 });
+          g.windows(0.08, 0.12, 0.18, 0.18, 0.1, sh + 0.2, 0.15, 0.08, { w: 0.35 });
+          g.roofed(-0.32, -0.34, 0, 0.64, 0.28, 0.2, { h: 0.1 });
           loadingDoor(g, -0.1, -0.34, 0.2, 0.14);
         } else {
           // waterworks: pump house and a water tower
@@ -465,6 +524,150 @@ export const small = {
           door(g, -0.12, -0.2);
           waterTower(g, 0.22, 0.18, g.range(0.8, 0.95));
           pipes(g, [0.08, 0.05], [0.22, 0.05], 0.08);
+        }
+      },
+    },
+  ],
+};
+
+// ----- 2×1 -----
+// Two dots side by side along the road: local x from about -0.4 to 1.4,
+// y from -0.4 to 0.4, front on -y.
+
+export const medium = {
+  id: 'industrial-medium',
+  name: 'Medium industry',
+  size: 'Medium',
+  category: 'zone',
+  tags: ['industrial'],
+  code: 'I',
+  footprint: [[0, 0], [1, 0]],
+  plot: { props: 'works', boundary: 0.65, kinds: ['tall', 'fence'], density: 0.45 },
+  sim: { destinations: ['residential'] },
+
+  levels: [
+    {
+      name: 'Workshop',
+      stats: { jobs: 5 },
+      agents: 1,
+      yards: ['depot', 'parking'],
+      draw(g) {
+        const kind = g.pick(['builders', 'garage', 'joinery']);
+        if (kind === 'builders') {
+          // the town's builders' yard: a tool shed, an open shed, sand,
+          // bricks and well rings
+          g.gable(-0.32, -0.1, 0, 0.7, 0.42, 0.2, 0.13);
+          g.windows(-0.32, -0.1, 0.7, 0.42, 0, 0.2, 0.2, 0.12, { skip: ['front'], h: 0.4 });
+          loadingDoor(g, -0.15, -0.1, 0.18, 0.14);
+          openShed(g, 0.5, -0.02, 0.5, 0.34, 0.16);
+          heap(g, 1.2, -0.18, 0.1);
+          bricks(g, 0.7, -0.25);
+          concreteRings(g, 1.22, 0.22);
+        } else if (kind === 'garage') {
+          // vehicle depot (ČSAD, the local services): a row of bays under a flat roof
+          const y = -0.2, d = 0.42, h = 0.2;
+          g.box(-0.3, y, 0, 1.6, d, h);
+          for (const x of [-0.24, 0.14, 0.52, 0.9]) loadingDoor(g, x, y, 0.3, 0.15);
+          g.box(0.2, y, h, 0.6, 0.025, 0.06);
+          barrels(g, 1.36, 0.3);
+        } else {
+          // joinery: a long gabled shed, the sawdust burner's chimney,
+          // planks and firewood outside
+          g.gable(-0.3, -0.2, 0, 1.1, 0.4, 0.2, 0.15);
+          g.windows(-0.3, -0.2, 1.1, 0.4, 0, 0.2, 0.2, 0.12, { skip: ['front'], h: 0.45 });
+          loadingDoor(g, -0.1, -0.2, 0.2, 0.14);
+          loadingDoor(g, 0.45, -0.2, 0.2, 0.14);
+          stack(g, 0.65, 0.12, 0.5, 0.035);
+          timber(g, 1.1, -0.1, false);
+          woodpile(g, 1.12, 0.25, false);
+        }
+      },
+    },
+    {
+      name: 'Works',
+      stats: { jobs: 12 },
+      agents: 2,
+      yards: ['depot', 'parking'],
+      grow: { requires: [{ type: 'residential', count: 3, radius: 5 }] },
+      draw(g) {
+        const kind = g.pick(['sawtooth', 'bakery', 'metal']);
+        if (kind === 'sawtooth') {
+          // a sawtooth hall behind a two-storey office front
+          sawtoothHall(g, 0.15, -0.2, 1.32, 0.3, 0.24, 4, 0.1);
+          loadingDoor(g, 0.85, -0.2, 0.24, 0.17);
+          g.box(-0.32, -0.3, 0, 0.44, 0.5, 0.28);
+          g.windows(-0.32, -0.3, 0.44, 0.5, 0, 0.28, 0.14, 0.1, { ribbon: true, skip: ['right'] });
+          door(g, 0, -0.3);
+        } else if (kind === 'bakery') {
+          // bread works (pekárna): a flat-roofed block, the vans' covered ramp
+          g.box(-0.3, -0.2, 0, 1.2, 0.42, 0.3);
+          g.windows(-0.3, -0.2, 1.2, 0.42, 0, 0.3, 0.15, 0.1, { ribbon: true });
+          door(g, 0, -0.2);
+          g.box(0.9, -0.12, 0, 0.38, 0.3, 0.05);                  // ramp
+          g.box(0.88, -0.16, 0.17, 0.44, 0.36, 0.015);            // its roof
+          stack(g, 0.7, 0.3, 0.72, 0.05);
+        } else {
+          // metalworks co-op (Kovo): an arched hall along the road, an office
+          g.vault(0.1, -0.2, 0, 1.2, 0.42, 0.16, 0.14, 6);
+          loadingDoor(g, 0.85, -0.2, 0.22, 0.13);
+          g.roofed(-0.32, -0.25, 0, 0.38, 0.34, 0.22, { h: 0.1, hip: 0.1 });
+          g.windows(-0.32, -0.25, 0.38, 0.34, 0, 0.22, 0.11, 0.1, { h: 0.45 });
+          door(g, -0.03, -0.25, 0.06, 0.1);
+          stack(g, 1.25, 0.3, 0.6, 0.045);
+        }
+      },
+    },
+    {
+      name: 'Small plant',
+      stats: { jobs: 26 },
+      agents: 2,
+      yards: ['depot', 'parking'],
+      grow: {
+        requires: [
+          { type: 'residential', count: 6, radius: 5 },
+          { type: 'industrial', count: 1, radius: 3, minLevel: 2 },
+        ],
+        coveredBy: ['services'],
+      },
+      draw(g) {
+        const kind = g.pick(['brewery', 'dairy', 'heating']);
+        if (kind === 'brewery') {
+          // town brewery: the brewhouse, a tall malt house with its vent,
+          // the cellar block, a chimney and barrels
+          g.gable(-0.32, -0.2, 0, 0.5, 0.42, 0.28, 0.14);
+          g.windows(-0.32, -0.2, 0.5, 0.42, 0, 0.28, 0.14, 0.1, { skip: ['right'] });
+          door(g, -0.07, -0.2);
+          g.roofed(0.22, -0.14, 0, 0.32, 0.3, 0.5, { h: 0.12, hip: 0.15 });
+          g.windows(0.22, -0.14, 0.32, 0.3, 0, 0.5, 0.125, 0.08, { w: 0.35 });
+          g.lathe(0.38, 0.01, 0.62, [[0.035, 0], [0.035, 0.05], [0.05, 0.06], [0, 0.1]], 6);
+          g.roofed(0.58, -0.2, 0, 0.72, 0.4, 0.2, { h: 0.08 });
+          g.windows(0.58, -0.2, 0.72, 0.4, 0, 0.2, 0.2, 0.12, { h: 0.35, skip: ['left'] });
+          loadingDoor(g, 0.9, -0.2, 0.2, 0.14);
+          stack(g, 1.2, 0.3, 0.85, 0.055);
+          barrels(g, 1.35, -0.28);
+        } else if (kind === 'dairy') {
+          // district dairy: ribbon-windowed works, steel milk tanks, a ramp
+          g.box(-0.3, -0.1, 0, 0.9, 0.42, 0.28);
+          g.windows(-0.3, -0.1, 0.9, 0.42, 0, 0.28, 0.14, 0.1, { ribbon: true });
+          g.box(-0.34, -0.25, 0, 0.7, 0.15, 0.04);
+          g.box(-0.36, -0.27, 0.15, 0.74, 0.17, 0.015);
+          for (const x of [0.82, 1.12]) for (const y of [-0.15, 0.17]) {
+            g.lathe(x, y, 0, [[0.08, 0], [0.08, 0.26], [0.045, 0.3], [0, 0.31]], 20, { smooth: true, rings: [1] });
+            hoops(g, x, y, 0.08, [0.09, 0.18]);
+          }
+          stack(g, 0.4, 0.3, 0.65, 0.045);
+        } else {
+          // heating plant (výtopna): the offices, the tall boiler house, a
+          // conveyor up from the coal heap, a tall chimney
+          g.roofed(-0.3, -0.2, 0, 0.5, 0.42, 0.25, { h: 0.07 });
+          g.windows(-0.3, -0.2, 0.5, 0.42, 0, 0.25, 0.125, 0.1, { skip: ['right'] });
+          door(g, 0, -0.2);
+          g.box(0.2, -0.25, 0, 0.55, 0.5, 0.5);
+          g.windows(0.2, -0.25, 0.55, 0.5, 0.08, 0.48, 0.4, 0.09, { w: 0.5, h: 0.85, skip: ['left'] });
+          stack(g, 1.18, 0.22, g.range(1.2, 1.4), 0.08);
+          heap(g, 1.12, -0.18, 0.12);
+          gallery(g, [1.06, -0.12, 0.06], [0.75, -0.02, 0.42], 0.05, 0.05);
+          transformer(g, 0.95, 0.3);
         }
       },
     },

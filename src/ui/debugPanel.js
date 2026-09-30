@@ -24,7 +24,6 @@ export class DebugPanel {
       ['Roads and paths', (on) => { show(layer('roads'), on); show(layer('paths'), on); }],
       ['Meadow grass', (on) => show(layer('meadow'), on)],
       ['Grid dots', (on) => show(layer('grid'), on)],
-      ['Map frame', (on) => show(layer('frame'), on)],
       ['Hover tags', (on) => { STYLE.hoverTags = on; }],
       ['Pen animations (build / demolish)', (on) => { DRAW.on = on; }],
     ];

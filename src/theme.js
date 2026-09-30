@@ -17,10 +17,11 @@
 // needs no redraw.
 
 export const SCHEMES = [
-  { name: 'Blue', bg: '#ebe7dd', main: '#3e12b6', detail: '#9b9486' },
-  { name: 'Night', bg: '#000000', main: '#8f4646', detail: '#552936' },
-  { name: 'Paper', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486' },
-  { name: '50s', bg: '#958167', main: '#2d2d2d', detail: '#101010' },
+  { name: 'Blue pen', bg: '#ebe7dd', main: '#3e12b6', detail: '#9b9486' },
+  { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486' },
+  { name: 'Night', bg: '#000000', main: '#64645b', detail: '#363f46' },
+  { name: 'Countryside', bg: '#d3d0c9', main: '#ce4919', detail: '#44499a' },
+  { name: 'Countryside 2', bg: '#c5479d', main: '#cbce19', detail: '#9a9744' },
 ];
 
 export const COLOR_NAMES = ['bg', 'main', 'detail'];

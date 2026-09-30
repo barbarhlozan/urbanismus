@@ -1,14 +1,16 @@
-// Coal mine, 3×2: pit -> colliery -> deep mine, after the Ostrava and
+// Coal mine, 4×3: pit -> colliery -> deep mine, after the Ostrava and
 // Kladno coalfields. Headframes (timber, steel trestle, concrete tower)
 // over the shafts, winding houses, the pithead baths, a coal preparation
 // plant on a conveyor, and the spoil heap (halda) that keeps growing.
 // Tagged 'industrial', so growth rules, trucks and trips treat it as industry.
 //
-// Local area covers x from about -0.4 to 2.4 and y from -0.4 to 1.4 (three
-// dots wide, two deep), front on -y. Buildings stand side by side rather
+// Local area covers x from about -0.4 to 3.4 and y from -0.4 to 2.4 (four
+// dots wide, three deep), front on -y: the pithead in front, the siding
+// and the stacks of pit props behind it, the spoil heap in the back corner. Buildings stand side by side rather
 // than in L-shapes, so they sort in depth cleanly.
 
-import { stack, door, heap, mound, gallery, transformer, pipes, FRAME } from './kit.js';
+import { stack, door, heap, mound, gallery, transformer, pipes, wagons, timber, FRAME } from './kit.js';
+import { coolingTower } from './industrial.js';
 
 // Sheave wheel of radius r at (x, y, z), in the vertical plane along x
 // (the hoisting ropes run along x to the winding house).
@@ -92,16 +94,33 @@ function halda(g, x, y, r, h) {
   mound(g, x, y, r, h);
 }
 
-// Wagons on a short siding (ground line) from x0 along x at y: pit tubs
-// (small) or standard coal wagons (big).
-function wagons(g, x0, y, n, big = false) {
-  const len = big ? 0.2 : 0.08, gap = big ? 0.03 : 0.02, w = big ? 0.08 : 0.05, h = big ? 0.07 : 0.04;
-  const x1 = x0 + n * (len + gap);
-  g.groundLine([[x0 - 0.06, y - w * 0.3], [x1 + 0.06, y - w * 0.3]], { lod: 1 });
-  g.groundLine([[x0 - 0.06, y + w * 0.3], [x1 + 0.06, y + w * 0.3]], { lod: 1 });
-  g.detailed(2, () => {
-    for (let i = 0; i < n; i++) g.box(x0 + i * (len + gap), y - w / 2, 0.012, len, w, h);
+// Pit props (důlní dříví): stacks of timber in rows between x0 and x1,
+// y0 and y1.
+function propYard(g, x0, x1, y0, y1) {
+  for (let y = y0; y <= y1 + 1e-6; y += 0.25) {
+    for (let x = x0; x <= x1 + 1e-6; x += 0.25) timber(g, x, y, true);
+  }
+}
+
+// Settling pond (kalová nádrž) for the pit water: a rounded basin inside
+// x0…x1, y0…y1 with a low bank round it.
+function pond(g, x0, y0, x1, y1) {
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rx = (x1 - x0) / 2, ry = (y1 - y0) / 2;
+  const ring = (k) => Array.from({ length: 16 }, (_, i) => {
+    const a = (i / 16) * Math.PI * 2;
+    return [cx + Math.cos(a) * rx * k * (1 - 0.12 * Math.abs(Math.sin(2 * a))), cy + Math.sin(a) * ry * k];
   });
+  g.groundPoly(ring(0.82), { fill: 'url(#hatch-water)' });
+  g.groundPoly(ring(1), { lod: 1 });
+}
+
+// Loading bin over the siding at (x, y): a raised box on legs, open below.
+function loadingBin(g, x, y) {
+  g.detailed(1, () => {
+    g.solid(x, y, 0.1);
+    for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) g.line([[x + dx * 0.12, y + dy * 0.07, 0], [x + dx * 0.12, y + dy * 0.07, 0.2]], FRAME);
+  });
+  g.box(x - 0.14, y - 0.09, 0.2, 0.28, 0.18, 0.16);
 }
 
 export default {
@@ -112,14 +131,14 @@ export default {
   category: 'zone',
   tags: ['industrial'],
   code: 'M',
-  footprint: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
+  footprint: [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [3, 1], [0, 2], [1, 2], [2, 2], [3, 2]],
   plot: { props: 'works', boundary: 0.7, kinds: ['tall'], density: 0.35 },
   sim: { destinations: ['residential'] },
 
   levels: [
     {
       name: 'Pit',
-      stats: { jobs: 10 },
+      stats: { jobs: 12 },
       agents: 1,
       yards: ['depot'],
       draw(g) {
@@ -137,12 +156,18 @@ export default {
         door(g, -0.1, -0.32, 0.06, 0.11);
         wagons(g, 0.35, -0.15, 4);
         heap(g, 1.25, -0.15, 0.1);
-        halda(g, 2.05, 0.85, 0.36, 0.3);
+        propYard(g, 1.9, 2.3, 0.0, 0.5);
+        // the ventilation shaft's fan house, tubs running out to the tip
+        g.roofed(-0.3, 1.45, 0, 0.36, 0.3, 0.18, { h: 0.1 });
+        stack(g, 0.2, 1.6, 0.45, 0.04);
+        wagons(g, 1.0, 1.75, 6);
+        pond(g, 2.5, -0.2, 3.3, 0.75);
+        halda(g, 2.75, 1.65, 0.5, 0.42);
       },
     },
     {
       name: 'Colliery',
-      stats: { jobs: 30 },
+      stats: { jobs: 36 },
       agents: 2,
       yards: ['depot', 'parking'],
       grow: {
@@ -164,12 +189,19 @@ export default {
         stack(g, 1.63, 1.02, g.range(1.25, 1.4), 0.075);
         wagons(g, 1.45, -0.2, 3, true);
         transformer(g, 2.25, 0.25);
-        halda(g, 2.05, 0.95, 0.38, 0.38);
+        propYard(g, -0.25, 0.75, 1.45, 1.75);
+        loadingBin(g, 1.2, 2.15);
+        wagons(g, -0.25, 2.15, 7, true);
+        g.roofed(2.2, -0.34, 0, 0.9, 0.3, 0.22, { h: 0.1, hip: 0.1 }); // lamp room and offices
+        g.windows(2.2, -0.34, 0.9, 0.3, 0, 0.22, 0.11, 0.1);
+        door(g, 2.65, -0.34, 0.07, 0.11);
+        pond(g, 2.55, 0.15, 3.3, 0.9);
+        halda(g, 2.8, 1.6, 0.55, 0.52);
       },
     },
     {
       name: 'Deep mine',
-      stats: { jobs: 60 },
+      stats: { jobs: 75 },
       agents: 3,
       yards: ['depot', 'parking'],
       grow: {
@@ -196,8 +228,17 @@ export default {
         g.windows(-0.34, -0.36, 1.24, 0.26, 0, 0.26, 0.13, 0.1, { ribbon: true });
         door(g, 0.3, -0.36, 0.08, 0.12);
         for (const x of [1.95, 2.2]) stack(g, x, 0.72, g.range(1.45, 1.6), 0.08);
-        halda(g, 2.05, 1.14, 0.3, 0.36);
         pipes(g, [1.7, 0.4], [1.7, 0.62], 0.2);
+        // the pit's own power station and its cooling tower, a conveyor
+        // from the preparation plant to the loading bin over the siding
+        coolingTower(g, 3.0, 0.15, g.range(0.9, 1.0), 0.26);
+        g.box(2.45, 0.55, 0, 0.5, 0.4, 0.42);
+        g.windows(2.45, 0.55, 0.5, 0.4, 0.06, 0.4, 0.34, 0.09, { w: 0.5, h: 0.85 });
+        loadingBin(g, 1.75, 2.1);
+        gallery(g, [1.85, 0.38, 0.5], [1.75, 1.95, 0.36], 0.06, 0.06);
+        wagons(g, -0.3, 2.1, 9, true);
+        propYard(g, -0.25, 1.1, 1.55, 1.8);
+        halda(g, 2.85, 1.75, 0.55, 0.6);
       },
     },
   ],

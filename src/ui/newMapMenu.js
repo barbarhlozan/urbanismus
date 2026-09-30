@@ -1,5 +1,6 @@
-// The New map menu: a small panel under the controls (opened with the New map
-// button) to set up the next map before the current city is discarded – the
+// The New map menu: a dialog in the middle of the screen, the game blurred
+// behind it (opened with the New map button), to set up the next map before
+// the current city is discarded – the
 // town's name (rolled at random, or typed), how many lakes, how much forest,
 // how hilly, and whether a river runs across. The choices (all but the name)
 // are remembered in this browser for the next time.
@@ -9,21 +10,24 @@
 
 import { townName } from '../core/townName.js';
 import { reveal, isShown } from './motion.js';
+import { SketchSlider } from './sketchSlider.js';
+import { controlIcon } from './icons.js';
 
-// each setting: its options as [label, value]; `pick` is the default
+// each setting: a slider over its options as [label, value], from least to
+// most; `pick` is the default, `icon` its drawing (icons.js)
 const SETTINGS = [
-  { key: 'lakes', label: 'Lakes', pick: 2, options: [['None', 0], ['1', 1], ['2', 2], ['3', 3], ['5', 5]] },
+  { key: 'lakes', label: 'Lakes', icon: 'lakes', pick: 2, options: [['None', 0], ['1', 1], ['2', 2], ['3', 3], ['5', 5]] },
   {
-    key: 'forest', label: 'Forests', pick: 'some', options: [
+    key: 'forest', label: 'Forests', icon: 'forest', pick: 'some', options: [
       ['None', 'none'], ['Few', 'few'], ['Some', 'some'], ['Many', 'many'], ['Lots', 'lots'],
     ],
   },
   {
-    key: 'hills', label: 'Land', pick: 1, options: [
+    key: 'hills', label: 'Land', icon: 'terrain', pick: 1, options: [
       ['Flat', 0.3], ['Gentle', 0.6], ['Hilly', 1], ['Steep', 1.45],
     ],
   },
-  { key: 'river', label: 'River', pick: 'random', options: [['Maybe', 'random'], ['Yes', 'yes'], ['No', 'no']] },
+  { key: 'river', label: 'River', icon: 'river', pick: 'random', options: [['No', 'no'], ['Maybe', 'random'], ['Yes', 'yes']] },
 ];
 
 // forest amount -> tree density and the forest noise threshold (generate.js)
@@ -54,8 +58,15 @@ export class NewMapMenu {
       // storage unavailable: start from the defaults
     }
 
+    // everything behind it, blurred; a click there closes it
+    this.scrim = document.createElement('div');
+    this.scrim.className = 'newmap-scrim hidden';
+    root.appendChild(this.scrim);
+
     this.el = document.createElement('div');
     this.el.className = 'newmap-panel hidden';
+    this.el.setAttribute('role', 'dialog');
+    this.el.setAttribute('aria-label', 'New map');
     this.el.innerHTML = `
       <div class="newmap-head"><span>New map</span><button class="close" aria-label="Close">×</button></div>
       <div class="newmap-body">
@@ -66,14 +77,29 @@ export class NewMapMenu {
         </label>
         ${SETTINGS.map((s) => `
           <div class="newmap-row" data-key="${s.key}">
-            <span class="field-name">${s.label}</span>
-            <div class="seg">${s.options.map(([label, v], i) => `<button data-i="${i}">${esc(label)}</button>`).join('')}</div>
+            <span class="field-name">${controlIcon(s.icon)}${s.label}</span>
+            <span class="slot"></span>
+            <span class="value"></span>
           </div>`).join('')}
         <p class="newmap-note">This city will be discarded.</p>
       </div>
       <div class="newmap-foot"><button class="cancel">Cancel</button><button class="create">Create map</button></div>`;
     root.appendChild(this.el);
     this.nameEl = this.el.querySelector('.name-field');
+
+    this.sliders = {};
+    for (const s of SETTINGS) {
+      const slider = new SketchSlider(s.options.length, {
+        label: s.label,
+        onChange: (i) => {
+          this.choice[s.key] = s.options[i][1];
+          this.refresh();
+        },
+      });
+      this.el.querySelector(`[data-key="${s.key}"] .slot`).appendChild(slider.el);
+      this.sliders[s.key] = slider;
+    }
+    addEventListener('resize', () => { if (this.open) this.drawSliders(); });
 
     this.el.querySelector('.close').addEventListener('click', () => this.toggle(false));
     this.el.querySelector('.cancel').addEventListener('click', () => this.toggle(false));
@@ -82,13 +108,6 @@ export class NewMapMenu {
       this.rollName();
     });
     this.el.querySelector('.create').addEventListener('click', () => this.create());
-    this.el.addEventListener('click', (e) => {
-      const b = e.target.closest('.seg button');
-      if (!b) return;
-      const s = SETTINGS.find((t) => t.key === b.closest('.newmap-row').dataset.key);
-      this.choice[s.key] = s.options[Number(b.dataset.i)][1];
-      this.refresh();
-    });
     this.el.addEventListener('keydown', (e) => {
       e.stopPropagation(); // no hotkeys while typing
       if (e.key === 'Escape') this.toggle(false);
@@ -106,12 +125,18 @@ export class NewMapMenu {
   }
 
   toggle(open = !this.open) {
-    reveal(this.el, open);
+    reveal(this.scrim, open, { from: [0, 0] });
+    reveal(this.el, open, { from: [0, 10] });
     this.button.classList.toggle('on', open);
     if (open) {
       this.rollName();
       this.refresh();
+      this.drawSliders();
     }
+  }
+
+  drawSliders() {
+    for (const s of Object.values(this.sliders)) s.draw();
   }
 
   rollName() {
@@ -119,11 +144,10 @@ export class NewMapMenu {
   }
 
   refresh() {
-    for (const row of this.el.querySelectorAll('.newmap-row')) {
-      const s = SETTINGS.find((t) => t.key === row.dataset.key);
-      for (const b of row.querySelectorAll('button')) {
-        b.classList.toggle('on', s.options[Number(b.dataset.i)][1] === this.choice[s.key]);
-      }
+    for (const s of SETTINGS) {
+      const i = s.options.findIndex(([, v]) => v === this.choice[s.key]);
+      this.sliders[s.key].value = i;
+      this.el.querySelector(`[data-key="${s.key}"] .value`).textContent = s.options[i][0];
     }
   }
 

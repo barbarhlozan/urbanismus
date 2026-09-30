@@ -18,6 +18,7 @@ import { mulberry32 } from '../core/random.js';
 import { freeTest } from './lots.js';
 import { BRIDGE } from './bridges.js';
 import { VEHICLES, vehicleSVGIn, modelFor, truckFor } from './vehicles.js';
+import { signsAt, signSVGIn, flashSVGIn, litLight } from './crossings.js';
 import { wobble } from './painter.js';
 
 export const PHOTO = {
@@ -285,15 +286,16 @@ function groundMarks(world, config, cam, bands, seen) {
 // Vehicles as they are at the moment of the photo, the same models as on
 // the map (vehicles.js) drawn through the photo camera: cars driving
 // (turned the way the map last drew them), buses and trucks (between their
-// front and back), cars parked in the lots, and trains, carriage by
-// carriage.
+// front and back), cars parked in the lots, trains, carriage by
+// carriage, and the signs at level crossings.
 function vehicles(renderer, cam, seen) {
   const { world, agents, parking, trains } = renderer;
   const { terrain } = world;
   const deck = renderer.bridgeState().deck;
   const out = [];
   // `size`: about half the vehicle's length, for what counts as in view
-  const add = (x, y, angle, name, hand, cls = '', size = 0.1) => {
+  // `draw(view)` -> SVG of the thing standing at (x, y)
+  const place = (x, y, size, cls, draw) => {
     if (!seen(x, y, size + 0.1) || cam.ahead(x, y) < 0.15 + size) return;
     const z = terrain.heightAt(x, y) + deck(x, y);
     const view = {
@@ -301,9 +303,10 @@ function vehicles(renderer, cam, seen) {
       facing: (n, [ox, oy, oz]) => cam.facingAt(n, [x + ox, y + oy, z + oz], [x, y]),
       depth: ([ox, oy]) => -cam.ahead(x + ox, y + oy),
     };
-    const svg = vehicleSVGIn(view, name, angle, hand);
+    const svg = draw(view);
     out.push({ depth: -cam.ahead(x, y), svg: cls ? `<g class="${cls}">${svg}</g>` : svg });
   };
+  const add = (x, y, angle, name, hand, cls = '', size = 0.1) => place(x, y, size, cls, (view) => vehicleSVGIn(view, name, angle, hand));
 
   for (const a of agents.visible()) {
     if (a.bus || a.truck) {
@@ -325,6 +328,15 @@ function vehicles(renderer, cam, seen) {
   const len = Math.round((renderer.config.trains.carSpacing - 0.02) * 100) / 100;
   for (const t of trains.visible()) {
     t.points.forEach(([px, py, dx, dy], i) => add(px, py, Math.atan2(dy, dx), `${i ? 'coach' : 'loco'}:${len}`, i % VEHICLES.hands, '', len / 2));
+  }
+  // the signs at level crossings, the lights of closed road crossings
+  // flashing as they are on the map (crossings.js)
+  const lit = litLight(performance.now() / 1000);
+  for (const c of trains.crossingList()) {
+    const closed = c.kind === 'road' && trains.closed.has(c.id);
+    for (const sign of signsAt(c)) {
+      place(sign.x, sign.y, 0.05, '', (view) => signSVGIn(view, sign.heading, sign.kind) + (closed ? flashSVGIn(view, sign.heading, lit) : ''));
+    }
   }
   // (the model is picked by the stall, as in Renderer.renderParked)
   const r2s = (n) => Math.round(n * 100) / 100;

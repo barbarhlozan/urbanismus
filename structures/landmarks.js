@@ -80,7 +80,7 @@ export const cultureHouse = {
           g.box(-0.32, -0.28, 0.18, 1.64, 0.66, 0.17);
           g.mullions(-0.32, -0.28, 1.64, 0.66, 0.18, 0.35, 0.07, { skip: ['back'] });
           g.box(0.05, 0.38, 0, 0.9, 0.9, 0.44);
-          g.box(0.25, 0.75, 0, 0.5, 0.45, 0.72);
+          g.box(0.25, 0.75, 0.44, 0.5, 0.45, 0.28); // fly tower, standing on the auditorium
           g.box(-0.34, 0.45, 0, 0.36, 0.85, 0.26);
           g.windows(-0.34, 0.45, 0.36, 0.85, 0, 0.26, 0.13, 0.1, { ribbon: true, skip: ['right'] });
           g.box(0.9, -0.3, 0.35, 0.36, 0.02, 0.07); // name sign on the band

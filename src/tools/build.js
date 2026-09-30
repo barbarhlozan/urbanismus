@@ -75,6 +75,8 @@ export function createBuildTool({ world }, defs) {
       const at = world.placementFor(d.id, hover, rotation);
       if (at.check.ok) {
         let out = kit.ghost(d, at.node, world.facingRotation(d.id, at.node, at.rotation), 1, seed);
+        // the track a station will lay
+        if (at.check.lay) out += kit.path(at.check.lay.map((f) => world.networks.rail.dot(f)), 'preview rail', null);
         const r = d.levels[0].coverage;
         if (r) {
           // service area: everything within r dots of the footprint

@@ -32,10 +32,12 @@ export const CONFIG = {
     junctionRadius: 0.15, // cars round junction turns this much (same scale as cornerRadius)
   },
 
-  // Single-track lanes: road segments (world.lanes) one car wide, with no
-  // sidewalks – people walk and cycle on them as on a footpath.
+  // Single-track lanes: road segments (world.lanes) one car wide – people
+  // walk and cycle on them as on a footpath. A footpath drawn beside one
+  // becomes a sidewalk on that side only.
   lane: {
     edge: 0.05,        // edge lines this far from the centre
+    kerb: 0.116,       // a sidewalk (on one side or both, world.laneWalks): its kerb this far out
     taper: 0.3,        // where a lane meets a wider road, its edges widen over this length
     speed: 0.55,       // cars go this share of their speed on a lane…
     laneOffset: 0.012, // …near the middle (they squeeze past oncoming ones)

@@ -28,7 +28,7 @@ function networkIndex(world, config, kind) {
   const c = caches.get(kind);
   if (c && c.layer === layer && c.version === layer.version) return c.index;
   const lines = networkPolylines(layer, config[kind]);
-  if (kind === 'road') lines.push(...streetKerbs(world, config.road, config.road.kerb)); // lots stop at the kerb
+  if (kind === 'road') lines.push(...streetKerbs(world, config.road, config.lane).map((k) => k.line)); // lots stop at the kerb
   const index = new SegmentIndex(lines);
   caches.set(kind, { layer, version: layer.version, index });
   return index;

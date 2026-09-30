@@ -5,7 +5,6 @@
 //              `contours` is on) and water hatching; in its own
 //              <svg id="ground"> underneath the map
 //   grid     – the main dots (shown while building, see styles.css)
-//   frame    – map border with coordinate ticks (STYLE.frame)
 //   meadow   – grass and wild flowers on open ground (meadow.js), in
 //              chunks rebuilt near a change and culled with the view
 //   subgrid  – the dense footpath dots (only visible while drawing footpaths)
@@ -43,10 +42,11 @@ import { Painter, LOOK, wobble } from './painter.js';
 import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex } from './vehicles.js';
 import { bodyFor, walkerSVG, cyclistSVG } from './people.js';
 import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './draw.js';
-import { chainEdges, edgeCurve, streetKerbPairs, railParts, roadEdges, roadway, keepRuns } from '../roads/geometry.js';
+import { chainEdges, edgeCurve, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
 import { AgentCanvas, AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
+import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
 import { STRUCTURE_TYPES, levelOf, drawSeed, yardOf, joinSides, joinedRow, tiltOf } from '../../structures/index.js';
 import { YARDS } from '../../structures/yards.js';
@@ -65,7 +65,7 @@ import { ELEVATION, contours } from '../terrain/elevation.js';
 import { findBridges, makeDeck, bridgeLines, hiddenUnder } from './bridges.js';
 import { MEADOW, meadowGround, chunkSVG } from './meadow.js';
 
-const LAYERS = ['terrain', 'frame', 'meadow', 'grid', 'subgrid', 'lots', 'paths', 'rails', 'roads', 'parked', 'trains', 'agents', 'objects', 'overlay'];
+const LAYERS = ['terrain', 'meadow', 'grid', 'subgrid', 'lots', 'paths', 'rails', 'roads', 'parked', 'trains', 'agents', 'objects', 'overlay'];
 const TOP = ['objects', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -137,11 +137,6 @@ function pencil(points, level, { len, gap, drift, skip }) {
 // grid unit of it (at most `max`), this far apart (grid units).
 const WATER = { radius: 0.75, soft: 5, metres: 6, step: 0.08, wave: { from: 0.45, length: 0.7, max: 1.6, gap: 0.09 } };
 
-// Short code for a map, shown in the frame corner and the stats box.
-// a, b, … z, aa, ab, … – a chessboard's files, for maps wider than eight
-const fileName = (i) => (i >= 26 ? fileName(Math.floor(i / 26) - 1) : '') + String.fromCharCode(97 + (i % 26));
-
-export const mapCode = (seed) => (seed % 46656).toString(36).toUpperCase().padStart(3, '0');
 
 // Half-size of a building's ground area around each of its dots.
 const STRUCTURE_PAD = 0.45;
@@ -315,7 +310,7 @@ export class Renderer {
     // only on their layers, as a change restyles everything below it
     if (this.drawn.zoom !== this.zoomVar) {
       this.zoomVar = this.drawn.zoom;
-      for (const l of ['terrain', 'frame']) this.layers[l].style.setProperty('--z', this.zoomVar);
+      this.layers.terrain.style.setProperty('--z', this.zoomVar);
     }
     this.updateLod(this.drawn.zoom);
     for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
@@ -498,7 +493,7 @@ export class Renderer {
   // the lake's surface – so it curves with the land, like the contour lines
   // around it – kept within reach of the water dots, so the lake covers
   // exactly its dots. A river's banks are a set distance from its
-  // centreline instead (terrain/rivers.js), out to the map frame. Each
+  // centreline instead (terrain/rivers.js), out to the edge of the map. Each
   // body of water is worked out on its own, over just its own box.
   renderWater() {
     const { world } = this;
@@ -562,14 +557,14 @@ export class Renderer {
   // One body of water's shore (a river's: banks) and waves, appended to `out`.
   // `below(x, y)`: grid units inside the shore (negative on land), kept
   // within reach of the water dots. With `river` (its field) it is worked
-  // out to the map frame, past the dots at the edges.
+  // out to the edge of the map, past the dots at the edges.
   renderWaterBody(cells, below, out, river = null) { // (out: lines in world units, by class)
     const { radius, soft, step, wave } = WATER;
     const { width, height } = this.world.grid;
     const xs = cells.map((c) => c[0]), ys = cells.map((c) => c[1]);
     let [x0, y0, x1, y1] = [Math.min(...xs) - 1.5, Math.min(...ys) - 1.5, Math.max(...xs) + 1.5, Math.max(...ys) + 1.5];
     if (river) {
-      const m = 1.2; // same margin as the frame
+      const m = 1.2; // margin around the outermost dots
       [x0, y0, x1, y1] = [Math.max(x0, -m), Math.max(y0, -m), Math.min(x1, width - 1 + m), Math.min(y1, height - 1 + m)];
       if (x0 < 0) x0 = -m;
       if (y0 < 0) y0 = -m;
@@ -657,11 +652,11 @@ export class Renderer {
     this.dirty.add('terrain');
   }
 
-  // Contour lines out to the map frame, broken over water. Index lines are
+  // Contour lines out to the edge of the map, broken over water. Index lines are
   // brighter and carry their height now and then.
   renderContours() {
     const { grid, terrain } = this.world;
-    const m = 1.2; // same margin as the frame
+    const m = 1.2; // margin around the outermost dots
     if (!this.contourLines) {
       const elev = this.world.elevation, river = this.world.riverField;
       const wet = (x, y) => {
@@ -697,48 +692,6 @@ export class Renderer {
     // thinned out with distance like the rest of the detail (d1 / d2)
     const line = (lines, cls) => lines.length ? `<path class="${cls}" d="${this.pathData(lines, false)}"/>` : '';
     return line(tiers[2], 'contour d2') + line(tiers[1], 'contour d1') + line(tiers[0], 'contour index') + `<g class="d1">${labels}</g>`;
-  }
-
-  renderFrame() {
-    if (!STYLE.frame) {
-      this.layers.frame.innerHTML = '';
-      return;
-    }
-    const { grid, seed } = this.world;
-    const [w, h] = [grid.width, grid.height];
-    const m = 1.2; // margin around the outermost dots
-    const [x0, y0, x1, y1] = [-m, -m, w - 1 + m, h - 1 + m];
-    const border = this.pathData([[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]);
-    const inner = this.pathData([[[x0 + 0.35, y0 + 0.35], [x1 - 0.35, y0 + 0.35], [x1 - 0.35, y1 - 0.35], [x0 + 0.35, y1 - 0.35], [x0 + 0.35, y0 + 0.35]]]);
-
-    // ticks every 5 dots along each edge; the bands between them are named
-    // like a chessboard's squares: files a, b, c… across, ranks counting up
-    // from the bottom edge
-    const STEP = 5;
-    const ticks = [];
-    let labels = '';
-    const label = (x, y, text) => {
-      const [sx, sy] = this.project(x, y);
-      labels += `<text class="frame-label" x="${r2(sx)}" y="${r2(sy)}">${text}</text>`;
-    };
-    const mid = (a, n) => (a + Math.min(a + STEP, n - 1)) / 2; // centre of the band from a
-    const ranks = Math.ceil(h / STEP);
-    for (let x = 0; x < w; x += STEP) {
-      ticks.push([[x, y0], [x, y0 - 0.3]], [[x, y1], [x, y1 + 0.3]]);
-      const file = fileName(x / STEP);
-      label(mid(x, w), y0 - 0.9, file);
-      label(mid(x, w), y1 + 0.9, file);
-    }
-    for (let y = 0; y < h; y += STEP) {
-      ticks.push([[x0, y], [x0 - 0.3, y]], [[x1, y], [x1 + 0.3, y]]);
-      const rank = ranks - y / STEP;
-      label(x0 - 0.9, mid(y, h), rank);
-      label(x1 + 0.9, mid(y, h), rank);
-    }
-    label(x0 + 1.2, y0 - 0.9, `MAP-${mapCode(seed)}`);
-    this.layers.frame.innerHTML =
-      `<path class="frame" d="${border}"/><path class="frame thin" d="${inner}"/>` +
-      `<path class="frame" d="${this.pathData(ticks)}"/>${labels}`;
   }
 
   renderGrid() {
@@ -811,11 +764,27 @@ export class Renderer {
     const { world } = this;
     const onRoad = roadway(world, this.config.road, this.config.lane);
     const intoSite = (n) => world.coarseAround(n).some((c) => STRUCTURE_TYPES[world.structureAt(c)?.type]?.site);
-    for (const { key, line, a, b } of roadEdges(layer, this.config.path, this.config.path.edge, [], (n) => !intoSite(n))) {
-      keepRuns(line, (q) => !onRoad(q)).forEach((run, i) => add(`p${key}${i ? `:${i}` : ''}`, 'footpath', run, a, b));
+    // footpaths carrying on from a road's dead end start where the road
+    // has narrowed into them (see roadItems)
+    const joined = new Map([...this.pathJoins().values()].map((j) => [j.fine, j]));
+    const joinOf = (a, b) => joined.get(a)?.to === b ? joined.get(a) : joined.get(b)?.to === a ? joined.get(b) : null;
+    for (const { key, kind, line, a, b } of roadEdges(layer, this.config.path, this.config.path.edge, [], (n) => !intoSite(n) && !joined.has(n))) {
+      const j = kind === 'edge' && joinOf(a, b);
+      const at = j && layer.pos(j.fine);
+      const keep = j ? (q) => !onRoad(q) && Math.hypot(q[0] - at[0], q[1] - at[1]) >= JOIN_REACH - 1e-3 : (q) => !onRoad(q);
+      keepRuns(line, keep).forEach((run, i) => add(`p${key}${i ? `:${i}` : ''}`, 'footpath', run, a, b));
     }
     this.addBridges('path', add);
     return items;
+  }
+
+  // Footpaths carrying on from roads' dead ends (roads/geometry.js),
+  // found again when a network changes.
+  pathJoins() {
+    const { networks } = this.world;
+    const key = `${networks.road.version}|${networks.path.version}|${this.world.lanes.size}`;
+    if (this.joins?.key !== key) this.joins = { key, map: pathJoins(this.world, this.config.road, this.config.lane, this.config.path) };
+    return this.joins.map;
   }
 
   renderRails() {
@@ -885,17 +854,18 @@ export class Renderer {
       // Lanes are narrower, and widen into the road where they meet one.
       const lane = this.config.lane;
       const width = (a, b) => (world.isLane(a, b) ? lane.edge : curve.edge);
-      for (const { key, kind, line, a, b } of roadEdges(layer, curve, width, world.roadExits(), undefined, lane.taper)) {
+      // dead ends a footpath carries on from: open, narrowing into it
+      const joins = this.pathJoins();
+      for (const { key, kind, line, a, b } of roadEdges(layer, curve, width, world.roadExits(), (n) => !joins.has(n), lane.taper)) {
         add(`r${key}`, kind === 'fade' ? 'road-exit' : 'road', line, a, b);
       }
+      for (const [n, { line }] of joins) line.forEach((pts, i) => add(`rj${n}:${i}`, 'road', pts, n, n));
 
-      // kerbs, open where a footpath comes in
+      // kerbs, rounding the corners, open where a footpath comes in
       const paths = pathIndex(world, this.config);
       const open = (q) => paths.distance(q, this.config.path.edge + PATH_OPENING) === Infinity;
-      for (const { a, b, lines } of streetKerbPairs(world, curve, curve.kerb)) {
-        lines.forEach((line, i) => {
-          keepRuns(line, open).forEach((run, j) => add(`k${i}${edgeKey(a, b)}${j ? `:${j}` : ''}`, 'kerb', run, a, b));
-        });
+      for (const { key, line, a, b } of streetKerbs(world, curve, lane, joins)) {
+        keepRuns(line, open).forEach((run, j) => add(`k${key}${j ? `:${j}` : ''}`, 'kerb', run, a, b));
       }
       // zebra crossings where streets meet a junction
       for (const { node, a, b, stripes } of zebraCrossings(world, curve)) {
@@ -1225,14 +1195,16 @@ export class Renderer {
     const [x, y] = world.grid.xy(s.node);
     const z = world.terrain.heightAt(x, y);
     const painter = this.attachFree(new Painter(camera, { x, y, z }, world.facingRotation(s.type, s.node, s.rotation), drawSeed(s)));
-    // the building, its yard and plot move with the relief as one piece, so
-    // they stay square on slopes (see Camera.project) – and so does a whole
-    // street front of buildings sharing walls, so the walls still meet
+    // the building moves with the relief as one piece, so it stays square on
+    // slopes (see Camera.project) – and so does a whole street front of
+    // buildings sharing walls, so the walls still meet. Its yard and plot (and
+    // parks and squares) keep its warp but follow the ground (Painter.follow).
     const row = joinedRow(world, s).map((o) => world.centerOf(o));
     const rigid = [row.reduce((a, p) => a + p[0], 0) / row.length, row.reduce((a, p) => a + p[1], 0) / row.length];
     painter.rigid = rigid;
     const points = world.nodesOf(s).map((n) => world.grid.xy(n));
     if (def.site) {
+      painter.follow = true; // parks and squares lie on the ground like yards
       const site = world.siteArea(s.type, s.node, s.rotation);
       painter.setSite(fitSite(world, this.config, site));
       painter.setSitePaths(world.sitePaths(s));
@@ -1252,6 +1224,7 @@ export class Renderer {
       const [dx, dy] = yard.origin;
       const yp = this.attachFree(new Painter(camera, { x: dx, y: dy, z: world.terrain.heightAt(dx, dy) }, yard.rotation, drawSeed(s) ^ 0x5bd1e995));
       yp.rigid = rigid;
+      yp.follow = true;
       yp.lod = 1;
       YARDS[yard.style].draw(yp, yard, s);
       if (live && yp.spots.length) this.parking.setSpots(s, yp.spots);
@@ -1268,6 +1241,7 @@ export class Renderer {
     if (plotDef.props && core) {
       const pp = this.attachFree(new Painter(camera, { x, y, z }, 0, drawSeed(s) ^ 0x2c1b3c6d));
       pp.rigid = rigid;
+      pp.follow = true;
       pp.lod = 1;
       drawPlot(pp, this.plotFor(s, plotDef, painter, core, yardWorld));
       painter.merge(pp);
@@ -1477,18 +1451,12 @@ export class Renderer {
     return { minX, maxX, minY, maxY };
   }
 
-  // Trains: a filled square per carriage, coupled by a line; lowered
-  // barriers across roads at closed level crossings. Carriages beyond
-  // where the exits fade out are left out. The trains go on the canvas
-  // (agentCanvas.js), the barriers, which rarely change, stay in the SVG.
+  // Trains: close up models, further out a filled square per carriage,
+  // coupled by a line. Carriages beyond where the exits fade out are left
+  // out. First the signs at level crossings (crossings.js), close up only:
+  // under the trains, their flashing lights over everything.
   renderTrains() {
-    const bars = this.pathData(this.trains.barriers());
-    if (bars !== this.lastBarriers) {
-      this.lastBarriers = bars;
-      this.barrierEl ??= this.layers.trains.appendChild(document.createElementNS(SVGNS, 'path'));
-      this.barrierEl.setAttribute('class', 'barrier');
-      this.barrierEl.setAttribute('d', bars);
-    }
+    if (this.camera.zoom >= VEHICLES.minZoom) this.renderCrossings();
     const { grid } = this.world;
     const m = 1.9;
     const onMap = ([x, y]) => x > -m && y > -m && x < grid.width - 1 + m && y < grid.height - 1 + m;
@@ -1530,7 +1498,11 @@ export class Renderer {
       }
       const [wx, wy] = wobble(a.x, a.y); // on the swaying road
       const [sx, sy] = this.projectDeck(a.x + wx, a.y + wy, 0.04);
-      if (kind === 'car') this.placeCar(el, a);
+      if (kind === 'car') {
+        this.placeCar(el, a);
+        const t = ((el.heading ?? 0) / VEHICLES.headings) * Math.PI * 2, [ux, uy] = [Math.cos(t) * 0.08, Math.sin(t) * 0.08];
+        el.shear = this.slopeShear([a.x + wx - ux, a.y + wy - uy], [a.x + wx + ux, a.y + wy + uy]);
+      }
       // facing left: mirrored
       el.mirror = kind !== 'car' && this.placePerson(el, a, kind, sx);
       el.sx = sx;
@@ -1561,17 +1533,47 @@ export class Renderer {
   // is one path in scene coordinates and fades instead.
   drawAgent(el, k) {
     const pen = this.pen;
-    if (el.kind !== 'truck' && el.kind !== 'bus') return pen.draw(el.shapes, el.sx, el.sy, k, el.mirror);
+    if (el.kind !== 'truck' && el.kind !== 'bus') return pen.draw(el.shapes, el.sx, el.sy, k, el.mirror, el.shear ?? 0);
     if (el.key === 'dot') {
       if (el.path && pen.onScreen(el.dot[0], el.dot[1])) pen.drawScene(AGENT_STYLES.truck, el.path, k < 1 ? Math.max(0, k) : 1);
       return;
     }
-    for (const p of el.parts) pen.draw(p.shapes, p.sx, p.sy, k);
+    for (const p of el.parts) pen.draw(p.shapes, p.sx, p.sy, k, false, el.shear ?? 0);
+  }
+
+  // Vehicles are drawn level; on a slope this leans one from `back` to
+  // `front` (world [x, y]) the way the ground does: the shear (y += k·x in
+  // its drawing, about its middle) that lifts its front on screen by as much
+  // more than its back as the ground (or a bridge deck) lifts it. Seen
+  // nearly end-on it's left level.
+  slopeShear(back, front) {
+    const cam = this.camera;
+    const [, ay] = this.projectDeck(...front), [, by] = this.projectDeck(...back);
+    const [a0x, a0y] = cam.project(...front, 0), [b0x, b0y] = cam.project(...back, 0);
+    const dx = a0x - b0x;
+    if (Math.abs(dx) < 0.3 * Math.hypot(dx, a0y - b0y)) return 0;
+    return Math.max(-1, Math.min(1, (ay - by - (a0y - b0y)) / dx));
   }
 
   // A train: close up a locomotive and coaches (src/render/vehicles.js),
   // each turned along the track and drawn back to front, further out a line
   // of square dots. `cars`: [{ i (index in the train), p: [x, y, dx, dy] }].
+  // Signs at level crossings, and at closed road crossings their lights
+  // flashing in turn.
+  renderCrossings() {
+    const cam = this.camera, t = performance.now() / 1000;
+    const lit = litLight(t);
+    for (const c of this.trains.crossingList()) {
+      const closed = c.kind === 'road' && this.trains.closed.has(c.id);
+      for (const sign of signsAt(c)) {
+        const [sx, sy] = this.projectDeck(sign.x, sign.y, 0);
+        if (!this.pen.onScreen(sx, sy)) continue;
+        this.pen.draw(shapesOf(signSVG(cam, sign.heading, sign.kind)), sx, sy);
+        if (closed) this.penTop.draw(shapesOf(flashSVG(cam, sign.heading, lit)), sx, sy);
+      }
+    }
+  }
+
   // Each carriage goes on the canvas over the buildings (penTop) unless
   // something nearer could hide it (screened), else on the one under them.
   placeTrain(el, cars) {
@@ -1594,16 +1596,19 @@ export class Renderer {
     }
     const len = r2(this.config.trains.carSpacing - 0.02);
     const order = cars
-      .map(({ i, p: [x, y, dx, dy] }) => ({ i, x, y, h: headingIndex(Math.atan2(dy, dx)), depth: cam.depth(x, y) }))
+      .map(({ i, p: [x, y, dx, dy] }) => ({ i, x, y, a: Math.atan2(dy, dx), h: headingIndex(Math.atan2(dy, dx)), depth: cam.depth(x, y) }))
       .sort((a, b) => a.depth - b.depth);
     const key = `${cam.rotation}|${order.map((c) => `${c.i}:${c.h}`).join(',')}`;
     if (el.key !== key) {
       el.key = key;
       el.shapes = order.map((c) => shapesOf(vehicleSVG(cam, `${c.i ? 'coach' : 'loco'}:${len}`, c.h, c.i % VEHICLES.hands)));
     }
+    const half = len / 2;
     order.forEach((c, k) => {
       const [sx, sy] = this.projectDeck(c.x, c.y, 0);
-      penFor(c.x, c.y).draw(el.shapes[k], sx, sy);
+      const [ux, uy] = [Math.cos(c.a), Math.sin(c.a)];
+      const shear = this.slopeShear([c.x - ux * half, c.y - uy * half], [c.x + ux * half, c.y + uy * half]);
+      penFor(c.x, c.y).draw(el.shapes[k], sx, sy, 1, false, shear);
     });
   }
 
@@ -1634,6 +1639,7 @@ export class Renderer {
     const front = [a.x + wx, a.y + wy], back = [a.tx + vx, a.ty + vy];
     if (Math.hypot(front[0] - back[0], front[1] - back[1]) > 1e-4) el.heading = headingIndex(Math.atan2(front[1] - back[1], front[0] - back[0]));
     const [sx, sy] = this.projectDeck((front[0] + back[0]) / 2, (front[1] + back[1]) / 2, 0.04);
+    el.shear = this.slopeShear(back, front);
     if (cam.zoom < VEHICLES.minZoom) {
       el.key = 'dot';
       el.dot = [sx, sy];

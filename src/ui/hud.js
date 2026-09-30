@@ -47,6 +47,7 @@ export class Hud {
         <button data-act="export" title="Download this city as a file, to open on another computer">${controlIcon('export')}<span class="label">Export</span></button>
         <button data-act="import" title="Open a city from a file (replaces this one)">${controlIcon('import')}<span class="label">Import</span></button>
         <button data-act="newMap" title="Discard this city and generate a new map">${controlIcon('newMap')}<span class="label">New map</span></button>
+        <button data-act="fullscreen" title="Full screen">${controlIcon('fullscreen')}<span class="label">Full screen</span></button>
         <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
       </div>
       <div class="bottom">

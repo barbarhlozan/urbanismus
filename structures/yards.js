@@ -17,7 +17,7 @@
 // the building's seed. The player can override it (s.data.yard).
 // `cars: true` styles are only for buildings with a road (see yardOf).
 
-import { tree, bush, hedge, fenceAlong, bench, crates, container, lamp, paving, garages, flowerBed, kiosk, bikeRack } from './kit.js';
+import { tree, bush, hedge, fenceAlong, bench, crates, bricks, cableDrum, concreteRings, woodpile, trailer, lamp, paving, garages, flowerBed, kiosk, bikeRack } from './kit.js';
 
 const spots = (x0, x1, step) => {
   const out = [];
@@ -168,8 +168,7 @@ export const YARDS = {
       for (const x of places) {
         if (room(yard, x, 0.05) < 0.16) continue;
         const y = (yard.frontAt(x) + 0.05 + y1) / 2;
-        if (g.chance(0.5)) container(g, x, y, true);
-        else crates(g, x, y);
+        g.pick([crates, bricks, cableDrum, concreteRings, woodpile, trailer])(g, x, y);
       }
     },
   },

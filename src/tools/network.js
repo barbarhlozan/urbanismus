@@ -23,17 +23,22 @@ export function createNetworkTool({ world, config }, options) {
     bend = bend === BEND.DIAGONAL_FIRST ? BEND.STRAIGHT_FIRST : BEND.DIAGONAL_FIRST;
   };
 
-  // Footpath dots on or right beside a road (where a stroke becomes sidewalks).
-  // (Lanes get no sidewalks: people walk on the lane itself.)
+  // Footpath steps on or right beside a road (where a stroke becomes
+  // sidewalks): 'road', 'lane' beside a lane (a sidewalk on that side
+  // only), 'on-lane' right on one (a sidewalk on the right), or null.
   const streetBeside = (f, g) => {
     const road = world.roadBeside(f, g);
-    return road && !world.isLane(...road);
+    if (!road) return null;
+    if (!world.isLane(...road)) return 'road';
+    return world.sideOf(f, g, road) ? 'lane' : 'on-lane';
   };
   const nearAnyRoad = (f) => layer.grid.neighbors(f).some((g) => streetBeside(f, g));
   const sidewalkNote = (plan) => {
     if (kind !== 'path' || !plan?.check.ok) return '';
-    const along = plan.nodes.some((n, i) => i > 0 && streetBeside(plan.nodes[i - 1], n));
-    return along ? 'Along the road it becomes sidewalks · ' : '';
+    const along = plan.nodes.map((n, i) => i > 0 && streetBeside(plan.nodes[i - 1], n));
+    if (along.includes('road')) return 'Along the road it becomes sidewalks · ';
+    if (along.includes('lane')) return 'Along the lane it becomes a sidewalk on this side · ';
+    return along.includes('on-lane') ? 'On the lane it becomes a sidewalk on its right · ' : '';
   };
   // Roads and lanes drawn over each other: what changes.
   const convertNote = (plan) => {
@@ -114,7 +119,7 @@ export function createNetworkTool({ world, config }, options) {
       }
       if (start < 0) {
         const nearRoad = kind === 'path' && hover >= 0 && nearAnyRoad(hover);
-        if (nearRoad) return 'Draw along a road to give it sidewalks';
+        if (nearRoad) return 'Draw along a road to give it sidewalks · beside a lane, a sidewalk on that side';
         if (kind === 'rail') return 'Click a dot to start a railway · run it off the map edge for trains';
         if (lane) return 'Click a dot to start a lane · draw over a road or footpath to make it a lane';
         return `Click a dot to start a ${noun}`;

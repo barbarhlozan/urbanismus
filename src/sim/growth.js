@@ -104,7 +104,7 @@ export class GrowthSystem {
     const { grid } = world;
     const homes = [], churches = [];
     for (const o of world.structures.values()) {
-      if (o.type === 'residential') homes.push(world.grid.xy(o.node));
+      if (matches(STRUCTURE_TYPES[o.type], 'residential')) homes.push(world.grid.xy(o.node));
       else if (o.type === 'church') churches.push(world.centerOf(o));
     }
     if (homes.length < rule.minHomes) return;

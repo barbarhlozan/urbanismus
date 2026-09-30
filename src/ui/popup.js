@@ -12,12 +12,15 @@
 import { isNarrow } from './device.js';
 import { reveal, isShown } from './motion.js';
 
+const GHOST_MS = 400;
+
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class Popup {
   constructor(root) {
     this.el = document.createElement('div');
     this.el.className = 'popup hidden';
+    this.openedAt = -Infinity;
     // the content scrolls inside, so the box itself (and its frame) stays put
     this.body = document.createElement('div');
     this.body.className = 'popup-body';
@@ -25,6 +28,9 @@ export class Popup {
     root.appendChild(this.el);
 
     this.el.addEventListener('click', (e) => {
+      // on phones the tap that opened the menu can arrive again as a click a
+      // moment later, on whatever row came up under the finger: not a choice
+      if (performance.now() - this.openedAt < GHOST_MS) return;
       if (e.target.closest('.close')) return this.hide();
       const btn = e.target.closest('button[data-i]');
       if (!btn || btn.disabled) return;
@@ -49,6 +55,7 @@ export class Popup {
 
   show(x, y, title, items, refresh = null, around = null) {
     const wasOpen = this.open;
+    if (!wasOpen) this.openedAt = performance.now();
     this.refresh = refresh;
     this.render(title, items);
     this.place(x, y, around);

@@ -35,7 +35,7 @@ export function hedgeAlong(g, pts, h = 0.045) {
     const mid = run[Math.floor(run.length / 2)];
     const [a, b] = [run[0], run[run.length - 1]];
     g.detailed(2, () => {
-      g.solid(mid[0], mid[1], h / 2);
+      g.solid(mid[0], mid[1], h / 2, { bend: true });
       g.line([[a[0], a[1], 0], ...run.map(([x, y]) => [x, y, h]), [b[0], b[1], 0]]);
       g.line(run.map(([x, y]) => [x, y, 0]));
     });
@@ -45,7 +45,7 @@ export function hedgeAlong(g, pts, h = 0.045) {
 // Picket fence from a to b (2D points), posts every ~0.1.
 export function fence(g, a, b, h = 0.06) {
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  g.solid((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, h / 2);
+  g.solid((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, h / 2, { bend: true });
   g.line([[a[0], a[1], h], [b[0], b[1], h]]);
   const n = Math.max(1, Math.round(len / 0.1));
   for (let i = 0; i <= n; i++) {
@@ -109,15 +109,6 @@ export function crates(g, x, y) {
   g.detailed(2, () => {
     g.box(x - 0.05, y - 0.05, 0, 0.1, 0.1, 0.06);
     if (stacked) g.box(x - 0.035, y - 0.035, 0.06, 0.07, 0.07, 0.05);
-  });
-}
-
-export function container(g, x, y, alongX = true) {
-  const w = alongX ? 0.3 : 0.11, d = alongX ? 0.11 : 0.3;
-  if (![[x - w / 2, y], [x, y], [x + w / 2, y], [x, y - d / 2], [x, y + d / 2]].every(([px, py]) => g.isFree(px, py, 0.03))) return;
-  g.detailed(2, () => {
-    g.box(x - w / 2, y - d / 2, 0, w, d, 0.1);
-    g.mullions(x - w / 2, y - d / 2, w, d, 0, 0.1, 0.05, 0.01);
   });
 }
 
@@ -319,7 +310,7 @@ export function fenceAlong(g, pts, h = 0.06, spacing = 0.1) {
 
 function fenceRun(g, pts, h, spacing) {
   const mid = pts[Math.floor(pts.length / 2)];
-  g.solid(mid[0], mid[1], h / 2);
+  g.solid(mid[0], mid[1], h / 2, { bend: true });
   g.line(pts.map(([x, y]) => [x, y, h]));
   let run = 0;
   for (let i = 0; i < pts.length - 1; i++) {
@@ -461,6 +452,97 @@ export function timber(g, x, y, alongX = g.chance(0.5)) {
     g.box(x - w / 2, y - d / 2, 0, w, d, 0.035);
     g.box(x - w / 2 + (alongX ? 0.02 : 0.01), y - d / 2 + (alongX ? 0.01 : 0.02), 0.035, w - (alongX ? 0.04 : 0.02), d - (alongX ? 0.02 : 0.04), 0.03);
     g.floors(x - w / 2, y - d / 2, w, d, 0, 0.035, 0.012, { inset: 0 });
+  });
+}
+
+// Wooden cable drum lying on its side: two flanges and the hub between them.
+export function cableDrum(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.06)) return;
+  const r = 0.042, hub = 0.022, half = 0.022;
+  const [ax, ay] = alongX ? [1, 0] : [0, 1];   // axle
+  const [ux, uy] = [-ay, ax];                  // across the axle
+  const ring = (k, rr) => Array.from({ length: 13 }, (_, i) => {
+    const a = (i / 12) * Math.PI * 2;
+    return [x + ax * k + ux * Math.cos(a) * rr, y + ay * k + uy * Math.cos(a) * rr, r + Math.sin(a) * rr];
+  });
+  g.detailed(2, () => {
+    g.solid(x, y, r);
+    for (const k of [-half, half]) g.line(ring(k, r), FRAME);
+    for (const s of [-1, 1]) g.line([[x - ax * half + ux * s * hub, y - ay * half + uy * s * hub, r], [x + ax * half + ux * s * hub, y + ay * half + uy * s * hub, r]]);
+    g.line([[x - ax * half, y - ay * half, r + hub], [x + ax * half, y + ay * half, r + hub]]);
+  });
+}
+
+// Concrete well rings (skruže): one standing on another, a third beside.
+export function concreteRings(g, x, y) {
+  if (!g.isFree(x, y, 0.07)) return;
+  const r = 0.035, h = 0.03;
+  g.detailed(2, () => {
+    g.cylinder(x - 0.025, y, 0, r, h, 10);
+    g.cylinder(x - 0.025, y, h, r, h, 10);
+    if (g.chance(0.7)) g.cylinder(x + 0.045, y + 0.02, 0, r, h, 10);
+  });
+}
+
+// Bricks stacked on a pallet or two.
+export function bricks(g, x, y) {
+  if (!g.isFree(x, y, 0.06)) return;
+  const n = g.int(1, 2);
+  g.detailed(2, () => {
+    for (let i = 0; i < n; i++) {
+      const bx = x - 0.055 + i * 0.06;
+      g.box(bx, y - 0.025, 0, 0.05, 0.05, 0.045);
+      g.floors(bx, y - 0.025, 0.05, 0.05, 0.008, 0.045, 0.012, { inset: 0 });
+    }
+  });
+}
+
+// Firewood stacked into a long pile under a strip of roofing.
+export function woodpile(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.08)) return;
+  const [w, d] = alongX ? [0.16, 0.045] : [0.045, 0.16];
+  g.detailed(2, () => {
+    g.box(x - w / 2, y - d / 2, 0, w, d, 0.06);
+    g.mullions(x - w / 2, y - d / 2, w, d, 0, 0.06, 0.018, 0);
+    g.box(x - w / 2 - 0.008, y - d / 2 - 0.008, 0.06, w + 0.016, d + 0.016, 0.008);
+  });
+}
+
+// Flat farm trailer (valník): a bed with low sides on four wheels and the
+// drawbar, sometimes loaded with sacks or a few boards.
+export function trailer(g, x, y, alongX = g.chance(0.5)) {
+  if (!g.isFree(x, y, 0.09)) return;
+  const L = 0.16, W = 0.07, zb = 0.035;
+  const [ux, uy] = alongX ? [1, 0] : [0, 1];
+  const [vx, vy] = [-uy, ux];
+  const box = (u0, u1, v0, v1, z0, z1) => g.box(
+    x + Math.min(u0 * ux + v0 * vx, u1 * ux + v1 * vx), y + Math.min(u0 * uy + v0 * vy, u1 * uy + v1 * vy), z0,
+    Math.abs((u1 - u0) * ux + (v1 - v0) * vx), Math.abs((u1 - u0) * uy + (v1 - v0) * vy), z1 - z0);
+  const wheel = (u, v, r) => {
+    const cx = x + u * ux + v * vx, cy = y + u * uy + v * vy;
+    g.line(Array.from({ length: 11 }, (_, i) => {
+      const a = (i / 10) * Math.PI * 2;
+      return [cx + Math.cos(a) * r * ux, cy + Math.cos(a) * r * uy, r + Math.sin(a) * r];
+    }), FRAME);
+  };
+  g.detailed(2, () => {
+    box(-L / 2, L / 2, -W / 2, W / 2, zb, zb + 0.022);
+    for (const u of [-L * 0.3, L * 0.3]) for (const v of [-W / 2, W / 2]) wheel(u, v, 0.018);
+    const tip = L / 2 + 0.05;
+    g.line([[x + ux * L / 2, y + uy * L / 2, zb], [x + ux * tip, y + uy * tip, zb * 0.6]]);
+    if (g.chance(0.5)) box(-L * 0.35, L * 0.1, -W * 0.35, W * 0.35, zb + 0.022, zb + 0.045);
+  });
+}
+
+// Wagons on a short siding (ground line) from x0 along x at y: pit tubs
+// (small) or standard coal wagons (big).
+export function wagons(g, x0, y, n, big = false) {
+  const len = big ? 0.2 : 0.08, gap = big ? 0.03 : 0.02, w = big ? 0.08 : 0.05, h = big ? 0.07 : 0.04;
+  const x1 = x0 + n * (len + gap);
+  g.groundLine([[x0 - 0.06, y - w * 0.3], [x1 + 0.06, y - w * 0.3]], { lod: 1 });
+  g.groundLine([[x0 - 0.06, y + w * 0.3], [x1 + 0.06, y + w * 0.3]], { lod: 1 });
+  g.detailed(2, () => {
+    for (let i = 0; i < n; i++) g.box(x0 + i * (len + gap), y - w / 2, 0.012, len, w, h);
   });
 }
 

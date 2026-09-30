@@ -10,7 +10,7 @@
 //
 // Coordinates: plot painters use world axes, (0, 0) = the building's anchor dot.
 
-import { tree, bush, shed, bench, bins, crates, container, pallets, fenceAlong, hedgeAlong, carpetRack, dryingFrame, sandpit, climbingFrame, barrels, timber, heap, tank, transformer } from './kit.js';
+import { tree, bush, shed, bench, bins, crates, pallets, bricks, cableDrum, concreteRings, woodpile, trailer, fenceAlong, hedgeAlong, carpetRack, dryingFrame, sandpit, climbingFrame, barrels, timber, heap, tank, transformer } from './kit.js';
 
 // Weighted props per style: [weight, radius, draw(g, x, y)]
 export const PLOT_STYLES = {
@@ -41,7 +41,11 @@ export const PLOT_STYLES = {
   works: [
     [3, 0.07, (g, x, y) => crates(g, x, y)],
     [2, 0.07, (g, x, y) => pallets(g, x, y)],
-    [2, 0.17, (g, x, y) => container(g, x, y, g.chance(0.5))],
+    [1, 0.1, (g, x, y) => trailer(g, x, y)],
+    [1, 0.07, (g, x, y) => cableDrum(g, x, y)],
+    [1, 0.07, (g, x, y) => concreteRings(g, x, y)],
+    [1, 0.06, (g, x, y) => bricks(g, x, y)],
+    [1, 0.09, (g, x, y) => woodpile(g, x, y)],
     [2, 0.06, (g, x, y) => barrels(g, x, y)],
     [2, 0.1, (g, x, y) => timber(g, x, y)],
     [1, 0.09, (g, x, y) => heap(g, x, y, 0.07)],

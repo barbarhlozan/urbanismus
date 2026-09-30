@@ -224,6 +224,8 @@ export class Painter {
     this.join = { left: false, right: false }; // set by the renderer, see structures/index.js
     this.current = null;
     this.rigid = null;    // world [x, y]: move as one piece, see _project()
+    this.follow = false;  // with rigid: still rise and fall with the ground, see _liftAt()
+    this._onGround = false;
     this.top = 0;         // highest z drawn at (local), for the renderer's screen box
     this.tilt = 0;        // extra turn in radians on top of `rotation`, see setTilt()
     this._tc = 1;
@@ -246,7 +248,18 @@ export class Painter {
   // that one point, so the whole drawing moves without bending (see
   // Camera.project).
   _project(x, y, z) {
-    return this.camera.project(x, y, z, this.rigid);
+    return this.camera.project(x, y, z, this.rigid, this._liftAt());
+  }
+
+  // Where the relief is taken for what is being drawn (null: at each point).
+  // Normally at `rigid`. With `follow` (yards, plots) only the warp stays
+  // rigid: ground drawing and bending solids (fences, hedges – solid(…,
+  // { bend: true })) follow the ground point by point, other solids stand
+  // upright where they start.
+  _liftAt() {
+    if (!this.follow) return this.rigid;
+    if (this._onGround || !this.current || this.current.bend) return null;
+    return this.current.at;
   }
 
   // A local direction or offset turned into world axes (tilt, then rotation).
@@ -403,7 +416,7 @@ export class Painter {
   _view([nx, ny, nz]) {
     const [wx, wy] = this._turn(nx, ny);
     if (this.camera.perspective && this.current?.at) {
-      const [vx, vy, vz] = this.camera.toEye(...this.current.at, this.rigid);
+      const [vx, vy, vz] = this.camera.toEye(...this.current.at, this._liftAt());
       return (wx * vx + wy * vy + nz * vz) / (Math.hypot(vx, vy, vz) || 1);
     }
     const [rx, ry] = rotateQuarter(wx, wy, this.camera.rotation);
@@ -417,7 +430,7 @@ export class Painter {
     const [rx, ry] = this._turn(nx, ny);
     if (this.camera.perspective) {
       const at = p ? this._world(p[0], p[1], p[2]) : this.current?.at;
-      if (at) return this.camera.facingAt([rx, ry, nz], at, this.rigid);
+      if (at) return this.camera.facingAt([rx, ry, nz], at, this._liftAt());
     }
     return this.camera.facing([rx, ry, nz]);
   }
@@ -513,13 +526,13 @@ export class Painter {
   // growing towards the viewer), used by toSVG() to sort: a primitive's
   // footprint (`fixed`), or else the point it starts at, grown by the faces
   // and lines drawn into it.
-  solid(x, y, z) {
+  solid(x, y, z, { bend = false } = {}) {
     const [wx, wy, wz] = this._world(x, y, z);
     const foot = this._footprint;
     this._footprint = null;
     const box = foot ? this._viewBox(foot.length === 2 ? [foot[0], [foot[1][0], foot[0][1]], foot[1], [foot[0][0], foot[1][1]]] : foot)
       : this._viewBox([[x, y]]);
-    this.current = { depth: this.camera.depth(wx, wy) + wz * 1e-3, parts: [], at: [wx, wy, wz], box, fixed: !!foot };
+    this.current = { depth: this.camera.depth(wx, wy) + wz * 1e-3, parts: [], at: [wx, wy, wz], box, fixed: !!foot, bend };
     this.solids.push(this.current);
     return this;
   }
@@ -943,6 +956,7 @@ export class Painter {
   _groundOutline(points, closed, opts) {
     const pts = points.map(([x, y]) => [x, y, 0]);
     const n = this.ground.length;
+    this._onGround = true;
     if (LOOK.sketch) {
       const { d } = this._sketch(pts, closed);
       if (d) this.ground.push(`<path d="${d}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
@@ -951,6 +965,7 @@ export class Painter {
         this.ground.push(`<${closed ? 'polygon' : 'polyline'} points="${run.map(([sx, sy]) => `${r2(sx)},${r2(sy)}`).join(' ')}"${attrs(opts, this._lod(opts), 'gnd')}/>`);
       }
     }
+    this._onGround = false;
     if (this.ground.length > n) {
       const cam = this.camera;
       let at;
@@ -973,7 +988,9 @@ export class Painter {
       const ring = Array.from({ length: 16 }, (_, i) => [x + Math.cos((i / 16) * Math.PI * 2) * r, y + Math.sin((i / 16) * Math.PI * 2) * r]);
       return this.groundPoly(ring, opts);
     }
+    this._onGround = true;
     const [sx, sy] = this._project(...this._world(x, y, 0));
+    this._onGround = false;
     const [rx, ry] = this.camera.groundEllipse(r);
     this.groundAt.push(this.toWorld(x, y));
     this.ground.push(`<ellipse cx="${r2(sx)}" cy="${r2(sy)}" rx="${r2(rx)}" ry="${r2(ry)}"${attrs(opts, this._lod(opts), 'gnd')}/>`);

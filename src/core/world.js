@@ -40,6 +40,8 @@ export class World {
 
     this.sidewalks = new Set(); // edgeKey of road segments that are streets (have sidewalks)
     this.lanes = new Set();     // edgeKey of road segments that are single-track lanes (never streets)
+    this.laneWalks = new Map(); // edgeKey of lanes -> sides with a sidewalk: bit 1 left of the way from
+                                // the lower dot to the higher (offsetPolyline +), bit 2 right (see sideOf)
 
     this.networks = {
       road: new NetworkLayer({
@@ -353,7 +355,7 @@ export class World {
   }
 
   // Free ground for the footprint, plus the type's own rule (def.canPlace,
-  // e.g. a station needs track alongside).
+  // e.g. a station needs room for its track).
   canPlaceStructure(type, node, rotation = 0, ignoreId = null) {
     const fits = this.fitsStructure(type, node, rotation, ignoreId);
     const rule = STRUCTURE_TYPES[type]?.canPlace;
@@ -361,18 +363,19 @@ export class World {
   }
 
   // Where to put a structure the player points at: as asked, or – for types
-  // with their own rule (a station must face its track) – turned half round
-  // over the same dots if only that fits. { node, rotation, check }.
+  // with their own rule – turned half round over the same dots if only that
+  // fits, or if that way it uses what's there rather than building its own
+  // (a station facing existing track instead of laying some: check.lay).
+  // { node, rotation, check }.
   placementFor(type, node, rotation = 0) {
     const check = this.canPlaceStructure(type, node, rotation);
-    if (check.ok || !STRUCTURE_TYPES[type]?.canPlace || node < 0) return { node, rotation, check };
+    if ((check.ok && !check.lay) || !STRUCTURE_TYPES[type]?.canPlace || node < 0) return { node, rotation, check };
     const offs = footprintOffsets(STRUCTURE_TYPES[type], rotation);
     const [sx, sy] = [0, 1].map((k) => Math.min(...offs.map((o) => o[k])) + Math.max(...offs.map((o) => o[k])));
     const flipped = this.grid.offset(node, sx, sy);
     const turned = (rotation + 2) % 4;
-    if (flipped >= 0 && this.canPlaceStructure(type, flipped, turned).ok) {
-      return { node: flipped, rotation: turned, check: { ok: true } };
-    }
+    const other = flipped >= 0 ? this.canPlaceStructure(type, flipped, turned) : { ok: false };
+    if (other.ok && (!other.lay || !check.ok)) return { node: flipped, rotation: turned, check: other };
     return { node, rotation, check };
   }
 
@@ -661,6 +664,7 @@ export class World {
     const s = { id: this.nextId++, type, node, rotation, level, seed, data };
     this._insertStructure(s);
     this.nodesOf(s).forEach((n) => this.clearFeaturesAt(n));
+    STRUCTURE_TYPES[type].placed?.(this, s); // e.g. a station lays its track
     this.events.emit('structure:added', s);
     return s;
   }
@@ -771,10 +775,27 @@ export class World {
       layer.graph.addEdge(nodes[i], nodes[i + 1]);
       if (kind !== 'road') continue;
       const key = edgeKey(nodes[i], nodes[i + 1]);
+      // a street narrowed to a lane keeps a sidewalk each side; a lane
+      // widened with any sidewalk becomes a street
       if (lane) {
+        if (this.sidewalks.delete(key)) this.laneWalks.set(key, 3);
         this.lanes.add(key);
-        this.sidewalks.delete(key);
-      } else this.lanes.delete(key);
+      } else if (this.lanes.delete(key) && this.laneWalks.delete(key)) this.sidewalks.add(key);
+    }
+    // a footpath drawn right on a lane gives it a sidewalk on the right of
+    // the way it was drawn (draw back the other way for the other side)
+    if (kind === 'path') {
+      for (let i = 0; i < nodes.length - 1; i++) {
+        const [fx, fy] = this.fine.xy(nodes[i]), [gx, gy] = this.fine.xy(nodes[i + 1]);
+        const road = this.roadOn(fx, fy, gx, gy);
+        if (!road || !this.isLane(...road)) continue;
+        const [lo, hi] = road[0] < road[1] ? road : [road[1], road[0]];
+        const [lx, ly] = this.grid.xy(lo), [hx, hy] = this.grid.xy(hi);
+        const key = edgeKey(...road);
+        // (with y down, the right of the way is the + offset side of lo -> hi)
+        const side = (gx - fx) * (hx - lx) + (gy - fy) * (hy - ly) > 0 ? 1 : 2;
+        this.laneWalks.set(key, (this.laneWalks.get(key) ?? 0) | side);
+      }
     }
     this.absorbSidewalks(kind !== 'path'); // a path build announces itself below
     layer.version++;
@@ -789,7 +810,7 @@ export class World {
     layer.graph.removeNode(node);
     nodes.push(...this.pruneBridges(layer, nodes));
     if (kind === 'road') {
-      for (const set of [this.sidewalks, this.lanes]) {
+      for (const set of [this.sidewalks, this.lanes, this.laneWalks]) {
         for (const k of [...set]) if (!this.roads.hasEdge(...k.split('-').map(Number))) set.delete(k);
       }
     }
@@ -804,17 +825,22 @@ export class World {
   // dense dots right beside it – are really sidewalks: remove them from the
   // footpaths and make those road segments streets instead. Runs after every
   // build and on load, so it doesn't matter which was drawn first.
-  // Lanes get no sidewalks: people walk on the lane itself, so a footpath
-  // right on one is taken in by it (a lane drawn over a footpath upgrades
-  // it), and one beside it stays a footpath.
+  // Lanes keep their narrow look: a footpath beside one becomes a sidewalk
+  // on that side only (draw one each side for two), and one right on it is
+  // taken in by it (drawn on it, it gave it a sidewalk, see buildNetwork;
+  // a lane drawn over a footpath just upgrades it).
   absorbSidewalks(notify = true) {
-    const streets = [];
+    const streets = [], walked = [];
     const gone = [];
     for (const [f, g] of this.paths.edges()) {
       const road = this.roadBeside(f, g);
       if (!road) continue;
       if (this.isLane(...road)) {
-        if (!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g))) continue;
+        const side = this.sideOf(f, g, road);
+        if (side) {
+          this.laneWalks.set(edgeKey(...road), (this.laneWalks.get(edgeKey(...road)) ?? 0) | side);
+          walked.push(road);
+        }
       } else streets.push(road);
       gone.push(f, g);
       this.paths.removeEdge(f, g);
@@ -827,7 +853,7 @@ export class World {
       path.version++;
       this.events.emit(path.event, { layer: path, nodes: gone });
     }
-    this.events.emit('roads:changed', { layer: this.networks.road, nodes: streets.flat(), sidewalks: true });
+    this.events.emit('roads:changed', { layer: this.networks.road, nodes: [...streets, ...walked].flat(), sidewalks: true });
     return true;
   }
 
@@ -837,10 +863,25 @@ export class World {
     const [fx, fy] = this.fine.xy(f);
     const [gx, gy] = this.fine.xy(g);
     for (const [dx, dy] of [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]]) {
+      // (sideways only: a footpath carrying straight on from a road's end
+      // isn't beside it)
+      if ((dx || dy) && dx * (gy - fy) === dy * (gx - fx)) continue;
       const road = this.roadOn(fx + dx, fy + dy, gx + dx, gy + dy);
       if (road) return road;
     }
     return null;
+  }
+
+  // Which side of road segment [a, b] the footpath step f -> g runs on: 1
+  // left of the way from the lower dot to the higher, 2 right, 0 on it
+  // (the bits of laneWalks).
+  sideOf(f, g, [a, b]) {
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    const [lx, ly] = this.grid.xy(lo), [hx, hy] = this.grid.xy(hi);
+    const [fx, fy] = this.fine.xy(f), [gx, gy] = this.fine.xy(g);
+    const mx = (fx + gx) / 4 - lx, my = (fy + gy) / 4 - ly; // (dense dots are half a dot apart)
+    const cross = (hx - lx) * my - (hy - ly) * mx;
+    return Math.abs(cross) < 1e-6 ? 0 : cross > 0 ? 1 : 2;
   }
 
   // The road segment covering the dense-grid step (fx, fy) -> (gx, gy), or
@@ -865,6 +906,13 @@ export class World {
     return this.lanes.has(edgeKey(a, b));
   }
 
+  // Does side s (0 left, 1 right of the way from the lower dot, as in
+  // roadEdges' keys) of road segment [a, b] have a sidewalk?
+  hasKerb(a, b, s) {
+    const key = edgeKey(a, b);
+    return this.sidewalks.has(key) || !!((this.laneWalks.get(key) ?? 0) & (1 << s));
+  }
+
   // Road dot where only lanes meet.
   laneOnly(node) {
     const ms = [...this.roads.neighbors(node)];
@@ -876,15 +924,16 @@ export class World {
     return this.laneOnly(node) ? CONFIG.lane.edge : CONFIG.road.edge;
   }
 
-  // Road segments at a road dot that are streets.
+  // Road segments at a road dot with sidewalks (streets, lanes with one).
   sidewalksAt(node) {
-    return [...this.roads.neighbors(node)].filter((m) => this.hasSidewalk(node, m)).map((m) => [node, m]);
+    return [...this.roads.neighbors(node)].filter((m) => this.hasSidewalk(node, m) || this.laneWalks.has(edgeKey(node, m))).map((m) => [node, m]);
   }
 
   setSidewalks(edges, on) {
     let changed = false;
     for (const [a, b] of edges) {
       const key = edgeKey(a, b);
+      if (!on && this.laneWalks.delete(key)) changed = true;
       if (on === this.sidewalks.has(key) || (on && (!this.roads.hasEdge(a, b) || this.lanes.has(key)))) continue;
       if (on) this.sidewalks.add(key);
       else this.sidewalks.delete(key);
@@ -945,6 +994,7 @@ export class World {
       networks: Object.fromEntries(Object.entries(this.networks).map(([k, l]) => [k, l.graph.toJSON()])),
       sidewalks: [...this.sidewalks],
       lanes: [...this.lanes],
+      laneWalks: [...this.laneWalks],
       structures: [...this.structures.values()],
       features: [...this.features.values()],
     };
@@ -973,6 +1023,7 @@ export class World {
       const [a, b] = key.split('-').map(Number);
       if (world.roads.hasEdge(a, b) && !world.lanes.has(key)) world.sidewalks.add(key);
     }
+    for (const [key, sides] of data.laneWalks ?? []) if (world.lanes.has(key)) world.laneWalks.set(key, sides);
     world.absorbSidewalks(false); // footpaths drawn beside roads before streets existed
 
     for (const s of data.structures) {
@@ -983,7 +1034,8 @@ export class World {
       s.data ??= {};
       // Stations saved facing away from their track: turn them round.
       const rule = STRUCTURE_TYPES[s.type].canPlace;
-      if (rule && !rule(world, world.footprintNodes(s.type, s.node, s.rotation), s.rotation).ok) {
+      const fits = rule?.(world, world.footprintNodes(s.type, s.node, s.rotation), s.rotation);
+      if (rule && (!fits.ok || fits.lay)) {
         const at = world.placementFor(s.type, s.node, s.rotation);
         if (at.check.ok) [s.node, s.rotation] = [at.node, at.rotation];
       }

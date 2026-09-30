@@ -139,6 +139,13 @@ const CONTROLS = {
   debug: '<path d="M5.5 6.6 C5.5 3.8 10.5 3.8 10.5 6.6 V10 C10.5 13.6 5.5 13.6 5.5 10 Z M8 6.6 V13.2 M5.5 8.2 H2.6 M10.5 8.2 H13.4 M5.5 10.8 L3.2 12.6 M10.5 10.8 L12.8 12.6 M6.4 4.8 L4.6 2.8 M9.6 4.8 L11.4 2.8"/>',
   export: '<path d="M8 2.5 V10 M5 7 L8 10 L11 7 M2.5 10.5 V13.5 H13.5 V10.5"/>',
   import: '<path d="M8 10 V2.5 M5 5.5 L8 2.5 L11 5.5 M2.5 10.5 V13.5 H13.5 V10.5"/>',
+  // for the New map settings: a pond with ripples, a pine, a river's two banks
+  lakes: '<path d="M1.8 9.6 C1.8 6.2 14.2 6.2 14.2 9.6 C14.2 13 1.8 13 1.8 9.6 Z M5.2 9.4 H7.8 M9.4 10.6 H11.2"/>',
+  forest: '<path d="M8 1.8 L4.4 7 H6.4 L3.4 11.2 H12.6 L9.6 7 H11.6 Z M8 11.2 V14.2"/>',
+  river: '<path d="M1.5 5.2 C4 3.6 6 6.8 8.5 5.2 C11 3.6 12.5 6.4 14.5 5.2 M1.5 10.2 C4 8.6 6 11.8 8.5 10.2 C11 8.6 12.5 11.4 14.5 10.2"/>',
+  // four corners pointing out (go full screen), or in (come back); the
+  // button shows one or the other (styles.css)
+  fullscreen: '<path class="fs-enter" d="M2.5 6 V2.5 H6 M10 2.5 H13.5 V6 M13.5 10 V13.5 H10 M6 13.5 H2.5 V10"/><path class="fs-exit" d="M6 2.5 V6 H2.5 M13.5 6 H10 V2.5 M10 13.5 V10 H13.5 M2.5 10 H6 V13.5"/>',
   // a folded map, and a plus: a new one
   newMap: '<path d="M1.5 4 L5 2.5 L8.5 4 L12 2.5 V8 M1.5 4 V12.5 L5 11 L8.5 12.5 M5 2.5 V11 M8.5 4 V12.5 M12.5 10 V15 M10 12.5 H15"/>',
 };

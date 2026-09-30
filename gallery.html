@@ -20,7 +20,9 @@
   <script type="module">
     // Dev page: every structure level drawn with a few seeds, close up.
     // gallery.html?type=residential&seeds=12&size=220&rot=0
-    //   &level=2     only that level (rot=2 shows most fronts)
+    //   &level=2     only that level
+    // Buildings are drawn twice: from `rot` (mostly their backs) and turned
+    // half round (their fronts, where the doors and shop windows are).
     //   &compare=1   each one also drawn the earlier way (outlined windows, plain roofs), left
     //   &scheme=2    color scheme (src/theme.js: 0 Night, 1 Red light, 2 Paper)
     //   &join=1      drawn as if sharing walls on both sides (street fronts)
@@ -32,7 +34,7 @@
     import { Painter, LOOK } from './src/render/painter.js';
     import { STRUCTURES } from './structures/index.js';
     import { agentShape } from './src/render/renderer.js';
-    import { VEHICLES, vehicleSVG } from './src/render/vehicles.js';
+    import { VEHICLES, MODEL_NAMES, vehicleSVG } from './src/render/vehicles.js';
     import { PEOPLE, walkerSVG, cyclistSVG } from './src/render/people.js';
     import { DRAW, drawIn, eraseOut } from './src/render/draw.js';
     import { drawTree, drawShrub, drawClump, TREE_KINDS } from './features/trees.js';
@@ -41,6 +43,7 @@
     const seeds = +(q.get('seeds') ?? 6), size = +(q.get('size') ?? 200), only = q.get('type');
     const cam = new Camera({ width: 1, height: 1 }, { tile: 64 });
     cam.rotation = +(q.get('rot') ?? 0);
+    const views = [['back', cam.rotation], ['front', (cam.rotation + 2) % 4]];
     for (const k of Object.keys(LOOK)) if (q.has(k)) LOOK[k] = q.get(k) === 'false' ? false : +q.get(k) || (q.get(k) === 'true');
     // before = the look at the start of the hand-drawn pass (wobble only)
     const NEW = { ...LOOK }, OLD = { ...LOOK, fascia: 0.012, sill: true, overshoot: 0, ink: false, hatch: 0, ground: 0, floors: true };
@@ -100,7 +103,7 @@
       const z = +(q.get('zoom') ?? 3);
       const mapCam = new Camera({ width: 1, height: 1 }, { tile: 32 });
       mapCam.rotation = cam.rotation;
-      for (const name of ['saloon', 'hatch', 'van', 'cab', 'trailer', 'loco:0.24', 'coach:0.24']) {
+      for (const name of [...MODEL_NAMES, 'loco:0.24', 'coach:0.24']) {
         out.insertAdjacentHTML('beforeend', `<h2>Vehicle · ${name}</h2>`);
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '-8 -10 128 16');
@@ -135,8 +138,9 @@
         const row = document.createElement('div');
         row.className = 'row';
         out.appendChild(row);
-        for (let k = 0; k < seeds; k++) for (const [label, look] of looks) {
+        for (let k = 0; k < seeds; k++) for (const [label, look] of looks) for (const [view, rotation] of views) {
           Object.assign(LOOK, look);
+          cam.rotation = rotation;
           const seed = (k + 1) * 2654435761 >>> 0;
           const g = new Painter(cam, { x: 0, y: 0 }, 0, seed);
           if (q.has('join')) g.join = { left: true, right: true };
@@ -151,7 +155,7 @@
           let svg;
           try { lvl.draw(g, s); svg = g.toGroundSVG() + g.toSVG(); } catch (e) { svg = ''; console.warn(def.id, lvl.name, e.message); }
           const fig = document.createElement('figure');
-          fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0">${svg}</g></svg><figcaption>#${k} ${label}</figcaption>`;
+          fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0">${svg}</g></svg><figcaption>#${k} ${[label, view].filter(Boolean).join(' · ')}</figcaption>`;
           row.appendChild(fig);
           const el = fig.querySelector('svg'), b = el.querySelector('g').getBBox();
           const pad = 8, m = Math.max(b.width, b.height) + pad * 2;

@@ -202,6 +202,9 @@ function railModel(kind, len) {
 }
 
 // A model by name: one of MODELS, or 'coach:<len>' / 'loco:<len>'.
+// Every road model by name (railway ones are made on demand, see model()).
+export const MODEL_NAMES = Object.keys(MODELS);
+
 function model(name) {
   if (!MODELS[name]) {
     const [kind, len] = name.split(':');

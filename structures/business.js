@@ -5,7 +5,7 @@
 // brutalist towers with a heavy crown.
 // Front (shop window, entrance) is the -y side.
 
-import { door, panel, frontage, shared, hips, aerials, flagpole, star, crates, bikeRack, bench } from './kit.js';
+import { door, panel, chimney, frontage, shared, hips, aerials, flagpole, star, crates, barrels, bikeRack, bench, streetClock } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -211,6 +211,179 @@ export default {
           g.floors(-w / 2, -d / 2 + 0.06, w, d, hp, h, fh, { inset: 0 });
           flagpole(g, -0.28, -0.38, 0.4);
           aerials(g, -0.2, 0.2, 0.06, h, 2);
+        }
+      },
+    },
+  ],
+};
+
+// ----- 2×1 -----
+// Two dots side by side along the road: local x from about -0.4 to 1.4,
+// y from -0.4 to 0.4, front on -y. The way in may come to either dot, so
+// there is an entrance near both (x = 0, 1).
+
+export const wide = {
+  id: 'business-wide',
+  access: 'any',
+  name: 'Wide business',
+  blurb: 'Shops and offices, two plots',
+  size: 'Wide',
+  category: 'zone',
+  tags: ['business'],
+  code: 'B',
+  footprint: [[0, 0], [1, 0]],
+  sim: { destinations: ['residential'] },
+  plot: { props: 'service', boundary: 0.2, kinds: ['hedge'], density: 0.3 },
+
+  levels: [
+    {
+      // A 70s shopping centre (nákupní středisko): two flat-roofed
+      // pavilions under one canopy; a village inn with its dance hall; two
+      // townhouses with shop fronts.
+      name: 'Shops',
+      stats: { jobs: 6 },
+      agents: 2,
+      yards: ['parking', 'plaza', 'trees'],
+      draw(g) {
+        const kind = g.pick(['centre', 'centre', 'inn', 'townhouses']);
+        if (kind === 'centre') {
+          const d = g.range(0.36, 0.4), y = -d / 2, h = 0.17, split = g.range(0.4, 0.6);
+          for (const [a, b] of [[-0.32, split - 0.04], [split + 0.04, 1.32]]) {
+            g.box(a, y, 0, b - a, d, h);
+            g.windows(a, y, b - a, d, 0, h, h, 0.1, { ribbon: true, h: 0.6, skip: ['back'] });
+            roofSign(g, (a + b) / 2, y + 0.03, h + 0.03, (b - a) * 0.55);
+          }
+          g.box(-0.34, y - 0.1, h - 0.03, 1.68, 0.1, 0.02);          // one canopy along both fronts
+          g.detailed(1, () => {
+            g.solid(0.5, y - 0.08, h / 2);
+            for (const x of [-0.3, 0.2, 0.8, 1.3]) g.line([[x, y - 0.08, 0], [x, y - 0.08, h - 0.03]]);
+          });
+          for (const x of [0.02, 0.98]) door(g, x, y, 0.08, 0.12);
+          bench(g, split, y - 0.14, true, -1);
+          bikeRack(g, 1.05, 1.28, y - 0.14);
+        } else if (kind === 'inn') {
+          // the inn: gable to the street; the hall behind a row of tall windows
+          const d = 0.4, y = -d / 2, w = 0.36, h = 0.19;
+          g.roofed(-0.32, y, 0, w, d, h, { h: g.range(0.2, 0.24), ridge: 'y' });
+          g.windows(-0.32, y, w, d, 0, h, h, 0.1, { h: 0.4, skip: ['right'] });
+          door(g, -0.14, y, 0.07, 0.12);
+          chimney(g, -0.2, 0.05, h + 0.1, 0.14);
+          const hx = 0.04, hw = 1.26, hh = 0.24;
+          g.roofed(hx, y + 0.02, 0, hw, d - 0.04, hh, { h: 0.13, hip: [0, 0.1] });
+          g.windows(hx, y + 0.02, hw, d - 0.04, 0.03, hh - 0.02, hh - 0.05, 0.16, { w: 0.35, h: 0.85, skip: ['left'] });
+          door(g, 1.0, y + 0.02, 0.07, 0.12);
+          barrels(g, 1.3, 0.32);
+          bench(g, -0.14, y - 0.12, true, -1);
+        } else {
+          const d = 0.38, y = -d / 2, fh = 0.15, xm = 0.5 + g.range(-0.06, 0.06);
+          for (const [a, b, hip] of [[-0.3, xm, [0.12, 0]], [xm, 1.3, [0, 0.12]]]) {
+            const h = fh * g.int(2, 3);
+            g.roofed(a, y, 0, b - a, d, h, { h: g.range(0.12, 0.15), hip });
+            g.windows(a, y, b - a, d, 0, h, fh, 0.09, { from: 1, skip: [hip[0] ? 'right' : 'left'] });
+            panel(g, a + 0.05, b - 0.05, y, 0.02, fh * 0.75);
+            g.box(a + 0.04, y - 0.05, fh * 0.8, b - a - 0.08, 0.05, 0.015); // awning
+          }
+        }
+      },
+    },
+    {
+      // A 60s office block with ribbon windows, a 50s district office
+      // (ONV) with a columned entrance, and a 70s savings bank and post
+      // office: glass below, panels above.
+      name: 'Offices',
+      stats: { jobs: 16 },
+      agents: 3,
+      yards: ['plaza', 'parking'],
+      grow: {
+        requires: [{ type: 'residential', count: 3, radius: 3 }],
+        boost: [{ type: 'square', radius: 3, factor: 1.6 }, { type: 'heritage', radius: 3, factor: 1.3 }],
+      },
+      draw(g) {
+        const kind = g.pick(['ribbon', 'district', 'bank']);
+        if (kind === 'ribbon') {
+          const x0 = -0.3, x1 = 1.2, d = g.range(0.34, 0.38), y = -d / 2, fh = 0.12, h = fh * g.int(4, 5);
+          g.box(x0, y, 0, x1 - x0, d, h);
+          g.windows(x0, y, x1 - x0, d, 0, h, fh, 0.1, { ribbon: true });
+          g.box(x0 - 0.02, y - 0.02, h, x1 - x0 + 0.04, d + 0.04, 0.02);
+          g.box(x1, y + 0.08, 0, 0.1, 0.14, h + 0.06);                // stair tower
+          g.mullions(x1, y + 0.08, 0.1, 0.14, 0, h + 0.06, 0.04);
+          for (const x of [0.02, 0.98]) door(g, x, y, 0.07, 0.1);
+          aerials(g, x0 + 0.1, x1 - 0.1, y + d * 0.5, h + 0.02, 2);
+        } else if (kind === 'district') {
+          const x0 = -0.32, x1 = 1.32, d = 0.42, y = -d / 2, fh = 0.15, h = fh * 4;
+          g.roofed(x0, y, 0, x1 - x0, d, h, { h: 0.12, hip: 0.14 });
+          g.windows(x0, y, x1 - x0, d, 0, h, fh, 0.075, { h: 0.55, w: 0.4 });
+          columns(g, 0.3, 0.7, y - 0.05, fh * 1.6, 5);
+          g.box(0.28, y - 0.07, fh * 1.6, 0.44, 0.07, 0.03);
+          flagpole(g, 0.5, y - 0.07, 0.25 + fh * 1.6);
+          for (const x of [0.02, 0.98]) door(g, x, y, 0.06, 0.1);
+        } else {
+          const x0 = -0.3, x1 = 1.3, d = 0.4, y = -d / 2, h0 = 0.16, h = h0 + 0.24;
+          g.box(x0, y, 0, x1 - x0, d, h);
+          g.windows(x0, y, x1 - x0, d, 0, h0, h0, 0.1, { ribbon: true, h: 0.7, skip: ['back'] });
+          g.mullions(x0, y, x1 - x0, d, h0, h, 0.06, { skip: ['back'] });
+          g.windows(x0, y, x1 - x0, d, h0, h, 0.12, 0.12, { ribbon: true, h: 0.3, skip: ['back'] });
+          g.box(x0 - 0.02, y - 0.08, h0, x1 - x0 + 0.04, 0.08, 0.015); // canopy
+          g.box(x1 - 0.01, y - 0.06, h0 + 0.02, 0.01, 0.05, 0.2);      // blade sign
+          for (const x of [0.02, 0.98]) door(g, x, y, 0.08, 0.12);
+          streetClock(g, 1.37, y + 0.06);
+        }
+      },
+    },
+    {
+      // A department store (Prior) of blank panels over a glazed ground
+      // floor, an Interhotel slab on its podium, a brutalist office slab
+      // raised on pilotis under a heavy crown.
+      name: 'High-rise',
+      stats: { jobs: 48 },
+      agents: 5,
+      yards: ['plaza', 'trees'],
+      grow: {
+        requires: [
+          { type: 'residential', count: 8, radius: 4 },
+          { type: 'residential', count: 4, radius: 4, minLevel: 2 },
+          { type: 'business', count: 2, radius: 3 },
+          { type: 'business', count: 1, radius: 3, minLevel: 2 },
+        ],
+        coveredBy: ['services'],
+        boost: [{ type: 'square', radius: 3, factor: 1.6 }],
+      },
+      draw(g) {
+        const kind = g.pick(['store', 'hotel', 'slab']);
+        const fh = 0.11;
+        if (kind === 'store') {
+          const x0 = -0.34, x1 = 1.34, d = 0.64, y = -0.32, h = fh * g.int(5, 6);
+          g.box(x0, y, 0, x1 - x0, d, h);
+          g.windows(x0, y, x1 - x0, d, 0, fh, fh, 0.1, { ribbon: true, h: 0.6 });
+          g.floors(x0, y, x1 - x0, d, fh, h, fh * 1.35, { inset: 0 });
+          g.mullions(x0, y, x1 - x0, d, fh, h, fh * 1.35, 0);
+          g.box(x0 - 0.02, y - 0.08, fh, x1 - x0 + 0.04, 0.08, 0.015); // canopy
+          g.box(0.1, y + 0.16, h, 0.8, d - 0.32, 0.09);                 // plant room
+          roofSign(g, 0.5, y + 0.04, h, 0.5);
+        } else if (kind === 'hotel') {
+          const hp = fh * 1.3, h = hp + fh * g.int(9, 11), d = 0.24;
+          g.box(-0.34, -0.32, 0, 1.68, 0.64, hp);
+          g.windows(-0.34, -0.32, 1.68, 0.64, 0, hp, hp, 0.1, { ribbon: true, h: 0.55 });
+          g.box(-0.2, -d / 2 + 0.06, hp, 1.4, d, h - hp);
+          g.mullions(-0.2, -d / 2 + 0.06, 1.4, d, hp, h, 0.045);
+          g.floors(-0.2, -d / 2 + 0.06, 1.4, d, hp, h, fh, { inset: 0 });
+          g.box(0.3, -0.02, h, 0.4, 0.16, 0.1);                       // lift room
+          for (const x of [-0.2, -0.05, 0.1]) flagpole(g, x, -0.4, 0.4);
+          aerials(g, -0.1, 1.1, 0.08, h, 3);
+        } else {
+          const lift = 0.12, hc = fh * 1.2, h = lift + fh * g.int(8, 10);
+          const x0 = -0.3, x1 = 1.3, d = 0.34, y = -d / 2;
+          g.box(0.1, y + 0.07, 0, 0.8, d - 0.14, lift);
+          g.mullions(0.1, y + 0.07, 0.8, d - 0.14, 0, lift, 0.05);
+          g.detailed(1, () => {
+            g.solid(0.5, y + 0.02, lift / 2);
+            for (let i = 0; i <= 6; i++) g.line([[x0 + 0.04 + ((x1 - x0 - 0.08) * i) / 6, y + 0.03, 0], [x0 + 0.04 + ((x1 - x0 - 0.08) * i) / 6, y + 0.03, lift]]);
+          });
+          g.box(x0, y, lift, x1 - x0, d, h - lift);
+          g.windows(x0, y, x1 - x0, d, lift, h, fh, 0.1, { ribbon: true });
+          g.box(x0 - 0.04, y - 0.04, h, x1 - x0 + 0.08, d + 0.08, hc);
+          g.windows(x0 - 0.04, y - 0.04, x1 - x0 + 0.08, d + 0.08, h, h + hc, hc, 0.1, { ribbon: true, h: 0.3 });
+          star(g, 0.5, y - 0.045, h + hc / 2);
         }
       },
     },

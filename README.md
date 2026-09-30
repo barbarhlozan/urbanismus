@@ -39,12 +39,16 @@ where the key sits (a US keyboard), so they work the same on a Czech or German l
   keep clear of buildings, cross roads and footpaths (level crossings) but can't share a
   stretch with either. Run a line off the map
   edge and trains start coming through. Cars, cyclists and pedestrians wait at a crossing while
-  a train passes (barriers come down across roads) – see `crossing` in `src/config.js`.
-- **5** – stations, beside a straight stretch of track (**Shift** switches size): **Station** (3×2, a
+  a train passes – see `crossing` in `src/config.js`. Every crossing has a St Andrew's cross on each
+  side; on roads with a box of lights under it that flash while a train is near.
+- **5** – stations (**Shift** switches size): **Station** (3×2, a
   passing track that leaves the line and rejoins it, an island platform, a station house), **Main
   station** (4×3, two through tracks and two bay tracks ending at buffers, three platforms, a vaulted
   hall with a clock tower) or **Stop** (1×2: platform, shelter and a little waiting house). The
-  extra tracks are for show – trains only use the line itself. They turn to face the track. Trains
+  extra tracks are for show – trains only use the line itself. A station brings its own straight
+  piece of track along its front (**Tab** picks the side) – draw railways (**L**) to its ends;
+  beside an existing straight line it uses that and turns to face it. Removing a station leaves
+  its track. Trains
   stop at every station they pass, and turn round at the last one when there's no other way off the
   map. With a road behind, a station gets a forecourt (or parking) towards it.
 - **6** – bus stop (1×1), beside a road, facing it: a shelter, the stop sign, a bench. Buses only

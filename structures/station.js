@@ -8,11 +8,16 @@
 // Extra tracks are for show – trains only use the line itself. They're
 // listed in `tracks` (local polylines) and drawn by the renderer with the
 // real railways, so they meet the line exactly (see stationTracks).
-// Stations are placed facing the track whichever side of it they're on (see
-// World.placementFor). Trains stop in front of the middle of the platform
-// (see stationStop and src/sim/trains.js).
+// A station brings its own track: placed where there's no railway, it lays
+// a straight piece along its front (canPlace returns it as `lay`, placed
+// lays it) for the player to connect lines to; the rotation picks the side.
+// Placed beside a straight stretch of railway it uses that instead, facing
+// it whichever side it's on (see World.placementFor). Removing a station
+// leaves its track. Trains stop in front of the middle of the platform (see
+// stationStop and src/sim/trains.js).
 
 import { rotateQuarter } from '../src/core/grid.js';
+import { validateRoute } from '../src/roads/routing.js';
 import { door, lamp, chimney, bench, flowerBed, bikeRack, tree } from './kit.js';
 
 // The railway's (dense-grid) dots in front of the footprint's front row,
@@ -20,17 +25,9 @@ import { door, lamp, chimney, bench, flowerBed, bikeRack, tree } from './kit.js'
 // are one straight stretch of railway; else null. A one-dot front needs the
 // track to carry on straight through the dot in front either way.
 function trackAlong(world, nodes, rotation) {
-  const [fx, fy] = rotateQuarter(0, -1, rotation);
-  const own = new Set(nodes);
-  const front = nodes.map((n) => world.grid.offset(n, fx, fy)).filter((t) => !own.has(t));
-  if (front.some((t) => t < 0)) return null;
-  const track = [world.coarseToFine(front[0])];
-  for (let i = 1; i < front.length; i++) {
-    for (const [f, g] of world.fineSegment(front[i - 1], front[i])) {
-      if (!world.rails.hasEdge(f, g)) return null;
-      track.push(g);
-    }
-  }
+  const track = trackDots(world, nodes, rotation);
+  if (!track) return null;
+  for (let i = 1; i < track.length; i++) if (!world.rails.hasEdge(track[i - 1], track[i])) return null;
   if (track.length === 1) {
     // along the front, both ways
     const [ax, ay] = rotateQuarter(1, 0, rotation);
@@ -39,6 +36,20 @@ function trackAlong(world, nodes, rotation) {
     const [l, r] = [side(-1), side(1)];
     if (l < 0 || r < 0 || !world.rails.hasEdge(l, track[0]) || !world.rails.hasEdge(track[0], r)) return null;
     return [l, track[0], r];
+  }
+  return track;
+}
+
+// The dense dots along the front of a footprint where its track runs (or
+// would), from the front row's first dot to its last; null off the map.
+function trackDots(world, nodes, rotation) {
+  const [fx, fy] = rotateQuarter(0, -1, rotation);
+  const own = new Set(nodes);
+  const front = nodes.map((n) => world.grid.offset(n, fx, fy)).filter((t) => !own.has(t));
+  if (!front.length || front.some((t) => t < 0)) return null;
+  const track = [world.coarseToFine(front[0])];
+  for (let i = 1; i < front.length; i++) {
+    for (const [, g] of world.fineSegment(front[i - 1], front[i])) track.push(g);
   }
   return track;
 }
@@ -130,8 +141,20 @@ const common = {
   category: 'transport',
   railStop: true,
   sim: { destinations: [] },
+  // On straight track: fine. Else its own track along the front, where a
+  // railway could run and none does yet: { ok, lay: [dense dots] }.
   canPlace(world, nodes, rotation) {
-    return trackAlong(world, nodes, rotation) ? { ok: true } : { ok: false, reason: 'Needs straight track alongside' };
+    if (trackAlong(world, nodes, rotation)) return { ok: true };
+    const dots = trackDots(world, nodes, rotation);
+    if (!dots || dots.length < 2) return { ok: false, reason: 'Off the map' };
+    if (dots.some((f, i) => i && world.rails.hasEdge(dots[i - 1], f))) return { ok: false, reason: 'Railway in the way' };
+    const check = validateRoute(world.networks.rail, dots);
+    return check.ok ? { ok: true, lay: dots } : { ok: false, reason: check.reason };
+  },
+  // lay its own track (canPlace said where)
+  placed(world, s) {
+    const check = common.canPlace(world, world.nodesOf(s), s.rotation);
+    if (check.lay) world.buildNetwork('rail', check.lay);
   },
 };
 
@@ -177,7 +200,7 @@ export const station = {
   id: 'station',
   name: 'Station',
   size: 'Station',
-  blurb: 'Beside straight track',
+  blurb: 'Brings its own track',
   hotkey: '5',
   code: 'ST',
   // front row along the line, the house in the back row
@@ -216,7 +239,7 @@ export const main = {
   id: 'station-main',
   name: 'Main station',
   size: 'Main station',
-  blurb: 'Beside straight track',
+  blurb: 'Brings its own track',
   code: 'MS',
   footprint: [
     [-1, 0], [0, 0], [1, 0], [2, 0],

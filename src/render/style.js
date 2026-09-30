@@ -8,7 +8,6 @@ export const STYLE = {
                    // ground, following the contour lines (render/warp.js)
   warp: 0,         // 0–1 slow sideways bending, unrelated to the terrain
   tremor: 0,       // 0–1 fine wobble on top of it
-  frame: true,     // map border with coordinate ticks
   contours: false, // terrain contour lines at the start (the Terrain button switches
                    // them; they cost the most to draw, so they start off)
   hoverTags: true, // leader line + boxed label on whatever is under the pointer

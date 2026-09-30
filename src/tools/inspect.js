@@ -10,6 +10,9 @@ import { statIcon, structureIcon } from '../ui/icons.js';
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export function createInspectTool(ctx) {
+  // which page of a building's menu is showing: its own, or 'convert' (the
+  // types it can turn into); every new click starts on its own
+  const nav = { page: 'main' };
   return {
     id: 'inspect',
     label: 'Select',
@@ -20,10 +23,11 @@ export function createInspectTool(ctx) {
       : 'Click the map · right-click: build more of what’s there · drag to pan · scroll to zoom · [ / ] rotate',
 
     click(node, event) {
-      const menu = node < 0 ? null : menuFor(ctx, node);
+      nav.page = 'main';
+      const menu = node < 0 ? null : menuFor(ctx, node, nav);
       if (!menu) return ctx.popup.hide();
       const around = screenBox(ctx, node);
-      ctx.popup.show(event.clientX, event.clientY, menu.title, menu.items, () => menuFor(ctx, node), around);
+      ctx.popup.show(event.clientX, event.clientY, menu.title, menu.items, () => menuFor(ctx, node, nav), around);
     },
 
     exit() {
@@ -115,11 +119,28 @@ function need(n) {
   return `<span class="bi-need" title="${esc(`Within reach of a ${name}`)}">${pic}<small>in reach</small></span>`;
 }
 
-function structureMenu({ world, growth }, s) {
+function structureMenu({ world, growth }, s, nav) {
   const def = STRUCTURE_TYPES[s.type];
   const level = levelOf(def, s);
   const max = maxLevel(def);
   const why = growth.explain(s);
+
+  // turning it into something else of the same kind: only what fits here
+  const converts = STRUCTURES
+    .filter((other) => other.id !== s.type && categoryOf(other) === categoryOf(def) && world.canConvert(s.id, other.id).ok)
+    .map((other) => ({ label: other.name, action: () => world.convertStructure(s.id, other.id) }));
+
+  // the second page: just those, and the way back
+  if (nav.page === 'convert' && converts.length) {
+    return {
+      title: level.name,
+      items: [
+        { label: '‹ Back', keepOpen: true, action: () => { nav.page = 'main'; } },
+        { section: 'Turn into' },
+        ...converts,
+      ],
+    };
+  }
 
   // what it is and how it's doing: to look at, not to click
   const items = [{ block: summary(def, s, level, max, why, world.isServed(s)) }];
@@ -141,22 +162,17 @@ function structureMenu({ world, growth }, s) {
     const next = order[(order.indexOf(choice) + 1) % order.length];
     items.push({ label: 'Surroundings', note, keepOpen: true, action: () => world.setYard(s.id, next === 'auto' ? null : next) });
   }
-
-  // turning it into something else of the same kind: only what fits here
-  const converts = STRUCTURES
-    .filter((other) => other.id !== s.type && categoryOf(other) === categoryOf(def) && world.canConvert(s.id, other.id).ok)
-    .map((other) => ({ label: other.name, action: () => world.convertStructure(s.id, other.id) }));
-  if (converts.length) items.push({ section: 'Turn into' }, ...converts);
+  if (converts.length) items.push({ label: 'Turn into…', note: '›', keepOpen: true, action: () => { nav.page = 'convert'; } });
 
   items.push({ section: '' }, { label: 'Erase', action: () => world.removeStructure(s.id) });
 
   return { title: level.name, items };
 }
 
-function menuFor(ctx, node) {
+function menuFor(ctx, node, nav = { page: 'main' }) {
   const { world } = ctx;
   const s = world.structureAt(node);
-  if (s) return structureMenu(ctx, s);
+  if (s) return structureMenu(ctx, s, nav);
 
   const feature = world.featureAt(node);
   const road = world.hasRoad(node);

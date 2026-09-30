@@ -23,6 +23,8 @@ const STYLES = {
   cyclist: { fill: 'main', stroke: 'main', width: 0.4 },
   truck: { fill: 'main', stroke: 'main', width: 0.9 },
   train: { fill: 'main', stroke: 'main', width: 0.9 },
+  sgl: { stroke: 'main', width: 0.9 },   // a crossing sign's pole (crossings.js)
+  flash: { stroke: 'main', width: 1.1 }, // its lights flashing
 };
 
 // How far (css px) past the window edge something may stand and still show.
@@ -98,11 +100,13 @@ export class AgentCanvas {
   }
 
   // Shapes drawn around the scene point (sx, sy), at size k, mirrored.
-  draw(shapes, sx, sy, k = 1, mirror = false) {
+  // `shear`: y += shear · x in the shapes (a vehicle leaning up or down a
+  // slope, see Renderer.slopeShear).
+  draw(shapes, sx, sy, k = 1, mirror = false, shear = 0) {
     if (!(k > 0.001) || !this.onScreen(sx, sy)) return;
     const { ctx, dpr, zoom } = this;
     const m = dpr * zoom * k;
-    ctx.setTransform(mirror ? -m : m, 0, 0, m, dpr * (this.panX + zoom * sx), dpr * (this.panY + zoom * sy));
+    ctx.setTransform(mirror ? -m : m, m * shear, 0, m, dpr * (this.panX + zoom * sx), dpr * (this.panY + zoom * sy));
     const unit = 1 / (zoom * k); // one screen px in the shapes' units
     for (const s of shapes) this.paint(s.style, s.path, unit);
   }

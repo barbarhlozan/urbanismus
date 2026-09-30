@@ -1,11 +1,12 @@
 // Services (police, fire and health in one): 1×1 and 2×2.
-// Fire stations with a hose-drying tower, a polyclinic with ribbon windows,
+// A village fire house with its siren, a police post (VB), a health centre,
+// fire stations with a hose-drying tower, a polyclinic with ribbon windows,
 // a hospital of hipped pavilions – and, as another look of the service
 // centre, a 60s pavilion school with its gym hall and playground.
 // Each level covers a radius (`coverage`, in dots). Top-level homes,
 // businesses and industry need to be inside some service coverage.
 
-import { flagpole, pitch, tree } from './kit.js';
+import { door, panel, pitch, tree, bench, bikeRack, FRAME } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -17,6 +18,38 @@ function garageDoor(g, x, y, w = 0.12, h = 0.14) {
 function cross(g, x, y, z, s = 0.05) {
   g.line([[x - s, y, z], [x + s, y, z]], { facing: FRONT });
   g.line([[x, y, z - s], [x, y, z + s]], { facing: FRONT });
+}
+
+// Air-raid siren on a short pole standing on a roof at height z: the
+// mushroom-shaped horn every village had on its fire house.
+function siren(g, x, y, z, pole = 0.08) {
+  g.detailed(1, () => {
+    g.solid(x, y, z + pole / 2);
+    g.line([[x, y, z], [x, y, z + pole]]);
+  });
+  g.lathe(x, y, z + pole, [[0.012, 0], [0.028, 0.012], [0.028, 0.022], [0.012, 0.03], [0, 0.034]], 8);
+}
+
+// Hose-drying tower, s square, h to the eaves: a closed shaft, an open
+// louvred top where the hoses hang (corner posts and slats), a hipped cap.
+function hoseTower(g, x, y, s, h) {
+  const open = 0.08;
+  g.box(x, y, 0, s, s, h - open);
+  g.windows(x, y, s, s, 0.1, h - open, 0.16, s * 0.8, { w: 0.3, h: 0.35 });
+  g.detailed(1, () => {
+    g.solid(x + s / 2, y + s / 2, h - open / 2);
+    for (const [px, py] of [[x, y], [x + s, y], [x + s, y + s], [x, y + s]]) g.line([[px, py, h - open], [px, py, h]], FRAME);
+    g.detailed(2, () => {
+      for (const z of [h - open * 0.66, h - open * 0.33]) g.line([[x, y, z], [x + s, y, z], [x + s, y + s, z], [x, y + s, z], [x, y, z]]);
+    });
+  });
+  g.roofed(x - 0.01, y - 0.01, h, s + 0.02, s + 0.02, 0.005, { h: s * 0.7, hip: (s + 0.02) / 2 });
+}
+
+// Fire pond (požární nádrž): a concrete-rimmed rectangle of water.
+function firePond(g, x0, y0, x1, y1) {
+  g.groundPoly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
+  g.groundPoly([[x0 + 0.03, y0 + 0.03], [x1 - 0.03, y0 + 0.03], [x1 - 0.03, y1 - 0.03], [x0 + 0.03, y1 - 0.03]], { fill: 'url(#hatch-water)' });
 }
 
 const common = {
@@ -43,11 +76,44 @@ export const small = {
       agents: 1,
       yards: ['parking', 'plaza'],
       draw(g) {
-        const x = -0.24, y = -0.18, w = 0.48, d = 0.36, h = 0.2;
-        g.roofed(x, y, 0, w, d, h, { h: 0.12, hip: 0.1 });
-        garageDoor(g, -0.18, y);
-        cross(g, 0.12, y, 0.12);
-        flagpole(g, 0.3, -0.3, 0.42);
+        const kind = g.pick(['firehouse', 'police', 'health']);
+        if (kind === 'firehouse') {
+          // village fire house (hasičská zbrojnice): a gabled garage for the
+          // pump, the siren on the ridge, a bench for the old men by the door
+          const w = g.range(0.36, 0.42), d = 0.4, y = -0.2, h = 0.2, r = g.range(0.14, 0.17);
+          g.roofed(-w / 2 - 0.06, y, 0, w, d, h, { h: r, ridge: 'y' });
+          g.windows(-w / 2 - 0.06, y, w, d, 0, h, h, 0.1, { skip: ['front'], h: 0.4 });
+          garageDoor(g, -w / 2 + 0.02, y, w - 0.16, 0.15);
+          panel(g, -0.12, 0.0, y, h + 0.02, h + 0.06);                   // name board in the gable
+          siren(g, -0.06, 0.08, h + r * 0.85);
+          bench(g, w / 2 + 0.06, -0.12, false, 1);
+        } else if (kind === 'police') {
+          // police post (VB): a two-storey house under a hipped roof, a porch
+          // and the sign board over the door, bikes by the wall
+          const x = -0.24, y = -0.18, w = 0.48, d = 0.36, fh = 0.14, h = fh * 2;
+          g.roofed(x, y, 0, w, d, h, { h: 0.11, hip: 0.12 });
+          g.windows(x, y, w, d, 0, h, fh, 0.1, { h: 0.45 });
+          g.box(-0.08, y - 0.07, 0, 0.16, 0.07, 0.012);                   // steps
+          g.box(-0.09, y - 0.08, fh * 0.8, 0.18, 0.08, 0.012);            // porch roof
+          door(g, 0, y, 0.06, fh * 0.75);
+          panel(g, -0.07, 0.07, y, fh * 0.85, fh * 0.98);                 // sign board
+          bikeRack(g, 0.12, 0.3, y - 0.1);
+        } else {
+          // health centre (zdravotní středisko): a flat-roofed 60s pavilion,
+          // a band of windows, the entrance under a canopy, the cross
+          const x = -0.3, y = -0.16, w = 0.6, d = 0.34, h = 0.17;
+          g.box(x, y, 0, w, d, h);
+          g.windows(x, y, w, d, 0, h, h, 0.1, { ribbon: true, h: 0.45 });
+          g.box(x - 0.02, y - 0.02, h, w + 0.04, d + 0.04, 0.018);
+          g.box(-0.2, y - 0.1, h - 0.03, 0.2, 0.1, 0.015);                // canopy
+          g.detailed(1, () => {
+            g.solid(-0.1, y - 0.09, h / 2);
+            for (const px of [-0.19, -0.01]) g.line([[px, y - 0.09, 0], [px, y - 0.09, h - 0.03]]);
+          });
+          door(g, -0.1, y, 0.07, 0.11);
+          cross(g, 0.15, y, 0.11, 0.035);
+          bench(g, 0.15, y - 0.1, true, -1);
+        }
       },
     },
     {
@@ -58,14 +124,26 @@ export const small = {
       yards: ['parking', 'plaza'],
       grow: { requires: [{ type: 'residential', count: 6, radius: 5 }] },
       draw(g) {
-        // fire station: gabled garage hall and a hose-drying tower
-        const y = -0.2, d = 0.4, h = 0.3;
-        g.roofed(-0.34, y, 0, 0.5, d, h, { h: 0.14 });
-        g.windows(-0.34, y, 0.5, d, h / 2, h, h / 2, 0.09, { skip: ['front'] });
-        garageDoor(g, -0.3, y);
-        garageDoor(g, -0.14, y);
-        g.roofed(0.18, -0.06, 0, 0.13, 0.13, 0.66, { h: 0.1, hip: 0.065 }); // tower
-        g.windows(0.18, -0.06, 0.13, 0.13, 0.5, 0.64, 0.14, 0.06);
+        // town fire station: the engine hall with its doors to the street, a
+        // flat-roofed crew wing, the hose-drying tower at the back with its
+        // louvred top, the siren on the roof
+        const y = -0.22, d = 0.36, h = 0.26, doors = g.int(2, 3);
+        const hw = doors === 3 ? 0.5 : 0.4, x0 = -0.36, x1 = x0 + hw;
+        if (g.chance(0.5)) g.roofed(x0, y, 0, hw, d, h, { h: 0.12 });
+        else {
+          g.box(x0, y, 0, hw, d, h);
+          g.box(x0 - 0.015, y - 0.02, h, hw + 0.03, d + 0.035, 0.02);
+        }
+        g.windows(x0, y, hw, d, h * 0.55, h, h * 0.45, 0.09, { skip: ['front', 'right'] });
+        const dw = (hw - 0.04) / doors;
+        for (let i = 0; i < doors; i++) garageDoor(g, x0 + 0.02 + i * dw + 0.01, y, dw - 0.02, 0.17);
+        const fh = 0.13, ww = 0.36 - x1;
+        g.box(x1, y + 0.04, 0, ww, 0.26, fh * 2);                        // crew wing
+        g.windows(x1, y + 0.04, ww, 0.26, 0, fh * 2, fh, 0.08, { ribbon: true, skip: ['left'] });
+        g.box(x1 - 0.01, y + 0.03, fh * 2, ww + 0.02, 0.28, 0.015);
+        door(g, x1 + ww / 2, y + 0.04, 0.05, 0.1);
+        siren(g, x1 + ww / 2, y + 0.18, fh * 2 + 0.015);
+        hoseTower(g, 0.2, 0.18, 0.14, g.range(0.62, 0.72));
       },
     },
     {
@@ -113,8 +191,12 @@ export const large = {
         for (const x of [-0.2, 0.15, 0.5]) garageDoor(g, x, y, 0.22, 0.2);
         g.roofed(1.02, y, 0, 0.36, 0.45, 0.42, { h: 0.12, hip: 0.1 });
         g.windows(1.02, y, 0.36, 0.45, 0, 0.42, 0.14, 0.09);
-        g.roofed(-0.28, 0.6, 0, 0.14, 0.14, 0.8, { h: 0.12, hip: 0.07 }); // hose tower
-        flagpole(g, 1.25, 1.2, 0.5);
+        hoseTower(g, -0.3, 0.6, 0.16, 0.8);
+        siren(g, 0.3, 0.1, 0.3 + 0.12);
+        // the drill yard behind: a fire pond, a training wall
+        firePond(g, 0.55, 0.75, 1.3, 1.3);
+        g.box(-0.05, 1.05, 0, 0.35, 0.05, 0.3);
+        g.windows(-0.05, 1.05, 0.35, 0.05, 0.05, 0.3, 0.1, 0.1, { skip: ['left', 'right'], h: 0.6 });
       },
     },
     {
@@ -140,7 +222,7 @@ export const large = {
           g.windows(-0.32, -0.3, 0.6, 0.9, 0.08, 0.3, 0.22, 0.12, { skip: ['front', 'back'], w: 0.4, h: 0.8 });
           g.box(-0.34, -0.32, 0.3, 0.64, 0.94, 0.02);
           pitch(g, 0.45, -0.34, 1.34, 0.22);
-          flagpole(g, 0.95, 0.4, 0.45);
+          bench(g, 0.95, 0.3, true, -1);
           tree(g, 1.25, 0.45, 1);
           return;
         }
@@ -151,7 +233,7 @@ export const large = {
         g.windows(-0.3, -0.32, 1.15, 0.58, 0, 0.28, 0.28, 0.12, { skip: ['front'], h: 0.4 });
         for (const x of [-0.22, 0.12]) garageDoor(g, x, -0.32, 0.22, 0.2);
         cross(g, 0.62, -0.32, 0.14, 0.06);
-        g.roofed(1.0, -0.3, 0, 0.16, 0.16, 0.9, { h: 0.14, hip: 0.08 }); // hose tower
+        hoseTower(g, 1.0, -0.3, 0.16, 0.9);
       },
     },
     {

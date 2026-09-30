@@ -3,6 +3,10 @@
 // take the photo (render/photo.js); it opens as a print (ui/photoPrint.js).
 // Taking more shots from the same spot keeps the photographer where they
 // are; Esc (or Move) picks them up again.
+//
+// Touch has no hover to aim with: a tap places the photographer, a second
+// tap sets where they look (the cone stays there, tap again to turn), and
+// the Take photo button shoots.
 
 import { PHOTO } from '../render/photo.js';
 import { isTouch } from '../ui/device.js';
@@ -12,12 +16,21 @@ const LENSES = PHOTO.lenses;
 export function createPhotoTool({ world }, { shoot }) {
   let point = null;  // pointer, world
   let spot = null;   // the photographer, world [x, y]
+  let aim = null;    // touch: where they look, world [x, y] (null: at the pointer)
   let lens = 1; // 42mm
 
-  const yaw = () => (spot && point && Math.hypot(point[0] - spot[0], point[1] - spot[1]) > 1e-3
-    ? Math.atan2(point[1] - spot[1], point[0] - spot[0])
-    : null);
+  const yaw = () => {
+    const at = aim ?? point;
+    return spot && at && Math.hypot(at[0] - spot[0], at[1] - spot[1]) > 1e-3
+      ? Math.atan2(at[1] - spot[1], at[0] - spot[0])
+      : null;
+  };
   const cycleLens = () => { lens = (lens + 1) % LENSES.length; };
+  const place = (at) => { spot = at; aim = null; };
+  const take = () => {
+    const a = yaw();
+    if (a != null) shoot({ x: spot[0], y: spot[1], yaw: a, fov: LENSES[lens].fov, lens: LENSES[lens].label });
+  };
 
   return {
     id: 'photo',
@@ -26,7 +39,7 @@ export function createPhotoTool({ world }, { shoot }) {
     toolbar: false, // its button is up top, with the map controls (hud.js)
 
     enter() {
-      spot = null;
+      place(null);
     },
 
     snap(x, y) {
@@ -36,37 +49,39 @@ export function createPhotoTool({ world }, { shoot }) {
 
     hint() {
       if (!spot) return isTouch() ? 'Tap where to stand' : 'Click where to stand · right-click to stop';
-      return isTouch()
-        ? 'Tap where to look to take the photo'
-        : 'Aim with the pointer, click to take the photo · Z: lens · Esc: move';
+      if (isTouch()) return aim ? 'Take photo, or tap to look elsewhere' : 'Tap where to look';
+      return 'Aim with the pointer, click to take the photo · Shift: lens · Esc: move';
     },
 
-    click() {
+    click(node, e) {
       if (!point) return;
-      if (!spot) {
-        spot = point;
+      if (!spot) return place(point);
+      // a tap only aims (Take photo shoots); a click aims and shoots at once
+      if (e?.pointerType && e.pointerType !== 'mouse') {
+        if (Math.hypot(point[0] - spot[0], point[1] - spot[1]) > 1e-3) aim = point;
         return;
       }
-      const a = yaw();
-      if (a == null) return;
-      shoot({ x: spot[0], y: spot[1], yaw: a, fov: LENSES[lens].fov, lens: LENSES[lens].label });
+      aim = null;
+      take();
     },
 
     cancel() {
       if (!spot) return false;
-      spot = null;
+      place(null);
       return true;
     },
 
     key(e) {
       if (e.key === 'Shift' && !e.repeat) cycleLens(); // like Size while building
+      else if (e.key === 'Enter' && aim) take();
       else return false;
       return true;
     },
 
     actions: () => [
+      ...(aim ? [{ label: 'Take photo', key: 'Enter', run: take }] : []),
       { label: `Lens: ${LENSES[lens].label}`, key: 'Shift', run: cycleLens },
-      ...(spot ? [{ label: 'Move', run: () => { spot = null; } }] : []),
+      ...(spot ? [{ label: 'Move', run: () => place(null) }] : []),
     ],
 
     cursor() {
