@@ -22,7 +22,12 @@
   --radius: 6px; /* corners of UI boxes */
   --panel-w: 370px; /* one width for every window: stats, top bar, menus, debug */
   --bar-h: 38px; /* the stats' title row and the top bar: one height */
-  --bm-w: 200px; /* the Build menu, narrower to leave the map */
+  /* every size below follows the bar height: a cell is a top-bar button
+     (36px), a Build menu tile two cells square; the Build menu (and a
+     building's menu) as wide as the town panel, four tiles across */
+  --cell: calc(var(--bar-h) - 2px);
+  --tile: calc(2 * var(--cell));
+  --bm-w: var(--panel-w);
   --ui-font: "Basteleur", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* notches and home indicators on phones */
   --safe-t: env(safe-area-inset-top, 0px);
@@ -374,7 +379,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .hud .row { display: flex; align-items: center; gap: 14px; padding: 4px 10px 5px; border-top: var(--line) solid var(--fg); font-size: 13px; }
 .hud .row:empty { display: none; }
 .hud .stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.hud .stat b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.hud .stat b { display: inline-block; font-weight: 700; font-variant-numeric: tabular-nums; } /* (inline-block: it hops, motion.js bump) */
 .hud .stat.warn { color: var(--detail); }
 .icon.stat-icon { width: 16px; height: 16px; flex: 0 0 16px; }
 .icon.stat-icon path { stroke-width: 1.1 !important; }
@@ -414,7 +419,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 
 /* the menu button folds the rest away (src/ui/hud.js); a .close, like the
    stats' fold button across from it */
-#ui .controls .menu-toggle { flex: 0 0 auto; width: 34px; } /* #ui: over .close's width */
+#ui .controls .menu-toggle { flex: 0 0 auto; width: var(--cell); } /* #ui: over .close's width */
 .controls .menu-icon { width: 14px; height: 14px; }
 .controls .menu-icon path { stroke-width: 1.3; stroke-linecap: round; }
 .controls .menu-icon .bars, .controls.folded .menu-icon .cross { display: none; }
@@ -427,7 +432,8 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 
 .bottom {
   position: fixed;
-  bottom: calc(20px + var(--safe-b));
+  /* above the Build menu's dock, which has the middle of the bottom edge */
+  bottom: calc(20px + var(--bar-h) + 2 * var(--line) + 12px + var(--safe-b));
   left: calc(16px + var(--safe-l));
   right: calc(16px + var(--safe-r));
   display: flex;
@@ -456,7 +462,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 
 .popup {
   position: fixed;
-  width: var(--panel-w);
+  width: var(--bm-w); /* as wide as the Build menu: the two read as one set */
   box-sizing: border-box;
   background: var(--bg);
   border: var(--line) solid var(--fg);
@@ -476,6 +482,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   background: var(--bg);
   z-index: 1;
 }
+.popup .title { min-height: var(--bar-h); }
 .popup .title > span { padding: 9px 0; }
 
 /* × in the header of the popup menu and the Style panel */
@@ -486,15 +493,15 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  padding: 0 10px;
+  min-width: var(--cell);
+  padding: 0;
   font-size: 16px;
   letter-spacing: 0;
   line-height: 1;
   border-left: var(--line) solid var(--fg);
 }
 #ui .close:hover { background: var(--fg) !important; color: var(--bg) !important; }
-body.touch #ui .close { min-width: 48px; min-height: 44px; }
+body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .popup button {
   display: flex;
   justify-content: space-between;
@@ -534,20 +541,21 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .bi-level { display: inline-flex; gap: 3px; align-items: center; }
 .bi-level i { width: 7px; height: 7px; border-radius: 50%; border: var(--line) solid var(--fg); box-sizing: border-box; }
 .bi-level i.on { background: var(--fg); }
-.bi-trend { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--detail); font-size: 11px; white-space: nowrap; }
+.bi-trend { display: flex; align-items: center; gap: 8px; color: var(--detail); font-size: 12px; }
 .bi-trend.growing, .bi-trend.declining { color: var(--fg); }
-.bi-bar { width: 36px; height: 4px; border: var(--line) solid var(--fg); border-radius: 2px; overflow: hidden; }
+.bi-trend > span:first-child { white-space: nowrap; }
+.bi-bar { flex: 1 1 auto; min-width: 40px; height: 4px; border: var(--line) solid var(--fg); border-radius: 2px; overflow: hidden; }
+.bi-pct { font-size: 11px; color: var(--detail); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
 .bi-bar i { display: block; height: 100%; background: var(--fg); }
 .popup-block .stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .popup-block .stat b { font-weight: 700; }
 .popup-block .warn { color: var(--detail); }
 /* what it needs to grow: a little drawing of each, and how many more */
-.bi-needs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
-.bi-needs > span:first-child { color: var(--detail); font-size: 11px; }
-.bi-need { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; cursor: help; }
-.bi-need .bi-pic { width: 22px; height: 22px; display: inline-flex; }
+.bi-needs { display: flex; flex-direction: column; gap: 2px; }
+.bi-needs .bi-head { color: var(--detail); font-size: 11px; margin-bottom: 1px; }
+.bi-need { display: flex; align-items: center; gap: 7px; font-size: 12px; line-height: 1.3; }
+.bi-need .bi-pic { flex: 0 0 22px; width: 22px; height: 22px; display: inline-flex; }
 .bi-need b { font-weight: 700; }
-.bi-need small { font-size: 9px; color: var(--detail); }
 .bi-need.avoid .bi-pic { position: relative; opacity: 0.6; }
 .bi-need.avoid .bi-pic::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.3px solid var(--fg); transform: rotate(-35deg); }
 .bi-boost { color: var(--detail); font-size: 11px; }
@@ -562,36 +570,233 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .tag-line { fill: none; stroke: var(--detail); stroke-width: 1.1; stroke-linecap: round; }
 .tag-dot { fill: var(--fg); }
 
-.feed {
+/* ---------- Dialogue (src/ui/dialogue.js) ---------- */
+
+.dialogue {
   position: fixed;
   left: calc(20px + var(--safe-l));
-  bottom: calc(var(--bottom-h) + 36px + var(--safe-b));
-  max-width: 380px;
+  bottom: calc(36px + var(--safe-b));
+  z-index: 11;
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 40px - var(--safe-l) - var(--safe-r)));
   background: var(--bg);
   border: var(--line) solid var(--fg);
   border-radius: var(--radius);
-  padding: 6px 12px;
-  font-size: 11px;
-  line-height: 1.7;
-  pointer-events: none;
+  cursor: pointer;
+  user-select: none;
 }
-.feed .t { margin-right: 10px; font-weight: 700; }
+.dlg-speaker {
+  padding: 9px 14px 8px;
+  border-bottom: var(--line) solid var(--fg);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.dlg-text { padding: 12px 34px 14px 14px; font-size: 14px; line-height: 1.55; min-height: 1.55em; white-space: pre-line; max-height: 40vh; overflow-y: auto; }
+.dialogue.narration .dlg-text { font-style: italic; color: color-mix(in srgb, var(--fg) 80%, var(--bg)); }
+.dlg-unwritten { visibility: hidden; }
+.dlg-more {
+  position: absolute;
+  right: 13px;
+  bottom: 9px;
+  font-size: 18px;
+  animation: dlg-nudge 1.2s ease-in-out infinite;
+}
+.dialogue.typing .dlg-more, .dialogue.choosing .dlg-more { visibility: hidden; }
+@keyframes dlg-nudge { 50% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) { .dlg-more { animation: none; } }
+.dlg-choices:empty { display: none; }
+.dlg-choices { border-top: var(--line) solid var(--fg); padding: 4px 0; }
+#ui .dlg-choices button {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 14px;
+  text-align: left;
+  font-size: 13.5px;
+}
+.dlg-n { color: var(--detail); font-variant-numeric: tabular-nums; }
+#ui .dlg-choices button:hover, #ui .dlg-choices button.focus { background: var(--fg); color: var(--bg); }
+#ui .dlg-choices button:hover .dlg-n, #ui .dlg-choices button.focus .dlg-n { color: var(--bg); }
+
+/* ---------- Chronicle (src/ui/chronicleBook.js) ---------- */
+
+.chron-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+.chron-book {
+  --rule: 24px; /* one written line: the text sits on the ruling */
+  /* centred by margins, not a transform: the entrance (ui/motion.js)
+     animates the transform, and would knock it off centre meanwhile */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  max-height: calc(100vh - 32px);
+  z-index: 13;
+  box-sizing: border-box;
+  width: min(860px, calc(100vw - 32px));
+  background: var(--bg);
+  border: var(--line) solid var(--fg);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+}
+.chron-head {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  min-height: var(--bar-h);
+  border-bottom: var(--line) solid var(--fg);
+}
+.chron-title { padding: 9px 14px; font-weight: 600; font-size: 15px; }
+.chron-pages {
+  position: relative;
+  padding: 18px 26px 6px;
+  /* the ruling, under both pages */
+  background: repeating-linear-gradient(to bottom, transparent 0 calc(var(--rule) - 1px),
+    color-mix(in srgb, var(--detail) 35%, transparent) calc(var(--rule) - 1px) var(--rule));
+  background-origin: content-box;
+  background-clip: content-box;
+}
+/* the spine between the pages */
+.chron-pages::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  margin-left: -2px;
+  border-left: var(--line) solid var(--fg);
+  border-right: var(--line) solid var(--detail);
+  background: var(--bg);
+}
+.chron-book.single .chron-pages::after { display: none; }
+.chron-flow {
+  height: calc(var(--rule) * 15);
+  column-count: 2;
+  column-gap: 52px;
+  column-fill: auto;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: var(--rule);
+}
+.chron-book.single .chron-flow { column-count: 1; }
+.chron-day {
+  margin: 0;
+  height: var(--rule);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--detail);
+  break-after: avoid;
+}
+.chron-day:not(:first-child) { margin-top: var(--rule); }
+.chron-blank { break-before: column; height: 1px; }
+.chron-entry { margin: 0; break-inside: avoid; text-indent: -12px; padding-left: 12px; }
+.chron-entry::before { content: '– '; color: var(--detail); }
+.chron-entry.story { font-style: italic; }
+.chron-foot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  padding: 6px 0 10px;
+  font-size: 12px;
+  color: var(--detail);
+}
+#ui .chron-foot button { font-size: 20px; padding: 0 12px; line-height: 1.2; }
+#ui .chron-foot button:disabled { opacity: 0.25; cursor: default; }
+.chron-folio { min-width: 70px; text-align: center; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .chron-flow { height: calc(var(--rule) * 16); }
+  .chron-pages { padding: 14px 16px 4px; }
+}
+
+/* the book by the town's name, with a dot while there's something new in it */
+#ui .hud .chron { position: relative; }
+.hud .chron .stat-icon { width: 15px; height: 15px; }
+.hud .chron.new::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg);
+}
 
 .hidden { display: none !important; }
+
+/* ---------- Opening cover (index.html, main.js openIntro) ---------- */
+
+/* the hole's radius, animatable as a length */
+@property --hole { syntax: '<length>'; inherits: false; initial-value: 0px; }
+.intro {
+  --hole: 0px;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--main);
+  pointer-events: none;
+  /* the map shows through a hole in the middle, with a soft pencil edge
+     inside it (so at nought there's no hole at all) */
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent calc(var(--hole) - 120px), #000 var(--hole));
+  mask-image: radial-gradient(circle at 50% 50%, transparent calc(var(--hole) - 120px), #000 var(--hole));
+}
+.intro-card { display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; transition: opacity 350ms ease-out, transform 250ms ease-out; }
+.intro-card.shown { opacity: 1; }
+.intro-name { font-family: var(--ui-font); font-size: clamp(26px, 5vw, 40px); letter-spacing: 0.01em; }
+/* The underline is uncovered from the left as the name appears, by a box
+   sliding over it while the line slides back the other way – only moves,
+   which the browser animates smoothly even while the game is still busy
+   loading (drawing a line along its length would stutter then). */
+.intro-pen, .intro-pen-reveal { display: block; width: 160px; height: 12px; overflow: hidden; }
+.intro-pen svg { display: block; width: 160px; height: 12px; }
+.intro-pen path { fill: none; stroke: var(--main); stroke-width: 1.4; stroke-linecap: round; }
+.intro-pen-reveal, .intro-pen svg { transform: translateX(-100%); }
+.intro-pen svg { transform: translateX(100%); }
+.intro-card.shown .intro-pen-reveal { animation: intro-pen 650ms cubic-bezier(0.5, 0, 0.3, 1) 220ms both; }
+.intro-card.shown .intro-pen svg { animation: intro-pen-back 650ms cubic-bezier(0.5, 0, 0.3, 1) 220ms both; }
+/* fading out to make way for the next name: the underline stays drawn */
+.intro-card.out .intro-pen-reveal, .intro-card.out .intro-pen svg { transform: none; }
+@keyframes intro-pen { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes intro-pen-back { from { transform: translateX(100%); } to { transform: none; } }
+.intro.opening .intro-card { opacity: 0; transform: translateY(-6px); }
+.intro.opening { --hole: calc(150vmax + 120px); transition: --hole 1300ms cubic-bezier(0.45, 0, 0.2, 1) 180ms; }
+/* the panels wait behind the cover, then come in (main.js) */
+body.loading #ui { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .intro-pen-reveal, .intro-pen svg { transform: none; }
+  .intro-card.shown .intro-pen-reveal, .intro-card.shown .intro-pen svg { animation: none; }
+  .intro.opening { --hole: 0px; opacity: 0; transition: opacity 300ms; }
+}
+/* not unlocked yet (src/story/unlocks.js): left out of the Build menu */
+#ui .bm-tool.locked, #ui .bm-tab.locked, #ui .controls button.locked, #ui .hud .chron.locked { display: none !important; }
 
 /* ---------- Build menu (bottom-right) ---------- */
 
 .build-menu {
   position: fixed;
-  right: calc(20px + var(--safe-r));
+  left: 50%; /* in the middle of the bottom edge */
+  transform: translateX(-50%);
   bottom: calc(20px + var(--safe-b));
   z-index: 5;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
 }
 .bm-panel,
-.bm-toggle {
+.bm-dock {
   background: var(--bg);
   border: var(--line) solid var(--fg);
   border-radius: var(--radius);
@@ -606,66 +811,95 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
   overflow: hidden;
 }
 #ui .build-menu.folded .bm-panel,
-#ui .build-menu:not(.folded) .bm-toggle { display: none; }
-/* folding away: the panel stays up until it has shrunk into the button */
+#ui .build-menu:not(.folded) .bm-dock { display: none; }
+/* folding away: the panel stays up until it has shrunk into the dock */
 #ui .build-menu.folded.folding .bm-panel { display: flex; }
-#ui .build-menu.folded.folding .bm-toggle { display: none; }
+#ui .build-menu.folded.folding .bm-dock { display: none; }
 
-.bm-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: stretch;
-  padding-left: 12px;
-  border-bottom: var(--line) solid var(--fg);
-  font-weight: 600;
-}
-.bm-head > span { padding: 9px 0; align-self: center; }
-.bm-body { overflow-y: auto; overscroll-behavior: contain; }
+/* the groups: a tab each, shown by a drawing; one bar high */
+.bm-head { display: flex; align-items: stretch; height: var(--bar-h); border-bottom: var(--line) solid var(--fg); }
+.bm-tabs { flex: 1; display: flex; }
+#ui .bm-tab { flex: 1; display: flex; align-items: center; justify-content: center; padding: 0; border-right: var(--line) solid var(--fg); }
+#ui .bm-tab .icon { width: calc(var(--bar-h) - 10px); height: calc(var(--bar-h) - 10px); }
+#ui .bm-tab:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
+#ui .bm-tab.on { background: var(--fg); color: var(--bg); }
+#ui .bm-tab.on .icon polygon, #ui .bm-tab.on .icon circle, #ui .bm-tab.on .icon .filled { fill: var(--fg); }
+#ui .bm-tab.on .icon .i-rail-dash { stroke: var(--fg); }
+#ui .bm-head .bm-fold { border-left: none; }
+.bm-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 6px; }
+.bm-caption { padding: 7px 4px 4px; font-size: 10px; color: var(--detail); letter-spacing: 0.04em; }
 
-#ui .bm-group,
+/* a group's tools: square tiles, two cells a side, the building's drawing
+   over its name */
+.bm-tools { display: grid; grid-template-columns: repeat(auto-fill, var(--tile)); grid-auto-rows: var(--tile); gap: 2px; justify-content: space-evenly; }
 #ui .bm-tool {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  width: 100%;
-  text-align: left;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border-radius: 3px;
+  text-align: center;
+  min-width: 0;
 }
-#ui .bm-group {
-  justify-content: space-between;
-  padding: 9px 12px;
-  border-top: var(--line) solid var(--fg);
-}
-#ui .bm-group:first-child { border-top: none; }
-.bm-caret::after { content: "+"; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
-.bm-group.open .bm-caret::after { content: "–"; }
-#ui .bm-group:hover,
-#ui .bm-group.open { background: var(--fg); color: var(--bg); }
-
-#ui .bm-tool { gap: 8px; padding: 4px 10px 4px 6px; }
 #ui .bm-tool:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
 #ui .bm-tool.active { background: var(--fg); color: var(--bg); }
+.bm-tool .bm-icon { width: calc(var(--tile) - 34px); height: calc(var(--tile) - 34px); flex: 0 0 auto; display: flex; }
+.bm-tool .bm-name { font-size: 10px; line-height: 1.1; max-width: 100%; overflow-wrap: anywhere; }
+.bm-tool .key { position: absolute; top: 3px; right: 5px; font-size: 9px; color: var(--detail); white-space: nowrap; }
+/* Erase: along the bottom, one bar high, a drawing and its name side by side */
 .bm-loose { border-top: var(--line) solid var(--fg); }
+#ui .bm-loose .bm-tool { flex-direction: row; justify-content: flex-start; gap: 8px; height: var(--bar-h); padding: 0 12px; width: 100%; border-radius: 0; }
+.bm-loose .bm-tool .bm-icon { width: calc(var(--bar-h) - 14px); height: calc(var(--bar-h) - 14px); }
+.bm-loose .bm-tool .bm-name { font-size: 11px; }
+.bm-loose .bm-tool .key { position: static; margin-left: auto; }
 
-.bm-icon { flex: 0 0 32px; height: 32px; display: flex; }
-.bm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.bm-tool .key { font-size: 10px; color: var(--detail); white-space: nowrap; }
-
+/* folded: the dock – "+ Build", or the tool in hand with its options and an
+   × – as high as the top bar, its buttons a cell wide like the bar's */
+.bm-dock { display: flex; align-items: stretch; height: calc(var(--bar-h) + 2 * var(--line)); box-sizing: border-box; overflow: hidden; }
 #ui .bm-toggle {
-  border: var(--line) solid var(--fg);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 16px;
+  gap: 8px;
+  padding: 0 14px;
+  font-size: 12px;
   font-weight: 600;
 }
 #ui .bm-toggle:hover { background: var(--fg); color: var(--bg); }
 .bm-toggle::before { content: "+"; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
-.build-menu.has-tool .bm-current::before { content: "· "; }
-.bm-current { font-weight: 400; }
-
-/* keep the tool actions clear of the open panel */
-@media (min-width: 641px) {
-  body:has(.build-menu:not(.folded)) .bottom { right: calc(var(--bm-w) + 40px + var(--safe-r)); }
+.build-menu.has-tool .bm-toggle::before { display: none; }
+#ui .build-menu.has-tool .bm-toggle { padding: 0 12px 0 6px; }
+.bm-held { display: none; width: calc(var(--bar-h) - 6px); height: calc(var(--bar-h) - 6px); }
+.build-menu.has-tool .bm-held { display: flex; }
+#ui .bm-toggle:hover .icon polygon, #ui .bm-toggle:hover .icon circle, #ui .bm-toggle:hover .icon .filled { fill: var(--fg); }
+#ui .bm-toggle:hover .icon .i-rail-dash { stroke: var(--fg); }
+.bm-opts { display: none; }
+.build-menu.has-tool .bm-opts { display: flex; }
+/* the options, each with its key under it (not on touch screens) */
+#ui .bm-opts button, #ui .bm-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: var(--cell);
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 1;
+  border-left: var(--line) solid var(--fg);
+  white-space: nowrap;
 }
+#ui .bm-opts button:hover, #ui .bm-drop:hover { background: var(--fg); color: var(--bg); }
+.bm-opts .opt-icon { width: 15px; height: 15px; }
+.bm-opts .opt-icon path, .bm-opts .opt-icon circle { stroke-width: 1.1 !important; fill: none !important; }
+#ui .bm-drop { display: none; font-size: 16px; }
+#ui .build-menu.has-tool .bm-drop { display: flex; }
+.bm-opts .key, .bm-drop .key { font-size: 8px; color: var(--detail); font-weight: 400; letter-spacing: 0.02em; }
+#ui .bm-opts button:hover .key, #ui .bm-drop:hover .key { color: inherit; opacity: 0.7; }
+body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
+
 
 /* icons: the map's line style at a small size */
 .icon { width: 100%; height: 100%; overflow: visible; }
@@ -702,10 +936,12 @@ body.touch #ui .close { min-width: 48px; min-height: 44px; }
 .controls [data-act="fullscreen"].full .fs-exit { display: inline; }
 .controls button[hidden] { display: none !important; }
 @media (min-width: 641px) {
-  .controls { width: auto; }
+  /* anchored right like the bar itself: while it grows or shrinks (motion.js)
+     what doesn't fit yet is cut off on the left, never the menu button */
+  .controls { width: auto; justify-content: flex-end; }
   /* a set width, not just a flex basis: Safari sizes the bar from its
      buttons' widths and would clip the last ones */
-  .controls button[data-act] { flex: 0 0 36px; width: 36px; padding: 8px 0; }
+  .controls button[data-act] { flex: 0 0 var(--cell); width: var(--cell); padding: 8px 0; }
   .controls button[data-act="colors"] { flex-basis: 44px; width: 44px; }
   .controls button[data-act] .label { display: none; }
 }
@@ -839,7 +1075,7 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 .newmap-panel .newmap-row .ctl-icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--fg); }
 .newmap-panel .newmap-row .ctl-icon path { stroke-width: 1.1; fill: none; }
 .newmap-panel .slot { flex: 1; min-width: 0; }
-.newmap-panel .value { flex: 0 0 44px; text-align: right; font-weight: 700; }
+.newmap-panel .value { flex: 0 0 44px; text-align: right; font-weight: 700; transform-origin: right center; }
 .newmap-panel .newmap-note { margin: 10px 0 4px; color: var(--detail); font-style: italic; font-size: 11px; }
 .newmap-panel .newmap-foot { display: flex; border-top: var(--line) solid var(--fg); }
 #ui .newmap-panel .newmap-foot button { flex: 1; padding: 9px 0; }
@@ -854,17 +1090,22 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 .sk-slider svg { display: block; width: 100%; height: 26px; overflow: visible; }
 .sk-slider .sk-track { fill: none; stroke: var(--detail); stroke-width: 1.1; stroke-linecap: round; }
 .sk-slider .sk-fill { fill: none; stroke: var(--fg); stroke-width: 2.2; stroke-linecap: round; }
-.sk-slider .sk-knob { transition: transform 0.16s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.sk-slider .sk-knob { transition: transform 0.32s cubic-bezier(0.34, 1.6, 0.64, 1); } /* springs onto its stop */
 .sk-slider.dragging .sk-knob { transition-duration: 0.06s; }
 .sk-slider .sk-knob path { fill: var(--bg); stroke: var(--fg); stroke-width: 1.4; stroke-linejoin: round; }
 .sk-slider:hover .sk-knob path, .sk-slider:focus-visible .sk-knob path { fill: var(--fg); }
 body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a finger */
 
+/* buttons give a little when pressed, and spring back */
+#ui button { transition: transform 0.25s cubic-bezier(0.34, 1.6, 0.64, 1), opacity 0.1s; } /* (opacity: the controls' fold, above) */
+#ui button:active:not(:disabled) { transform: scale(0.93); transition-duration: 0.06s; }
+@media (prefers-reduced-motion: reduce) { #ui button:active { transform: none; } }
+
 /* ---------- Sketched frames (src/ui/sketchFrame.js) ---------- */
 
 /* the border keeps its room but the pen-drawn frame replaces it */
 #ui .sketched { border-color: transparent !important; border-radius: 0; }
-.bm-panel, #ui .bm-toggle, .actions { position: relative; }
+.bm-panel, .bm-dock, .actions { position: relative; }
 .sk-frame {
   position: absolute;
   top: calc(-1 * var(--line));
@@ -883,12 +1124,10 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 body.touch .build-menu .key,
 body.touch .actions button .key { display: none; }
 body.touch .actions button,
-body.touch .controls button,
-body.touch .bm-group,
-body.touch .bm-toggle { min-height: 44px; }
+body.touch .controls button { min-height: 44px; }
 body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 body.touch .bm-tool:hover:not(.active),
-body.touch .bm-group:hover,
+body.touch .bm-tab:hover:not(.on),
 body.touch .bm-toggle:hover { background: var(--bg) !important; color: var(--fg) !important; }
 body.touch .controls button:hover:not(.on),
 body.touch .actions button:hover { background: var(--bg) !important; color: var(--fg) !important; }
@@ -943,21 +1182,16 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
     bottom: calc(10px + var(--safe-b));
     gap: 10px;
   }
-  /* the tool actions sit above the folded Build button */
-  .bottom { bottom: calc(64px + var(--safe-b)); }
-  .build-menu {
-    right: calc(8px + var(--safe-r));
-    bottom: calc(10px + var(--safe-b));
-  }
+  /* the tool actions sit above the folded Build menu */
+  .bottom { bottom: calc(10px + var(--bar-h) + 2 * var(--line) + 10px + var(--safe-b)); }
+  .build-menu { bottom: calc(10px + var(--safe-b)); }
   .bm-panel { width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); }
   .actions button { flex: 1 1 auto; }
 
-  .feed {
+  .dialogue {
     left: calc(8px + var(--safe-l));
-    right: calc(8px + var(--safe-r));
-    max-width: none;
-    font-size: 10px;
-    line-height: 1.6;
+    width: calc(100vw - 16px - var(--safe-l) - var(--safe-r));
+    bottom: calc(10px + var(--bar-h) + 2 * var(--line) + 10px + var(--safe-b));
   }
 }
 

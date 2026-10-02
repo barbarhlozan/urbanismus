@@ -1,5 +1,6 @@
 // Bus stop: a 1×1 dot beside a road, turned to face it (single-dot
-// buildings face their road, World.facingRotation). A sheet-metal shelter
+// buildings face their road, World.facingRotation) and square to it, round
+// a bend too (tiltOf in structures/index.js). A sheet-metal shelter
 // open towards the road, the round ZASTÁVKA sign in its hoop at the kerb
 // (on one pole or two legs, by seed), a bin, and a tree behind.
 // Buses come in from off the map through road exits and call at a few stops
@@ -84,6 +85,7 @@ export const busStop = {
   hotkey: '6',
   code: 'BS',
   busStop: true,
+  facesRoad: true, // can't be turned away from its road
   sim: { destinations: [] },
   footprint: [[0, 0]],
   canPlace(world, nodes) {
@@ -95,13 +97,15 @@ export const busStop = {
       stats: {},
       agents: 0,
       draw(g) {
-        // the road runs along y = -1: the shelter just back from it, the
-        // sign at the kerb
-        shelter(g, -0.2, 0.12, -0.58);
-        sign(g, 0.3, -0.7, g.chance(0.5));
-        g.detailed(2, () => g.box(-0.34, -0.72, 0, 0.03, 0.03, 0.035)); // a bin
-        tree(g, 0.14, 0.2, 0.8);
-        flowerBed(g, -0.24, 0.08, 0.06);
+        // the road runs along y = -1 (or nearer beside a diagonal: g.roadGap,
+        // then everything moves back by the difference): the shelter just
+        // back from it, the sign at the kerb
+        const k = 1 - (g.roadGap ?? 1);
+        shelter(g, -0.2, 0.12, -0.58 + k);
+        sign(g, 0.3, -0.7 + k, g.chance(0.5));
+        g.detailed(2, () => g.box(-0.34, -0.72 + k, 0, 0.03, 0.03, 0.035)); // a bin
+        tree(g, 0.14, 0.2 + k, 0.8);
+        flowerBed(g, -0.24, 0.08 + k, 0.06);
       },
     },
   ],

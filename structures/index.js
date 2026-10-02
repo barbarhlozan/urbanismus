@@ -27,6 +27,11 @@
 //   tracks     [{ pts, buffer }] extra railway drawn with the real lines, in
 //              local coordinates (stations' passing tracks and sidings)
 //   levels[i].tilt       true = may stand a little askew on its dot (see tiltOf)
+//   keepsGrid  true = a single-dot structure never turned to a road at an angle
+//              to the grid (squares: their paving joins the neighbours')
+//   facesRoad  true = a single-dot structure that always faces its road (the
+//              player can't turn it; a bus stop). Other single-dot ones can
+//              be turned side or back to it (s.data.turn, World.facingRotation)
 //   levels[i].coverage   service radius in dots (services)
 //   levels[i].yards      surroundings styles it may get (see yards.js)
 
@@ -132,14 +137,58 @@ export function yardOf(def, s, { cars = true } = {}) {
   return options[Math.floor(mulberry32(drawSeed(s) ^ 0x51ed)() * options.length)];
 }
 
-// A small turn (radians) for a building standing on its own, so a street of
-// houses doesn't line up like a grid: up to LOOK.tilt degrees either way,
-// seeded like the rest of its look. Only single-dot levels with `tilt: true`,
-// and never while sharing a wall with a neighbour (the walls must meet).
-export function tiltOf(def, s, join = { left: false, right: false }) {
-  if (!LOOK.tilt || !levelOf(def, s).tilt || (def.footprint ?? [[0, 0]]).length !== 1 || join.left || join.right) return 0;
+// How far (radians) a single-dot building turns on its dot: square to its
+// road where that runs at an angle to the grid (a diagonal, a bend – see
+// roadFront); else a small turn so a street of houses doesn't line up like
+// a grid, up to LOOK.tilt degrees either way, seeded like the rest of its
+// look (only levels with `tilt: true`). Never while sharing a wall with a
+// neighbour (the walls must meet). Without `world` (no road known) only the
+// small turn.
+export function tiltOf(def, s, join = { left: false, right: false }, world = null) {
+  if ((def.footprint ?? [[0, 0]]).length !== 1 || join.left || join.right) return 0;
+  const road = world ? roadFront(world, s).tilt : 0;
+  if (Math.abs(road) > 1e-6) return road;
+  if (!LOOK.tilt || !levelOf(def, s).tilt) return 0;
   const r = mulberry32(drawSeed(s) ^ 0x7117)();
   return (r * 2 - 1) * LOOK.tilt * Math.PI / 180;
+}
+
+// How a single-dot structure stands square to the road in front of it, e.g.
+// a house on a bend: { tilt, gap }. The road's direction at that dot – along
+// the line through its two neighbours where it runs on through the dot
+// (straight or bending gently), else (a corner, a junction, an end) the one
+// of its segments most across the front – as a turn of the front's
+// own axis (tilt, radians, at most 45° either way), and how far that line
+// passes from the structure's dot (gap; 1 beside a straight road, less
+// beside a diagonal), for the drawing to keep its distance (g.roadGap).
+export function roadFront(world, s) {
+  const none = { tilt: 0, gap: 1 };
+  // squares: their paving joins their neighbours' on the grid, never turned
+  if (STRUCTURE_TYPES[s.type]?.keepsGrid) return none;
+  const rot = world.facingRotation(s.type, s.node, s.rotation);
+  const [fx, fy] = rotateQuarter(0, -1, rot);
+  const r = world.grid.offset(s.node, fx, fy);
+  if (r < 0 || !world.hasRoad(r)) return none;
+  const pos = (n) => world.networks.road.pos(n);
+  const [rx, ry] = pos(r);
+  const out = [...world.roads.neighbors(r)].map((n) => {
+    const [x, y] = pos(n), l = Math.hypot(x - rx, y - ry) || 1;
+    return [(x - rx) / l, (y - ry) / l];
+  });
+  if (!out.length) return none;
+  let t;
+  const through = out.length === 2 && out[0][0] * out[1][0] + out[0][1] * out[1][1] < -0.5; // bends 60° at most
+  if (through) t = [out[1][0] - out[0][0], out[1][1] - out[0][1]];
+  else t = out.reduce((best, d) => (Math.abs(d[0] * fx + d[1] * fy) < Math.abs(best[0] * fx + best[1] * fy) ? d : best));
+  // into the frame of the structure facing its road (one turned side or back
+  // to it – s.data.turn – turns by the same angle in its own frame)
+  const [lx, ly] = rotateQuarter(t[0], t[1], (4 - rot) % 4);
+  let a = Math.atan2(ly, lx);
+  if (a > Math.PI / 2) a -= Math.PI;
+  if (a < -Math.PI / 2) a += Math.PI;
+  const [sx, sy] = world.grid.xy(s.node), tl = Math.hypot(...t) || 1;
+  const gap = Math.abs((sx - rx) * t[1] - (sy - ry) * t[0]) / tl;
+  return { tilt: Math.max(-Math.PI / 4, Math.min(Math.PI / 4, a)), gap: Math.max(0.5, Math.min(1, gap)) };
 }
 
 // Joined buildings: neighbouring single-dot buildings facing the same road
@@ -175,6 +224,7 @@ function joinedNeighbour(world, s, dir) {
   const def = STRUCTURE_TYPES[s.type];
   const join = def && levelOf(def, s).join;
   if (!join || world.nodesOf(s).length !== 1) return null;
+  if (s.data?.turn) return null; // turned away from the street front
   const rot = world.facingRotation(s.type, s.node, s.rotation);
   const [x, y] = world.grid.xy(s.node);
   const side = (dir) => {
@@ -185,7 +235,7 @@ function joinedNeighbour(world, s, dir) {
     const odef = STRUCTURE_TYPES[o.type];
     const ojoin = odef && levelOf(odef, o).join;
     if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return null;
-    if (world.facingRotation(o.type, o.node, o.rotation) !== rot) return null;
+    if (o.data?.turn || world.facingRotation(o.type, o.node, o.rotation) !== rot) return null;
     const [a, b] = s.id < o.id ? [s, o] : [o, s];
     const roll = mulberry32((drawSeed(a) ^ Math.imul(drawSeed(b), 0x85ebca6b) ^ 0x10ad) >>> 0)();
     return roll < Math.min(join.chance ?? 1, ojoin.chance ?? 1) ? o : null;

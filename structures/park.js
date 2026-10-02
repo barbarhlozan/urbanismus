@@ -39,7 +39,9 @@ function lineDistance(p, line) {
 // facing a road carry on to the lawn edge, and entrance posts stand at every
 // way in (not between two parks). From here on nothing else in the park is
 // put on them (g.isFree).
-function walkways(g) {
+// `under` (x, y) -> true: what covers the ground there (a pitch) – the
+// walkways stop at its edge, and people just cross it.
+function walkways(g, { under = null } = {}) {
   const paths = g.site.paths;
   const { hub, exits, lines, plaza } = paths;
   const { x0, y0, x1, y1 } = g.site;
@@ -52,19 +54,24 @@ function walkways(g) {
   lines.forEach((line, i) => {
     const full = [...lawnEdge(line[0]), ...line, ...lawnEdge(line[line.length - 1])];
     const others = lines.filter((_, j) => j !== i);
-    const open = (p) => (!plaza || Math.hypot(p[0] - hub[0], p[1] - hub[1]) >= plaza) && others.every((o) => lineDistance(p, o) >= W * 0.95);
+    const open = (p) => (!plaza || Math.hypot(p[0] - hub[0], p[1] - hub[1]) >= plaza) && others.every((o) => lineDistance(p, o) >= W * 0.95)
+      && !under?.(...p);
     for (const k of [-1, 1]) {
       if (full.length > 1) keepRuns(offsetPolyline(full, W * k), open).forEach((run) => g.groundLine(run, { cls: 'fp' }));
     }
   });
-  if (plaza) g.groundCircle(hub[0], hub[1], plaza, { cls: 'fp' });
+  if (plaza && !under?.(...hub)) g.groundCircle(hub[0], hub[1], plaza, { cls: 'fp' });
   for (const e of exits) if (!e.site) gate(g, e.pos[0] - e.dir[0] * 0.08, e.pos[1] - e.dir[1] * 0.08, e.dir);
   // keep what comes next off them (a little leeway for benches beside them)
   // (what stands on the plaza, in the middle, is meant to)
   const free = g.free;
   const onPlaza = (x, y) => plaza && Math.hypot(x - hub[0], y - hub[1]) < plaza;
-  g.free = (x, y, r = 0) => (!free || free(x, y, r)) && (onPlaza(x, y) || !nearWalkway(g, x, y, W + 0.01 + r * 0.6));
+  g.free = (x, y, r = 0) => (!free || free(x, y, r)) && (onPlaza(x, y) || under?.(x, y) || !nearWalkway(g, x, y, W + 0.01 + r * 0.6));
 }
+
+// (x, y) -> is it in the rectangle (a little way out of it, so walkways
+// stop short of its line)?
+const inside = (x0, y0, x1, y1, m = 0.03) => (x, y) => x > x0 - m && x < x1 + m && y > y0 - m && y < y1 + m;
 
 // Is (x, y) within d of a walkway's centre line (or on the plaza)?
 function nearWalkway(g, x, y, d) {
@@ -303,9 +310,11 @@ export const small = {
       draw(g) {
         const kind = g.pick(['trees', 'trees', 'playground', 'memorial', 'pitch']);
         if (kind === 'pitch') {
-          // a kids' football pitch over the whole green (no walkways –
-          // people just cross it), a bench and a tree at the side
+          // a kids' football pitch over the whole green: the walkways
+          // only come up to it (people just cross it); a bench and a
+          // tree at the side
           pitch(g, -0.33, -0.21, 0.33, 0.21);
+          walkways(g, { under: inside(-0.33, -0.21, 0.33, 0.21) });
           bench(g, 0, -0.32, true, -1);
           tree(g, g.pick([-0.33, 0.33]), 0.33, 0.9);
           grass(g, 4);
@@ -417,10 +426,11 @@ export const large = {
       draw(g) {
         const kind = g.pick(['meadow', 'woods', 'playground', 'sports', 'forest']);
         if (kind === 'sports') {
-          // sports ground: a full football pitch across the park (no
-          // walkways), benches along one touchline, a changing hut, trees
-          // in the corners
+          // sports ground: a full football pitch across the park (the
+          // walkways come up to it), benches along one touchline, a
+          // changing hut, trees in the corners
           pitch(g, -0.28, 0.02, 1.28, 0.98);
+          walkways(g, { under: inside(-0.28, 0.02, 1.28, 0.98) });
           for (const x of [0.15, 0.5, 0.85]) bench(g, x, -0.12, true, -1);
           g.gable(1.05, -0.36, 0, 0.24, 0.14, 0.08, 0.06);
           for (const [x, y] of [[-0.3, -0.25], [-0.3, 1.28], [1.3, 1.28]]) tree(g, x, y, 1.05);

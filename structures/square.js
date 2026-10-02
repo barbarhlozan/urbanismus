@@ -16,6 +16,7 @@ const common = {
   code: 'Q',
   access: 'any',
   site: true,
+  keepsGrid: true, // paving that joins its neighbours': never turned to a road
   sim: { destinations: [] },
 };
 
