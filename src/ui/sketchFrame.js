@@ -25,7 +25,9 @@ export function sketchFrame(el) {
   el.classList.add('sketched');
 
   const draw = () => {
-    const { width, height } = el.getBoundingClientRect();
+    // the box's own size, not its outline on screen: mid-entrance it's tilted
+    // and scaled (motion.js), and a frame fitted to that wouldn't fit after
+    const width = el.offsetWidth, height = el.offsetHeight;
     if (!width || !height) return;
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     path.setAttribute('d', sketchRect(INSET, INSET, width - INSET * 2, height - INSET * 2, seed, { over: INSET }));

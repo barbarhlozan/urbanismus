@@ -21,6 +21,9 @@ export const CONFIG = {
     // Detail levels by zoom: below `medium` small details hide (facade lines,
     // fences, props, paving patterns); below `far` lots and parked cars hide too.
     lod: { medium: 0.9, far: 0.55 },
+    // Forest trees are drawn plainer further out (smoother crown outlines,
+    // see features/trees.js): below `medium` a little, below `far` more.
+    trees: { medium: 1.5, far: 0.9 },
   },
 
   road: {
@@ -261,6 +264,22 @@ export const CONFIG = {
     slowdown: 0.45,       // each car over capacity cuts speed by this share (compounding)
     minSpeed: 0.2,        // never slower than this share of full speed
     ease: 0.9,            // how quickly cars brake / pick up speed (per second)
+  },
+
+  // The story (src/story/, written in story/story.txt – see story/README.md).
+  story: {
+    file: 'story/story.txt',
+    unlocks: 'story/unlocks.txt', // what may be built (src/story/unlocks.js)
+    check: 2,             // real seconds between looks at the rules
+    typing: 55,           // letters a second as a line is written out (0: all at once)
+  },
+
+  // The town's chronicle (src/sim/chronicle.js), opened from the book by the town's name.
+  chronicle: {
+    day: 180,             // game seconds in one of the chronicle's days
+    residents: [25, 50, 100, 250, 500, 1000, 2000, 3500, 5000, 7500, 10000], // worth a line when passed
+    houses: [15, 20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000], // after the first ten, each its own line
+    check: 5,             // real seconds between counts of the residents
   },
 
   storageKey: 'urbanismus.save.v1',

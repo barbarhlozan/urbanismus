@@ -1,6 +1,6 @@
 // Screen furniture: the town's name and numbers (top-left), controls
-// (top-right), the active tool's actions (bottom centre), Build menu
-// (bottom-right, see buildMenu.js), app name and version (bottom-left).
+// (top-right), Build menu (bottom centre, see buildMenu.js) with photo
+// mode's options just above it, app name and version (bottom-left).
 // The name can be edited in place; the arrow beside it folds the numbers away.
 // The controls fold into their menu button: on phones they start folded and
 // open as a list, folding again once a button is used or on a tap elsewhere;
@@ -12,7 +12,7 @@ const REFRESH_MS = 5000;
 import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
 import { BuildMenu } from './buildMenu.js';
 import { statIcon, controlIcon } from './icons.js';
-import { resize, shrink } from './motion.js';
+import { resize, shrink, bump } from './motion.js';
 import { CONFIG } from '../config.js';
 import { isNarrow } from './device.js';
 
@@ -20,20 +20,31 @@ const MENU_KEY = 'urbanismus.controlsFolded';
 const MENU_ICON = `<svg class="icon menu-icon" viewBox="0 0 16 16" aria-hidden="true">
   <path class="bars" d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><path class="cross" d="M4 4l8 8M12 4l-8 8"/></svg>`;
 
+// The numbers in a row that changed since last time give a little hop
+// (not the first time round: nothing has changed yet).
+function hop(row, seen) {
+  for (const s of row.querySelectorAll('.stat')) {
+    const v = s.querySelector('b')?.textContent;
+    if (seen.has(s.title) && seen.get(s.title) !== v) bump(s.querySelector('b'));
+    seen.set(s.title, v);
+  }
+}
+
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 // one number with its drawing; the label shows on hover
 const stat = (icon, label, v, cls = '') => `<span class="stat ${cls}" title="${label}">${statIcon(icon)}<b>${v}</b></span>`;
 
 export class Hud {
-  constructor(root, { world, tools, agents, trains, actions }) {
+  constructor(root, { world, tools, agents, trains, chronicle, actions }) {
     this.world = world;
+    this.chronicle = chronicle;
     this.trains = trains;
     this.tools = tools;
     this.agents = agents;
 
     root.insertAdjacentHTML('beforeend', `
       <div class="hud">
-        <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="Town name"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close fold" title="Fold away the numbers" aria-expanded="true">–</button></div>
+        <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="Town name"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close chron" title="The town's chronicle">${statIcon('book')}</button><button class="close fold" title="Fold away the numbers" aria-expanded="true">–</button></div>
         <div class="stats row"></div>
         <div class="traffic row"></div>
       </div>
@@ -61,6 +72,8 @@ export class Hud {
 
     const hudEl = root.querySelector('.hud');
     const foldBtn = root.querySelector('.hud .fold');
+    this.chronEl = root.querySelector('.hud .chron');
+    this.chronEl.addEventListener('click', () => actions.chronicle());
     foldBtn.addEventListener('click', () => {
       let folded;
       resize(hudEl, () => { folded = hudEl.classList.toggle('folded'); });
@@ -148,7 +161,13 @@ export class Hud {
   }
 
   update() {
-    const actions = this.tools.actions();
+    // a dot on the book while there's something new in it
+    const unread = !!this.chronicle?.unread;
+    if (unread !== this.unread) this.chronEl.classList.toggle('new', (this.unread = unread));
+    // a Build menu tool's options sit beside it in the folded menu's dock;
+    // anything else's (photo mode), or with the menu open, in the bar here
+    let actions = this.tools.actions();
+    if (this.buildMenu.dock(actions)) actions = [];
     const actionsKey = actions.map((a) => a.label).join('|');
     if (actionsKey !== this.lastActions) {
       this.lastActions = actionsKey;
@@ -176,7 +195,10 @@ export class Hud {
       const html = stat('walk', 'On foot', count.walk) + stat('cycle', 'Cycling', count.cycle)
         + stat('drive', 'Driving', count.drive) + (trucks ? stat('truck', 'Trucks', trucks) : '')
         + (buses ? stat('bus', 'Buses', buses) : '');
-      if (html !== this.trafficHTML) this.trafficEl.innerHTML = this.trafficHTML = html;
+      if (html !== this.trafficHTML) {
+        this.trafficEl.innerHTML = this.trafficHTML = html;
+        hop(this.trafficEl, this.trafficSeen ??= new Map());
+      }
     }
   }
 
@@ -197,6 +219,9 @@ export class Hud {
       + stat('jobs', 'Jobs', totals.jobs ?? 0)
       + stat('buildings', 'Buildings', world.structures.size)
       + (unconnected ? stat('cutoff', `${unconnected} cut off from the roads`, unconnected, 'warn') : '');
-    if (html !== this.statsHTML) this.statsEl.innerHTML = this.statsHTML = html;
+    if (html !== this.statsHTML) {
+      this.statsEl.innerHTML = this.statsHTML = html;
+      hop(this.statsEl, this.statsSeen ??= new Map());
+    }
   }
 }

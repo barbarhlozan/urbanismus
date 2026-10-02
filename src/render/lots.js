@@ -61,7 +61,8 @@ function samples(a, b) {
   return Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
 }
 
-// Adds to a yard frame (see Renderer.yardFrame / structures/yards.js):
+// Adds to a yard frame (see Renderer.yardFrame / structures/yards.js; its
+// optional `tilt` turns it on top of its rotation, like the building):
 //   profile  [[x, y]…]  the road-side edge, following the road
 //   frontAt(x)          edge depth at x
 //   outline  polygon of the whole yard
@@ -70,12 +71,16 @@ function samples(a, b) {
 export function fitYard(world, config, frame) {
   const roads = roadIndex(world, config);
   const paths = pathIndex(world, config);
-  const { origin: [dx, dy], rotation, x0, x1, y1 } = frame;
+  const { origin: [dx, dy], rotation, tilt = 0, x0, x1, y1 } = frame;
+  // local -> world: the frame's tilt (a yard turned with its building to
+  // a diagonal road), then its quarter turn – as in Painter._turn
+  const [c, s] = [Math.cos(tilt), Math.sin(tilt)];
+  const turn = (lx, ly) => rotateQuarter(lx * c - ly * s, lx * s + ly * c, rotation);
   const toWorld = (lx, ly) => {
-    const [wx, wy] = rotateQuarter(lx, ly, rotation);
+    const [wx, wy] = turn(lx, ly);
     return [dx + wx, dy + wy];
   };
-  const dir = rotateQuarter(0, -1, rotation);
+  const dir = turn(0, -1);
   const reach = y1 - YARD_MAX + ROAD_GAP;
 
   // depth: short of the road, or YARD_OPEN where there's none – and never

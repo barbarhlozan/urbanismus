@@ -33,6 +33,7 @@
     import { Camera } from './src/render/camera.js';
     import { Painter, LOOK } from './src/render/painter.js';
     import { STRUCTURES } from './structures/index.js';
+    import { sampleSitePaths } from './src/roads/siteWalks.js';
     import { agentShape } from './src/render/renderer.js';
     import { VEHICLES, MODEL_NAMES, vehicleSVG } from './src/render/vehicles.js';
     import { PEOPLE, walkerSVG, cyclistSVG } from './src/render/people.js';
@@ -145,11 +146,12 @@
           const g = new Painter(cam, { x: 0, y: 0 }, 0, seed);
           if (q.has('join')) g.join = { left: true, right: true };
           if (def.site) {
-            // parks and squares: their footprint as the site, a path hub in the middle
+            // parks and squares: their footprint as the site
             const xs = def.footprint.map((f) => f[0]), ys = def.footprint.map((f) => f[1]);
             const [x0, y0, x1, y1] = [Math.min(...xs) - 0.5, Math.min(...ys) - 0.5, Math.max(...xs) + 0.5, Math.max(...ys) + 0.5];
             g.setSite([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
-            g.setSitePaths({ hubPos: [(x0 + x1) / 2, (y0 + y1) / 2], exits: [] });
+            // ways in: a different number for each seed (0–4), the two adjacent on odd seeds
+            g.setSitePaths(sampleSitePaths([x0, y0, x1, y1], [2, 1, 3, 4, 0][k % 5], { bend: k % 2 === 1 }));
           }
           const s = { type: def.id, level: li + 1, seed, id: k, node: 0, rotation: 0 };
           let svg;

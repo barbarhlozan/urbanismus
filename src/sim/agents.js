@@ -51,6 +51,11 @@
 // Drivers use parking lots without owning cars: leaving by car takes a parked
 // car from the lot there (if any), arriving parks one (see sim/parking.js).
 //
+// Cars, trucks and buses can be locked (src/story/unlocks.js): then nobody
+// drives (walking, cycling or the bus / train instead, where they can), no
+// visitors or commuters come in by car, industry keeps no trucks and none
+// deliver, and no buses come. followVehicles() clears those already out.
+//
 // The renderer only reads visible() and x / y / trip.mode.
 
 import { STRUCTURE_TYPES, levelOf, matches, codeOf } from '../../structures/index.js';
@@ -58,6 +63,9 @@ import { compass } from '../ui/annotations.js';
 import { findPath } from '../roads/pathfinding.js';
 import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, roadway } from '../roads/geometry.js';
 import { siteWalks, hubRadius } from '../roads/siteWalks.js';
+import { UNLOCKS } from '../story/unlocks.js';
+
+const can = (kind) => UNLOCKS.allowsVehicle(kind); // 'cars' | 'trucks' | 'buses'
 import { WalkNetwork } from './walking.js';
 
 // The point `len` behind s on a leg – straight back from its start while
@@ -104,7 +112,7 @@ export class AgentSystem {
     const def = STRUCTURE_TYPES[s.type];
     const count = def ? levelOf(def, s).agents ?? 1 : 0;
     const trucks = this.config.trucks;
-    const fleet = def && trucks.homes.some((n) => matches(def, n)) ? trucks.perLevel[(s.level ?? 1) - 1] ?? 0 : 0;
+    const fleet = def && can('trucks') && trucks.homes.some((n) => matches(def, n)) ? trucks.perLevel[(s.level ?? 1) - 1] ?? 0 : 0;
     this.syncCount(s, '', count, () => this.homeDwell(s) * Math.random());
     this.syncCount(s, 't', fleet, () => trucks.firstTrip * Math.random(), { truck: true });
   }
@@ -122,6 +130,26 @@ export class AgentSystem {
         break;
       }
     }
+  }
+
+  // Something was locked or unlocked: cars, trucks and buses that may no
+  // longer run are taken off the map – visitors gone, residents back home –
+  // and the industries' trucks are counted again.
+  followVehicles() {
+    for (const [id, a] of this.agents) {
+      const kind = a.bus ? 'buses' : a.truck ? 'trucks' : a.trip?.mode === 'drive' ? 'cars' : null;
+      if (!kind || can(kind)) continue;
+      if (a.visitor) {
+        this.agents.delete(id);
+        continue;
+      }
+      a.state = 'home';
+      a.trip = null;
+      a.retry = null;
+      const home = this.world.structures.get(a.home);
+      a.timer = home ? this.homeDwell(home) * Math.random() : 1;
+    }
+    for (const s of this.world.structures.values()) this.sync(s);
   }
 
   despawnFor(s) {
@@ -478,7 +506,8 @@ export class AgentSystem {
   // (sometimes, config.transit), else a drive out through an exit (and, on the
   // way back, the same way in).
   planLeave(home, why = 'leaves the city', commute = false, transit = true) {
-    if (transit && Math.random() < this.config.transit.share) {
+    // (no cars: the bus or train it is, or nothing)
+    if (transit && (Math.random() < this.config.transit.share || !can('cars'))) {
       const ride = this.transitRoute(home);
       if (ride) {
         const how = STRUCTURE_TYPES[ride.stop.type].railStop ? 'train' : 'bus';
@@ -486,6 +515,7 @@ export class AgentSystem {
         return { dest: ride.stop.id, plan: { mode: 'walk', ...ride.route, transit: { stop: ride.stop.id }, commute } };
       }
     }
+    if (!can('cars')) return null;
     const exit = this.pickExit();
     const from = this.world.accessInfo(home);
     if (!exit || !from) return null;
@@ -499,7 +529,7 @@ export class AgentSystem {
     const cfg = this.config.visitors;
     const exits = this.world.roadExits();
     const size = Math.min(1, this.world.structures.size / cfg.fullCity);
-    if (!exits.length || size === 0) return;
+    if (!exits.length || size === 0 || !can('cars')) return;
     if ((this.visitorTimer -= dt) > 0) return;
     // average gap between arrivals: interval per exit, scaled by city size
     this.visitorTimer = (cfg.interval / exits.length / size) * (0.5 + Math.random());
@@ -511,7 +541,7 @@ export class AgentSystem {
   updateCommuters(dt) {
     const { residents, jobs } = this.balance();
     const missing = jobs - residents;
-    if (missing <= 0 || !this.world.roadExits().length) return;
+    if (missing <= 0 || !this.world.roadExits().length || !can('cars')) return;
     if ((this.commuteTimer -= dt) > 0) return;
     this.commuteTimer = (this.config.commute.interval / missing) * (0.5 + Math.random());
     if (this.commuterCount().inbound < Math.min(missing, this.config.commute.max)) this.spawnVisitor({ commuter: true });
@@ -521,7 +551,7 @@ export class AgentSystem {
   updateDeliveries(dt) {
     const cfg = this.config.trucks;
     const size = Math.min(1, this.world.structures.size / this.config.visitors.fullCity);
-    if (!this.world.roadExits().length || size === 0) return;
+    if (!this.world.roadExits().length || size === 0 || !can('trucks')) return;
     if ((this.deliveryTimer -= dt) > 0) return;
     this.deliveryTimer = (cfg.deliveryInterval / size) * (0.5 + Math.random());
     let n = 0;
@@ -578,6 +608,7 @@ export class AgentSystem {
   // stops and a road off the map.
   updateBuses(dt) {
     const cfg = this.config.buses;
+    if (!can('buses')) return;
     if ((this.busTimer -= dt) > 0) return;
     const stops = this.busStops();
     if (!stops.length || !this.world.roadExits().length) {
@@ -841,6 +872,7 @@ export class AgentSystem {
         return leave && this.begin(a, leave.plan, leave.dest);
       }
       case 'delivery': {
+        if (!can('cars')) return null;
         const places = this.candidates(home, sim.destinations);
         for (let attempt = 0; attempt < 4 && places.length; attempt++) {
           const dest = places.splice(Math.floor(Math.random() * places.length), 1)[0];
@@ -870,7 +902,7 @@ export class AgentSystem {
     if (walk && (walk.cost <= comfortDistance || Math.random() < longWalkChance)) return { mode: 'walk', ...walk };
     const ride = this.ride.route(home, dest, this.config.bike.maxDistance);
     if (ride && Math.random() < this.bikeChance(ride.cost)) return { mode: 'cycle', ...(walk ?? ride) };
-    const drive = this.driveRoute(home, dest);
+    const drive = can('cars') && this.driveRoute(home, dest);
     if (drive) return drive;
     if (walk) return { mode: 'walk', ...walk };
     return ride && { mode: 'cycle', ...ride };

@@ -70,7 +70,7 @@ export class ColorMenu {
   }
 
   toggle(open = !this.open) {
-    reveal(this.el, open);
+    reveal(this.el, open, { rows: '.scheme, .custom-fields' });
     this.button.classList.toggle('on', open);
     if (open) this.refresh();
   }

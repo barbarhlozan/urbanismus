@@ -6,6 +6,7 @@ import { Camera } from '../render/camera.js';
 import { Painter } from '../render/painter.js';
 import { vehicleSVG } from '../render/vehicles.js';
 import { levelOf, drawSeed } from '../../structures/index.js';
+import { sampleSitePaths } from '../roads/siteWalks.js';
 
 const ICON_SEED = 12345;
 const PAD = 3;
@@ -25,6 +26,10 @@ function measureSvg() {
   return measure;
 }
 
+// How many ways into a park or square drawn on its own: two (a walkway
+// across) for the icons, a mix on the Assets page.
+const ways = (seed) => (seed === ICON_SEED ? 2 : [2, 1, 3, 4, 0][seed % 5]);
+
 // The structure's drawing (ground + solids) as SVG markup, on its own.
 function paint(def, level, seed, camera) {
   try {
@@ -36,7 +41,7 @@ function paint(def, level, seed, camera) {
       const xs = def.footprint.map((p) => p[0]), ys = def.footprint.map((p) => p[1]);
       const [x0, y0, x1, y1] = [Math.min(...xs) - 0.45, Math.min(...ys) - 0.45, Math.max(...xs) + 0.45, Math.max(...ys) + 0.45];
       g.setSite([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
-      g.setSitePaths({ hubPos: [(x0 + x1) / 2, (y0 + y1) / 2], exits: [] });
+      g.setSitePaths(sampleSitePaths([x0, y0, x1, y1], ways(seed), { bend: seed !== ICON_SEED && seed % 2 === 1 }));
     }
     levelOf(def, instance).draw(g, instance);
     return g.toGroundSVG() + g.toSVG();
@@ -123,6 +128,7 @@ const STATS = {
   bus: '<path d="M1.5 11.5 V4 H14.5 V11.5 Z M1.5 7.5 H14.5 M5 4 V7.5 M8.5 4 V7.5 M12 4 V7.5"/><circle cx="4.6" cy="11.6" r="1.4"/><circle cx="11.4" cy="11.6" r="1.4"/>',
   // a service area: a dotted ring round a dot
   area: '<circle cx="8" cy="8" r="1.2"/><path d="M8 2.5 A5.5 5.5 0 0 1 8 13.5 A5.5 5.5 0 0 1 8 2.5" stroke-dasharray="1.6 1.9"/>',
+  book: '<path d="M8 4.2 C6.2 3 4 2.8 1.8 3.2 V12.8 C4 12.4 6.2 12.6 8 13.8 C9.8 12.6 12 12.4 14.2 12.8 V3.2 C12 2.8 9.8 3 8 4.2 Z M8 4.2 V13.8 M3.6 6 C4.8 5.8 5.8 6 6.6 6.4 M3.6 8.4 C4.8 8.2 5.8 8.4 6.6 8.8"/>',
   pen: '<path d="M3 13 L3.6 10.4 L10.8 3.2 L12.8 5.2 L5.6 12.4 Z M9.6 4.4 L11.6 6.4"/>',
 };
 

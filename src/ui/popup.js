@@ -13,6 +13,7 @@ import { isNarrow } from './device.js';
 import { reveal, isShown } from './motion.js';
 
 const GHOST_MS = 400;
+const ROWS = '.popup-body > :not(.title)'; // they follow the menu in, one by one
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -60,7 +61,7 @@ export class Popup {
     this.render(title, items);
     this.place(x, y, around);
     // arriving: a sheet rises from the bottom edge, a menu a few pixels
-    if (!wasOpen) reveal(this.el, true, { from: isNarrow() ? [0, 40] : [0, 4], force: true });
+    if (!wasOpen) reveal(this.el, true, { from: isNarrow() ? [0, 40] : [0, 4], force: true, rows: ROWS });
   }
 
   place(x, y, around) {

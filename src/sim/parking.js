@@ -4,9 +4,11 @@
 //   take(s)  someone drives off from s: one parked car disappears (if any)
 //   park(s)  someone drives in to s: one appears (if there's a free stall)
 // Cars are shown as hollow dots in the first `count` stalls of a stable,
-// per-lot shuffled order.
+// per-lot shuffled order. While cars are locked (src/story/unlocks.js) every
+// lot stands empty – its count is kept for when they're back.
 
 import { mulberry32 } from '../core/random.js';
+import { UNLOCKS } from '../story/unlocks.js';
 
 export class ParkingSystem {
   constructor(world) {
@@ -20,6 +22,7 @@ export class ParkingSystem {
   }
 
   count(s) {
+    if (!UNLOCKS.allowsVehicle('cars')) return 0;
     return Math.min(s.data.parked ?? 0, this.capacity(s));
   }
 
@@ -41,14 +44,14 @@ export class ParkingSystem {
   }
 
   take(s) {
-    if (!s || this.count(s) === 0) return false;
+    if (!s || this.count(s) === 0 || !UNLOCKS.allowsVehicle('cars')) return false;
     s.data.parked = this.count(s) - 1;
     this.world.events.emit('parking:changed', s);
     return true;
   }
 
   park(s) {
-    if (!s || this.count(s) >= this.capacity(s)) return false;
+    if (!s || this.count(s) >= this.capacity(s) || !UNLOCKS.allowsVehicle('cars')) return false;
     s.data.parked = this.count(s) + 1;
     this.world.events.emit('parking:changed', s);
     return true;

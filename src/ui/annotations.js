@@ -1,18 +1,19 @@
-// Annotations (each switchable in render/style.js):
+// Annotations (switchable in render/style.js):
 //   hover tags  a leader line and a boxed label naming the building / road /
 //               exit under the pointer, e.g. "Clinic"
-//   event log   a running log of what happens (visitors, residents leaving
-//               the city, buildings growing …), with simulation time
 //
-// Systems report events with annotations.log(text, [x, y]) (the position is
-// currently unused, kept so events can be placed on the map later).
+// Systems also report what happens with annotations.log(text, [x, y])
+// (visitors, residents leaving, buildings growing…). The player doesn't
+// see it – the chronicle (sim/chronicle.js) is their record – but the last
+// LOG_LINES are kept in annotations.lines, newest first, for debugging from
+// the console (window.urbanismus.annotations.lines).
 
 import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { STYLE } from '../render/style.js';
 import { sketchRect, sketchPolyline, seedOf } from '../render/sketch.js';
 
-const FEED_LINES = 6;
+const LOG_LINES = 200;
 
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -26,34 +27,16 @@ function textWidth(text, size) {
 }
 
 export class Annotations {
-  constructor(root, { world, camera, clock }) {
+  constructor({ world, camera, clock }) {
     this.world = world;
     this.camera = camera;
     this.clock = clock;
     this.lines = [];
-    this.el = document.createElement('div');
-    this.el.className = 'feed hidden';
-    root.appendChild(this.el);
-    this.feedDirty = true;
   }
 
-  log(text, _pos = null) {
-    const t = this.clock.elapsed;
-    this.lines.unshift({ t, text });
-    this.lines.length = Math.min(this.lines.length, FEED_LINES);
-    this.feedDirty = true;
-  }
-
-  update() {
-    const show = STYLE.feed && this.lines.length > 0;
-    if (show !== this.shown) this.el.classList.toggle('hidden', !(this.shown = show));
-    if (!show || !this.feedDirty) return;
-    this.feedDirty = false;
-    const clock = (t) => {
-      const s = Math.floor(t);
-      return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-    };
-    this.el.innerHTML = this.lines.map((l) => `<div><span class="t">${clock(l.t)}</span>${esc(l.text)}</div>`).join('');
+  log(text, pos = null) {
+    this.lines.unshift({ t: Math.round(this.clock.elapsed), text, pos });
+    this.lines.length = Math.min(this.lines.length, LOG_LINES);
   }
 
   // SVG for the overlay layer (scene coordinates, constant screen size).

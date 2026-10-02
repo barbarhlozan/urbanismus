@@ -9,9 +9,14 @@
 // ranked along the way they were drawn (the order of the dots in the build
 // event), so the pen runs down the new road from where the player started.
 //
-// DOM per layer: for each class, one path of settled lines, then one of the
-// lines on the move. Settled lines that continue each other are joined into
-// one subpath, so dash patterns (footpaths, rail dashes) run on unbroken.
+// DOM per layer: for each class, a group of settled lines, then a path of
+// the lines on the move. Settled lines that continue each other are joined
+// into one subpath, so dash patterns (footpaths, rail dashes) run on
+// unbroken. The settled lines are a path per chunk of the map (CHUNK), not
+// one across the whole network: a path's outline box decides which patches
+// of the screen have to go through it, so the browser draws a patch with
+// only the lines near it. Solid lines are cut where they cross into the
+// next chunk; a dashed run stays whole, in the chunk it starts in.
 // Moving lines are redrawn every frame as the part of their points the pen
 // has reached – this works for dashed lines too, where a dash reveal can't.
 
@@ -26,6 +31,8 @@ export const INK = {
 };
 
 const SVGNS = 'http://www.w3.org/2000/svg';
+const CHUNK = 320; // scene px
+const chunkOf = ([x, y]) => `${Math.floor(x / CHUNK)},${Math.floor(y / CHUNK)}`;
 const r2 = (n) => Math.round(n * 100) / 100;
 const clamp01 = (u) => (u < 0 ? 0 : u > 1 ? 1 : u);
 const ease = (u) => (u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u));
@@ -65,11 +72,12 @@ export class InkLayer {
     this.paths = {};
     el.innerHTML = '';
     for (const cls of classes) {
-      const settled = el.appendChild(document.createElementNS(SVGNS, 'path'));
+      const settled = el.appendChild(document.createElementNS(SVGNS, 'g'));
       const moving = el.appendChild(document.createElementNS(SVGNS, 'path'));
-      settled.setAttribute('class', cls);
       moving.setAttribute('class', cls);
-      this.paths[cls] = { settled, moving };
+      // dashed lines' runs aren't cut at chunk edges (see above)
+      const dashed = getComputedStyle(moving).strokeDasharray !== 'none';
+      this.paths[cls] = { settled, moving, chunks: new Map(), dashed }; // chunks: key -> <path>
     }
   }
 
@@ -148,19 +156,35 @@ export class InkLayer {
       const { cls, pts } = m.item;
       moving[cls] = (moving[cls] ?? '') + pathD(partial(pts, f, m.flip));
     }
-    for (const [cls, { settled, moving: el }] of Object.entries(this.paths)) {
+    for (const [cls, { settled, moving: el, chunks, dashed }] of Object.entries(this.paths)) {
       const d = moving[cls] ?? '';
       if (el.getAttribute('d') !== d) el.setAttribute('d', d);
       if (!this.settledDirty) continue;
-      // lines that continue each other become one subpath
-      let out = '', end = null;
+      // lines that continue each other become one subpath, in a chunk's path
+      const out = new Map(); // chunk -> path data
+      let end = null, chunk = null;
       for (const it of this.items.values()) {
         if (it.cls !== cls || this.moving.has(it.key)) continue;
         const [first, ...rest] = it.pts;
-        out += near(end, first) ? rest.map(([x, y]) => `L${r2(x)} ${r2(y)}`).join('') : pathD(it.pts);
+        const c = dashed && near(end, first) ? chunk : chunkOf(first);
+        out.set(c, (out.get(c) ?? '') + (near(end, first) && c === chunk ? rest.map(([x, y]) => `L${r2(x)} ${r2(y)}`).join('') : pathD(it.pts)));
         end = it.pts[it.pts.length - 1];
+        chunk = c;
       }
-      if (settled.getAttribute('d') !== out) settled.setAttribute('d', out); // an unchanged write still re-lays it out
+      for (const [c, path] of chunks) {
+        if (out.has(c)) continue;
+        path.remove();
+        chunks.delete(c);
+      }
+      for (const [c, data] of out) {
+        let path = chunks.get(c);
+        if (!path) {
+          path = settled.appendChild(document.createElementNS(SVGNS, 'path'));
+          path.setAttribute('class', cls);
+          chunks.set(c, path);
+        }
+        if (path.getAttribute('d') !== data) path.setAttribute('d', data); // an unchanged write still re-lays it out
+      }
     }
     this.settledDirty = false;
   }

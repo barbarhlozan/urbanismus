@@ -17,7 +17,8 @@
 // With LEAFY on, the broadleaf kinds are drawn as on an old map-sketching
 // sheet instead: a lumpy crown outline with diagonal hatching on a short
 // trunk (saplings now and then as a tall narrow poplar), and spruces and
-// shrubs get the same hatching. Hatching is hidden when zoomed far out.
+// shrubs get the same hatching. Hatching is hidden when zoomed far out, and
+// crown outlines get plainer with the painter's `detail` (plain()).
 
 export const TREE_KINDS = ['spruce', 'sapling', 'spreading'];
 
@@ -57,7 +58,7 @@ export function drawClump(g, x, y, trees) {
 function drawSpruce(g, x, y, height, simple) {
   const { outline, trunk, inside, branches } = spruceShape(g, height, simple);
   g.strokes(x, y, 0, trunk, { cls: 'trunk' });
-  g.shape(x, y, 0, outline, { smooth: true, cls: 'tree' });
+  g.shape(x, y, 0, plain(g, outline, height, PLAIN.spruce), { smooth: true, cls: 'tree' });
   if (LEAFY) {
     // hatch inside the smooth outline: it runs through the points' midpoints,
     // pulled in a little towards the trunk
@@ -190,7 +191,7 @@ function drawLeafy(g, x, y, kind, H, simple) {
   // the trunk runs up into the crown (its fill hides the top); close up,
   // a fork shows through it, as in an ink drawing
   g.strokes(x, y, 0, [[[0, 0], [lean * 0.5, T], [lean, cy]]], { cls: kind === 'spreading' ? 'trunk thick' : 'trunk' });
-  g.shape(x, y, 0, outline, { smooth: true, cls: 'tree' });
+  g.shape(x, y, 0, plain(g, outline, H, PLAIN.leafy), { smooth: true, cls: 'tree' });
   g.strokes(x, y, 0, hatchIn(g, clip, H * (simple ? 0.09 : 0.07)), { cls: 'leaf', lod: 1 });
   if (!simple) {
     const fork = [[lean * 0.6, T * 0.9], [lean - rx * 0.35, cy + ry * 0.1]];
@@ -220,6 +221,43 @@ function midpoints(pts) {
     const q = pts[(i + 1) % pts.length];
     return [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
   });
+}
+
+// A crown outline as plain as the painter's `detail` asks (0: as is): its
+// points thinned (Douglas–Peucker) to within a share of the tree's height
+// (`tol`, by detail 1 / 2), so it keeps its shape – a spruce its tiers, a
+// broadleaf its lumps – and loses the small bumps, which can't be told
+// apart that far out anyway. Only the drawing changes – every random choice
+// was already made – so a tree looks the same at each detail, just plainer.
+const PLAIN = { spruce: [0.012, 0.02], leafy: [0, 0.012] };
+function plain(g, pts, H, tols) {
+  const tol = (tols[g.detail - 1] ?? 0) * H;
+  if (!tol || pts.length < 8) return pts;
+  const keep = new Uint8Array(pts.length);
+  const span = (i, j) => {
+    const [ax, ay] = pts[i], [bx, by] = pts[j % pts.length];
+    const l = Math.hypot(bx - ax, by - ay) || 1;
+    let far = -1, worst = tol;
+    for (let k = i + 1; k < j; k++) {
+      const d = Math.abs((bx - ax) * (ay - pts[k][1]) - (ax - pts[k][0]) * (by - ay)) / l;
+      if (d > worst) { worst = d; far = k; }
+    }
+    if (far < 0) return;
+    keep[far] = 1;
+    span(i, far);
+    span(far, j);
+  };
+  // closed: split at the first point and the one furthest from it
+  let opp = 0, dmax = -1;
+  for (let k = 1; k < pts.length; k++) {
+    const d = Math.hypot(pts[k][0] - pts[0][0], pts[k][1] - pts[0][1]);
+    if (d > dmax) { dmax = d; opp = k; }
+  }
+  keep[0] = keep[opp] = 1;
+  span(0, opp);
+  span(opp, pts.length);
+  const out = pts.filter((_, k) => keep[k]);
+  return out.length >= 5 ? out : pts;
 }
 
 // Diagonal hatching ("/") inside a polygon, `step` apart: each line split

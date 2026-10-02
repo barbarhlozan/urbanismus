@@ -13,7 +13,9 @@
 //   boost      [{ type, radius, factor }]           grows faster when one is nearby
 // `type` is a structure id or tag (see matches() in structures/index.js).
 //
-// Buildings the player levelled by hand are `locked` and left alone.
+// Buildings the player levelled by hand are `locked` and left alone. A
+// level that isn't unlocked yet (src/story/unlocks.js) isn't grown into –
+// though a building already at it stays.
 //
 // Now and then a church appears by itself on free land by a road in a
 // neighbourhood with enough homes and no church nearby (config.growth.church).
@@ -23,6 +25,7 @@
 
 import { STRUCTURE_TYPES, maxLevel, levelOf, matches, nameOf, codeOf } from '../../structures/index.js';
 import { rotateQuarter } from '../core/grid.js';
+import { UNLOCKS } from '../story/unlocks.js';
 
 export class GrowthSystem {
   constructor(world, config) {
@@ -107,7 +110,7 @@ export class GrowthSystem {
       if (matches(STRUCTURE_TYPES[o.type], 'residential')) homes.push(world.grid.xy(o.node));
       else if (o.type === 'church') churches.push(world.centerOf(o));
     }
-    if (homes.length < rule.minHomes) return;
+    if (homes.length < rule.minHomes || !UNLOCKS.allows('church')) return;
 
     // homes in any rectangle of dots from a table of running sums
     const W = grid.width + 1;
@@ -151,7 +154,8 @@ export class GrowthSystem {
     if (!this.world.isServed(s)) return 1;
     const def = STRUCTURE_TYPES[s.type];
     let level = 1;
-    for (let l = 2; l <= maxLevel(def); l++) {
+    const top = UNLOCKS.ceiling(s.type, s.level);
+    for (let l = 2; l <= top; l++) {
       if (!this.check(s, def.levels[l - 1].grow).ok) break;
       level = l;
     }
@@ -279,7 +283,7 @@ export class GrowthSystem {
     }
     const target = this.targetLevel(s);
     const trend = target > s.level ? 'growing' : target < s.level ? 'declining' : 'stable';
-    const next = s.level < maxLevel(def) ? def.levels[s.level].grow : null;
+    const next = s.level < UNLOCKS.ceiling(s.type, s.level) ? def.levels[s.level].grow : null;
     const boosts = (next?.boost ?? []).filter((b) => this.countNear(s, b.type, b.radius) > 0).map((b) => nameOf(b.type));
     // Declining: explain what the current level is missing; otherwise the next level.
     const keep = trend === 'declining';

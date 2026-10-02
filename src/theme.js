@@ -21,13 +21,13 @@ export const SCHEMES = [
   { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486' },
   { name: 'Night', bg: '#000000', main: '#64645b', detail: '#363f46' },
   { name: 'Countryside', bg: '#d3d0c9', main: '#ce4919', detail: '#44499a' },
-  { name: 'Countryside 2', bg: '#c5479d', main: '#cbce19', detail: '#9a9744' },
 ];
 
 export const COLOR_NAMES = ['bg', 'main', 'detail'];
 
 const SCHEME_KEY = 'urbanismus.scheme';
 const CUSTOM_KEY = 'urbanismus.customScheme';
+const PALETTE_KEY = 'urbanismus.palette';
 
 // The player's own scheme; until first edited, a copy of the scheme in use.
 const savedCustom = load(CUSTOM_KEY, JSON.parse);
@@ -60,6 +60,9 @@ export function applyTheme(choice = load(SCHEME_KEY) ?? 0, root = document.docum
   for (const name of COLOR_NAMES) root.style.setProperty(`--${name}`, scheme[name]);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', scheme.bg);
   save(SCHEME_KEY, String(choice));
+  // the colours themselves too, for the opening cover (index.html), which
+  // shows before any of this has loaded
+  save(PALETTE_KEY, JSON.stringify({ bg: scheme.bg, main: scheme.main, detail: scheme.detail }));
   return scheme;
 }
 

@@ -69,7 +69,7 @@ export class DebugPanel {
   }
 
   toggle(open = !this.open) {
-    reveal(this.el, open);
+    reveal(this.el, open, { rows: 'label' });
     this.onToggle?.(open);
   }
 }

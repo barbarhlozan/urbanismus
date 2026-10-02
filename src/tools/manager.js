@@ -30,6 +30,7 @@ export class ToolManager {
     this.hoverNode = -1;
     this.armed = -1; // touch: dot previewed by the last tap, waiting for a confirming tap
     this.listeners = new Set();
+    this.allowed = () => true; // (tool) -> may it be picked up? (main.js: what's unlocked)
   }
 
   register(tool) {
@@ -43,7 +44,7 @@ export class ToolManager {
 
   use(id, params = {}) {
     const next = this.registry.get(id);
-    if (!next) return;
+    if (!next || !this.allowed(next)) return;
     this.active?.exit?.();
     this.active = next;
     this.armed = -1;

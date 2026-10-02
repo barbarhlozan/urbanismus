@@ -11,5 +11,4 @@ export const STYLE = {
   contours: false, // terrain contour lines at the start (the Terrain button switches
                    // them; they cost the most to draw, so they start off)
   hoverTags: true, // leader line + boxed label on whatever is under the pointer
-  feed: false,     // running event log (hidden for now)
 };

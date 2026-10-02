@@ -9,7 +9,7 @@
 //                       `terrain` overrides CONFIG.terrain for generateWorld
 
 import { townName } from '../core/townName.js';
-import { reveal, isShown } from './motion.js';
+import { reveal, isShown, bump } from './motion.js';
 import { SketchSlider } from './sketchSlider.js';
 import { controlIcon } from './icons.js';
 
@@ -94,6 +94,7 @@ export class NewMapMenu {
         onChange: (i) => {
           this.choice[s.key] = s.options[i][1];
           this.refresh();
+          bump(this.el.querySelector(`[data-key="${s.key}"] .value`));
         },
       });
       this.el.querySelector(`[data-key="${s.key}"] .slot`).appendChild(slider.el);
@@ -125,8 +126,8 @@ export class NewMapMenu {
   }
 
   toggle(open = !this.open) {
-    reveal(this.scrim, open, { from: [0, 0] });
-    reveal(this.el, open, { from: [0, 10] });
+    reveal(this.scrim, open, { fade: true });
+    reveal(this.el, open, { from: [0, 10], rows: '.newmap-name, .newmap-row, .newmap-note' });
     this.button.classList.toggle('on', open);
     if (open) {
       this.rollName();

@@ -1,0 +1,136 @@
+# What can be built when a town starts. The story can change it as it goes,
+# with the same two commands in a branch:  unlock station
+#
+#   lock name      take it out of the Build menu (and out of Upgrade / Turn into…)
+#   unlock name    put it back
+#
+# Read top to bottom: the last line that matches wins. Anything not locked
+# is open. Case, spaces, '-' and '.' don't matter in names (Panel block,
+# panel-block and panel_block are the same).
+#
+# ---------- All the names ----------
+#
+# Everything
+#   all                  every building and network tool (not the buttons at the
+#                        top, nor traffic)
+#
+# Build menu groups
+#   transport            Road, Lane, Footpath, Railway, the stations, Bus stop
+#   zones                Residential, Business, Industry, Coal mine, Farm
+#   public               Parks, Squares, Services, Cemetery, House of culture
+#   landmarks            Chapel, Church, Town hall, Plague column, Memorial,
+#                        Gate tower, Castle, Tower, Stadium
+#
+# Network tools
+#   road
+#   lane
+#   footpath             (no footpath: no new streets with sidewalks either)
+#   railway
+#
+# Shared names – each covers several types at once
+#   residential          residential + residential_wide
+#   business             business + business_wide
+#   industrial           industrial + industrial_medium + industrial_small + mine
+#   park                 park + park_large
+#   square               square + square_large
+#   services             services + services_large
+#   heritage             every landmark, and culture_house too
+#
+# Types, by group (one size each), with their levels
+#   Transport
+#     station            station_station
+#     station_main       station_main_main_station
+#     stop               stop_stop
+#     bus_stop           bus_stop_bus_stop
+#   Zones
+#     residential        residential_house, residential_apartments, residential_panel_block
+#     residential_wide   residential_wide_houses, residential_wide_apartments, residential_wide_panel_block
+#     business           business_shop, business_offices, business_high_rise
+#     business_wide      business_wide_shops, business_wide_offices, business_wide_high_rise
+#     industrial         industrial_workshop, industrial_factory, industrial_plant
+#     industrial_medium  industrial_medium_workshop, industrial_medium_works, industrial_medium_small_plant
+#     industrial_small   industrial_small_workshop, industrial_small_works, industrial_small_small_plant
+#     mine               mine_pit, mine_colliery, mine_deep_mine
+#     farm               farm_farmstead, farm_jzd, farm_cooperative
+#   Public
+#     park               park_green, park_garden_park, park_pavilion_park
+#     park_large         park_large_meadow, park_large_pond_park, park_large_city_park
+#     square             square_plaza, square_fountain_square, square_monument_square
+#     square_large       square_large_market_square, square_large_fountain_square, square_large_grand_square
+#     services           services_service_post, services_station, services_clinic
+#     services_large     services_large_service_station, services_large_service_centre, services_large_hospital
+#     cemetery           cemetery_cemetery
+#     culture_house      culture_house_house_of_culture
+#   Landmarks
+#     chapel             chapel_chapel
+#     church             church_church
+#     town_hall          town_hall_town_hall
+#     plague_column      plague_column_plague_column
+#     memorial           memorial_memorial
+#     town_gate          town_gate_gate_tower
+#     castle             castle_castle
+#     tv_tower           tv_tower_tower
+#     stadium            stadium_stadium
+#
+# Levels: a level name locks that level only – nothing grows into it and it
+# isn't offered as an upgrade (what already stands stays). Any level also
+# works by number: residential_level3. A shared name with a level covers all
+# its types at that level: residential_panel_block is the panel block of both
+# residential and residential_wide; industrial_workshop of all three industries.
+#
+# The buttons at the top (`all` leaves them be)
+#   chronicle            the book by the town's name (it keeps writing while hidden)
+#   photo                photo mode (and its key)
+#   terrain              contour lines
+#   colors               the Colors menu
+#   assets
+#   debug
+#   export
+#   import
+#   new_map
+#   fullscreen
+#   controls             all of the buttons above
+#
+# Traffic (`all` leaves it be)
+#   cars                 nobody drives: people walk, cycle or take the bus or
+#                        train instead; no visitors or commuters come by car;
+#                        car parks stand empty
+#   trucks               industry keeps no trucks, and no deliveries come in
+#   buses                no buses come (bus stops stay, empty)
+#   vehicles             all three
+#
+# ------------------------------------
+#
+# And the colour scheme the game starts in:
+#   scheme Blue pen        (or Black pen, Night, Countryside; a number from 1;
+#                           custom; or three colours: scheme #ebe7dd #3e12b6 #9b9486
+#                           – background, main, detail)
+# It's put on whenever this line changes. While `colors` is locked it's put on
+# every time; otherwise a scheme the player picks in the Colors menu stays.
+#
+# Full list and examples: story/README.md
+#
+# For example, a village that starts with only roads, footpaths, houses and
+# a chapel, and no panel blocks until the story says so:
+#
+#   lock all
+#   unlock road
+#   unlock footpath
+#   unlock residential
+#   unlock chapel
+#   lock residential_panel_block
+#
+# A finished game might hide what's only for making it:
+#
+#   lock debug
+#   lock assets
+#
+# As it is, everything is open.
+
+lock assets
+lock debug
+#lock all
+#unlock road
+#unlock footpath
+#unlock residential
+#unlock chapel

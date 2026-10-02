@@ -6,6 +6,11 @@ import { STYLE } from './render/style.js';
 import { makeWarp, makeLift } from './render/warp.js';
 import { ELEVATION } from './terrain/elevation.js';
 import { Annotations } from './ui/annotations.js';
+import { Dialogue } from './ui/dialogue.js';
+import { ChronicleBook } from './ui/chronicleBook.js';
+import { Chronicle } from './sim/chronicle.js';
+import { Storyteller } from './story/storyteller.js';
+import { UNLOCKS, applyScheme } from './story/unlocks.js';
 import { World } from './core/world.js';
 import { generateWorld } from './terrain/generate.js';
 import { Camera } from './render/camera.js';
@@ -31,6 +36,7 @@ import { ColorMenu } from './ui/colorMenu.js';
 import { NewMapMenu } from './ui/newMapMenu.js';
 import { AssetsPage } from './ui/assetsPage.js';
 import { sketchFrames } from './ui/sketchFrame.js';
+import { reveal } from './ui/motion.js';
 import { attachInput } from './ui/input.js';
 import { exportCity, pickCity } from './ui/saveFile.js';
 import { BUILD_FAMILIES } from '../structures/index.js';
@@ -103,6 +109,7 @@ window.addEventListener('resize', () => {
 });
 
 const clock = new SimClock(CONFIG);
+clock.elapsed = world.time; // (the town's own time carries on from the save)
 const parking = new ParkingSystem(world);
 const agents = new AgentSystem(world, CONFIG, parking);
 const growth = new GrowthSystem(world, CONFIG);
@@ -112,10 +119,18 @@ trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
 const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, parking, config: CONFIG });
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);
-const annotations = new Annotations(uiRoot, { world, camera, clock });
+const annotations = new Annotations({ world, camera, clock });
 agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos);
 
+// the town's chronicle, and the story told along the way (story/story.txt)
+UNLOCKS.setWorld(world); // (what may be built: story/unlocks.txt, read with the story)
+const chronicle = new Chronicle(world, CONFIG);
+const dialogue = new Dialogue(uiRoot, { typing: CONFIG.story.typing, avoid: '.build-menu' });
+const story = new Storyteller({ world, agents, trains, dialogue, chronicle, config: CONFIG });
+// (read with the opening, below: openIntro)
+
 const tools = new ToolManager(world.grid, 'inspect');
+tools.allowed = (tool) => UNLOCKS.allowsTool(tool);
 const ctx = { world, camera, tools, popup, growth, config: CONFIG };
 tools.register(createInspectTool(ctx));
 tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', hotkey: '1', group: 'transport', blurb: 'Cars and people' }));
@@ -126,7 +141,11 @@ for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createBulldozeTool(ctx));
 const photoPrint = new PhotoPrint(uiRoot);
 tools.register(createPhotoTool(ctx, {
-  shoot: (shot) => photoPrint.show(takePhoto(renderer, shot), world.name),
+  shoot: (shot) => {
+    photoPrint.show(takePhoto(renderer, shot), world.name);
+    world.story.vars.photos_taken = (world.story.vars.photos_taken ?? 0) + 1;
+    chronicle.first('photo', `Someone took a photograph of ${world.name}.`);
+  },
 }));
 
 const actions = {
@@ -143,6 +162,7 @@ const actions = {
   export: () => exportCity(world),
   import: () => importCity(),
   fullscreen: () => toggleFullscreen(),
+  chronicle: () => { if (UNLOCKS.allowsControl('chronicle')) chronicleBook.toggle(); },
 };
 
 // Full screen: the whole page, UI and all. Safari wants its own prefixed
@@ -203,7 +223,41 @@ async function importCity() {
   }
 }
 
-const hud = new Hud(uiRoot, { world, tools, agents, trains, actions });
+const hud = new Hud(uiRoot, { world, tools, agents, trains, chronicle, actions });
+const chronicleBook = new ChronicleBook(uiRoot, { world, chronicle });
+// something locked or unlocked: the Build menu and the buttons at the top
+// follow, a tool in hand that may no longer be used is put down, and a panel
+// whose button went is closed
+const followUnlocks = () => {
+  hud.buildMenu.refreshLocks();
+  if (tools.active && !tools.allowed(tools.active)) tools.use(tools.defaultId);
+  // cars, trucks and buses: off the map if locked, and the car parks follow
+  agents.followVehicles();
+  renderer.dirty.add('parked');
+  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .hud .chron')) {
+    btn.classList.toggle('locked', !UNLOCKS.allowsControl(btn.dataset.act ?? 'chronicle'));
+  }
+  const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu };
+  for (const [id, panel] of Object.entries(panels)) {
+    if (panel?.open && !UNLOCKS.allowsControl(id)) (panel.hide ? panel.hide() : panel.toggle(false));
+  }
+};
+
+// The colour scheme from story/unlocks.txt (`scheme Night`): put on when the
+// line changes (so editing it shows), or every time while the Colors button
+// is locked; otherwise the player's own pick from the Colors menu stays.
+const FILE_SCHEME_KEY = 'urbanismus.fileScheme';
+function fileScheme() {
+  const value = UNLOCKS.scheme?.value;
+  if (!value) return;
+  let last = null;
+  try { last = localStorage.getItem(FILE_SCHEME_KEY); } catch { /* storage unavailable */ }
+  if (last === value && UNLOCKS.allowsControl('colors')) return;
+  applyScheme(value);
+  colorMenu.refresh();
+  try { localStorage.setItem(FILE_SCHEME_KEY, value); } catch { /* storage unavailable */ }
+}
+story.onScheme = () => colorMenu.refresh();
 // the full-screen button: hidden where there's no full screen, its icon and name following the state
 {
   const btn = uiRoot.querySelector('[data-act="fullscreen"]');
@@ -222,8 +276,10 @@ debugPanel.onToggle = (open) => uiRoot.querySelector('[data-act="debug"]').class
 const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"]'));
 const assetsPage = new AssetsPage(uiRoot);
 const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMap"]'), { onCreate: newMap });
+UNLOCKS.onChange(followUnlocks); // (once the panels it closes exist)
+followUnlocks();
 // pen-drawn frames on every UI box, to match the sketched map
-sketchFrames(uiRoot, '.hud, .controls, .actions, .popup, .feed, .bm-panel, .bm-toggle, .debug-panel, .color-panel, .newmap-panel');
+sketchFrames(uiRoot, '.hud, .controls, .actions, .popup, .bm-panel, .bm-dock, .debug-panel, .color-panel, .newmap-panel');
 
 // Terrain contour lines: off unless switched on (remembered in this browser).
 
@@ -264,7 +320,7 @@ function pickUp() {
   if (!p || node < 0) return;
   const s = world.structureAt(node);
   let tool = null, params = {};
-  if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation }];
+  if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation, turn: s.data?.turn ?? 0 }];
   else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
   else if (world.rails.hasNode(world.networks.rail.nodeAt(...p))) tool = tools.registry.get('rail');
   else if (world.hasRoad(node)) tool = tools.registry.get(world.laneOnly(node) ? 'lane' : 'road');
@@ -287,9 +343,20 @@ attachInput(document.getElementById('input'), {
 
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
+  // the open book takes the keys (and nothing reaches the map behind it)
+  if (chronicleBook.open) {
+    if (chronicleBook.key(e)) e.preventDefault();
+    return;
+  }
+  if (dialogue.key(e)) {
+    e.preventDefault();
+    return;
+  }
   if (e.key === 'Escape') {
     if (photoPrint.open) photoPrint.hide();
     else if (popup.open) popup.hide();
+    // nothing in hand: Esc folds the open Build menu away
+    else if (tools.active?.id === tools.defaultId && !hud.buildMenu.folded) hud.buildMenu.fold(true);
     else tools.cancel();
     return;
   }
@@ -313,6 +380,79 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// ---------- opening ----------
+
+// The cover in index.html shows the town's name, underlined by a pen
+// stroke as it appears, while everything loads. A new town (or a first
+// visit) has no name to show yet: the game's own name comes first, and
+// gives way to the town's once it's made. Once the story and what's
+// unlocked are read (so the Build menu and the buttons are right from the
+// first look), the map has been drawn and the underline is done, the name
+// fades, a hole opens from the middle to show the map – the nearest
+// buildings sketched in by the pen as the edge reaches them – and the
+// panels come in.
+const INTRO = {
+  underline: 950, // ms from the name appearing to its underline done (.intro-pen in styles.css), and a breath
+  title: 1700, // a new town: ms the game's name shows before the town's takes over…
+  swap: 420,   // …and for it to fade out (.intro-card in styles.css) first;
+  named: 1500, // then the new town's name shows this long before the map opens (it's new: time to read it)
+  delay: 180,  // ms before the hole starts opening (the name fades meanwhile)
+  open: 1300,  // ms for the hole to open (as .intro.opening in styles.css)
+  panels: 650, // ms after it starts that the panels come in
+};
+let opening = true;
+async function openIntro() {
+  await story.load();
+  fileScheme();
+  const intro = document.getElementById('intro');
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // the map drawn with what's unlocked, and the name in its font
+  await frames();
+  const card = intro?.querySelector('.intro-card');
+  const name = intro?.querySelector('.intro-name');
+  const show = () => {
+    card?.classList.remove('out');
+    card?.classList.add('shown'); // (its underline starts again with it)
+    window.introShownAt = performance.now();
+  };
+  if (card && !card.classList.contains('shown')) show();
+  if (window.introTitle && name) {
+    // the game's name a while, then the new town's in its place
+    await wait(Math.max(0, window.introShownAt + INTRO.title - performance.now()));
+    card.classList.replace('shown', 'out');
+    await wait(INTRO.swap);
+    name.textContent = world.name;
+    show();
+  } else if (name && name.textContent !== world.name) {
+    name.textContent = world.name;
+  }
+  await wait(Math.max(0, window.introShownAt + (window.introTitle ? INTRO.named : INTRO.underline) - performance.now()));
+  // the pen gets the middle ready under the cover (each drawing hidden
+  // until its turn), a couple of frames before the hole opens on it
+  const start = performance.now() + 50;
+  const reach = Math.hypot(innerWidth, innerHeight) * 1.5 / 2;
+  renderer.sketchIntro((px) => start - performance.now() + INTRO.delay + INTRO.open * Math.sqrt(Math.min(1, px / reach)) * 0.85);
+  await frames();
+  intro?.classList.add('opening');
+  setTimeout(() => {
+    document.body.classList.remove('loading');
+    // (the Build menu's own box is centred with a transform: its panel and dock move instead)
+    const panels = [...uiRoot.querySelectorAll('.hud, .controls, .bm-panel, .bm-dock, .credit')];
+    // each stays out of sight until its own entrance starts (else it shows, blinks out, comes in)
+    for (const el of panels) el.style.opacity = '0';
+    panels.forEach((el, i) => setTimeout(() => {
+      el.style.opacity = '';
+      reveal(el, true, { force: true, from: [0, el.closest('.build-menu') ? 14 : -8] });
+    }, i * 70));
+  }, INTRO.panels);
+  setTimeout(() => {
+    intro?.remove();
+    opening = false;
+  }, INTRO.delay + INTRO.open + 100);
+}
+openIntro();
+
 // ---------- loop ----------
 
 let last = performance.now();
@@ -327,12 +467,14 @@ function loop(now) {
   if (newMapMenu.open) return;
   try {
     const simDt = clock.step(dt);
+    world.time = clock.elapsed;
     agents.update(simDt);
     trains.update(simDt);
     growth.update(simDt);
     renderer.frame(tools.overlay(overlayKit) + annotations.overlay(overlayKit, tools.point, tools.active?.id));
     hud.update();
-    annotations.update();
+    chronicle.update(dt);
+    if (!opening) story.update(dt); // (the story waits for the map to be drawn)
   } catch (err) {
     if (!reported) console.error('Frame failed:', err);
     reported = true;
@@ -341,4 +483,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // Handy for debugging from the console.
-window.urbanismus = { world, camera, clock, agents, trains, growth, parking, tools, renderer, annotations, hud };
+window.urbanismus = { world, camera, clock, agents, trains, growth, parking, tools, renderer, annotations, hud, story, chronicle, dialogue };

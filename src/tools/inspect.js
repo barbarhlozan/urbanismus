@@ -5,6 +5,7 @@ import { STRUCTURES, STRUCTURE_TYPES, levelOf, maxLevel, categoryOf, yardOf, mat
 import { YARDS, YARD_STYLES } from '../../structures/yards.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { isTouch } from '../ui/device.js';
+import { UNLOCKS } from '../story/unlocks.js';
 import { statIcon, structureIcon } from '../ui/icons.js';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -73,51 +74,73 @@ function screenBox({ world, camera }, node) {
   return { left, top, right, bottom };
 }
 
-const TREND = {
-  growing: 'growing',
-  declining: 'declining',
-  waiting: 'waiting',
-  manual: 'set by hand',
-};
-
-// The building at a glance, drawn rather than listed: its level as pips,
-// whether it's growing, its numbers with their little drawings (as in the
-// HUD), and what it still needs, each shown by a drawing of that building.
+// The building at a glance: its level as pips, its numbers with their
+// little drawings (as in the HUD); then, in words, where it's going – what
+// it's growing into (or shrinking back to) and how far along it is – and
+// what it still needs to become the next level, a line each, with a
+// drawing of what's asked for. (Staying as it is, the usual, goes unsaid.)
 function summary(def, s, level, max, { trend, needs, keep, boosts, progress }, served) {
   const pips = Array.from({ length: max }, (_, i) => `<i class="${i < s.level ? 'on' : ''}"></i>`).join('');
-  const moving = trend === 'growing' || trend === 'declining';
-  const bar = moving && progress > 0.005 ? `<span class="bi-bar"><i style="width:${Math.round(progress * 100)}%"></i></span>` : '';
-  const arrow = trend === 'growing' ? '↗ ' : trend === 'declining' ? '↘ ' : '';
   const stats = Object.entries(level.stats ?? {}).map(([k, v]) =>
     `<span class="stat" title="${k[0].toUpperCase()}${k.slice(1)}">${statIcon(k)}<b>${v}</b></span>`);
   if (level.coverage) stats.push(`<span class="stat" title="Serves everything within ${level.coverage} dots">${statIcon('area')}<b>${level.coverage}</b></span>`);
   let html = `<div class="bi-row"><span class="bi-kind">${esc(def.name)}</span>`
-    + `<span class="bi-level" title="Level ${s.level} of ${max}">${pips}</span>${stats.join('')}`
-    // (stable, the usual state, goes unsaid)
-    + (TREND[trend] ? `<span class="bi-trend ${trend}">${arrow}${TREND[trend]}${bar}</span>` : '') + '</div>';
+    + `<span class="bi-level" title="Level ${s.level} of ${max}">${pips}</span>${stats.join('')}</div>`;
+
+  const name = (l) => def.levels[l - 1]?.name.toLowerCase();
+  const pct = Math.min(99, Math.round(progress * 100));
+  const bar = (title) => `<span class="bi-bar" title="${esc(title)}"><i style="width:${pct}%"></i></span><span class="bi-pct">${pct}%</span>`;
+  if (served && trend === 'growing' && name(s.level + 1)) {
+    html += `<div class="bi-trend growing"><span>Growing into ${esc(name(s.level + 1))}</span>${bar(`${pct}% of the way to becoming ${name(s.level + 1)}`)}</div>`;
+  } else if (trend === 'declining' && name(s.level - 1)) {
+    html += `<div class="bi-trend declining"><span>Shrinking back to ${esc(name(s.level - 1))}</span>${bar(`${pct}% of the way back to ${name(s.level - 1)}`)}</div>`;
+  } else if (trend === 'manual') {
+    html += `<div class="bi-trend"><span>Set by hand: it stays as it is</span></div>`;
+  }
 
   if (!served) {
     html += `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${def.access === 'any' ? 'Needs a road or footpath' : 'Needs a road next to it'}</span></div>`;
   } else if (needs.length && trend !== 'manual') {
-    html += `<div class="bi-needs"><span>${keep ? 'To stay' : 'To grow'}</span>${needs.map(need).join('')}</div>`;
+    const next = def.levels[s.level]?.name;
+    const head = keep ? `To stay ${level.name.toLowerCase()}, it needs` : next ? `To become ${next.toLowerCase()}, it needs` : 'To grow, it needs';
+    html += `<div class="bi-needs"><span class="bi-head">${esc(head)}</span>${needs.map(need).join('')}</div>`;
   }
-  if (boosts.length) html += `<div class="bi-boost">${boosts.map((b) => `${esc(b[0].toUpperCase() + b.slice(1))} nearby`).join(', ')} · growing faster</div>`;
+  if (boosts.length) {
+    const near = boosts.map((b) => NOUNS[b]?.[0] ?? b).map((b, i) => esc(i ? b : b[0].toUpperCase() + b.slice(1)));
+    html += `<div class="bi-boost">${near.join(', ')} nearby, so it grows faster</div>`;
+  }
   return html;
 }
 
-// One thing a building needs: a drawing of what's asked for, how many more
-// (or none of it, crossed out), the details on hover.
+// One thing a building needs, in words, with a drawing of what's asked for
+// (crossed out when it's something to keep away).
 function need(n) {
   const def = STRUCTURES.find((d) => matches(d, n.type));
   const pic = `<span class="bi-pic">${def ? structureIcon(def) : ''}</span>`;
-  const name = nameOf(n.type);
+  const [one, many] = NOUNS[n.type] ?? [nameOf(n.type), plural(nameOf(n.type))];
+  const within = `within ${n.radius} ${n.radius === 1 ? 'dot' : 'dots'}`;
+  let text;
   if (n.kind === 'more') {
-    const title = `${n.count} more ${name}${n.minLevel > 1 ? ` of level ${n.minLevel} or up` : ''} within ${n.radius} dots`;
-    return `<span class="bi-need" title="${esc(title)}">${pic}<b>+${n.count}</b>${n.minLevel > 1 ? `<small>L${n.minLevel}+</small>` : ''}</span>`;
+    const what = n.count === 1 ? `1 more ${one}` : `${n.count} more ${many}`;
+    const level = n.minLevel > 1 ? ` (${levelName(def, n.minLevel)} or bigger)` : '';
+    text = `<b>${esc(what)}</b>${esc(level)} ${within}`;
+  } else if (n.kind === 'avoid') {
+    text = `no ${esc(many)} ${within}`;
+  } else {
+    text = one === many ? `<b>${esc(one)}</b> in reach` : `a <b>${esc(one)}</b> in reach`;
   }
-  if (n.kind === 'avoid') return `<span class="bi-need avoid" title="${esc(`No ${name} within ${n.radius} dots`)}">${pic}</span>`;
-  return `<span class="bi-need" title="${esc(`Within reach of a ${name}`)}">${pic}<small>in reach</small></span>`;
+  return `<span class="bi-need ${n.kind === 'avoid' ? 'avoid' : ''}">${pic}<span>${text}</span></span>`;
 }
+
+// What growth rules ask for, as it's said (one, more than one).
+const NOUNS = {
+  residential: ['home', 'homes'],
+  industrial: ['industry', 'industry'],
+  services: ['services', 'services'],
+  heritage: ['landmark', 'landmarks'],
+};
+const plural = (name) => (/(s|x|ch|sh)$/.test(name) ? `${name}es` : /[^aeiou]y$/.test(name) ? `${name.slice(0, -1)}ies` : `${name}s`);
+const levelName = (def, level) => (def?.levels[level - 1]?.name ?? `level ${level}`).toLowerCase();
 
 function structureMenu({ world, growth }, s, nav) {
   const def = STRUCTURE_TYPES[s.type];
@@ -125,9 +148,11 @@ function structureMenu({ world, growth }, s, nav) {
   const max = maxLevel(def);
   const why = growth.explain(s);
 
-  // turning it into something else of the same kind: only what fits here
+  // turning it into something else of the same kind: only what fits here,
+  // and may be built (src/story/unlocks.js) at the level it would be
   const converts = STRUCTURES
-    .filter((other) => other.id !== s.type && categoryOf(other) === categoryOf(def) && world.canConvert(s.id, other.id).ok)
+    .filter((other) => other.id !== s.type && categoryOf(other) === categoryOf(def) && world.canConvert(s.id, other.id).ok
+      && UNLOCKS.allows(other.id, Math.min(s.level, maxLevel(other))))
     .map((other) => ({ label: other.name, action: () => world.convertStructure(s.id, other.id) }));
 
   // the second page: just those, and the way back
@@ -147,8 +172,8 @@ function structureMenu({ world, growth }, s, nav) {
 
   // making it bigger or smaller, or changing how it looks
   items.push({ section: 'Change' });
-  if (s.level < max) items.push({ label: 'Upgrade', note: def.levels[s.level].name, action: () => world.setStructureLevel(s.id, s.level + 1, { manual: true }) });
-  if (s.level > 1) items.push({ label: 'Downgrade', note: def.levels[s.level - 2].name, action: () => world.setStructureLevel(s.id, s.level - 1, { manual: true }) });
+  if (s.level < max && UNLOCKS.allows(s.type, s.level + 1)) items.push({ label: 'Upgrade', note: def.levels[s.level].name, action: () => world.setStructureLevel(s.id, s.level + 1, { manual: true }) });
+  if (s.level > 1 && UNLOCKS.allows(s.type, s.level - 1)) items.push({ label: 'Downgrade', note: def.levels[s.level - 2].name, action: () => world.setStructureLevel(s.id, s.level - 1, { manual: true }) });
   if (s.data.locked) items.push({ label: 'Let it grow on its own', action: () => world.setGrowthLocked(s.id, false) });
   items.push({ label: 'Change look', keepOpen: true, action: () => world.restyleStructure(s.id) });
 

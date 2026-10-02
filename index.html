@@ -11,7 +11,44 @@
   <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="loading">
+  <!-- The opening cover (main.js, openIntro): the town's name on paper in its
+       own colours while the game loads, then a hole opening from the middle
+       as the map is drawn. Painted before any script module has loaded. -->
+  <div id="intro" class="intro" aria-hidden="true">
+    <div class="intro-card">
+      <div class="intro-name">Urbanismus</div>
+      <span class="intro-pen"><span class="intro-pen-reveal"><svg viewBox="0 0 160 12"><path d="M3 8 C30 4 52 9 80 6 S130 3 157 7"/></svg></span></span>
+    </div>
+  </div>
+  <script>
+    // colours and name for the cover, from the last visit (no modules yet);
+    // a new map or a first visit has no town yet: the game's own name comes
+    // first, and main.js turns it into the town's (introTitle)
+    window.introTitle = true;
+    try {
+      const p = JSON.parse(localStorage.getItem('urbanismus.palette'));
+      if (p) for (const k of ['bg', 'main', 'detail']) document.documentElement.style.setProperty(`--${k}`, p[k]);
+      const save = localStorage.getItem('urbanismus.save.v1');
+      const name = !localStorage.getItem('urbanismus.pendingMap') && save && JSON.parse(save).name;
+      if (name) {
+        document.querySelector('.intro-name').textContent = name;
+        window.introTitle = false;
+      }
+    } catch { /* first visit, or storage unavailable: the defaults */ }
+    // the name comes in once its font is there (not first in another one),
+    // and is underlined (main.js waits for that: introShownAt)
+    {
+      const card = document.querySelector('.intro-card');
+      const show = () => {
+        if (card.classList.contains('shown')) return;
+        card.classList.add('shown');
+        window.introShownAt = performance.now();
+      };
+      document.fonts?.load('40px Basteleur').then(show, show);
+      setTimeout(show, 600);
+    }
+  </script>
   <div id="view" class="view">
     <svg id="ground" xmlns="http://www.w3.org/2000/svg"></svg>
     <svg id="world" xmlns="http://www.w3.org/2000/svg"></svg>

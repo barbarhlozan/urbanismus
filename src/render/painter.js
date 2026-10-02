@@ -227,6 +227,7 @@ export class Painter {
     this.follow = false;  // with rigid: still rise and fall with the ground, see _liftAt()
     this._onGround = false;
     this.top = 0;         // highest z drawn at (local), for the renderer's screen box
+    this.detail = 0;      // how plain to draw, for drawings that care (0 = full; trees, see features/trees.js)
     this.tilt = 0;        // extra turn in radians on top of `rotation`, see setTilt()
     this._tc = 1;
     this._ts = 0;

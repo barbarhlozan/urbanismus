@@ -113,6 +113,40 @@ folded there and folds again once you pick a tool.
 - The look is fixed, modelled on instrument approach charts: thin white lines that keep
   their width at every zoom. The map warp and annotations are set in `src/render/style.js`.
 
+## The story and the chronicle
+
+The town comes with a story, told in a dialogue window (bottom left) as the town grows. It is
+written in `story/story.txt`, a plain text file of rules and branches of dialogue:
+
+```
+if residential_house > 5 trigger IntroDialogue
+
+::IntroDialogue::
+Grandma: So in this village there were five houses and not much else.
+> Ask about the geese -> Geese
+> Say goodbye -> Goodbye
+::
+```
+
+How to write it, and everything a rule can count, is in [`story/README.md`](story/README.md).
+Each branch is told once per town. What has been told is kept with the town. Click the window,
+or press **Enter**, to go on.
+
+The **book** beside the town's name opens the town's **chronicle**: the houses (each of the
+first ten, with where it stands – by the church, by the river – then round numbers of them),
+every first (the first road, the first panel block, the railway arriving), every landmark, the residents
+passing round numbers, a new name, and whatever the story writes in it (`chronicle:` lines).
+A dot on the book means there's something new in it. **← →** turn the pages.
+
+## Tests
+
+```
+node --test tests/*.test.js
+```
+
+No installs needed (Node 22 or newer). They cover the story script, park entrances and walkways,
+bridges, and the chronicle, on small made-up towns (`tests/helpers.js`).
+
 ## Where things live
 
 - `structures/` – the buildings (one file per type, registered in `index.js`)
@@ -120,7 +154,9 @@ folded there and folds again once you pick a tool.
 - `src/config.js` – most of the numbers worth tweaking
 - `src/theme.js` – colours
 - `src/render/` – drawing (`painter.js` has the drawing API at the top)
-- `src/sim/` – growth, people, parking
+- `src/sim/` – growth, people, parking, the chronicle
+- `src/story/`, `story/` – the storyteller, and the story it tells
+- `tests/` – see Tests above
 - `src/roads/`, `src/tools/`, `src/ui/` – what they say
 
 **New building:** copy `structures/residential.js`, change the id/name/hotkey, and add it

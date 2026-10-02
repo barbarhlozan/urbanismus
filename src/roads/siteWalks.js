@@ -56,3 +56,23 @@ export function siteWalks({ hubPos: hub, exits, half }) {
   }
   return { lines: exits.map((e) => [hub, e.pos]), plaza: SITE_WALK.plaza, loop: 0, centre: hub };
 }
+
+// Ways in for a site drawn on its own, with no town round it (the Assets
+// page, gallery.html, Build menu icons): `n` of them (0–4), on the middle of
+// the sides of the rectangle [x0, y0, x1, y1], as footpaths. Two face each
+// other, unless `bend`. Hand the result to Painter.setSitePaths.
+export function sampleSitePaths([x0, y0, x1, y1], n, { bend = false } = {}) {
+  const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  const sides = {
+    w: { pos: [x0, my], dir: [-1, 0] },
+    e: { pos: [x1, my], dir: [1, 0] },
+    n: { pos: [mx, y0], dir: [0, -1] },
+    s: { pos: [mx, y1], dir: [0, 1] },
+  };
+  const pick = ['', 'w', bend ? 'ws' : 'we', 'wes', 'wens'][Math.max(0, Math.min(4, n))];
+  return {
+    hubPos: [mx, my],
+    half: Math.min(x1 - x0, y1 - y0) / 2,
+    exits: [...pick].map((k) => ({ ...sides[k], road: -1, site: -1 })),
+  };
+}

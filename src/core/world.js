@@ -37,6 +37,9 @@ export class World {
     this.structureAtNode = new Map(); // node -> structure id (every footprint node)
     this.featureAtNode = new Map();   // node -> feature id
     this.nextId = 1;
+    this.time = 0; // simulated seconds the town has been running (the clock, kept in the save)
+    this.story = { seen: [], vars: {}, unlocks: [] }; // what the story has told and unlocked (src/story/)
+    this.chronicle = { entries: [], marks: [] }; // the town's chronicle (src/sim/chronicle.js)
 
     this.sidewalks = new Set(); // edgeKey of road segments that are streets (have sidewalks)
     this.lanes = new Set();     // edgeKey of road segments that are single-track lanes (never streets)
@@ -583,16 +586,22 @@ export class World {
   }
 
   // Rotation a building is drawn with: single-dot buildings turn their front
-  // (local -y) towards the road they use, or without one towards a footpath;
-  // larger ones keep their placed rotation.
-  facingRotation(type, node, rotation = 0) {
+  // (local -y) towards the road they use, or without one towards a footpath,
+  // then `turn` more quarter turns (the player's choice, s.data.turn: side
+  // or back to the road); larger ones keep their placed rotation.
+  facingRotation(type, node, rotation = 0, turn = 0) {
     const nodes = this.footprintNodes(type, node, rotation);
     if (nodes.length > 1) return rotation;
     const front = this.frontFor(nodes);
     if (!front) return rotation;
     const [ox, oy] = front.dir;
-    if (ox !== 0) return ox > 0 ? 1 : 3;
-    return oy > 0 ? 2 : 0;
+    const base = ox !== 0 ? (ox > 0 ? 1 : 3) : oy > 0 ? 2 : 0;
+    return (base + turn) % 4;
+  }
+
+  // The rotation structure s is drawn with (see facingRotation).
+  drawnRotation(s) {
+    return this.facingRotation(s.type, s.node, s.rotation, s.data?.turn ?? 0);
   }
 
   // Map exits: roads that end at the edge of the map continue off it.
@@ -811,7 +820,8 @@ export class World {
     nodes.push(...this.pruneBridges(layer, nodes));
     if (kind === 'road') {
       for (const set of [this.sidewalks, this.lanes, this.laneWalks]) {
-        for (const k of [...set]) if (!this.roads.hasEdge(...k.split('-').map(Number))) set.delete(k);
+        // (keys(): laneWalks is a Map, the others Sets)
+        for (const k of [...set.keys()]) if (!this.roads.hasEdge(...k.split('-').map(Number))) set.delete(k);
       }
     }
     layer.version++;
@@ -997,6 +1007,9 @@ export class World {
       laneWalks: [...this.laneWalks],
       structures: [...this.structures.values()],
       features: [...this.features.values()],
+      time: Math.round(this.time),
+      story: this.story,
+      chronicle: this.chronicle,
     };
   }
 
@@ -1047,6 +1060,9 @@ export class World {
       if (FEATURE_TYPES[f.type] && !world.structureAt(f.node)) world._insertFeature(f);
     }
     world.nextId = data.nextId;
+    world.time = data.time ?? 0;
+    world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [] };
+    world.chronicle = { entries: data.chronicle?.entries ?? [], marks: data.chronicle?.marks ?? [] };
     return world;
   }
 }
