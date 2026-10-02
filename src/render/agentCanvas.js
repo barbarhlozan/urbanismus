@@ -18,6 +18,8 @@ const STYLES = {
   'fig-body': { fill: 'bg', stroke: 'main', width: 0.9 },
   'fig-head': { stroke: 'main', width: 0.8 },
   'fig-wheel': { stroke: 'main', width: 0.8 },
+  'fig-line': { stroke: 'main', width: 0.8 },
+  'fig-ink': { fill: 'main', stroke: 'main', width: 0.5 },
   car: { fill: 'main' },
   walker: { fill: 'main' },
   cyclist: { fill: 'main', stroke: 'main', width: 0.4 },
@@ -101,12 +103,13 @@ export class AgentCanvas {
 
   // Shapes drawn around the scene point (sx, sy), at size k, mirrored.
   // `shear`: y += shear · x in the shapes (a vehicle leaning up or down a
-  // slope, see Renderer.slopeShear).
-  draw(shapes, sx, sy, k = 1, mirror = false, shear = 0) {
+  // slope, see Renderer.slopeShear). `squash`: height scaled about the foot
+  // (a walker's step).
+  draw(shapes, sx, sy, k = 1, mirror = false, shear = 0, squash = 1) {
     if (!(k > 0.001) || !this.onScreen(sx, sy)) return;
     const { ctx, dpr, zoom } = this;
     const m = dpr * zoom * k;
-    ctx.setTransform(mirror ? -m : m, m * shear, 0, m, dpr * (this.panX + zoom * sx), dpr * (this.panY + zoom * sy));
+    ctx.setTransform(mirror ? -m : m, m * shear, 0, m * squash, dpr * (this.panX + zoom * sx), dpr * (this.panY + zoom * sy));
     const unit = 1 / (zoom * k); // one screen px in the shapes' units
     for (const s of shapes) this.paint(s.style, s.path, unit);
   }

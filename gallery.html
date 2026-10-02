@@ -16,6 +16,12 @@
   </style>
 </head>
 <body>
+  <!-- the map's fill patterns (src/render/renderer.js), for ponds and pools -->
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <pattern id="hatch-water" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(-40)">
+      <line class="hatch" x1="0" y1="2.5" x2="5" y2="2.5"/>
+    </pattern>
+  </defs></svg>
   <div id="out"></div>
   <script type="module">
     // Dev page: every structure level drawn with a few seeds, close up.
@@ -27,11 +33,18 @@
     //   &scheme=2    color scheme (src/theme.js: 0 Night, 1 Red light, 2 Paper)
     //   &join=1      drawn as if sharing walls on both sides (street fronts)
     //   &sketch=1.2  hand-drawn wobble (LOOK.sketch); any LOOK key works, e.g. &eave=0.05
+    //   &grounds=1   each one drawn with each ground shadow style (cast, hatch, scribble)
+    //   &shadow=0    no shadows at all, &walls=0 no wall shading; any SUN key works too,
+    //                e.g. &fall=60&length=1&angle=-60&spacing=0.04 (src/render/shadows.js)
+    //   &lod=1       as seen from middle zoom (2: far), to check what thins out
+    //   &sz=1        shadow hatching density tier, 0–3, on the ground (&sw=1: on walls;
+    //                src/render/shadows.js; default: as the map would at this size)
     //   &speed=3     pen animations slowed down (DRAW in src/render/draw.js)
     // Click a drawing to watch it sketched in, shift-click to watch it erased.
     import { applyTheme } from './src/theme.js';
     import { Camera } from './src/render/camera.js';
     import { Painter, LOOK } from './src/render/painter.js';
+    import { SUN, sunFor, shadowSVG, tierAt, groundSpacing, wallSpacing } from './src/render/shadows.js';
     import { STRUCTURES } from './structures/index.js';
     import { sampleSitePaths } from './src/roads/siteWalks.js';
     import { agentShape } from './src/render/renderer.js';
@@ -46,9 +59,19 @@
     cam.rotation = +(q.get('rot') ?? 0);
     const views = [['back', cam.rotation], ['front', (cam.rotation + 2) % 4]];
     for (const k of Object.keys(LOOK)) if (q.has(k)) LOOK[k] = q.get(k) === 'false' ? false : +q.get(k) || (q.get(k) === 'true');
+    for (const k of Object.keys(SUN)) if (!['on', 'walls'].includes(k) && q.has(k)) SUN[k] = isNaN(+q.get(k)) ? q.get(k) : +q.get(k);
+    if (q.has('shadow')) SUN.on = q.get('shadow') !== '0';
+    if (q.has('walls')) SUN.walls = q.get('walls') !== '0';
+    // a painter's cast shadow (drawn under it, as the map's shadows layer)
+    const px = cam.tile * size / 200; // about the map's px per grid unit at this figure size
+    const lod = `${q.get('lod') ?? 0} sz-${q.get('sz') ?? tierAt(px, groundSpacing())} sw-${q.get('sw') ?? tierAt(px, wallSpacing())}`;
+    const shade = (g) => shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sunFor(cam));
     // before = the look at the start of the hand-drawn pass (wobble only)
     const NEW = { ...LOOK }, OLD = { ...LOOK, fascia: 0.012, sill: true, overshoot: 0, ink: false, hatch: 0, ground: 0, floors: true };
-    const looks = q.has('compare') ? [['before', OLD], ['after', NEW]] : [['', NEW]];
+    const looks = q.has('compare') ? [['before', OLD], ['after', NEW]]
+      : q.has('grounds') ? ['cast', 'hatch', 'scribble'].map((ground) => [ground, NEW, { ground }])
+        : [['', NEW]];
+    const BASE_SUN = { ...SUN };
     const out = document.getElementById('out');
     if (q.has('speed')) DRAW.speed = +q.get('speed');
     out.addEventListener('click', (e) => {
@@ -64,14 +87,15 @@
       const el = document.createElement('div');
       el.className = 'row';
       out.appendChild(el);
-      for (let k = 0; k < seeds; k++) for (const [label, look] of looks) {
+      for (let k = 0; k < seeds; k++) for (const [label, look, sun] of looks) {
         Object.assign(LOOK, look);
+        Object.assign(SUN, BASE_SUN, sun);
         const seed = (k + 1) * 2654435761 >>> 0;
         const g = new Painter(cam, { x: 0, y: 0 }, 0, seed);
         let svg;
-        try { draw(g, k, seed); svg = g.toSVG(); } catch (e) { svg = ''; console.warn(title, e.message); }
+        try { draw(g, k, seed); svg = shade(g) + g.toSVG(); } catch (e) { svg = ''; console.warn(title, e.message); }
         const fig = document.createElement('figure');
-        fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0">${svg}</g></svg><figcaption>#${k} ${label}</figcaption>`;
+        fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-${lod}">${svg}</g></svg><figcaption>#${k} ${label}</figcaption>`;
         el.appendChild(fig);
         const box = fig.querySelector('svg'), b = box.querySelector('g').getBBox();
         const m = Math.max(b.width, b.height) + 16;
@@ -139,8 +163,9 @@
         const row = document.createElement('div');
         row.className = 'row';
         out.appendChild(row);
-        for (let k = 0; k < seeds; k++) for (const [label, look] of looks) for (const [view, rotation] of views) {
+        for (let k = 0; k < seeds; k++) for (const [label, look, sun] of looks) for (const [view, rotation] of views) {
           Object.assign(LOOK, look);
+          Object.assign(SUN, BASE_SUN, sun);
           cam.rotation = rotation;
           const seed = (k + 1) * 2654435761 >>> 0;
           const g = new Painter(cam, { x: 0, y: 0 }, 0, seed);
@@ -155,9 +180,9 @@
           }
           const s = { type: def.id, level: li + 1, seed, id: k, node: 0, rotation: 0 };
           let svg;
-          try { lvl.draw(g, s); svg = g.toGroundSVG() + g.toSVG(); } catch (e) { svg = ''; console.warn(def.id, lvl.name, e.message); }
+          try { lvl.draw(g, s); svg = g.toGroundSVG() + shade(g) + g.toSVG(); } catch (e) { svg = ''; console.warn(def.id, lvl.name, e.message); }
           const fig = document.createElement('figure');
-          fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0">${svg}</g></svg><figcaption>#${k} ${[label, view].filter(Boolean).join(' · ')}</figcaption>`;
+          fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-${lod}">${svg}</g></svg><figcaption>#${k} ${[label, view].filter(Boolean).join(' · ')}</figcaption>`;
           row.appendChild(fig);
           const el = fig.querySelector('svg'), b = el.querySelector('g').getBBox();
           const pad = 8, m = Math.max(b.width, b.height) + pad * 2;

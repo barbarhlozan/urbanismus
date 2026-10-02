@@ -165,18 +165,36 @@ const actions = {
   chronicle: () => { if (UNLOCKS.allowsControl('chronicle')) chronicleBook.toggle(); },
 };
 
-// Full screen: the whole page, UI and all. Safari wants its own prefixed
-// names, and on an iPhone there's no full screen for pages at all: the
-// button hides.
+// Full screen: the whole page, UI and all. Safari (iPad too) wants its own
+// prefixed names. An iPhone has no full screen for pages at all: there the
+// button explains how to put the game on the home screen, from where it
+// opens as an app, without Safari around it (manifest.webmanifest). Opened
+// that way it's as full as it gets, and the button hides.
 const fs = {
-  enabled: () => document.fullscreenEnabled || document.webkitFullscreenEnabled,
+  // what the browser can do, not what it says (iPad Safari leaves
+  // fullscreenEnabled out but can go full screen all the same)
+  enabled: () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen),
+  app: () => matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true,
   element: () => document.fullscreenElement ?? document.webkitFullscreenElement,
   enter: () => (document.documentElement.requestFullscreen ?? document.documentElement.webkitRequestFullscreen)?.call(document.documentElement),
   exit: () => (document.exitFullscreen ?? document.webkitExitFullscreen)?.call(document),
 };
 function toggleFullscreen() {
+  if (!fs.enabled()) return explainHomeScreen();
   const p = fs.element() ? fs.exit() : fs.enter();
   p?.catch?.(() => { /* refused (not from a click, or not allowed here) */ });
+}
+
+// iPhone: no full screen for pages, but the game added to the home screen
+// opens without Safari's bars – say how, under the button.
+function explainHomeScreen() {
+  const at = uiRoot.querySelector('[data-act="fullscreen"]').getBoundingClientRect();
+  popup.show(at.left, at.bottom, 'Full screen', [
+    { label: 'Safari can’t show web pages full screen on iPhone. Add the game to your home screen instead:', info: true },
+    { label: '1. Tap Share (the square with the arrow)', info: true },
+    { label: '2. Choose Add to Home Screen', info: true },
+    { label: 'Open it from there: it fills the screen like an app.', info: true },
+  ]);
 }
 
 // Discard this city and start over with the New map menu's settings.
@@ -258,10 +276,11 @@ function fileScheme() {
   try { localStorage.setItem(FILE_SCHEME_KEY, value); } catch { /* storage unavailable */ }
 }
 story.onScheme = () => colorMenu.refresh();
-// the full-screen button: hidden where there's no full screen, its icon and name following the state
+// the full-screen button: its icon and name following the state; hidden
+// when the game already runs as an app from the home screen
 {
   const btn = uiRoot.querySelector('[data-act="fullscreen"]');
-  if (!fs.enabled()) btn.hidden = true;
+  if (fs.app()) btn.hidden = true;
   const show = () => {
     const full = !!fs.element();
     btn.classList.toggle('full', full);

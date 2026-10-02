@@ -27,6 +27,16 @@
 //   g.solid(x, y, z)                         start a new depth-sorted group manually
 //   g.cylinder(x, y, z, r, h, sides, opts)   upright polygonal cylinder (chimneys, silos)
 //
+// Shadows – every face casts one on the ground by itself, and a wall turned
+// away from the sun is shaded with upright strokes (render/shadows.js;
+// opts.shadow = false: neither for this face). Things not made of faces
+// cast with:
+//   g.cast([[x,y,z]…])                       the shadow of these points (their convex hull)
+//   g.castShape(x, y, z, [[u,v]…])           of a screen-facing outline (as g.shape), turned
+//                                            about its upright axis into a round lump (trees)
+//   g.castFoot([[x,y]…], h)                  stand an outline (CCW) h high on the ground, for
+//                                            the contact shadows at its foot (trees)
+//
 // Ground drawing – flat linework at z = 0 (lawns, paving, parking lines,
 // paths). It goes to a separate layer under roads and buildings, so it never
 // covers anything standing up:
@@ -80,6 +90,7 @@ import { color } from '../theme.js';
 import { mulberry32 } from '../core/random.js';
 import { MinHeap } from '../core/heap.js';
 import { siteWalks } from '../roads/siteWalks.js';
+import { SUN, sunFor, tierClass, wallHatch, awayFrom, shadeShare } from './shadows.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -231,6 +242,9 @@ export class Painter {
     this.tilt = 0;        // extra turn in radians on top of `rotation`, see setTilt()
     this._tc = 1;
     this._ts = 0;
+    this.casts = [];      // shadow casters: lists of world [x, y, height], see render/shadows.js
+    this.feet = [];       // walls' feet on the ground: { a, b, h, n } world, see render/shadows.js
+    this.casting = true;  // false: draw no shadows (icons)
   }
 
   // Turn the whole drawing by a small angle (radians, counter-clockwise
@@ -340,7 +354,16 @@ export class Painter {
     let size = 0;
     for (let i = 1; i < scr.length; i++) size = Math.max(size, Math.hypot(scr[i][0] - scr[i - 1][0], scr[i][1] - scr[i - 1][1]));
     const jit = Math.min(amp * 0.4, size * 0.05);
-    const pts = scr.map(([x, y]) => [x + hash2(x, y, 1) * jit, y + hash2(x, y, 2) * jit, x, y]);
+    // each corner strays at most a fraction of its shorter edge: a finely
+    // sampled line (a lot's edge following a road, a curve) would otherwise
+    // have every point thrown about by the same amount – a zigzag
+    const n = scr.length;
+    const gap = (i, j) => (j < 0 || j >= n ? Infinity : Math.hypot(scr[j][0] - scr[i][0], scr[j][1] - scr[i][1]));
+    const near = (i) => Math.min(gap(i, closed ? (i - 1 + n) % n : i - 1), gap(i, closed ? (i + 1) % n : i + 1));
+    const pts = scr.map(([x, y], i) => {
+      const k = Math.min(jit, near(i) * 0.15);
+      return [x + hash2(x, y, 1) * k, y + hash2(x, y, 2) * k, x, y];
+    });
     if (closed) pts.push(pts[0]);
     let d = `M${r2(pts[0][0])} ${r2(pts[0][1])}`;
     for (let i = 1; i < pts.length; i++) {
@@ -564,9 +587,78 @@ export class Painter {
   face(points, opts = {}) {
     this._ensure(...points[0]);
     this._spread(points);
-    if (!this._facing(newellNormal(points), points[0])) return this;
+    const n = newellNormal(points);
+    if (opts.shadow !== false) {
+      this.cast(points);
+      this._footOf(points, n);
+    }
+    if (!this._facing(n, points[0])) return this;
     this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
+    if (opts.shadow !== false) this._shade(points, n);
     return this;
+  }
+
+  // Shade a wall turned away from the sun (SUN.walls): strokes on parallel
+  // screen lines leaning their own way (SUN.wallAngle, apart from the
+  // ground's), stopping short of the wall's edges by a seeded amount. A
+  // wall only a little turned away gets only some of them. Drawn right after
+  // the wall, so what is drawn on it later (ink windows) covers them.
+  _shade(points, n) {
+    if (!SUN.on || !SUN.walls) return;
+    const w = this._wallNormal(n);
+    if (!w) return;
+    this._sun ??= sunFor(this.camera);
+    const share = shadeShare(awayFrom(w, this._sun), this._sun);
+    if (share > 0) this._wallStrokes(points, { share, trim: SUN.wallTrim, loose: SUN.wallLoose });
+  }
+
+  // The outward world normal (unit, horizontal) of a wall with local normal
+  // n; null for what is not a wall (roofs, floors).
+  _wallNormal([nx, ny, nz]) {
+    const h = Math.hypot(nx, ny);
+    if (h < 1e-9 || Math.abs(nz) > h * 0.2) return null;
+    return this._turn(nx / h, ny / h);
+  }
+
+  // Wall-shading strokes over a face (local 3D points), drawn as
+  // render/shadows.js wallHatch does (opts: share, trim, loose, fade),
+  // seeded by where the face stands. Thinned out by density tiers like the
+  // ground shadows, and hidden with the facade detail when far.
+  _wallStrokes(points, opts) {
+    const [poly] = this._screenRuns(points, true);
+    if (!poly) return;
+    const [wx, wy] = this.toWorld(points[0][0], points[0][1]);
+    const d = wallHatch(poly, this._sun.wall, { ...opts, seed: (wx * 13.1 + wy * 7.7) % 97 });
+    d.forEach((path, n) => {
+      if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln wall-shade${tierClass(n, 'w')}`)}/>`);
+    });
+  }
+
+  // The shade under the eaves of a pitched roof (SUN.eaveBand): a band of
+  // wall strokes just under the wall top from a to b (local [x, y], the
+  // wall's outward normal on the right going a -> b, as faces are
+  // counter-clockwise), on a wall that is lit – a shaded one is hatched all
+  // over already.
+  _eaveBand(a, b, zt) {
+    if (!SUN.on || !SUN.walls || !SUN.eaveBand) return;
+    const pts = [[a[0], a[1], zt - SUN.eaveBand], [b[0], b[1], zt - SUN.eaveBand], [b[0], b[1], zt], [a[0], a[1], zt]];
+    const n = newellNormal(pts);
+    if (!this._facing(n, pts[0])) return;
+    this._sun ??= sunFor(this.camera);
+    if (shadeShare(awayFrom(this._wallNormal(n), this._sun), this._sun) > 0) return;
+    this._wallStrokes(pts, { trim: 0.1, loose: SUN.wallLoose * 0.5, fade: 0, hang: true });
+  }
+
+  // Record where a wall stands on the ground (its foot: world ends, height,
+  // outward normal), for the contact shadows (render/shadows.js).
+  _footOf(points, n) {
+    if (!this.casting) return;
+    const w = this._wallNormal(n);
+    if (!w) return;
+    const low = points.filter((p) => p[2] <= SUN.low);
+    if (low.length !== 2) return;
+    const h = Math.max(...points.map((p) => p[2]));
+    this.feet.push({ a: this.toWorld(low[0][0], low[0][1]), b: this.toWorld(low[1][0], low[1][1]), h, n: w });
   }
 
   // A pitched roof plane: a face whose first edge is the eave, hatched with
@@ -801,6 +893,20 @@ export class Painter {
     plane([[U1, V1, zb], [U0, V1, zb], [RA, vm, zr], [RB, vm, zr]]);
     if (ra > u0) plane([[U0, V1, zb], [U0, V0, zb], [RA, vm, zr]]);
     if (rb < u1) plane([[U1, V0, zb], [U1, V1, zb], [RB, vm, zr]]);
+    // shade under the eaves, on the walls the eaves overhang (in the frame's
+    // order, so the band's ends run counter-clockwise like the walls)
+    if (e && !m) {
+      onWalls(() => {
+        const band = (p, q) => {
+          const [a, b] = [P(...p, 0), P(...q, 0)];
+          if (alongY) this._eaveBand(b, a, zb); else this._eaveBand(a, b, zb);
+        };
+        if (ev0) band([u0, v0], [u1, v0]);
+        if (ev1) band([u1, v1], [u0, v1]);
+        if (ra > u0 && eu0) band([u0, v1], [u0, v0]);
+        if (rb < u1 && eu1) band([u1, v0], [u1, v1]);
+      });
+    }
     this.current = walls;
     return this;
   }
@@ -1040,8 +1146,58 @@ export class Painter {
     return this;
   }
 
+  // Cast a shadow from local 3D points (their convex hull, see
+  // render/shadows.js). Faces do this by themselves.
+  cast(points) {
+    if (!this.casting) return this;
+    this.casts.push(points.map(([x, y, z]) => {
+      const [lx, ly] = this._turn(x, y);
+      return [this.ox + lx, this.oy + ly, z];
+    }));
+    return this;
+  }
+
+  // The shadow of a screen-facing outline (u right, v up, grid units, as
+  // g.shape) taken as a solid of revolution about its upright axis: a tree
+  // crown drawn as a flat glyph still casts a round shadow. A few of the
+  // outline's points are enough for the hull.
+  castShape(x, y, z, points) {
+    const step = Math.max(1, Math.floor(points.length / 10));
+    const pts = [];
+    for (let i = 0; i < points.length; i += step) {
+      const r = Math.abs(points[i][0]), h = z + points[i][1] / this.camera.zScale;
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        pts.push([x + Math.cos(a) * r, y + Math.sin(a) * r, h]);
+      }
+    }
+    return this.cast(pts);
+  }
+
+  // A contact shadow's footing (render/shadows.js): the edges of a
+  // counter-clockwise outline on the ground, standing h high.
+  castFoot(base, h) {
+    if (!this.casting) return this;
+    for (let i = 0; i < base.length; i++) {
+      const p = base[i], q = base[(i + 1) % base.length];
+      const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (l < 1e-9) continue;
+      this.feet.push({ a: this.toWorld(p[0], p[1]), b: this.toWorld(q[0], q[1]), h, n: this._turn((q[1] - p[1]) / l, -(q[0] - p[0]) / l) });
+    }
+    return this;
+  }
+
+  // Ground point (world x, y) -> scene px, as this painter draws its ground:
+  // for drawing its shadows (render/shadows.js).
+  groundProjector() {
+    const at = this.rigid, lift = this.follow ? null : this.rigid;
+    return (x, y) => this.camera.project(x, y, this.oz, at, lift);
+  }
+
   // Combine another painter's output (same camera) into this one.
   merge(other) {
+    this.casts.push(...other.casts);
+    this.feet.push(...other.feet);
     this.top = Math.max(this.top, other.top + other.oz - this.oz);
     this.solids.push(...other.solids);
     this.ground.push(...other.ground);

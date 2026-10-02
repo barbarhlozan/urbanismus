@@ -59,6 +59,7 @@ function drawSpruce(g, x, y, height, simple) {
   const { outline, trunk, inside, branches } = spruceShape(g, height, simple);
   g.strokes(x, y, 0, trunk, { cls: 'trunk' });
   g.shape(x, y, 0, plain(g, outline, height, PLAIN.spruce), { smooth: true, cls: 'tree' });
+  castTree(g, x, y, outline);
   if (LEAFY) {
     // hatch inside the smooth outline: it runs through the points' midpoints,
     // pulled in a little towards the trunk
@@ -68,6 +69,18 @@ function drawSpruce(g, x, y, height, simple) {
   }
   g.strokes(x, y, 0, inside, { cls: 'trunk', lod: 2 });
   g.strokes(x, y, 0, branches, { cls: 'twig', lod: 2 });
+}
+
+// A tree's shadow: its crown turned into a round lump (Painter.castShape)
+// on a thin trunk down to the ground – and for the contact shadows, a
+// small block at its foot about half the crown wide and half the tree high.
+function castTree(g, x, y, outline) {
+  g.castShape(x, y, 0, outline);
+  const top = Math.min(...outline.map((p) => p[1])) / g.camera.zScale, w = 0.012;
+  g.cast([0, top].flatMap((z) => [[x - w, y, z], [x + w, y, z], [x, y + w, z], [x, y - w, z]]));
+  const r = Math.max(...outline.map((p) => Math.abs(p[0]))) * 0.5;
+  const h = Math.max(...outline.map((p) => p[1])) / g.camera.zScale * 0.5;
+  g.castFoot([[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]], h);
 }
 
 function bareParts(g, kind, height, simple) {
@@ -83,6 +96,7 @@ export function drawShrub(g, x, y, height) {
     const { outline, clip } = blob(g, 0, height * 0.45, height * g.range(0.55, 0.7), height * 0.45, g.int(4, 6));
     g.shape(x, y, 0, outline, { smooth: true, cls: 'tree' });
     g.strokes(x, y, 0, hatchIn(g, clip, height * 0.22), { cls: 'leaf' });
+    g.castShape(x, y, 0, outline);
     return;
   }
   const lines = [];
@@ -193,6 +207,7 @@ function drawLeafy(g, x, y, kind, H, simple) {
   g.strokes(x, y, 0, [[[0, 0], [lean * 0.5, T], [lean, cy]]], { cls: kind === 'spreading' ? 'trunk thick' : 'trunk' });
   g.shape(x, y, 0, plain(g, outline, H, PLAIN.leafy), { smooth: true, cls: 'tree' });
   g.strokes(x, y, 0, hatchIn(g, clip, H * (simple ? 0.09 : 0.07)), { cls: 'leaf', lod: 1 });
+  castTree(g, x, y, outline);
   if (!simple) {
     const fork = [[lean * 0.6, T * 0.9], [lean - rx * 0.35, cy + ry * 0.1]];
     const fork2 = [[lean * 0.6, T * 0.9], [lean + rx * 0.3, cy + ry * 0.25]];

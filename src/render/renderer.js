@@ -14,6 +14,9 @@
 //   rails    – railways: the map symbol, a solid line with dashes inside
 //   roads    – roads + driveways (for buildings without surroundings);
 //              over the railways, so level crossings read as road
+//   shadows  – cast shadows of structures and features, as hatching
+//              (shadows.js); built together with objects, over the roads
+//              so a shadow runs on across the street
 //   parked   – parked cars (hollow squares) in parking lots
 //   trains   – carriages (squares) coupled by a line
 //   agents   – moving dots; sit under objects so buildings hide them correctly
@@ -23,7 +26,8 @@
 // To add a layer: add its name to LAYERS, write render<Name>(), and mark it
 // dirty from the events that should refresh it.
 //
-// Objects (and their ground drawing in `lots`) are kept per structure /
+// Objects (and their ground drawing in `lots`, their shadow in `shadows`)
+// are kept per structure /
 // feature / street segment (its lamp): a change redraws only the objects
 // near it, then re-sorts. Keys: 's12' structure, 'f7' feature, 'k3-4'
 // the street from road dot 3 to 4.
@@ -40,7 +44,7 @@ import { THEME } from '../theme.js';
 import { STYLE } from './style.js';
 import { Painter, LOOK, wobble } from './painter.js';
 import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex } from './vehicles.js';
-import { bodyFor, walkerSVG, cyclistSVG } from './people.js';
+import { PEOPLE, bodyFor, walkerSVG, cyclistSVG } from './people.js';
 import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './draw.js';
 import { chainEdges, edgeCurve, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
@@ -66,12 +70,13 @@ import { MEADOW, meadowGround, chunkSVG } from './meadow.js';
 import { PENCIL, CONTOUR_CHUNK, chunked, cut, pencil } from './pencil.js';
 import { carMark, personMark } from './marks.js';
 import { mergeRuns, placeInOrder, isoSort } from './order.js';
+import { SUN, sunFor, shadowSVG, tierAt, groundSpacing, wallSpacing } from './shadows.js';
 
 // (gallery.html and others import these from here)
 export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
-const LAYERS = ['terrain', 'meadow', 'grid', 'subgrid', 'lots', 'paths', 'rails', 'roads', 'parked', 'trains', 'agents', 'objects', 'overlay'];
+const LAYERS = ['terrain', 'meadow', 'grid', 'subgrid', 'lots', 'paths', 'rails', 'roads', 'shadows', 'parked', 'trains', 'agents', 'objects', 'overlay'];
 const TOP = ['objects', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -222,7 +227,7 @@ export class Renderer {
   // Rebuild everything (e.g. after a camera rotation).
   invalidate() {
     this.roadLines = null; // drawn for the old view
-    for (const l of LAYERS) if (l !== 'agents' && l !== 'overlay' && l !== 'objects' && l !== 'lots') this.dirty.add(l);
+    for (const l of LAYERS) if (l !== 'agents' && l !== 'overlay' && l !== 'objects' && l !== 'lots' && l !== 'shadows') this.dirty.add(l);
     this.objsAll = true;
     this.lastOverlay = null;
     for (const ink of Object.values(this.ink ?? {})) ink.clearErasing(); // drawn for the old view
@@ -904,6 +909,16 @@ export class Renderer {
       if (this.treeDetail !== undefined) this.treesAll = true;
       this.treeDetail = detail;
     }
+    // shadow hatching: the stroke tiers that keep strokes apart on screen,
+    // on the ground (sz) and on walls (sw)
+    const tiers = `sz-${tierAt(this.camera.tile * z, groundSpacing())} sw-${tierAt(this.camera.tile * z, wallSpacing())}`;
+    if (tiers !== this.shadeTiers) {
+      for (const s of [this.svg, this.ground, this.top]) {
+        if (this.shadeTiers) s.classList.remove(...this.shadeTiers.split(' '));
+        s.classList.add(...tiers.split(' '));
+      }
+      this.shadeTiers = tiers;
+    }
     const level = z >= medium ? 0 : z >= far ? 1 : 2;
     if (level === this.lodLevel) return;
     for (const s of [this.svg, this.ground, this.top]) {
@@ -976,6 +991,7 @@ export class Renderer {
           } else {
             entry.g.remove();
             entry.lg.remove();
+            entry.sg.remove();
             orderChanged = true;
           }
         }
@@ -984,8 +1000,9 @@ export class Renderer {
         continue;
       }
       if (!entry) {
-        entry = { key, g: document.createElementNS(SVGNS, 'g'), lg: document.createElementNS(SVGNS, 'g') };
+        entry = { key, g: document.createElementNS(SVGNS, 'g'), lg: document.createElementNS(SVGNS, 'g'), sg: document.createElementNS(SVGNS, 'g') };
         this.layers.lots.appendChild(entry.lg);
+        this.layers.shadows.appendChild(entry.sg);
         this.objs.set(key, entry);
         orderChanged = true;
       }
@@ -994,17 +1011,20 @@ export class Renderer {
       if (sig !== entry.sig && entry.sig && animate && swaps < DRAW.cap && !this.born.has(key) && entry.shown !== false) {
         // the old drawing is erased as a ghost, the new one drawn after it
         swaps++;
-        this.ghosts.set(`${key}~${now}`, { g: entry.g, lg: entry.lg, bounds: entry.bounds, box: entry.box, shown: entry.shown });
+        this.ghosts.set(`${key}~${now}`, { g: entry.g, lg: entry.lg, sg: entry.sg, bounds: entry.bounds, box: entry.box, shown: entry.shown });
         entry.shown = undefined; // new elements below
         sketch.push({ entry: this.ghosts.get(`${key}~${now}`), reverse: true, drawnFor: Infinity, then: key });
         entry.g = document.createElementNS(SVGNS, 'g');
         entry.lg = entry.lg.parentNode.insertBefore(document.createElementNS(SVGNS, 'g'), entry.lg.nextSibling);
+        entry.sg = entry.sg.parentNode.insertBefore(document.createElementNS(SVGNS, 'g'), entry.sg.nextSibling);
         this.born.set(key, now);
         orderChanged = true;
       }
       entry.sig = sig;
       entry.g.innerHTML = built.svg;
       entry.lg.innerHTML = built.ground;
+      entry.shade = built.shade;
+      entry.sg.innerHTML = this.shadowSVG(entry.shade);
       const b = built.bounds;
       if (!entry.bounds || ['minX', 'maxX', 'minY', 'maxY'].some((k) => entry.bounds[k] !== b[k])) orderChanged = true;
       entry.bounds = b;
@@ -1034,7 +1054,7 @@ export class Renderer {
     const tile = this.camera.tile, scale = this.drawn.zoom;
     sketch.sort((a, b) => !!b.reverse - !!a.reverse); // erasing first: a swap waits for it
     for (const { entry, key, reverse, drawnFor, then } of sketch) {
-      const groups = [entry.lg, entry.g];
+      const groups = [entry.lg, entry.g, entry.sg];
       if (reverse) {
         const left = eraseOut(groups, { drawn: drawnFor, tile, scale, speed: then ? DRAW.swap : 1 });
         entry.until = now + left;
@@ -1082,6 +1102,7 @@ export class Renderer {
       if (!all && now < e.until) continue;
       e.g.remove();
       e.lg.remove();
+      e.sg.remove();
       this.ghosts.delete(key);
     }
   }
@@ -1120,7 +1141,7 @@ export class Renderer {
     const out = this.paintStreet(key);
     if (!out) return null;
     const { painter, x, y } = out;
-    return { svg: mergeRuns(painter.toSVG()), ground: '', ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
+    return { svg: mergeRuns(painter.toSVG()), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
   }
 
   // The painters behind buildStreet / buildFeature / buildStructure, for any
@@ -1151,7 +1172,7 @@ export class Renderer {
     const out = this.paintFeature(f, this.camera, this.treeDetail);
     if (!out) return null;
     const { painter, x, y } = out;
-    return { svg: mergeRuns(painter.toSVG()), ground: '', ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
+    return { svg: mergeRuns(painter.toSVG()), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
   }
 
   paintFeature(f, camera = this.camera, detail = 0) {
@@ -1174,7 +1195,25 @@ export class Renderer {
     const out = this.paintStructure(s);
     if (!out) return null;
     const { painter, points } = out;
-    return { svg: mergeRuns(painter.toSVG()), ground: mergeRuns(painter.toGroundSVG()), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
+    return { svg: mergeRuns(painter.toSVG()), ground: mergeRuns(painter.toGroundSVG()), shade: this.shadeOf(painter), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
+  }
+
+  // An object's shadow (shadows.js): what casts it and the feet of its
+  // walls, in world points, and how its ground projects – kept on the object's entry, so the shadow alone
+  // can be drawn again for another sun (renderShadows).
+  shadeOf(painter) {
+    return painter.casts.length || painter.feet.length ? { casts: painter.casts, feet: painter.feet, project: painter.groundProjector() } : null;
+  }
+
+  shadowSVG(shade) {
+    return shade ? shadowSVG(shade, sunFor(this.camera)) : '';
+  }
+
+  // Every object's shadow drawn again from its casters, with SUN as it is
+  // now – without repainting the objects (mark the layer dirty after a
+  // change to SUN).
+  renderShadows() {
+    for (const e of this.objs.values()) e.sg.innerHTML = this.shadowSVG(e.shade);
   }
 
   paintStructure(s, camera = this.camera) {
@@ -1283,6 +1322,11 @@ export class Renderer {
       const n = world.grid.nodeAt(ax + wx, ay + wy);
       return n < 0 || world.terrain.isWater(n);
     };
+    // (a road at a slant can cut across the plot's square: its fences stop short)
+    const clear = (x, y) => {
+      const [wx, wy] = toAnchor(x, y);
+      return !this.free || this.free(ax + wx, ay + wy, 0.02);
+    };
 
     // Boundary sides: this plot draws its +x and +y sides, and the -x / -y
     // sides only where a square plot is next door (it draws those); a turned
@@ -1307,7 +1351,7 @@ export class Renderer {
       inside: (x, y, r) =>
         x - r > x0 && x + r < x1 && y - r > y0 && y + r < y1 &&
         !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y),
-      onLine: (x, y) => !onBuilding(x, y, 0.02) && !inYard(x, y) && !water(x, y),
+      onLine: (x, y) => !onBuilding(x, y, 0.02) && !inYard(x, y) && !water(x, y) && clear(x, y),
     };
   }
 
@@ -1425,7 +1469,9 @@ export class Renderer {
         y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
       }
     }
-    return [x0 - t, y0 - top * this.camera.zScale * t - 2 * t, x1 + t, y1 + t];
+    // its shadow reaches out by its height along the sun, any way it falls
+    const s = SUN.on ? top * SUN.length * t * 1.2 : 0;
+    return [x0 - t - s, y0 - top * this.camera.zScale * t - 2 * t, x1 + t + s, y1 + t + s];
   }
 
   // Hide the objects (and their ground drawing) that lie outside the drawn
@@ -1440,7 +1486,7 @@ export class Renderer {
       if (show === e.shown) continue;
       e.shown = show;
       if (show && e.stale) this.objsDirty.add(e.key); // drawn for an old view: redraw (renderObjects)
-      e.g.style.display = e.lg.style.display = show ? '' : 'none';
+      e.g.style.display = e.lg.style.display = e.sg.style.display = show ? '' : 'none';
     }
   }
 
@@ -1545,7 +1591,7 @@ export class Renderer {
   // is one path in scene coordinates and fades instead.
   drawAgent(el, k) {
     const pen = this.pen;
-    if (el.kind !== 'truck' && el.kind !== 'bus') return pen.draw(el.shapes, el.sx, el.sy, k, el.mirror, el.shear ?? 0);
+    if (el.kind !== 'truck' && el.kind !== 'bus') return pen.draw(el.shapes, el.sx, el.sy, k, el.mirror, el.shear ?? 0, el.squash ?? 1);
     if (el.key === 'dot') {
       if (el.path && pen.onScreen(el.dot[0], el.dot[1])) pen.drawScene(AGENT_STYLES.truck, el.path, k < 1 ? Math.max(0, k) : 1);
       return;
@@ -1683,14 +1729,20 @@ export class Renderer {
   // should be mirrored (walking to the left of the screen). `sx`: its screen x.
   placePerson(el, a, kind, sx) {
     const cam = this.camera;
+    const body = (el.body ??= bodyFor(a.id));
     if (el.at) {
       const dx = a.x - el.at[0], dy = a.y - el.at[1];
       if (dx * dx + dy * dy > 1e-8) el.heading = headingIndex(Math.atan2(dy, dx));
       if (Math.abs(sx - el.sx) > 1e-3) el.left = sx < el.sx;
+      // steps by the way walked, so one standing still stands still; each
+      // starts on its own foot so a crowd doesn't bob in step
+      el.walked = (el.walked ?? body / PEOPLE.bodies * PEOPLE.stride) + Math.hypot(dx, dy);
     }
     el.at = [a.x, a.y];
+    el.squash = kind === 'walker' && cam.zoom >= PEOPLE.bobZoom && el.walked !== undefined
+      ? 1 - PEOPLE.bob * Math.abs(Math.sin((el.walked / PEOPLE.stride) * Math.PI))
+      : 1;
     const close = cam.zoom >= VEHICLES.minZoom;
-    const body = (el.body ??= bodyFor(a.id));
     const heading = el.heading ?? 0;
     const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.rotation}` : `w${body}`;
     if (el.key !== key) {

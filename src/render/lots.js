@@ -17,6 +17,7 @@ const ROAD_GAP = 0.11;  // clearance from the road centre line
 const STEP = 0.05;      // sampling along plot edges
 const YARD_MAX = -0.92; // yards never reach past this (just short of the road dot)
 const YARD_OPEN = -0.62; // depth where no road is in front
+const YARD_LOOK = 0.35;  // rays look this much past YARD_MAX for the road
 
 const PATH_GAP = 0.07;   // clearance from a footpath centre line
 
@@ -56,6 +57,33 @@ export function freeTest(world, config) {
     roads.distance([x, y], ROAD_GAP + r) === Infinity;
 }
 
+// A polyline with the points that lie within `tol` of the line through
+// their neighbours left out (Douglas–Peucker): a straight stretch of a
+// sampled edge becomes one stroke, a curve keeps enough points to follow.
+// (The hand-drawn pen nudges every point; fewer of them, a calmer line.)
+const SIMPLIFY = 0.006;
+export function simplify(pts, tol = SIMPLIFY) {
+  if (pts.length < 3) return pts;
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [i, j] = stack.pop();
+    const [ax, ay] = pts[i], [bx, by] = pts[j];
+    const l = Math.hypot(bx - ax, by - ay);
+    let far = -1, best = tol;
+    for (let k = i + 1; k < j; k++) {
+      const [px, py] = pts[k];
+      const d = l < 1e-9 ? Math.hypot(px - ax, py - ay) : Math.abs((bx - ax) * (py - ay) - (by - ay) * (px - ax)) / l;
+      if (d > best) [far, best] = [k, d];
+    }
+    if (far < 0) continue;
+    keep[far] = 1;
+    stack.push([i, far], [far, j]);
+  }
+  return pts.filter((_, k) => keep[k]);
+}
+
 function samples(a, b) {
   const n = Math.max(2, Math.ceil(Math.abs(b - a) / STEP));
   return Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
@@ -81,20 +109,35 @@ export function fitYard(world, config, frame) {
     return [dx + wx, dy + wy];
   };
   const dir = turn(0, -1);
-  const reach = y1 - YARD_MAX + ROAD_GAP;
+  // (looking a little past the deepest a yard goes, so a road bending away
+  // is still found and the yard reaches as far as it may towards it)
+  const reach = y1 - YARD_MAX + ROAD_GAP + YARD_LOOK;
 
-  // depth: short of the road, or YARD_OPEN where there's none – and never
-  // over a footpath crossing in front
-  const depth = (from) => {
-    const r = roads.cast(from, dir, reach);
-    const p = paths.cast(from, dir, reach);
-    const t = r === null ? y1 - YARD_OPEN : r - ROAD_GAP;
-    return p === null ? t : Math.min(t, p - PATH_GAP);
-  };
-  const profile = samples(x0, x1).map((x) => {
-    const y = y1 - depth(toWorld(x, y1));
-    return [x, Math.min(Math.max(y, YARD_MAX), y1 - 0.1)];
+  // depth: short of the road – and never over a footpath crossing in front.
+  // Where a ray misses the road (it bends away past their reach, or ends)
+  // but others hit it, the edge carries on from theirs: filled in between
+  // hits, held level past the last one. Otherwise rays on a curve right at
+  // the edge of their reach would flip between the road and YARD_OPEN, a
+  // saw-tooth edge. With no road in front at all: YARD_OPEN.
+  const xs = samples(x0, x1);
+  const hits = xs.map((x) => {
+    const r = roads.cast(toWorld(x, y1), dir, reach);
+    return r === null ? null : r - ROAD_GAP;
   });
+  const known = hits.map((h, i) => (h === null ? -1 : i)).filter((i) => i >= 0);
+  const road = hits.map((h, i) => {
+    if (h !== null) return h;
+    if (!known.length) return y1 - YARD_OPEN;
+    const next = known.find((k) => k > i), prev = known.findLast((k) => k < i);
+    if (prev === undefined) return hits[next];
+    if (next === undefined) return hits[prev];
+    return hits[prev] + ((hits[next] - hits[prev]) * (i - prev)) / (next - prev);
+  });
+  const profile = simplify(xs.map((x, i) => {
+    const p = paths.cast(toWorld(x, y1), dir, reach);
+    const y = y1 - (p === null ? road[i] : Math.min(road[i], p - PATH_GAP));
+    return [x, Math.min(Math.max(y, YARD_MAX), y1 - 0.1)];
+  }));
 
   const frontAt = (x) => {
     if (x <= profile[0][0]) return profile[0][1];
@@ -120,35 +163,47 @@ export function fitYard(world, config, frame) {
 }
 
 // site = { rect: [x0, y0, x1, y1], inner: [x0, y0, x1, y1], road: [left, top, right, bottom] }
-// in world coordinates. Returns the outline polygon (world) with road sides
-// following the road.
+// in world coordinates. Returns the outline polygon (world): the rectangle,
+// cut back ROAD_GAP short of any road that crosses it. Each point of the
+// rectangle's edge is looked at from the middle of the footprint and pulled
+// in to the first road in the way – so it follows a road on any side, a
+// diagonal one or a curve too, and never reaches past one – but never into
+// the footprint (its dots and SITE_KEEP round them).
+const SITE_KEEP = 0.3;
 export function fitSite(world, config, site) {
   const index = roadIndex(world, config);
   const [X0, Y0, X1, Y1] = site.rect;
   const [I0, J0, I1, J1] = site.inner; // footprint dots' extent
-  const [left, top, right, bottom] = site.road;
+  const cx = (I0 + I1) / 2, cy = (J0 + J1) / 2;
+  const [K0, L0, K1, L1] = [I0 - SITE_KEEP, J0 - SITE_KEEP, I1 + SITE_KEEP, J1 + SITE_KEEP];
 
-  // Depth of one side at position s along it: cast outward from just outside
-  // the footprint; stop short of the road, never beyond the rectangle.
-  const edge = (fromX, fromY, d, limit) => {
-    const start = [fromX, fromY];
-    const t = index.cast(start, d, limit + ROAD_GAP);
-    return t === null ? limit : Math.max(Math.min(t - ROAD_GAP, limit), 0.05);
+  // how far a ray from the middle runs inside the box [a0, b0, a1, b1]
+  const exit = (dx, dy, [a0, b0, a1, b1]) => {
+    const tx = dx > 0 ? (a1 - cx) / dx : dx < 0 ? (a0 - cx) / dx : Infinity;
+    const ty = dy > 0 ? (b1 - cy) / dy : dy < 0 ? (b0 - cy) / dy : Infinity;
+    return Math.min(tx, ty);
+  };
+  const fit = ([x, y]) => {
+    const len = Math.hypot(x - cx, y - cy);
+    if (len < 1e-6) return [x, y];
+    const dx = (x - cx) / len, dy = (y - cy) / len;
+    const keep = exit(dx, dy, [K0, L0, K1, L1]);
+    const hit = index.cast([cx, cy], [dx, dy], len + ROAD_GAP);
+    let t = hit === null ? len : Math.min(len, hit - ROAD_GAP);
+    // (a road met at a slant: back off until it's ROAD_GAP clear)
+    while (t > keep && index.distance([cx + dx * t, cy + dy * t], ROAD_GAP) !== Infinity) t -= 0.02;
+    t = Math.max(t, Math.min(keep, len));
+    return [cx + dx * t, cy + dy * t];
   };
 
-  const pts = [];
-  // top (-y), left to right
-  if (top) for (const x of samples(X0, X1)) pts.push([x, J0 - 0.3 - edge(x, J0 - 0.3, [0, -1], J0 - 0.3 - Y0)]);
-  else pts.push([X0, Y0], [X1, Y0]);
-  // right (+x), top to bottom
-  if (right) for (const y of samples(Y0, Y1)) pts.push([I1 + 0.3 + edge(I1 + 0.3, y, [1, 0], X1 - I1 - 0.3), y]);
-  else pts.push([X1, Y0], [X1, Y1]);
-  // bottom (+y), right to left
-  if (bottom) for (const x of samples(X1, X0)) pts.push([x, J1 + 0.3 + edge(x, J1 + 0.3, [0, 1], Y1 - J1 - 0.3)]);
-  else pts.push([X1, Y1], [X0, Y1]);
-  // left (-x), bottom to top
-  if (left) for (const y of samples(Y1, Y0)) pts.push([I0 - 0.3 - edge(I0 - 0.3, y, [-1, 0], I0 - 0.3 - X0), y]);
-  else pts.push([X0, Y1], [X0, Y0]);
-
-  return pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1]);
+  // round the rectangle: top, right, bottom, left – each side thinned on
+  // its own, so the corners stay put (each side's last point is the next
+  // one's first)
+  const sides = [
+    samples(X0, X1).map((x) => [x, Y0]),
+    samples(Y0, Y1).map((y) => [X1, y]),
+    samples(X1, X0).map((x) => [x, Y1]),
+    samples(Y1, Y0).map((y) => [X0, y]),
+  ];
+  return sides.flatMap((side) => simplify(side.map(fit)).slice(0, -1));
 }

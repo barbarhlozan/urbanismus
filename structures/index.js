@@ -52,6 +52,7 @@ import * as landmarks from './landmarks.js';
 import * as grounds from './grounds.js';
 import mine from './mine.js';
 import farm from './farm.js';
+import pool from './pool.js';
 
 // Toolbar groups, in toolbar order. The network tools (road, footpath,
 // railway) join 'transport' too (src/main.js).
@@ -65,7 +66,7 @@ export const CATEGORIES = [
 export const STRUCTURES = [
   residential, residentialWide, business, businessWide, industrial, industrialMedium, industrialSmall, mine, farm,
   park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.main, station.stop, busStop,
-  grounds.cemetery,
+  grounds.cemetery, pool,
   heritage.chapel, heritage.church, heritage.townHall, heritage.column, heritage.memorial, heritage.townGate, heritage.castle,
   landmarks.cultureHouse, landmarks.tvTower, landmarks.stadium,
 ];
@@ -76,7 +77,7 @@ export const BUILD_FAMILIES = [
   [station.station, station.main, station.stop], [busStop],
   [residential, residentialWide], [business, businessWide], [industrial, industrialMedium, industrialSmall], [mine], [farm],
   [park.small, park.large], [square.small, square.large], [services.small, services.large],
-  [grounds.cemetery], [landmarks.cultureHouse],
+  [grounds.cemetery], [landmarks.cultureHouse], [pool],
   [heritage.chapel], [heritage.church], [heritage.townHall], [heritage.column, heritage.memorial],
   [heritage.townGate], [heritage.castle],
   [landmarks.tvTower], [landmarks.stadium],

@@ -3,64 +3,64 @@
 # Rules first: each one tells its branch once, the first time it holds.
 # They are looked at in this order, every couple of seconds.
 
-if minutes >= 0 trigger Arrival
-if residential_house > 5 trigger IntroDialogue
-if church >= 1 trigger Bells
-if railways > 0 and seen(IntroDialogue) trigger Railway
-if residential_panel_block >= 1 trigger Panels
-if residents >= 500 trigger Grown
-if photos >= 1 trigger Photograph
+#if minutes >= 0 trigger Arrival
+#if residential_house > 5 trigger IntroDialogue
+#if church >= 1 trigger Bells
+#if railways > 0 and seen(IntroDialogue) trigger Railway
+#if residential_panel_block >= 1 trigger Panels
+#if residents >= 500 trigger Grown
+#if photos >= 1 trigger Photograph
 
 
-::Arrival::
-A meadow, a stream, a few birches. Nobody has built anything here yet.
-::
+#::Arrival::
+#A meadow, a stream, a few birches. Nobody has built anything here yet.
+#::
 
-::IntroDialogue::
-Grandma: So in this village there were five houses.
-> Ask about who lived there -> Geese
-> Ask what did she do -> Chapel
-::
+#::IntroDialogue::
+#Grandma: So in this village there were five houses.
+#> Ask about who lived there -> Geese
+#> Ask what did she do -> Chapel
+#::
 
-::Geese::
-Grandma: Eleven of them. Each had a name, and each name was a saint's.
-set asked_geese = 1
--> Goodbye
-::
+#::Geese::
+#Grandma: Eleven of them. Each had a name, and each name was a saint's.
+#set asked_geese = 1
+#-> Goodbye
+#::
 
-::Chapel::
-Grandma: There wasn't one. We only said "from the chapel" because we meant to build one.
-chronicle: Grandma remembered the chapel that was never built.
--> Goodbye
-::
+#::Chapel::
+#Grandma: There wasn't one. We only said "from the chapel" because we meant to build one.
+#chronicle: Grandma remembered the chapel that was never built.
+#-> Goodbye
+#::
 
-::Goodbye::
-Grandma: Well. Off you go, there's building to do.
-::
+#::Goodbye::
+#Grandma: Well. Off you go, there's building to do.
+#::
 
-::Bells::
-The bells ring for the first time over {town}.
-if asked_geese -> BellsGeese
-::
+#::Bells::
+#The bells ring for the first time over {town}.
+#if asked_geese -> BellsGeese
+#::
 
-::BellsGeese::
-Grandma: The geese would have hated it.
-::
+#::BellsGeese::
+#Grandma: The geese would have hated it.
+#::
 
-::Railway::
-Station master: The line reaches {town} now. The first train comes when it comes.
-chronicle: The station master hung a timetable that nobody believed.
-::
+#::Railway::
+#Station master: The line reaches {town} now. The first train comes when it comes.
+#chronicle: The station master hung a timetable that nobody believed.
+#::
 
-::Panels::
-Grandma: Panels. Stacked like sugar cubes.
-Grandma: Still – warm water, and a lift. I won't say no to a lift.
-::
+#::Panels::
+#Grandma: Panels. Stacked like sugar cubes.
+#Grandma: Still – warm water, and a lift. I won't say no to a lift.
+#::
 
-::Grown::
-{residents} people now. Nobody knows everybody any more.
-::
+#::Grown::
+#{residents} people now. Nobody knows everybody any more.
+#::
 
-::Photograph::
-Grandma: Just how I remember it. 
-::
+#::Photograph::
+#Grandma: Just how I remember it. 
+#::

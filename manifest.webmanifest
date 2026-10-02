@@ -1,0 +1,15 @@
+{
+  "name": "Urbanismus",
+  "short_name": "Urbanismus",
+  "description": "A hand-drawn town builder",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#ebe7dd",
+  "theme_color": "#ebe7dd",
+  "icons": [
+    { "src": "icons/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

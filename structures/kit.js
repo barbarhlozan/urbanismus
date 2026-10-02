@@ -183,22 +183,28 @@ export function statue(g, x, y, kind = null, size = 1) {
 export const STATUES = ['standing', 'worker', 'flag', 'soldier', 'mother', 'pair', 'bust', 'equestrian'];
 
 // Outlines of the figures, in units of the figure's height (u right, v up
-// from its feet). Drawn facing the screen, like trees and people.
+// from its feet). Drawn facing the screen, like trees and people – and
+// built like the people (src/render/people.js): blocks on stub legs, a
+// round head on top.
 const circle = (cu, cv, r, n = 12) => Array.from({ length: n }, (_, i) => [cu + Math.cos((i / n) * Math.PI * 2) * r, cv + Math.sin((i / n) * Math.PI * 2) * r]);
+// a block from v0 to v1, `hem` and `top` half wide, on two stub legs
+// `leg` tall (none if 0)
+const block = (v0, v1, hem, top, leg = 0, lx = hem * 0.45, lw = 0.035) => [
+  ...(leg ? [[-lx - lw, v0 - leg], [-lx + lw, v0 - leg], [-lx + lw, v0], [lx - lw, v0], [lx - lw, v0 - leg], [lx + lw, v0 - leg], [lx + lw, v0]] : [[hem, v0]]),
+  [hem, v0], [top, v1], [-top, v1], [-hem, v0], ...(leg ? [[-lx - lw, v0]] : []),
+];
 const FIG = {
-  // a man in a long coat, legs a little apart
-  man: [[-0.13, 0], [-0.03, 0], [0, 0.28], [0.03, 0], [0.13, 0], [0.15, 0.42], [0.19, 0.72], [0.16, 0.8],
-    [0.07, 0.83], [0.05, 0.86], [-0.05, 0.86], [-0.07, 0.83], [-0.16, 0.8], [-0.19, 0.72], [-0.15, 0.42]],
-  // a woman in a long skirt
-  woman: [[-0.17, 0], [0.17, 0], [0.13, 0.48], [0.16, 0.74], [0.13, 0.8], [0.06, 0.83], [0.05, 0.86],
-    [-0.05, 0.86], [-0.06, 0.83], [-0.13, 0.8], [-0.16, 0.74], [-0.13, 0.48]],
-  child: [[-0.08, 0], [0.08, 0], [0.07, 0.32], [0.04, 0.36], [-0.04, 0.36], [-0.07, 0.32]],
-  bust: [[-0.3, 0], [0.3, 0], [0.28, 0.22], [0.14, 0.34], [0.07, 0.36], [0.07, 0.44], [-0.07, 0.44], [-0.07, 0.36], [-0.14, 0.34], [-0.28, 0.22]],
-  horse: [[-0.34, 0], [-0.3, 0], [-0.27, 0.3], [-0.16, 0.32], [-0.13, 0], [-0.09, 0], [-0.09, 0.33], [0.18, 0.33],
-    [0.2, 0], [0.24, 0], [0.24, 0.33], [0.3, 0.36], [0.38, 0.1], [0.43, 0.12], [0.36, 0.42], [0.4, 0.62],
-    [0.52, 0.72], [0.57, 0.68], [0.53, 0.8], [0.45, 0.86], [0.36, 0.8], [0.27, 0.6], [0.05, 0.6],
-    [-0.2, 0.62], [-0.36, 0.58], [-0.45, 0.5], [-0.52, 0.3], [-0.44, 0.44], [-0.38, 0.36]],
-  rider: [[-0.1, 0.56], [0.08, 0.56], [0.07, 0.8], [0.1, 0.9], [0.04, 0.95], [-0.06, 0.95], [-0.1, 0.88], [-0.08, 0.74]],
+  // a man in a long coat
+  man: block(0.15, 0.83, 0.16, 0.17, 0.15),
+  // a woman in a long skirt, wider at the hem
+  woman: block(0.12, 0.81, 0.2, 0.14, 0.12, 0.08),
+  child: block(0.07, 0.36, 0.08, 0.08, 0.07, 0.04, 0.02),
+  bust: block(0, 0.32, 0.27, 0.25),
+  // a horse in blocks: four stub legs, a box of a body, neck and head
+  horse: [[-0.38, 0], [-0.31, 0], [-0.31, 0.3], [-0.23, 0.3], [-0.23, 0], [-0.16, 0], [-0.16, 0.3], [0.12, 0.3],
+    [0.12, 0], [0.19, 0], [0.19, 0.3], [0.24, 0.3], [0.24, 0], [0.31, 0], [0.31, 0.42], [0.5, 0.64],
+    [0.55, 0.8], [0.42, 0.86], [0.26, 0.6], [-0.38, 0.6], [-0.48, 0.54], [-0.47, 0.34], [-0.38, 0.46]],
+  rider: block(0.56, 0.9, 0.1, 0.09),
 };
 
 // A bronze figure standing at (x, y, z), h tall: ink silhouettes for the
@@ -241,10 +247,10 @@ export function figure(g, x, y, z, h, kind = 'standing') {
       g.shape(x, y, z, [[0.0, 1.15], [-0.08, 1.35], [0.02, 1.3], [0.1, 1.36]].map(([a, b]) => [a * v, b * v]), ink);
       break;
     case 'bust':
-      body(FIG.bust); head(0, 0.6, 0.17);
+      body(FIG.bust); head(0, 0.5, 0.16);
       break;
     case 'equestrian':
-      body(FIG.horse); body(FIG.rider); head(-0.01, 1.03, 0.065);
+      body(FIG.horse); body(FIG.rider); head(0, 0.98, 0.07);
       stroke([[0.0, 0.6], [0.06, 0.4]], [[0.06, 0.88], [0.22, 1.2]]);
       break;
     default:

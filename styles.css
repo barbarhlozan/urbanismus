@@ -210,6 +210,9 @@ html, body {
 .layer-objects .foot { stroke: var(--main); stroke-width: 1.2; }
 .layer-objects .roof-hatch { stroke: var(--main); stroke-width: 0.7; }
 .layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: 0.8; stroke-linejoin: round; }
+/* cast shadows: pen hatching on the ground (src/render/shadows.js) */
+.shadow { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; }
+.layer-objects .wall-shade { stroke: var(--detail); stroke-width: 0.6; }
 /* screen-facing line drawings (trees, see features/trees.js) */
 .glyph { fill: none; stroke: var(--detail); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round; }
 .glyph.trunk { stroke-width: 1.4; }
@@ -245,12 +248,22 @@ html, body {
 .flash { fill: none; stroke: var(--main); stroke-width: 1.1; stroke-linecap: round; }
 /* people close up (src/render/people.js): paper bodies, open heads, wheel rings */
 .fig-body { fill: var(--bg); stroke: var(--main); stroke-width: 0.9; stroke-linejoin: round; }
-.fig-head, .fig-wheel { fill: none; stroke: var(--main); stroke-width: 0.8; }
+.fig-head, .fig-wheel, .fig-line { fill: none; stroke: var(--main); stroke-width: 0.8; stroke-linecap: round; }
+.fig-ink { fill: var(--main); stroke: var(--main); stroke-width: 0.5; stroke-linejoin: round; }
 .parked-car .vb { stroke: var(--detail); }
 .parked-car .vi { fill: var(--detail); stroke: var(--detail); }
 .agent.cyclist { stroke: var(--fg); stroke-width: 0.4; stroke-linejoin: round; }
 .train { fill: var(--fg); stroke: var(--fg); stroke-width: 0.9; stroke-linejoin: round; }
 .parked { fill: var(--bg); stroke: var(--detail); stroke-width: 1.1; }
+
+/* Shadow hatching density (src/render/shadows.js): stroke tiers above the
+   one the zoom allows hide – on the ground (s, sz) and on walls (w, sw) */
+.sz-0 .s1, .sz-0 .s2, .sz-0 .s3,
+.sz-1 .s2, .sz-1 .s3,
+.sz-2 .s3,
+.sw-0 .w1, .sw-0 .w2, .sw-0 .w3,
+.sw-1 .w2, .sw-1 .w3,
+.sw-2 .w3 { display: none; }
 
 /* Detail levels (set on both SVGs by the renderer from the zoom) */
 .lod-1 .d2,
