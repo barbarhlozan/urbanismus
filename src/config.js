@@ -107,6 +107,13 @@ export const CONFIG = {
     clearRadius: 5,     // keep the map centre free for the player
   },
 
+  // Too steep to build on (metres of rise per grid step): buildings where
+  // the ground under any of their dots is steeper than `build`; roads and
+  // railways where a segment climbs more than `road` / `rail` per grid step
+  // of its length – so a road may still run across a steep hillside, just
+  // not straight up it. Footpaths go anywhere (steps); bridges are level.
+  steep: { build: 14, road: 12, rail: 5 },
+
   time: {
     // First entry is the starting speed; T / the speed button cycles through them.
     // At Normal (scale 1) simulated seconds are real seconds: every speed

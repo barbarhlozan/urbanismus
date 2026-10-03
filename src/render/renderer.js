@@ -2,7 +2,10 @@
 // world events that affect it fire. Layer order (back to front):
 //
 //   terrain  – contour lines (grey, index lines labelled; only while
-//              `contours` is on) and water hatching; in its own
+//              `contours` is on), the brows (where a hill turns away out
+//              of sight, brows.js; always), the rock faces (rocks.js),
+//              faint lines on slopes too steep to build on (steep.js;
+//              outside the terrain view) and water hatching; in its own
 //              <svg id="ground"> underneath the map
 //   grid     – the main dots (shown while building, see styles.css)
 //   meadow   – grass and wild flowers on open ground (meadow.js), in
@@ -65,9 +68,13 @@ import { SegmentIndex } from '../core/geom2d.js';
 import { densify } from './warp.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { ELEVATION, contours } from '../terrain/elevation.js';
+import { sketchPolyline, seedOf } from './sketch.js';
 import { findBridges, makeDeck, bridgeLines, hiddenUnder } from './bridges.js';
 import { MEADOW, meadowGround, chunkSVG } from './meadow.js';
 import { PENCIL, CONTOUR_CHUNK, chunked, cut, pencil } from './pencil.js';
+import { BROWS, visibility, browLines, browRuns, hiddenAt } from './brows.js';
+import { rockLines, ROCK_LOOK } from './rocks.js';
+import { STEEP_LINES, steepLines } from './steep.js';
 import { carMark, personMark } from './marks.js';
 import { mergeRuns, placeInOrder, isoSort } from './order.js';
 import { SUN, sunFor, shadowSVG, tierAt, groundSpacing, wallSpacing } from './shadows.js';
@@ -220,7 +227,9 @@ export class Renderer {
       this.objsAll = this.worldAll = true; // (not just the view: draw them all now)
       this.roadLines = null;
       this.contourLines = null; // water breaks them
+      this.steepLines = null;
       this.waterLines = null;
+      this.brows = null;
     });
   }
 
@@ -441,7 +450,55 @@ export class Renderer {
   }
 
   renderTerrain() {
-    this.layers.terrain.innerHTML = (this.contours ? this.renderContours() : '') + this.renderWater();
+    this.layers.terrain.innerHTML = (this.contours ? this.renderContours() : this.renderSteep()) + this.renderBrows() + this.renderWater();
+  }
+
+  // What the camera sees of the ground, the brows (brows.js) and the rock
+  // faces (rocks.js), worked out again for each rotation of the view; as
+  // pencil strokes, a path per kind and chunk of the map.
+  renderBrows() {
+    const { camera, world } = this;
+    if (!BROWS.on || !camera.lift) return '';
+    if (this.brows?.rotation !== camera.rotation) {
+      const { terrain, grid } = world;
+      const m = 1.2; // (as the contours)
+      const height = (x, y) => camera.lift(x, y) + terrain.heightAt(x, y);
+      const vis = visibility(camera, height, [-m, -m, grid.width - 1 + m, grid.height - 1 + m]);
+      const tiers = [[], [], []];
+      browLines(vis, camera).forEach((line, n) => {
+        for (const run of browRuns(line)) tiers[run.tier].push(...pencil(run.points, n, BROWS.pencil));
+      });
+      // the rock faces turned to the viewer (those turned away are brows)
+      const rocks = rockLines(world, camera, height, [-0.5, -0.5, grid.width - 0.5, grid.height - 0.5], (x, y) => hiddenAt(vis, camera, x, y));
+      const lips = rocks.lips.flatMap((l, n) => pencil(l, n, ROCK_LOOK.pencil));
+      this.brows = { rotation: camera.rotation, vis, tiers, lips, faces: rocks.faces };
+    }
+    const paths = (lines, cls) => chunked(lines, CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
+    const { tiers, lips, faces } = this.brows;
+    return paths(tiers[0], 'brow light') + paths(tiers[1], 'brow') + paths(tiers[2], 'brow outline') + paths(faces, 'rock-face') + paths(lips, 'rock-lip');
+  }
+
+  // Faint lines on the slopes too steep to build on (steep.js), traced once
+  // per terrain; the terrain view has the full contour lines instead.
+  renderSteep() {
+    if (!STEEP_LINES.on) return '';
+    if (!this.steepLines) {
+      const { grid } = this.world;
+      const m = 1.2; // (as the contours)
+      this.steepLines = steepLines(this.world, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], this.wetAt());
+    }
+    return chunked(this.steepLines, CONTOUR_CHUNK).map((ls) => `<path class="steep" d="${this.pathData(ls, false)}"/>`).join('');
+  }
+
+  // Is a world point on water (where the terrain's lines break)?
+  wetAt() {
+    const { grid, terrain } = this.world;
+    const river = this.world.riverField;
+    return (x, y) => {
+      if (river && river.depth(x, y) > 0) return true;
+      const n = grid.nodeAt(Math.round(x), Math.round(y));
+      return n >= 0 && terrain.isWater(n) && Math.hypot(x - Math.round(x), y - Math.round(y)) < 0.75;
+    };
   }
 
   // Lakes as on a hand-drawn map: a single shoreline, and in the middle of
@@ -609,48 +666,32 @@ export class Renderer {
     this.dirty.add('terrain');
   }
 
-  // Contour lines out to the edge of the map, broken over water. Index lines are
-  // brighter and carry their height now and then.
+  // Contour lines out to the edge of the map, broken over water. Index lines
+  // are brighter; the map's named hills have their tops marked.
   renderContours() {
-    const { grid, terrain } = this.world;
+    const { grid } = this.world;
     const m = 1.2; // margin around the outermost dots
     if (!this.contourLines) {
-      const elev = this.world.elevation, river = this.world.riverField;
-      const wet = (x, y) => {
-        if (river && river.depth(x, y) > 0) return true;
-        const n = grid.nodeAt(Math.round(x), Math.round(y));
-        return n >= 0 && terrain.isWater(n) && Math.hypot(x - Math.round(x), y - Math.round(y)) < 0.75;
-      };
-      this.contourLines = contours(elev, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], ELEVATION, wet);
+      this.contourLines = contours(this.world.elevation, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], ELEVATION, this.wetAt());
       // drawn by hand: each line as a run of pencil strokes (see pencil())
       this.contourStrokes = [[], [], []];
       for (const c of this.contourLines) this.contourStrokes[c.tier].push(...pencil(c.points, c.level, PENCIL[c.tier]));
     }
     const tiers = this.contourStrokes;
+    // no heights along the lines: each named hill's top gets a little pen
+    // triangle instead (its name and height show on hovering it, ui/annotations.js)
     let labels = '';
-    const every = 9; // grid steps of line between labels
-    for (const c of this.contourLines) {
-      if (c.tier) continue;
-      let run = every / 2;
-      for (let i = 1; i < c.points.length - 1; i++) {
-        const [ax, ay] = c.points[i - 1], [bx, by] = c.points[i];
-        run += Math.hypot(bx - ax, by - ay);
-        if (run < every) continue;
-        run = 0;
-        // written along the line, the right way up
-        const [sx, sy] = this.project(bx, by);
-        const [px, py] = this.project(...c.points[i - 1]), [qx, qy] = this.project(...c.points[i + 1]);
-        let angle = (Math.atan2(qy - py, qx - px) * 180) / Math.PI;
-        if (angle > 90) angle -= 180;
-        if (angle < -90) angle += 180;
-        labels += `<text class="contour-label" transform="translate(${r2(sx)} ${r2(sy)}) rotate(${Math.round(angle)})">${c.level}</text>`;
-      }
+    for (const hill of this.world.hills) {
+      const [sx, sy] = this.project(hill.x, hill.y);
+      const t = 0.12 * this.camera.tile; // (at the map's scale)
+      const mark = sketchPolyline([[sx - t, sy + t * 0.6], [sx, sy - t * 0.9], [sx + t, sy + t * 0.6], [sx - t, sy + t * 0.6]], seedOf(hill.x, hill.y), { k: 0.4 });
+      labels += `<path class="summit" d="${mark}"/>`;
     }
     // thinned out with distance like the rest of the detail (d1 / d2); a
     // path per chunk of the map, not one across all of it, so drawing a
     // patch of the screen only goes through the lines near it
     const line = (lines, cls) => chunked(lines, CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
-    return line(tiers[2], 'contour d2') + line(tiers[1], 'contour d1') + line(tiers[0], 'contour index') + `<g class="d1">${labels}</g>`;
+    return line(tiers[2], 'contour d2') + line(tiers[1], 'contour d1') + line(tiers[0], 'contour index') + labels;
   }
 
   renderGrid() {

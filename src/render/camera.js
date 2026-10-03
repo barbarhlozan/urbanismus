@@ -66,16 +66,39 @@ export class Camera {
     return rx + ry + nz / this.zScale > 1e-9;
   }
 
-  // Scene point -> world (x, y) on the ground (z = 0 plus the relief). The
-  // warp and relief are undone by a few fixed-point steps: they are smooth
-  // and gentle, so this converges fast.
+  // Scene point -> world (x, y) on the ground (z = 0 plus the relief): the
+  // nearest ground along the line of sight. A steep hill can turn more than
+  // a screen pixel per pixel (so simply undoing the lift step by step would
+  // overshoot), and one screen point can cover a slope and the ground hidden
+  // behind it. So the line of sight is walked from in front of the highest
+  // ground backwards to where it first meets the surface, then narrowed
+  // down. The warp is gentle: it moves the line sideways, a few times over.
   unproject(sx, sy) {
     const q = this.unprojectFlat(sx, sy);
     if (!this.warp && !this.lift) return q;
-    let p = q;
-    for (let i = 0; i < 8; i++) {
-      const [fx, fy] = this.unprojectFlat(...this.project(p[0], p[1]));
-      p = [p[0] + (q[0] - fx), p[1] + (q[1] - fy)];
+    const d = rotateQuarter(1, 1, -this.rotation);  // away from the viewer: +1 px down the screen per tile px
+    const e = rotateQuarter(1, -1, -this.rotation); // across: 2 cos30 tile px sideways
+    const [lo, hi] = this.lift?.range ?? [0, 0];
+    const pad = this.warp ? 1 : 0.05;
+    const from = hi * this.zScale + pad, to = lo * this.zScale - pad;
+    const STEP = 0.02;
+    let base = q, p = q;
+    for (let k = 0; k < (this.warp ? 6 : 1); k++) {
+      const at = (s) => [base[0] + d[0] * s, base[1] + d[1] * s];
+      const front = (s) => this.project(...at(s))[1] > sy; // below the cursor on screen: in front of the ground
+      let s = from;
+      while (s > to && front(s - STEP)) s -= STEP;
+      let a = s - STEP, b = s; // ground between a (behind) and b (in front)
+      for (let i = 0; i < 14; i++) {
+        const m = (a + b) / 2;
+        if (front(m)) b = m; else a = m;
+      }
+      p = at((a + b) / 2);
+      if (!this.warp) break;
+      const ex = sx - this.project(...p)[0];
+      if (Math.abs(ex) < 1e-3) break;
+      const t = ex / (2 * COS30 * this.tile);
+      base = [base[0] + e[0] * t, base[1] + e[1] * t];
     }
     return p;
   }

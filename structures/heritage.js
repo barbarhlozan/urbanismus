@@ -1,6 +1,6 @@
 // Heritage: old landmarks the town grew around – a wayside chapel, a
-// baroque church, a town hall with a clock tower, a plague column, a war
-// memorial, a gate tower left from the town walls, a castle (ruin, castle or chateau). They
+// baroque church, a town hall in three sizes, a war memorial, a castle
+// (ruin, castle or chateau). They
 // don't develop (one level each); they draw visitors and strollers, and
 // make nearby apartments and offices grow faster (tag 'heritage').
 // A church can also appear by itself in a grown neighbourhood without one
@@ -143,88 +143,195 @@ export const church = {
   ],
 };
 
-export const townHall = {
+// ----- town halls, in three sizes -----
+// Small 1×1 (a little town's hall with a turret on the ridge), Medium 2×1
+// (an arcaded hall on the square with its clock tower) and Large 3×2 (the
+// big hall of a royal town round a courtyard). One Build tool, S switches.
+
+// Arcade (podloubí) along the front wall at depth y from a to b: round
+// arches about 0.14 apart, fh * 0.85 high at the crown.
+function arcade(g, a, b, y, fh) {
+  const n = Math.max(1, Math.round((b - a) / 0.14));
+  for (let i = 0; i < n; i++) {
+    const xa = a + ((b - a) * i) / n + 0.025, xb = a + ((b - a) * (i + 1)) / n - 0.025;
+    g.line([[xa, y, 0], [xa, y, fh * 0.6], [(xa + xb) / 2, y, fh * 0.85], [xb, y, fh * 0.6], [xb, y, 0]], { facing: FRONT });
+  }
+}
+
+// Clock tower standing on the ground at (x, y), half-width t, th to the
+// gallery; then an onion or a gothic spire. Returns the top of the crown.
+function clockTower(g, x, y, t, th, fh, crown = g.pick(['onion', 'spire'])) {
+  g.box(x - t, y - t, 0, 2 * t, 2 * t, th);
+  g.floors(x - t, y - t, 2 * t, 2 * t, 0, th, fh, { inset: 0 });
+  g.windows(x - t, y - t, 2 * t, 2 * t, fh, th - 0.2, fh, t, { w: 0.35, h: 0.5 });
+  clockFaces(g, x, y, t, th - 0.1, t * 0.45);
+  g.box(x - t - 0.02, y - t - 0.02, th, 2 * t + 0.04, 2 * t + 0.04, 0.02); // gallery
+  const lt = t * 0.72;
+  g.box(x - lt, y - lt, th + 0.02, 2 * lt, 2 * lt, 0.1);                 // lantern storey
+  g.windows(x - lt, y - lt, 2 * lt, 2 * lt, th + 0.02, th + 0.12, 0.1, lt, { w: 0.4, h: 0.6 });
+  if (crown === 'onion') onion(g, x, y, th + 0.12, lt);
+  else spire(g, x, y, th + 0.12, lt, 0.3 + t);
+}
+
+// Renaissance attic: a wall standing above the eaves along the front
+// (x from a to b at depth y, from z up), its top a row of round crenels –
+// the parapet that hides the roof behind it (Slavonice, Litomyšl).
+function attic(g, a, b, y, z, h) {
+  const n = Math.max(2, Math.round((b - a) / 0.12)), pts = [[a, y, z]];
+  for (let i = 0; i < n; i++) {
+    const xa = a + ((b - a) * i) / n, xb = a + ((b - a) * (i + 1)) / n, xm = (xa + xb) / 2, w = (xb - xa) / 2;
+    pts.push([xa, y, z + h * 0.7]);
+    for (let k = 0; k <= 4; k++) {
+      const ang = Math.PI - (k / 4) * Math.PI;
+      pts.push([xm + Math.cos(ang) * w, y, z + h * 0.7 + Math.sin(ang) * h * 0.3]);
+    }
+  }
+  pts.push([b, y, z + h * 0.7], [b, y, z]);
+  g.solid((a + b) / 2, y, z + h / 2);
+  g.face(outward(pts, [(a + b) / 2, y + 0.01, z + h / 2]));
+  g.face(outward(pts.map(([px, , pz]) => [px, y + 0.02, pz]), [(a + b) / 2, y + 0.01, z + h / 2]));
+  g.detailed(2, () => g.line([[a, y, z + h * 0.35], [b, y, z + h * 0.35]], { facing: FRONT }));
+}
+
+// A portal: a stone frame round the door, a balcony slab above it.
+function portal(g, x, y, fh) {
+  panel(g, x - 0.06, x + 0.06, y, 0, fh * 0.9);
+  door(g, x, y, 0.06, fh * 0.75);
+  g.box(x - 0.08, y - 0.05, fh * 1.05, 0.16, 0.05, 0.015);
+}
+
+const townHallCommon = {
   ...common,
-  id: 'town-hall',
-  hotkey: 'c',
   name: 'Town hall',
   blurb: 'Old town hall',
-  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  tags: ['heritage', 'town-hall'],
   plot: { props: 'green', boundary: 0.2, kinds: ['hedge'], density: 0.2 },
+};
+
+export const townHallSmall = {
+  ...townHallCommon,
+  id: 'town-hall-small',
+  size: 'Small',
+  footprint: [[0, 0]],
   levels: [
     {
       name: 'Town hall',
-      stats: { jobs: 12 },
+      stats: { jobs: 4 },
+      agents: 1,
+      yards: ['plaza', 'trees'],
+      draw(g) {
+        const fh = 0.14, h = fh * 2, w = g.range(0.5, 0.56), d = 0.4, x0 = -w / 2, y = -0.2;
+        if (g.chance(0.5)) {
+          // hipped roof with a clock turret and a small onion on the ridge
+          const r = 0.16;
+          g.roofed(x0, y, 0, w, d, h, { h: r, hip: 0.12 });
+          g.windows(x0, y, w, d, 0, h, fh, 0.09, { from: 1 });
+          g.box(-0.04, -0.04, h + r * 0.7, 0.08, 0.08, 0.1);
+          clockFaces(g, 0, 0, 0.04, h + r * 0.7 + 0.06, 0.022);
+          onion(g, 0, 0, h + r * 0.7 + 0.1, 0.04);
+        } else {
+          // baroque gable to the street with the clock in it, a little bell turret
+          const r = 0.24;
+          g.roofed(x0 + 0.06, y, 0, w - 0.12, d, h, { h: r, ridge: 'y' });
+          g.windows(x0 + 0.06, y, w - 0.12, d, 0, h, fh, 0.09, { from: 1 });
+          clockFaces(g, 0, y + 0.04, 0.04, h + r * 0.4, 0.035);
+          g.line([[x0 + 0.06, y, h], [x0 + 0.03, y, h + 0.04], [x0 + 0.08, y, h + 0.1]], { facing: FRONT });
+          g.line([[w / 2 - 0.06, y, h], [w / 2 - 0.03, y, h + 0.04], [w / 2 - 0.08, y, h + 0.1]], { facing: FRONT });
+          g.box(-0.03, y + d - 0.12, h + r * 0.7, 0.06, 0.06, 0.07);
+          onion(g, 0, y + d - 0.09, h + r * 0.7 + 0.07, 0.035);
+        }
+        portal(g, 0, y, fh);
+      },
+    },
+  ],
+};
+
+export const townHall = {
+  ...townHallCommon,
+  id: 'town-hall',
+  hotkey: 'c',
+  size: 'Medium',
+  footprint: [[0, 0], [1, 0]],
+  levels: [
+    {
+      name: 'Town hall',
+      stats: { jobs: 8 },
       agents: 2,
       yards: ['plaza'],
       draw(g) {
-        const fh = 0.15, h = fh * 3, y0 = -0.3, d = 0.62;
-        const t = 0.13, tx = 0.5;
-        // two front wings either side of the clock tower
-        for (const [a, b] of [[-0.32, tx - t], [tx + t, 1.32]]) {
-          g.roofed(a, y0, 0, b - a, d, h, { h: 0.2, hip: [a < 0 ? 0.16 : 0, a < 0 ? 0 : 0.16] });
-          g.windows(a, y0, b - a, d, 0, h, fh, 0.09, { skip: [a < 0 ? 'right' : 'left'], from: 1 });
-          // arcade along the ground floor
-          const n = Math.round((b - a) / 0.14);
-          for (let i = 0; i < n; i++) {
-            const xa = a + ((b - a) * i) / n + 0.025, xb = a + ((b - a) * (i + 1)) / n - 0.025;
-            g.line([[xa, y0, 0], [xa, y0, fh * 0.6], [(xa + xb) / 2, y0, fh * 0.85], [xb, y0, fh * 0.6], [xb, y0, 0]], { facing: FRONT });
-          }
+        const kind = g.pick(['centre', 'corner', 'attic']);
+        const fh = 0.15, d = 0.5, y0 = -0.32;
+        if (kind === 'attic') {
+          // renaissance hall: an arcade, sgraffito storeys, the attic on top
+          const h = fh * 3, x0 = -0.34, x1 = 1.34;
+          g.roofed(x0, y0, 0, x1 - x0, d, h, { h: 0.14, hip: 0.12 });
+          g.windows(x0, y0, x1 - x0, d, 0, h, fh, 0.1, { from: 1, h: 0.5 });
+          g.floors(x0, y0, x1 - x0, d, fh, h, fh, { skip: ['back'] });
+          arcade(g, x0 + 0.02, x1 - 0.02, y0, fh);
+          attic(g, x0, x1, y0, h, 0.16);
+          return;
         }
-        // clock tower with a gallery and a spire or an onion
-        const th = 1.05, ty = y0 + t;
-        g.box(tx - t, ty - t, 0, 2 * t, 2 * t, th);
-        g.floors(tx - t, ty - t, 2 * t, 2 * t, 0, th, fh, { inset: 0 });
-        clockFaces(g, tx, ty, t, th - 0.12);
-        g.box(tx - t - 0.02, ty - t - 0.02, th, 2 * t + 0.04, 2 * t + 0.04, 0.02); // gallery
-        g.box(tx - t * 0.7, ty - t * 0.7, th + 0.02, 1.4 * t, 1.4 * t, 0.1);
-        if (g.chance(0.5)) onion(g, tx, ty, th + 0.12, t * 0.7);
-        else spire(g, tx, ty, th + 0.12, t * 0.7, 0.35);
-        // back wings round a courtyard
-        g.roofed(-0.32, y0 + d + 0.08, 0, 0.4, 0.95, fh * 2, { h: 0.16, ridge: 'y', hip: [0, 0.12] });
-        g.windows(-0.32, y0 + d + 0.08, 0.4, 0.95, 0, fh * 2, fh, 0.09);
-        g.roofed(0.92, y0 + d + 0.08, 0, 0.4, 0.95, fh * 2, { h: 0.16, ridge: 'y', hip: [0, 0.12] });
-        g.windows(0.92, y0 + d + 0.08, 0.4, 0.95, 0, fh * 2, fh, 0.09);
-        g.roofed(0.14, 1.05, 0, 0.72, 0.28, fh * 2, { h: 0.14 });
+        // wings either side of (or beside) the clock tower, an arcade under them
+        const t = 0.12, tx = kind === 'centre' ? 0.5 : 1.34 - t, ty = y0 + t;
+        const h = fh * g.int(2, 3);
+        const wings = kind === 'centre' ? [[-0.34, tx - t], [tx + t, 1.34]] : [[-0.34, tx - t]];
+        for (const [a, b] of wings) {
+          const left = a < 0, hip = kind === 'centre' ? (left ? [0.14, 0] : [0, 0.14]) : [0.14, 0];
+          g.roofed(a, y0, 0, b - a, d, h, { h: 0.19, hip });
+          g.windows(a, y0, b - a, d, 0, h, fh, 0.09, { from: 1, skip: [kind === 'centre' && !left ? 'left' : 'right'] });
+          arcade(g, a + 0.02, b - 0.02, y0, fh);
+        }
+        clockTower(g, tx, ty, t, h + 0.4, fh);
       },
     },
   ],
 };
 
-
-export const column = {
-  ...common,
-  id: 'plague-column',
-  hotkey: 'v',
-  name: 'Plague column',
-  size: 'Plague column',
-  blurb: 'Baroque column',
-  footprint: [[0, 0]],
-  plot: { props: 'green', boundary: 0, density: 0.2 },
+export const townHallLarge = {
+  ...townHallCommon,
+  id: 'town-hall-large',
+  size: 'Large',
+  // 3×2: local x from about -0.4 to 2.4, y from -0.4 to 1.4
+  footprint: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
   levels: [
     {
-      name: 'Plague column',
-      stats: {},
-      agents: 0,
+      name: 'Town hall',
+      stats: { jobs: 16 },
+      agents: 3,
       yards: ['plaza'],
       draw(g) {
-        paving(g, [[-0.34, -0.34], [0.34, -0.34], [0.34, 0.34], [-0.34, 0.34]], 0.1, { lod: 1 });
-        // stepped base, saints on the corners, column, figure on top
-        g.box(-0.2, -0.2, 0, 0.4, 0.4, 0.04);
-        g.box(-0.14, -0.14, 0.04, 0.28, 0.28, 0.1);
-        g.lathe(0, 0, 0.14, [[0.05, 0], [0.035, 0.05], [0.03, 0.55], [0.045, 0.58], [0.045, 0.6]], 8);
-        g.lathe(0, 0, 0.74, [[0.025, 0], [0.03, 0.05], [0.012, 0.1], [0, 0.12]], 6);
-        g.detailed(1, () => {
-          for (const [x, y] of [[-0.17, -0.17], [0.17, -0.17], [0.17, 0.17], [-0.17, 0.17]]) {
-            g.lathe(x, y, 0.04, [[0.018, 0], [0.02, 0.05], [0.01, 0.08], [0, 0.09]], 5);
-          }
-        });
+        // the front range with its arcade, the tall clock tower in the
+        // middle (or off to one side), side ranges round a courtyard with
+        // a fountain, the back range closing it
+        const fh = 0.15, h = fh * 3, d = 0.52, y0 = -0.34, t = 0.15;
+        const tx = g.pick([1.0, 1.0, 0.45, 1.55]), ty = y0 + t;
+        const roofH = 0.22;
+        for (const [a, b] of [[-0.34, tx - t], [tx + t, 2.34]]) {
+          if (b - a < 0.1) continue;
+          const hip = [a < 0 ? 0.16 : 0, b > 2.3 ? 0.16 : 0];
+          g.roofed(a, y0, 0, b - a, d, h, { h: roofH, hip });
+          g.windows(a, y0, b - a, d, 0, h, fh, 0.1, { from: 1, skip: [a > 0 && 'left', b < 2.3 && 'right'].filter(Boolean) });
+          arcade(g, a + 0.02, b - 0.02, y0, fh);
+        }
+        clockTower(g, tx, ty, t, h + 0.6, fh);
+        // oriel on the corner
+        g.box(2.2, y0 - 0.06, fh * 1.2, 0.12, 0.06, fh * 1.6);
+        // side and back ranges, lower, round the courtyard
+        const yb = y0 + d + 0.06, fh2 = fh * 2;
+        g.roofed(-0.34, yb, 0, 0.42, 1.36 - yb, fh2, { h: 0.16, ridge: 'y', hip: [0, 0.12] });
+        g.windows(-0.34, yb, 0.42, 1.36 - yb, 0, fh2, fh, 0.1);
+        g.roofed(1.92, yb, 0, 0.42, 1.36 - yb, fh2, { h: 0.16, ridge: 'y', hip: [0, 0.12] });
+        g.windows(1.92, yb, 0.42, 1.36 - yb, 0, fh2, fh, 0.1);
+        g.roofed(0.14, 1.02, 0, 1.72, 0.34, fh2, { h: 0.15 });
+        g.windows(0.14, 1.02, 1.72, 0.34, 0, fh2, fh, 0.1, { skip: ['left', 'right'] });
+        fountain(g, 1.0, 0.62, 0.09);
+        for (const x of [0.4, 1.6]) tree(g, x, 0.68, 0.9);
       },
     },
   ],
 };
 
-// ----- memorials, town gates, castles -----
+// ----- memorials, castles -----
 
 
 // A tank on its plinth top at z, gun pointing along -x and up a little.
@@ -238,8 +345,8 @@ function tankOn(g, x, y, z) {
 export const memorial = {
   ...common,
   id: 'memorial',
+  hotkey: 'v',
   name: 'Memorial',
-  size: 'Memorial',
   blurb: 'Stone memorial',
   footprint: [[0, 0]],
   plot: { props: 'green', boundary: 0, density: 0.3 },
@@ -332,49 +439,6 @@ function curtain(g, [x0, y0], [x1, y1], h, d = 0.07) {
     });
   }
 }
-
-export const townGate = {
-  ...common,
-  id: 'town-gate',
-  hotkey: 'b',
-  name: 'Gate tower',
-  blurb: 'Old town gate',
-  footprint: [[0, 0]],
-  plot: { props: 'green', boundary: 0, density: 0.2 },
-  levels: [
-    {
-      name: 'Gate tower',
-      stats: {},
-      agents: 0,
-      yards: ['plaza'],
-      draw(g) {
-        // a gothic or baroque gate tower standing on its own, the town
-        // walls long gone
-        const t = 0.15, h = g.range(0.72, 0.85);
-        g.box(-t, -t, 0, 2 * t, 2 * t, h);
-        g.windows(-t, -t, 2 * t, 2 * t, 0.3, h - 0.05, 0.14, 0.1, { w: 0.3, h: 0.55 });
-        // the gateway, front and back
-        for (const [y, n] of [[-t, [0, -1, 0]], [t, [0, 1, 0]]]) {
-          g.line([[-0.07, y, 0], [-0.07, y, 0.13], [-0.04, y, 0.18], [0, y, 0.2], [0.04, y, 0.18], [0.07, y, 0.13], [0.07, y, 0]], { facing: n, lod: 1 });
-        }
-        if (g.chance(0.6)) {
-          // gothic: a gallery, a steep spire and four corner pinnacles
-          g.box(-t - 0.02, -t - 0.02, h, 2 * t + 0.04, 2 * t + 0.04, 0.03);
-          spire(g, 0, 0, h + 0.03, t * 0.95, 0.5);
-          g.detailed(1, () => {
-            for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-              g.lathe(sx * t, sy * t, h + 0.03, [[0.022, 0], [0, 0.14]], 4, { phase: 0.5 });
-            }
-          });
-        } else {
-          // baroque: hipped roof with an onion
-          g.roofed(-t, -t, h, 2 * t, 2 * t, 0, { h: 0.12, hip: t });
-          onion(g, 0, 0, h + 0.12, t * 0.5);
-        }
-      },
-    },
-  ],
-};
 
 // Round tower (a castle keep): a smooth shaft on a battered plinth, rows
 // of small windows, and on top either a corbelled parapet under a hatched

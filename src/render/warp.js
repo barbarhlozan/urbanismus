@@ -12,6 +12,7 @@ import { valueNoise2D } from '../core/random.js';
 // `relief` is the lift, in grid steps, between the lowest and the highest
 // possible ground (terrain/elevation.js); the middle stays put. Elevation is
 // sampled once over `box` and interpolated, as this runs for every point drawn.
+// The function carries `range`: [lowest, highest] lift (for Camera.unproject).
 export function makeLift(elevation, maxElevation, relief, [x0, y0, x1, y1], step = 0.25) {
   if (!relief) return null;
   const nx = Math.ceil((x1 - x0) / step) + 1;
@@ -20,13 +21,17 @@ export function makeLift(elevation, maxElevation, relief, [x0, y0, x1, y1], step
   for (let j = 0; j < ny; j++) {
     for (let i = 0; i < nx; i++) v[j * nx + i] = (elevation(x0 + i * step, y0 + j * step) / maxElevation - 0.5) * relief;
   }
-  return (x, y) => {
+  const lift = (x, y) => {
     const fx = Math.min(Math.max((x - x0) / step, 0), nx - 1.001);
     const fy = Math.min(Math.max((y - y0) / step, 0), ny - 1.001);
     const i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j;
     const c = j * nx + i;
     return (v[c] + (v[c + 1] - v[c]) * tx) * (1 - ty) + (v[c + nx] + (v[c + nx + 1] - v[c + nx]) * tx) * ty;
   };
+  let lo = Infinity, hi = -Infinity;
+  for (const h of v) { lo = Math.min(lo, h); hi = Math.max(hi, h); }
+  lift.range = [lo, hi];
+  return lift;
 }
 
 export function makeWarp(seed, warp, tremor) {

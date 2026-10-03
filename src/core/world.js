@@ -13,6 +13,8 @@ import { townName } from './townName.js';
 import { Grid, ORTHO, DIAG } from './grid.js';
 import { Terrain } from '../terrain/terrain.js';
 import { makeElevation } from '../terrain/elevation.js';
+import { makeRocks } from '../terrain/rocks.js';
+import { findHills } from '../terrain/hills.js';
 import { riverField } from '../terrain/rivers.js';
 import { RoadNetwork, edgeKey } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
@@ -24,9 +26,10 @@ import { FEATURE_TYPES } from '../../features/index.js';
 export const SAVE_VERSION = 3; // 3: railways on the fine grid
 
 export class World {
-  constructor({ width, height, seed = 1, name, hilliness = 1 }) {
+  constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1 }) {
     this.seed = seed;
     this.hilliness = hilliness; // scales the seed's hills (terrain/elevation.js)
+    this.rockiness = rockiness; // 0–1, how much of the steep ground is rock (terrain/rocks.js)
     this.name = name || townName(seed); // what the player calls the town (older saves: from the seed)
     this.events = new EventBus();
     this.grid = new Grid(width, height);
@@ -53,6 +56,7 @@ export class World {
         scale: 1,
         isBlocked: (n) => this.isRoadBlocked(n),
         conflicts: (a, b) => this.railAlong(a, b),
+        steep: (a, b) => this.grade(this.networks.road, a, b) > CONFIG.steep.road,
         coarseOf: (n) => n,
         // drivers weigh a lane by the time it takes (CONFIG.lane.speed)
         cost: (a, b) => this.grid.distance(a, b) / (this.isLane(a, b) ? CONFIG.lane.speed : 1),
@@ -69,6 +73,7 @@ export class World {
         scale: 0.5,
         isBlocked: (f) => this.isRailBlocked(f),
         conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.paths.hasEdge(f, g),
+        steep: (f, g) => this.grade(this.networks.rail, f, g) > CONFIG.steep.rail,
         maxTurn: Math.PI / 4,
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'rails:changed',
@@ -306,7 +311,8 @@ export class World {
   }
 
   // Ground height in metres at a world position: the seed's hills with the
-  // river valleys cut in (terrain/elevation.js). `riverField` is the rivers'
+  // river valleys cut in (terrain/elevation.js) and the steepest slopes
+  // broken into cliff bands (terrain/rocks.js). `riverField` is the rivers'
   // distance field (terrain/rivers.js), null without rivers. Both are worked
   // out once per set of rivers.
   get elevation() {
@@ -317,11 +323,58 @@ export class World {
     return this.relief().field;
   }
 
+  // How much rock there is at a world position, 0–1 (terrain/rocks.js).
+  rockAt(x, y) {
+    return this.relief().rock(x, y);
+  }
+
+  // The named hills (terrain/hills.js), highest first, found once per relief.
+  get hills() {
+    const r = this.relief();
+    r.hills ??= findHills(r.elevation, this.grid, this.seed, {
+      isWater: (x, y) => {
+        const n = this.grid.nodeAt(Math.round(x), Math.round(y));
+        return n >= 0 && this.terrain.isWater(n);
+      },
+    });
+    return r.hills;
+  }
+
+  // Too steep at this main dot to put up a building (CONFIG.steep.build).
+  tooSteepToBuild(node) {
+    return this.slopeAt(node) > CONFIG.steep.build;
+  }
+
+  // How steep the ground is at a main dot (metres of rise per grid step,
+  // either way along its steepest line), worked out once per relief.
+  slopeAt(node) {
+    const r = this.relief();
+    if (!r.slopes) {
+      const e = r.elevation, d = 0.5;
+      r.slopes = new Float32Array(this.grid.size);
+      for (let i = 0; i < this.grid.size; i++) {
+        const [x, y] = this.grid.xy(i);
+        r.slopes[i] = Math.hypot(e(x + d, y) - e(x - d, y), e(x, y + d) - e(x, y - d)) / (2 * d);
+      }
+    }
+    return r.slopes[node];
+  }
+
+  // How steeply a segment of a network climbs: metres per grid step of its
+  // length, between its two ends.
+  grade(layer, a, b) {
+    const [ax, ay] = layer.pos(a), [bx, by] = layer.pos(b);
+    const len = Math.hypot(bx - ax, by - ay);
+    return len ? Math.abs(this.elevation(bx, by) - this.elevation(ax, ay)) / len : 0;
+  }
+
   relief() {
     const rivers = this.terrain.rivers;
     if (this._relief?.rivers !== rivers) {
       const field = riverField(rivers);
-      this._relief = { rivers, field, elevation: makeElevation(this.seed, field, this.hilliness) };
+      const { width, height } = this.grid;
+      const rocks = makeRocks(this.seed, makeElevation(this.seed, field, this.hilliness), [-3, -3, width + 2, height + 2], { rivers: field, amount: this.rockiness });
+      this._relief = { rivers, field, elevation: rocks.elevation, rock: rocks.rock };
     }
     return this._relief;
   }
@@ -395,6 +448,7 @@ export class World {
       if (this.railNear(n)) return { ok: false, reason: 'Railway' };
       const f = this.featureAt(n);
       if (f && FEATURE_TYPES[f.type]?.clearable === false) return { ok: false, reason: 'Blocked' };
+      if (this.tooSteepToBuild(n)) return { ok: false, reason: 'Too steep' };
     }
     if (this.fineCoveredBy(nodes).some((f) => this.paths.hasNode(f))) return { ok: false, reason: 'Footpath' };
     return { ok: true };
@@ -997,6 +1051,7 @@ export class World {
       seed: this.seed,
       name: this.name,
       hilliness: this.hilliness,
+      rockiness: this.rockiness,
       width: this.grid.width,
       height: this.grid.height,
       nextId: this.nextId,
@@ -1015,7 +1070,7 @@ export class World {
 
   static fromJSON(data) {
     if (data.version > SAVE_VERSION) throw new Error(`Save is from a newer version (${data.version})`);
-    const world = new World(data);
+    const world = new World({ ...data, rockiness: data.rockiness ?? 0 }); // (older saves: no rock, their ground stays as built on)
     world.terrain.load(data.terrain);
 
     const networks = data.networks ?? { road: data.roads ?? [] }; // v1 had only roads

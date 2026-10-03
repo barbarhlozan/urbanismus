@@ -65,6 +65,24 @@ export class OverlayKit {
     return node < 0 ? '' : this.crossAt(...this.world.grid.xy(node), size);
   }
 
+  // Too steep here: a little warning sign like the "steep hill" road sign –
+  // an upright triangle, pen-drawn, with the slope as a filled wedge inside –
+  // where other problems get the cross. Same size and halo as the cross.
+  steepAt(x, y, size = 0.16) {
+    const [cx, cy] = this.project(x, y);
+    const s = size * this.camera.tile * 1.25;
+    const k = 1 / this.camera.zoom, seed = seedOf(x, y, 7);
+    const top = [cx, cy - s * 1.05], left = [cx - s, cy + s * 0.7], right = [cx + s, cy + s * 0.7];
+    const sign = sketchLine(top, left, seed, { k, over: 1 }) + sketchLine(left, right, seed + 1, { k, over: 1 })
+      + sketchLine(right, top, seed + 2, { k, over: 1 });
+    const wedge = `M${r2(cx - s * 0.5)} ${r2(cy + s * 0.42)}L${r2(cx + s * 0.5)} ${r2(cy + s * 0.42)}L${r2(cx + s * 0.5)} ${r2(cy - s * 0.12)}Z`;
+    return `<path class="cross-halo" d="${sign}"/><path class="steep-sign" d="${sign}"/><path class="steep-wedge" d="${wedge}"/>`;
+  }
+
+  steep(node, size) {
+    return node < 0 ? '' : this.steepAt(...this.world.grid.xy(node), size);
+  }
+
   // points: world coordinates; curve: { cornerRadius, curveSamples } or null for straight
   path(points, cls, curve = this.config.road) {
     const pts = curve ? smoothPolyline(points, curve.cornerRadius, curve.curveSamples) : points;
@@ -105,7 +123,9 @@ export class OverlayKit {
 
   // Photo mode (tools/photo.js): the photographer at (x, y), the camera icon,
   // and, with `yaw`, the wedge of ground their camera sees, `fov` degrees
-  // wide and `len` grid steps long – no outline, only loose pencil strokes
+  // wide and `len` grid steps long, held level at the photographer's height
+  // (not laid on the ground, so a slope doesn't stretch it out of shape) –
+  // no outline, only loose pencil strokes
   // across it, irregular in spacing, slant, length and where they start
   // (seeded by the spot, so they hold still while aiming).
   photographer(x, y, yaw = null, fov = 42, len = 3) {
@@ -114,9 +134,10 @@ export class OverlayKit {
     if (yaw != null) {
       const rnd = mulberry32(seedOf(x, y, 7));
       const half = (fov * Math.PI) / 360, tan = Math.tan(half);
+      const z = this.world.terrain.heightAt(x, y) + 0.04;
       const at = (t, w, a) => {
         const c = Math.cos(yaw + a), s = Math.sin(yaw + a);
-        return this.project(x + c * t - s * w, y + s * t + c * w);
+        return this.camera.project(x + c * t - s * w, y + s * t + c * w, z, [x, y]);
       };
       let d = '';
       for (let t = 0.1 + rnd() * 0.05; t < len; t += 0.05 + rnd() * 0.1) {

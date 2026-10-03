@@ -17,9 +17,10 @@
 # Build menu groups
 #   transport            Road, Lane, Footpath, Railway, the stations, Bus stop
 #   zones                Residential, Business, Industry, Coal mine, Farm
-#   public               Parks, Squares, Services, Cemetery, House of culture
-#   landmarks            Chapel, Church, Town hall, Plague column, Memorial,
-#                        Gate tower, Castle, Tower, Stadium
+#   public               Parks, Squares, Services, Cemetery, House of culture,
+#                        Swimming pool
+#   landmarks            Chapel, Church, Town hall, Memorial, Castle, Tower,
+#                        Stadium
 #
 # Network tools
 #   road
@@ -34,6 +35,7 @@
 #   park                 park + park_large
 #   square               square + square_large
 #   services             services + services_large
+#   town_hall            town_hall + town_hall_small + town_hall_large
 #   heritage             every landmark, and culture_house too
 #
 # Types, by group (one size each), with their levels
@@ -61,13 +63,14 @@
 #     services_large     services_large_service_station, services_large_service_centre, services_large_hospital
 #     cemetery           cemetery_cemetery
 #     culture_house      culture_house_house_of_culture
+#     pool               pool_swimming_pool
 #   Landmarks
 #     chapel             chapel_chapel
 #     church             church_church
 #     town_hall          town_hall_town_hall
-#     plague_column      plague_column_plague_column
+#     town_hall_small    town_hall_small_town_hall
+#     town_hall_large    town_hall_large_town_hall
 #     memorial           memorial_memorial
-#     town_gate          town_gate_gate_tower
 #     castle             castle_castle
 #     tv_tower           tv_tower_tower
 #     stadium            stadium_stadium

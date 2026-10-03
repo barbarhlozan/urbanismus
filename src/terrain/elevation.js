@@ -12,9 +12,13 @@ import { RIVER } from './rivers.js';
 
 export const ELEVATION = {
   relief: 160,   // metres from the lowest to the highest possible point
+                 // (times the map's hilliness when that is above 1)
+  base: 500,     // metres above sea of elevation 0, for the contour labels
+                 // (a multiple of interval * index, so labels stay round)
   interval: 5,   // metres between contour lines
   index: 4,      // every n-th line is an index line (brighter, labelled);
                  // every other line is kept at mid zoom, the rest only close up
+  steep: { from: 2, interval: 10 }, // hilliness from which lines are spaced wider
   step: 0.2,     // sampling step in grid units (smaller = smoother, slower)
 };
 
@@ -51,16 +55,26 @@ function softMin(a, b, k) {
   return Math.min(a, b) - (h * h * k) / 4;
 }
 
+// Mountains (hilliness past Steep's 1.45, fully at 2.5) get more contrast:
+// the octaves add up towards the middle, so without it most of the land
+// would sit in a narrow band. `rugged` 0–1 ramps it in; at 1 the spurs and
+// knolls weigh more (more separate peaks) and an S-curve of `contrast`
+// spreads the heights out (`contrast` 4 would start flattening the tops).
+const MOUNTAINS = { from: 1.45, to: 2.5, spur: 0.4, knoll: 0.06, contrast: 3 };
+
 function makeHills(seed, k = 1) {
+  const rugged = Math.min(Math.max((k - MOUNTAINS.from) / (MOUNTAINS.to - MOUNTAINS.from), 0), 1);
   // octaves: big hills, spurs, small knolls, then roughness for wiggly lines
-  const octaves = [[18, 1], [8, 0.5], [3.5, 0.22], [1.3, 0.07]]
+  const octaves = [[18, 1], [8, 0.5 + MOUNTAINS.spur * rugged], [3.5, 0.22 + MOUNTAINS.knoll * rugged], [1.3, 0.07]]
     .map(([cell, amp], i) => [valueNoise2D(seed + 911 + i * 37, cell), amp]);
   const total = octaves.reduce((s, [, a]) => s + a, 0);
+  const c = MOUNTAINS.contrast * rugged;
+  const spread = c ? (t) => 0.5 + Math.tanh(c * (t - 0.5)) / (2 * Math.tanh(c / 2)) : (t) => t;
   return (x, y) => {
     let v = 0;
     for (const [n, a] of octaves) v += n(x, y) * a;
     // stretch the middle apart, so slopes are steep and tops / bottoms flatter
-    const t = v / total;
+    const t = spread(v / total);
     const s = t * t * (3 - 2 * t);
     // flatter land sits at mid height rather than at the bottom
     return ((0.35 * t + 0.65 * s) * k + Math.max(0, (1 - k) / 2)) * ELEVATION.relief;

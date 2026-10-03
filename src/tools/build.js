@@ -104,10 +104,11 @@ export function createBuildTool({ world }, defs) {
         return out;
       }
       // it can't go here: still show it where it would stand, faded, with
-      // a cross on each of its dots
+      // a cross on each of its dots – or, where the ground is too steep to
+      // build on, a steep-hill sign
       const nodes = world.footprintNodes(d.id, hover, rotation);
       const ghost = nodes.includes(-1) ? '' : kit.ghost(d, hover, world.facingRotation(d.id, hover, rotation, turn()), 1, seed, { blocked: true });
-      return ghost + nodes.map((n) => kit.cross(n)).join('');
+      return ghost + nodes.map((n) => (n >= 0 && world.tooSteepToBuild(n) ? kit.steep(n) : kit.cross(n))).join('');
     },
   };
 }

@@ -67,7 +67,7 @@ export const STRUCTURES = [
   residential, residentialWide, business, businessWide, industrial, industrialMedium, industrialSmall, mine, farm,
   park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.main, station.stop, busStop,
   grounds.cemetery, pool,
-  heritage.chapel, heritage.church, heritage.townHall, heritage.column, heritage.memorial, heritage.townGate, heritage.castle,
+  heritage.chapel, heritage.church, heritage.townHallSmall, heritage.townHall, heritage.townHallLarge, heritage.memorial, heritage.castle,
   landmarks.cultureHouse, landmarks.tvTower, landmarks.stadium,
 ];
 
@@ -78,8 +78,8 @@ export const BUILD_FAMILIES = [
   [residential, residentialWide], [business, businessWide], [industrial, industrialMedium, industrialSmall], [mine], [farm],
   [park.small, park.large], [square.small, square.large], [services.small, services.large],
   [grounds.cemetery], [landmarks.cultureHouse], [pool],
-  [heritage.chapel], [heritage.church], [heritage.townHall], [heritage.column, heritage.memorial],
-  [heritage.townGate], [heritage.castle],
+  [heritage.chapel], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
+  [heritage.castle],
   [landmarks.tvTower], [landmarks.stadium],
 ];
 

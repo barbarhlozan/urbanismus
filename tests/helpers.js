@@ -3,7 +3,7 @@
 import { World } from '../src/core/world.js';
 
 export function flatWorld(width = 20, height = 20) {
-  return new World({ width, height, seed: 1, name: 'Testov' });
+  return new World({ width, height, seed: 1, name: 'Testov', rockiness: 0 }); // (rock would put cliffs where tests build)
 }
 
 // A run of main dots, [x, y] to [x, y] in a straight line (or diagonal).

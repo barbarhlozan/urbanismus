@@ -116,29 +116,37 @@ function spanProblem(layer, nodes, i, j) {
   return null;
 }
 
+// `steep`: the blocked dots that are only blocked for climbing too steeply
+// (shown by a sign rather than a cross, render/overlay.js steepAt).
 export function validateRoute(layer, nodes) {
   const blocked = [];
-  if (!nodes || nodes.length < 2) return { ok: false, blocked, reason: 'Too short' };
+  const steep = new Set(), other = new Set();
+  const block = (set, ...ns) => { blocked.push(...ns); for (const n of ns) set.add(n); };
+  const result = (r) => ({ ...r, steep: [...steep].filter((n) => !other.has(n)) });
+  if (!nodes || nodes.length < 2) return { ok: false, blocked, steep: [], reason: 'Too short' };
 
   const spans = bridgeSpans(layer, nodes);
   for (const n of nodes) {
-    if (!spans.clear.has(n) && layer.isBlocked(n)) blocked.push(n);
+    if (!spans.clear.has(n) && layer.isBlocked(n)) block(other, n);
   }
   let reason = spans.problem?.reason ?? 'Something is in the way';
   for (let i = 0; i < nodes.length - 1; i++) {
     if (crossesDiagonal(layer, nodes[i], nodes[i + 1])) {
       reason = 'Crosses another line';
-      blocked.push(nodes[i], nodes[i + 1]);
+      block(other, nodes[i], nodes[i + 1]);
     } else if (layer.conflicts(nodes[i], nodes[i + 1])) {
       reason = 'Runs along another line';
-      blocked.push(nodes[i], nodes[i + 1]);
+      block(other, nodes[i], nodes[i + 1]);
+    } else if (!(spans.clear.has(nodes[i]) && spans.clear.has(nodes[i + 1])) && layer.steep(nodes[i], nodes[i + 1])) {
+      reason = 'Too steep';
+      block(steep, nodes[i], nodes[i + 1]);
     }
   }
   if (!blocked.length) {
     const sharp = sharpBends(layer, nodes);
-    if (sharp.length) return { ok: false, blocked: sharp, reason: 'Too sharp a bend for trains' };
+    if (sharp.length) return { ok: false, blocked: sharp, steep: [], reason: 'Too sharp a bend for trains' };
   }
 
-  if (blocked.length === 0) return { ok: true, blocked };
-  return { ok: false, blocked, reason };
+  if (blocked.length === 0) return result({ ok: true, blocked });
+  return result({ ok: false, blocked, reason });
 }

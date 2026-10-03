@@ -48,7 +48,7 @@ const WORDS = { 15: 'fifteen', 20: 'twenty', 30: 'thirty', 50: 'fifty', 75: 'sev
 const PLACE_REACH = 2;
 const PLACES = [
   ['church', 'by the church'], ['chapel', 'by the chapel'], ['town-hall', 'by the town hall'],
-  ['castle', 'below the castle'], ['town-gate', 'by the old gate'], ['station', 'near the station'],
+  ['castle', 'below the castle'], ['pool', 'by the swimming pool'], ['station', 'near the station'],
   ['station-main', 'near the station'], ['stop', 'by the railway stop'], ['square', 'on the square'],
   ['square-large', 'on the square'], ['park', 'by the park'], ['park-large', 'by the park'],
   ['cemetery', 'by the cemetery'], ['farm', 'by the farm'], ['mine', 'by the pit'], ['industrial', 'by the works'],

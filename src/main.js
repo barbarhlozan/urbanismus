@@ -95,7 +95,7 @@ const uiRoot = document.getElementById('ui');
 const camera = new Camera(world.grid, CONFIG.camera);
 camera.warp = makeWarp(world.seed, STYLE.warp, STYLE.tremor);
 camera.lift = makeLift(world.elevation, ELEVATION.relief, STYLE.relief,
-  [-3, -3, world.grid.width + 2, world.grid.height + 2]);
+  [-3, -3, world.grid.width + 2, world.grid.height + 2], 0.125); // (fine enough for the cliff faces, terrain/rocks.js)
 camera.centerOn(camera.cx, camera.cy, innerWidth, innerHeight);
 
 // Keep whatever is in the middle of the screen in the middle when resizing.
@@ -119,7 +119,7 @@ trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
 const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, parking, config: CONFIG });
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);
-const annotations = new Annotations({ world, camera, clock });
+const annotations = new Annotations({ world, camera, clock, heights: () => renderer.contours });
 agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos);
 
 // the town's chronicle, and the story told along the way (story/story.txt)

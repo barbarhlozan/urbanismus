@@ -17,11 +17,11 @@ Landmarks, plus Erase. Open a group to see its tools; click a tool to pick it up
 again (or close its group, or **Esc**) to put it down. The **–** folds the menu into a single
 Build button; picking a tool folds it too, out of the way, and it comes back when you put the
 tool down. Things that come in two sizes or kinds (parks, squares, services, industry,
-station / stop, plague column / memorial) are one tool with a **Size** button (**Shift**). While a tool is in hand, its options (size, rotate,
+station / stop, town hall) are one tool with a **Size** button (**Shift**). While a tool is in hand, its options (size, rotate,
 another look, bend…) are buttons above the bottom edge.
 
 The shortcuts follow the Build menu across the keyboard, one row per group, in menu order:
-**1–6** Transport, **Q–T** Zones, **A–G** Public, **Z X C V B N M ,** Landmarks. They go by
+**1–6** Transport, **Q–T** Zones, **A–G** Public, **Z–,** Landmarks. They go by
 where the key sits (a US keyboard), so they work the same on a Czech or German layout.
 
 - **Click the map** – menu for the nearest dot (build, road from here, remove); the dots
@@ -58,8 +58,8 @@ where the key sits (a US keyboard), so they work the same on a Czech or German l
 - **R** – coal mine (pit → colliery → deep mine), **T** – farm (farmstead → JZD → cooperative)
 - **A S D** – parks, squares, services, small and large (**Shift** switches size); **F** –
   cemetery, **G** – house of culture
-- **Z X C V B N M ,** – landmarks: chapel, church, town hall, plague column, gate tower,
-  castle, tower, stadium
+- **Z X C V N M ,** – landmarks: chapel, church, town hall (**Shift** switches small, medium,
+  large), memorial, castle, tower, stadium (**B** is free)
 - **Backspace** – erase
 - **P** – photo: click where to stand, aim with the pointer, click to take a picture of the
   town from street level (**Shift** lens: 28 / 42 / 80 mm);
@@ -86,8 +86,8 @@ folded there and folds again once you pick a tool.
   car park or garages.
 - Neighbouring apartments and shops facing the same road often share a wall and form a
   street front; panel blocks join into one long block built in sections.
-- The **Landmarks** group has the old town (a chapel, a church, a town hall, a plague column or
-  war memorial, a gate tower, a castle) and the new one (a stadium or Sokol hall, and a TV
+- The **Landmarks** group has the old town (a chapel, a church, a town hall in three sizes, a
+  war memorial, a castle) and the new one (a stadium or Sokol hall, and a TV
   tower or lookout, which only goes on a hilltop). They make nearby apartments
   and offices grow faster, and a church sometimes appears by itself in a big enough
   neighbourhood without one.

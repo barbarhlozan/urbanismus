@@ -137,7 +137,11 @@ export function createNetworkTool({ world, config }, options) {
       if (!plan) return out;
       const points = plan.nodes.map((n) => layer.pos(n));
       out += kit.path(points, `preview ${kind}${lane ? ' lane' : ''}${plan.check.ok ? '' : ' invalid'}`, curve);
-      for (const n of new Set(plan.check.blocked)) out += kit.crossAt(...layer.pos(n), 0.16 * Math.sqrt(layer.scale));
+      // a steep-hill sign where it climbs too steeply, a cross for anything else
+      const steep = new Set(plan.check.steep ?? []);
+      for (const n of new Set(plan.check.blocked)) {
+        out += (steep.has(n) ? kit.steepAt : kit.crossAt).call(kit, ...layer.pos(n), 0.16 * Math.sqrt(layer.scale));
+      }
       return out;
     },
   };

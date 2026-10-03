@@ -24,7 +24,7 @@ const SETTINGS = [
   },
   {
     key: 'hills', label: 'Land', icon: 'terrain', pick: 1, options: [
-      ['Flat', 0.3], ['Gentle', 0.6], ['Hilly', 1], ['Steep', 1.45],
+      ['Flat', 0.3], ['Gentle', 0.6], ['Hilly', 1], ['Steep', 1.45], ['Mountains', 2.5],
     ],
   },
   { key: 'river', label: 'River', icon: 'river', pick: 'random', options: [['No', 'no'], ['Maybe', 'random'], ['Yes', 'yes']] },

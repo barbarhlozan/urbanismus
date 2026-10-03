@@ -1,6 +1,8 @@
 // Annotations (switchable in render/style.js):
 //   hover tags  a leader line and a boxed label naming the building / road /
-//               exit under the pointer, e.g. "Clinic"
+//               exit under the pointer, e.g. "Clinic"; with the Terrain
+//               lines on, a hill's top mark tells its name and height
+//               ("Holý vrch · 570 m", terrain/hills.js)
 //
 // Systems also report what happens with annotations.log(text, [x, y])
 // (visitors, residents leaving, buildings growing…). The player doesn't
@@ -10,6 +12,8 @@
 
 import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
 import { FEATURE_TYPES } from '../../features/index.js';
+import { ELEVATION } from '../terrain/elevation.js';
+import { HILLS } from '../terrain/hills.js';
 import { STYLE } from '../render/style.js';
 import { sketchRect, sketchPolyline, seedOf } from '../render/sketch.js';
 
@@ -27,7 +31,9 @@ function textWidth(text, size) {
 }
 
 export class Annotations {
-  constructor({ world, camera, clock }) {
+  // heights(): whether open ground tells its height (the Terrain lines are on)
+  constructor({ world, camera, clock, heights = () => false }) {
+    this.heights = heights;
     this.world = world;
     this.camera = camera;
     this.clock = clock;
@@ -54,6 +60,11 @@ export class Annotations {
     const node = world.grid.nodeAt(x, y);
     if (node < 0) return null;
     const at = (height) => ({ pos: world.grid.xy(node), height });
+    // a hill's top mark (with the Terrain lines showing): its name and height
+    if (this.heights()) {
+      const hill = world.hills.find((hl) => Math.hypot(hl.x - x, hl.y - y) <= HILLS.hover);
+      if (hill) return { pos: [hill.x, hill.y], height: 0.15, lines: [`${hill.name} · ${Math.round(ELEVATION.base + hill.height)} m`] };
+    }
     const s = world.structureAt(node);
     if (s) return { pos: world.centerOf(s), height: 0.5, lines: [levelOf(STRUCTURE_TYPES[s.type], s).name] };
     if (world.roadExits().some((e) => e.node === node)) return { ...at(0.1), lines: ['Road out of town'] };

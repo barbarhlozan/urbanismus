@@ -96,16 +96,18 @@ html, body {
 
 .contour { fill: none; stroke: var(--contour); stroke-width: 0.7; stroke-linejoin: round; }
 .contour.index { stroke: var(--contourIndex); stroke-width: 0.9; }
-.contour-label {
-  fill: var(--contourIndex);
-  font-family: var(--ui-font);
-  font-size: calc(9px / var(--z, 1));
-  text-anchor: middle;
-  dominant-baseline: middle;
-  paint-order: stroke;
-  stroke: var(--bg);
-  stroke-width: 3px;
-}
+/* brows: where a hill turns away out of sight (render/brows.js) */
+.brow { fill: none; stroke: color-mix(in srgb, var(--detail) 55%, var(--bg)); stroke-width: 0.8; stroke-linecap: round; stroke-linejoin: round; }
+.brow.light { stroke: color-mix(in srgb, var(--detail) 32%, var(--bg)); stroke-width: 0.7; }
+.brow.outline { stroke: var(--detail); stroke-width: 1.1; }
+/* slopes too steep to build on, outside the terrain view (render/steep.js) */
+.steep { fill: none; stroke: color-mix(in srgb, var(--detail) 28%, var(--bg)); stroke-width: 0.6; stroke-linecap: round; stroke-linejoin: round; }
+/* rock faces turned to the viewer: the lip, strokes down the face (render/rocks.js) */
+.rock-lip { fill: none; stroke: color-mix(in srgb, var(--detail) 62%, var(--bg)); stroke-width: 0.85; stroke-linecap: round; stroke-linejoin: round; }
+.rock-face { fill: none; stroke: color-mix(in srgb, var(--detail) 45%, var(--bg)); stroke-width: 0.6; stroke-linecap: round; }
+/* a named hill's top (terrain/hills.js): a little pen triangle; hovering it
+   shows the name and height (ui/annotations.js) */
+.summit { fill: none; stroke: var(--detail); stroke-width: 1; stroke-linejoin: round; stroke-linecap: round; }
 /* lakes and rivers (Renderer.renderWater): a lake's shoreline with
    two wave strokes inside, a river's banks thinner and lighter; all in the
    detail pen */
@@ -225,8 +227,9 @@ html, body {
 .layer-objects .filled.tree { stroke: var(--detail); stroke-width: 1; }
 /* grass and wild flowers on open ground (src/render/meadow.js); tiers
    t1 / t2 show from a zoom up (mz0/1/2 set on the layer by the renderer) */
-.layer-meadow path { fill: none; stroke: var(--detail); stroke-width: 0.8; stroke-linecap: round; stroke-linejoin: round; }
-.layer-meadow .thin { stroke-width: 0.6; }
+/* a hair under the crowns' hatching (.glyph.leaf): a tuft's blades double back on themselves, so it reads heavier */
+.layer-meadow path { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; stroke-linejoin: round; }
+.layer-meadow .thin { stroke-width: 0.5; }
 .layer-meadow .ink { fill: var(--detail); stroke-width: 0.4; }
 .mz0 .t1, .mz0 .t2, .mz1 .t2 { display: none; }
 .ghost .gnd { fill: none; stroke-width: 0.8; }
@@ -316,6 +319,9 @@ html, body {
 .overlay .preview.invalid { stroke-width: 1; stroke-dasharray: 6 4; }
 .overlay .cross { fill: none; stroke: var(--fg); stroke-width: 1.6; stroke-linecap: round; }
 .overlay .cross-halo { fill: none; stroke: var(--bg); stroke-width: 5; stroke-linecap: round; }
+/* too steep: a warning sign with the slope in it (OverlayKit.steepAt) */
+.overlay .steep-sign { fill: none; stroke: var(--fg); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.overlay .steep-wedge { fill: var(--fg); stroke: var(--fg); stroke-width: 0.6; stroke-linejoin: round; }
 
 /* ---------- UI ---------- */
 
