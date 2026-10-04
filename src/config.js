@@ -2,9 +2,9 @@
 
 export const CONFIG = {
   // shown in the corner of the screen
-  app: { name: 'Urbanismus', version: '0.1', author: 'mlozanek' },
+  app: { name: 'Urbanismus', version: '0.2', author: 'mlozanek' },
 
-  grid: { width: 40, height: 40 },
+  grid: { width: 70, height: 70 },
 
   // null = random seed for each new map
   seed: null,
@@ -90,8 +90,6 @@ export const CONFIG = {
 
   growth: {
     interval: 6,               // simulated seconds between checks
-    upTime: { 2: 170, 3: 430 }, // ~seconds of met conditions to reach level 2 / level 3
-    downTime: 260,             // ~seconds of lost conditions before dropping a level
     // A church appears by itself now and then (chance per check) where at
     // least minHomes homes are within radius and no church within spacing.
     church: { chance: 0.03, minHomes: 14, radius: 4, spacing: 9 },
@@ -108,11 +106,14 @@ export const CONFIG = {
   },
 
   // Too steep to build on (metres of rise per grid step): buildings where
-  // the ground under any of their dots is steeper than `build`; roads and
-  // railways where a segment climbs more than `road` / `rail` per grid step
-  // of its length – so a road may still run across a steep hillside, just
-  // not straight up it. Footpaths go anywhere (steps); bridges are level.
-  steep: { build: 14, road: 12, rail: 5 },
+  // the ground under any of their dots is steeper than `build` (not parks,
+  // `anySlope`); roads and railways where a segment climbs more than
+  // `road` / `rail` per grid step of its length, measured at its steepest
+  // along the way (World.grade) – so a road may still run across a steep
+  // hillside, just not straight up it. Footpaths go anywhere (steps);
+  // bridges are level. 14 for roads: about three contour lines a step; on
+  // a Hilly map that leaves out roughly one stretch in sixteen.
+  steep: { build: 14, road: 14, rail: 8 },
 
   time: {
     // First entry is the starting speed; T / the speed button cycles through them.
@@ -204,13 +205,12 @@ export const CONFIG = {
     dwellMax: 43,
   },
 
-  // Trucks: one long body. Industrial buildings keep some (perLevel)
+  // Trucks: one long body. Industrial buildings keep some (def.trucks, default 1)
   // that mostly carry goods off the map through a road exit and come back,
   // otherwise make service runs to businesses or other industry. Delivery
   // trucks also come in from outside to businesses and industry.
   trucks: {
     homes: ['industrial', 'farm'],  // structure ids / tags that keep trucks
-    perLevel: [1, 1, 2],            // trucks per building at level 1 / 2 / 3
     exportShare: 0.6,               // trips that leave the map (needs a road exit)
     destinations: ['business', 'business', 'industrial'], // service runs, picked at random
     speed: 0.75,                    // share of a car's speed

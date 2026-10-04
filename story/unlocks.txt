@@ -1,12 +1,12 @@
 # What can be built when a town starts. The story can change it as it goes,
 # with the same two commands in a branch:  unlock station
 #
-#   lock name      take it out of the Build menu (and out of Upgrade / Turn into…)
+#   lock name      take it out of the Build menu (and out of Turn into…)
 #   unlock name    put it back
 #
 # Read top to bottom: the last line that matches wins. Anything not locked
-# is open. Case, spaces, '-' and '.' don't matter in names (Panel block,
-# panel-block and panel_block are the same).
+# is open. Case, accents, spaces, '-' and '.' don't matter in names (Národní
+# výbor, narodni-vybor and narodni_vybor are the same).
 #
 # ---------- All the names ----------
 #
@@ -14,13 +14,19 @@
 #   all                  every building and network tool (not the buttons at the
 #                        top, nor traffic)
 #
-# Build menu groups
-#   transport            Road, Lane, Footpath, Railway, the stations, Bus stop
-#   zones                Residential, Business, Industry, Coal mine, Farm
-#   public               Parks, Squares, Services, Cemetery, House of culture,
-#                        Swimming pool
-#   landmarks            Chapel, Church, Town hall, Memorial, Castle, Tower,
-#                        Stadium
+# Build menu groups (by name or id)
+#   doprava, transport                Road, Lane, Footpath, Railway, the stations,
+#                                     Bus stop
+#   bydleni, housing                  House, Apartments, Block
+#   vyroba, work                      Workshop, Works, Factory, Plant, the mines,
+#                                     the farms
+#   obcanska_vybavenost, amenities    shops, pubs, offices, services, school,
+#                                     House of culture, Swimming pool, Cemetery
+#   prostranstvi, spaces              parks and squares
+#   pamatky, heritage, landmarks      Chapel, Church, Town hall, Memorial, Castle,
+#                                     Tower, Stadium
+#   zones                             bydleni + vyroba
+#   public                            obcanska_vybavenost + prostranstvi
 #
 # Network tools
 #   road
@@ -28,58 +34,82 @@
 #   footpath             (no footpath: no new streets with sidewalks either)
 #   railway
 #
-# Shared names – each covers several types at once
-#   residential          residential + residential_wide
-#   business             business + business_wide
-#   industrial           industrial + industrial_medium + industrial_small + mine
-#   park                 park + park_large
-#   square               square + square_large
-#   services             services + services_large
-#   town_hall            town_hall + town_hall_small + town_hall_large
+# Shared names (tags) – each covers several things at once
+#   residential          every home: house, apartments, block
+#   business             jednota, hospoda, obchodni_dum, tuzex, narodni_vybor,
+#                        posta, hotel
+#   shop, pub, office, hotel
+#   industrial           workshops, works, factory, plants and the mines
+#   mine                 pit, colliery, deep_mine
+#   farm                 farmstead, jzd, statni_statek
+#   services             fire_station, police, health_centre, clinic, hospital,
+#                        service_centre, school
+#   fire, police, health, school
+#   park                 every park, and the swimming pool
+#   square               every square
 #   heritage             every landmark, and culture_house too
 #
-# Types, by group (one size each), with their levels
-#   Transport
-#     station            station_station
-#     station_main       station_main_main_station
-#     stop               stop_stop
-#     bus_stop           bus_stop_bus_stop
-#   Zones
-#     residential        residential_house, residential_apartments, residential_panel_block
-#     residential_wide   residential_wide_houses, residential_wide_apartments, residential_wide_panel_block
-#     business           business_shop, business_offices, business_high_rise
-#     business_wide      business_wide_shops, business_wide_offices, business_wide_high_rise
-#     industrial         industrial_workshop, industrial_factory, industrial_plant
-#     industrial_medium  industrial_medium_workshop, industrial_medium_works, industrial_medium_small_plant
-#     industrial_small   industrial_small_workshop, industrial_small_works, industrial_small_small_plant
-#     mine               mine_pit, mine_colliery, mine_deep_mine
-#     farm               farm_farmstead, farm_jzd, farm_cooperative
-#   Public
-#     park               park_green, park_garden_park, park_pavilion_park
-#     park_large         park_large_meadow, park_large_pond_park, park_large_city_park
-#     square             square_plaza, square_fountain_square, square_monument_square
-#     square_large       square_large_market_square, square_large_fountain_square, square_large_grand_square
-#     services           services_service_post, services_station, services_clinic
-#     services_large     services_large_service_station, services_large_service_centre, services_large_hospital
-#     cemetery           cemetery_cemetery
-#     culture_house      culture_house_house_of_culture
-#     pool               pool_swimming_pool
-#   Landmarks
-#     chapel             chapel_chapel
-#     church             church_church
-#     town_hall          town_hall_town_hall
-#     town_hall_small    town_hall_small_town_hall
-#     town_hall_large    town_hall_large_town_hall
-#     memorial           memorial_memorial
-#     castle             castle_castle
-#     tv_tower           tv_tower_tower
-#     stadium            stadium_stadium
-#
-# Levels: a level name locks that level only – nothing grows into it and it
-# isn't offered as an upgrade (what already stands stays). Any level also
-# works by number: residential_level3. A shared name with a level covers all
-# its types at that level: residential_panel_block is the panel block of both
-# residential and residential_wide; industrial_workshop of all three industries.
+# Things to build, by group. The name (as in the Build menu) covers all its
+# sizes; the ids after it each name one size.
+#   Doprava
+#     station            station, station_main, stop
+#     bus_stop           bus_stop
+#   Bydlení
+#     house              house, house_wide
+#     apartments         apartments, apartments_wide
+#     block              block, block_wide
+#   Výroba
+#     workshop           workshop, workshop_medium, workshop_large
+#     works              works, works_medium
+#     factory            factory
+#     plant              plant_small, plant_medium, plant
+#     pit                pit
+#     colliery           colliery
+#     deep_mine          deep_mine
+#     farmstead          farmstead
+#     jzd                jzd
+#     statni_statek      state_farm
+#   Občanská vybavenost
+#     jednota            jednota, jednota_wide
+#     hospoda            hospoda, hospoda_wide
+#     obchodni_dum       store, store_wide
+#     tuzex              tuzex
+#     narodni_vybor      office, office_wide, office_tower, office_tower_wide
+#     posta              post_office
+#     hotel              hotel, hotel_wide
+#     fire_station       fire_house, fire_station, fire_station_large
+#     police_post        police
+#     health_centre      health_centre
+#     polyclinic         clinic
+#     hospital           hospital
+#     service_centre     service_centre
+#     school             school
+#     house_of_culture   culture_house
+#     swimming_pool      pool
+#     cemetery           cemetery
+#   Prostranství
+#     green              green
+#     garden_park        garden_park
+#     pavilion_park      pavilion_park
+#     meadow             meadow
+#     pond_park          pond_park
+#     city_park          city_park
+#     plaza              plaza
+#     fountain_square    fountain_square, fountain_square_large
+#     shopping_precinct  precinct, precinct_large
+#     monument_square    monument_square
+#     market_square      market_square
+#     bus_station        bus_station
+#     grand_square       grand_square
+#     parade_square      parade_square
+#   Památky
+#     chapel             chapel
+#     church             church
+#     town_hall          town_hall, town_hall_small, town_hall_large
+#     memorial           memorial
+#     castle             castle
+#     tower              tv_tower
+#     stadium            stadium
 #
 # The buttons at the top (`all` leaves them be)
 #   chronicle            the book by the town's name (it keeps writing while hidden)
@@ -113,15 +143,16 @@
 #
 # Full list and examples: story/README.md
 #
-# For example, a village that starts with only roads, footpaths, houses and
-# a chapel, and no panel blocks until the story says so:
+# For example, a village that starts with only roads, footpaths, homes, a
+# Jednota and a chapel, and no panel blocks until the story says so:
 #
 #   lock all
 #   unlock road
 #   unlock footpath
 #   unlock residential
+#   unlock jednota
 #   unlock chapel
-#   lock residential_panel_block
+#   lock block
 #
 # A finished game might hide what's only for making it:
 #

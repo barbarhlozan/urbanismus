@@ -11,7 +11,7 @@ import { World } from '../src/core/world.js';
 import { CONFIG } from '../src/config.js';
 
 const SCRIPT = `
-if residential_house_amount > 2 trigger introDialogue
+if house_amount > 2 trigger introDialogue
 if church >= 1 and seen(IntroDialogue) trigger Bells
 
 ::IntroDialogue::
@@ -58,11 +58,11 @@ test('a rule starts its branch once, choices lead on', async () => {
   const dialogue = fakeDialogue([0]);
   const { story, chronicle } = await teller(w, dialogue);
   road(w, [2, 5], [10, 5]);
-  w.placeStructure('residential', w.grid.index(3, 6));
-  w.placeStructure('residential', w.grid.index(4, 6));
+  w.placeStructure('house', w.grid.index(3, 6));
+  w.placeStructure('house', w.grid.index(4, 6));
   await tick(story);
   assert.deepEqual(dialogue.said, []); // two houses: not yet
-  w.placeStructure('residential', w.grid.index(5, 6));
+  w.placeStructure('house', w.grid.index(5, 6));
   await tick(story);
   assert.deepEqual(dialogue.said, [
     'Grandma: So in this village there were 3 houses and not much else.',
@@ -92,7 +92,7 @@ test('seen() and {town}', async () => {
   w.placeStructure('church', w.grid.index(3, 3));
   await tick(story);
   assert.deepEqual(dialogue.said, []); // the bells wait for Grandma
-  for (const x of [3, 4, 5]) w.placeStructure('residential', w.grid.index(x, 6));
+  for (const x of [3, 4, 5]) w.placeStructure('house', w.grid.index(x, 6));
   await tick(story);
   await tick(story);
   assert.equal(dialogue.said.at(-1), 'The bells of Testov.');

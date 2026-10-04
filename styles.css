@@ -91,6 +91,11 @@ html, body {
 /* the dots only show while building (any tool but Select, see main.js) */
 .layer-grid { display: none; }
 #world.show-grid .layer-grid { display: inline; }
+/* with a building in hand, no dots where it can't stand; with a road, none
+   under buildings (renderGrid marks them; main.js sets the mode) */
+#world.grid-building .grid-dot.steep,
+#world.grid-building .grid-dot.taken,
+#world.grid-roads .grid-dot.house { display: none; }
 
 .hatch { stroke: var(--detail); stroke-width: 0.8; }
 
@@ -178,7 +183,6 @@ html, body {
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.overlay .coverage { fill: none; stroke: var(--fg); stroke-width: 1; stroke-dasharray: 2 4; }
 
 .fine-dot { fill: var(--detail); }
 .layer-subgrid { display: none; }
@@ -214,6 +218,10 @@ html, body {
 .layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: 0.8; stroke-linejoin: round; }
 /* cast shadows: pen hatching on the ground (src/render/shadows.js) */
 .shadow { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; }
+/* SUN.ground / SUN.walls 'tone': flat shade instead of strokes */
+.shadow.tone { fill: color-mix(in srgb, var(--detail) 16%, var(--bg)); stroke: none; }
+.layer-objects .filled.shade-1 { fill: color-mix(in srgb, var(--detail) 9%, var(--bg)); }
+.layer-objects .filled.shade-2 { fill: color-mix(in srgb, var(--detail) 18%, var(--bg)); }
 .layer-objects .wall-shade { stroke: var(--detail); stroke-width: 0.6; }
 /* screen-facing line drawings (trees, see features/trees.js) */
 .glyph { fill: none; stroke: var(--detail); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round; }
@@ -321,6 +329,18 @@ html, body {
 .overlay .cross-halo { fill: none; stroke: var(--bg); stroke-width: 5; stroke-linecap: round; }
 /* too steep: a warning sign with the slope in it (OverlayKit.steepAt) */
 .overlay .steep-sign { fill: none; stroke: var(--fg); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+/* Erase: what would go turns to the secondary colour (Renderer.markErasing:
+   its drawing's own colours, so everything in it follows) … */
+.erasing { --main: var(--detail); --fg: var(--detail); }
+/* … and the eraser pops up over it, a little past full size, then settles
+   (OverlayKit.eraserAt; shrinking away: Renderer.letGo) */
+.overlay .eraser-mark { transform-box: fill-box; transform-origin: center; animation: eraser-pop 0.32s cubic-bezier(0.34, 1.6, 0.64, 1) both; }
+@keyframes eraser-pop { from { transform: scale(0.3); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .overlay .eraser-mark { animation: none; } }
+/* Erase: the eraser over what would go (OverlayKit.eraserAt) */
+.overlay .eraser-body { fill: var(--bg); stroke: none; }
+.overlay .eraser-tip { fill: color-mix(in srgb, var(--fg) 25%, var(--bg)); stroke: none; }
+.overlay .eraser { fill: none; stroke: var(--fg); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .overlay .steep-wedge { fill: var(--fg); stroke: var(--fg); stroke-width: 0.6; stroke-linejoin: round; }
 
 /* ---------- UI ---------- */
@@ -556,28 +576,9 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .popup-block { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
 .bi-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .bi-kind { color: var(--detail); font-size: 11px; }
-/* level: one pip per level, filled up to this one */
-.bi-level { display: inline-flex; gap: 3px; align-items: center; }
-.bi-level i { width: 7px; height: 7px; border-radius: 50%; border: var(--line) solid var(--fg); box-sizing: border-box; }
-.bi-level i.on { background: var(--fg); }
-.bi-trend { display: flex; align-items: center; gap: 8px; color: var(--detail); font-size: 12px; }
-.bi-trend.growing, .bi-trend.declining { color: var(--fg); }
-.bi-trend > span:first-child { white-space: nowrap; }
-.bi-bar { flex: 1 1 auto; min-width: 40px; height: 4px; border: var(--line) solid var(--fg); border-radius: 2px; overflow: hidden; }
-.bi-pct { font-size: 11px; color: var(--detail); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
-.bi-bar i { display: block; height: 100%; background: var(--fg); }
 .popup-block .stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .popup-block .stat b { font-weight: 700; }
 .popup-block .warn { color: var(--detail); }
-/* what it needs to grow: a little drawing of each, and how many more */
-.bi-needs { display: flex; flex-direction: column; gap: 2px; }
-.bi-needs .bi-head { color: var(--detail); font-size: 11px; margin-bottom: 1px; }
-.bi-need { display: flex; align-items: center; gap: 7px; font-size: 12px; line-height: 1.3; }
-.bi-need .bi-pic { flex: 0 0 22px; width: 22px; height: 22px; display: inline-flex; }
-.bi-need b { font-weight: 700; }
-.bi-need.avoid .bi-pic { position: relative; opacity: 0.6; }
-.bi-need.avoid .bi-pic::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.3px solid var(--fg); transform: rotate(-35deg); }
-.bi-boost { color: var(--detail); font-size: 11px; }
 .popup .heading .label { text-decoration: none !important; }
 
 
@@ -838,7 +839,9 @@ body.loading #ui { visibility: hidden; }
 /* the groups: a tab each, shown by a drawing; one bar high */
 .bm-head { display: flex; align-items: stretch; height: var(--bar-h); border-bottom: var(--line) solid var(--fg); }
 .bm-tabs { flex: 1; display: flex; }
-#ui .bm-tab { flex: 1; display: flex; align-items: center; justify-content: center; padding: 0; border-right: var(--line) solid var(--fg); }
+#ui .bm-tab { flex: 1; display: flex; align-items: center; justify-content: center; padding: 0; border-right: var(--line) solid var(--fg); position: relative; }
+.bm-tab .key { position: absolute; top: 2px; right: 4px; font-size: 9px; line-height: 1; color: var(--detail); }
+#ui .bm-tab.on .key { color: inherit; opacity: 0.7; }
 #ui .bm-tab .icon { width: calc(var(--bar-h) - 10px); height: calc(var(--bar-h) - 10px); }
 #ui .bm-tab:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
 #ui .bm-tab.on { background: var(--fg); color: var(--bg); }

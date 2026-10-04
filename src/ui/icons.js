@@ -1,11 +1,11 @@
 // Small line drawings for the Build menu. Buildings are drawn with their own
-// draw() through the same Painter as the map (level 2, fixed seed), so the
+// draw() through the same Painter as the map (with a fixed seed), so the
 // icons always match what gets built; lines and the eraser are hand drawn.
 
 import { Camera } from '../render/camera.js';
 import { Painter } from '../render/painter.js';
 import { vehicleSVG } from '../render/vehicles.js';
-import { levelOf, drawSeed } from '../../structures/index.js';
+import { drawSeed } from '../../structures/index.js';
 import { sampleSitePaths } from '../roads/siteWalks.js';
 
 const ICON_SEED = 12345;
@@ -31,10 +31,10 @@ function measureSvg() {
 const ways = (seed) => (seed === ICON_SEED ? 2 : [2, 1, 3, 4, 0][seed % 5]);
 
 // The structure's drawing (ground + solids) as SVG markup, on its own.
-function paint(def, level, seed, camera) {
+function paint(def, seed, camera) {
   try {
     camera.cx = camera.cy = 0;
-    const instance = { id: -1, type: def.id, node: 0, rotation: 0, level, seed, data: {} };
+    const instance = { id: -1, type: def.id, node: 0, rotation: 0, seed, data: {} };
     const g = new Painter(camera, { x: 0, y: 0, z: 0 }, 0, drawSeed(instance));
     if (def.site) {
       // a lot just around the footprint, no roads
@@ -43,7 +43,7 @@ function paint(def, level, seed, camera) {
       g.setSite([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
       g.setSitePaths(sampleSitePaths([x0, y0, x1, y1], ways(seed), { bend: seed !== ICON_SEED && seed % 2 === 1 }));
     }
-    levelOf(def, instance).draw(g, instance);
+    def.draw(g, instance);
     return g.toGroundSVG() + g.toSVG();
   } catch (err) {
     console.warn(`Can't draw ${def.id}`, err);
@@ -51,10 +51,10 @@ function paint(def, level, seed, camera) {
   }
 }
 
-export function structureIcon(def, { level = Math.min(2, def.levels.length), seed = ICON_SEED } = {}) {
-  const key = `${def.id}:${level}:${seed}`;
+export function structureIcon(def, { seed = ICON_SEED } = {}) {
+  const key = `${def.id}:${seed}`;
   if (cache.has(key)) return cache.get(key);
-  const body = paint(def, level, seed, new Camera({ width: 1, height: 1 }, { tile: 32, zScale: 0.9 }));
+  const body = paint(def, seed, new Camera({ width: 1, height: 1 }, { tile: 32, zScale: 0.9 }));
   const svg = fit(`<g class="icon-art">${body}</g>`, 'icon lod-1', PAD);
   cache.set(key, svg);
   return svg;
@@ -62,8 +62,8 @@ export function structureIcon(def, { level = Math.min(2, def.levels.length), see
 
 // The same drawing close up in the map's own style (as gallery.html), not
 // the simplified icon line style.
-export function structureDrawing(def, { level = 1, seed = ICON_SEED } = {}) {
-  const body = paint(def, level, seed, new Camera({ width: 1, height: 1 }, { tile: 64 }));
+export function structureDrawing(def, { seed = ICON_SEED } = {}) {
+  const body = paint(def, seed, new Camera({ width: 1, height: 1 }, { tile: 64 }));
   return fit(`<g class="scene layer-objects lod-0">${body}</g>`, 'drawing', 8);
 }
 

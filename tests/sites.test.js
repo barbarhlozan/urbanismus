@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { flatWorld, road, street, path } from './helpers.js';
 import { siteWalks, sampleSitePaths } from '../src/roads/siteWalks.js';
 
-const park = (world, x, y) => world.placeStructure('park', world.grid.index(x, y));
+const park = (world, x, y) => world.placeStructure('green', world.grid.index(x, y));
 const dirs = (paths) => paths.exits.map((e) => e.dir.join(',')).sort();
 
 test('a plain road along a park is no way in', () => {

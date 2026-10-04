@@ -1,5 +1,5 @@
-// Too steep to build (CONFIG.steep): buildings keep off steep ground, roads
-// and railways off steep climbs; footpaths go anywhere.
+// Too steep to build (CONFIG.steep): buildings keep off steep ground (parks
+// don't mind), roads and railways off steep climbs; footpaths go anywhere.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../src/config.js';
@@ -14,9 +14,16 @@ function ramp(rise) {
 
 test('buildings stay off ground steeper than the limit', () => {
   const steep = ramp(CONFIG.steep.build + 2);
-  assert.equal(steep.canPlaceStructure('residential', steep.grid.index(10, 10)).reason, 'Too steep');
+  assert.equal(steep.canPlaceStructure('house', steep.grid.index(10, 10)).reason, 'Too steep');
   const gentle = ramp(CONFIG.steep.build - 2);
-  assert.ok(gentle.canPlaceStructure('residential', gentle.grid.index(10, 10)).ok);
+  assert.ok(gentle.canPlaceStructure('house', gentle.grid.index(10, 10)).ok);
+});
+
+test('parks go on any slope, squares do not', () => {
+  const world = ramp(CONFIG.steep.build * 3);
+  assert.ok(world.canPlaceStructure('green', world.grid.index(10, 10)).ok);
+  assert.ok(world.canPlaceStructure('meadow', world.grid.index(10, 10)).ok);
+  assert.equal(world.canPlaceStructure('plaza', world.grid.index(10, 10)).reason, 'Too steep');
 });
 
 test('a road may cross a steep slope but not climb it', () => {

@@ -9,14 +9,21 @@
 //   lock all
 //   unlock road
 //   unlock residential
-//   lock residential_panel_block
+//   lock block
 //
-// Names (as in story conditions: case, '-', '.' and spaces don't matter):
+// Names (as in story conditions: case, accents, '-', '.' and spaces don't
+// matter):
 //   all
-//   transport, zones, public, landmarks       a whole Build menu group
-//   residential, park_large, station_main…    a type, or one size of it
-//   residential, heritage, park…              a tag (every type that has it)
-//   residential_panel_block, park_green…      one level of a type (by its name)
+//   doprava, bydleni, vyroba,                  a whole Build menu group, by
+//   obcanska_vybavenost, prostranstvi, pamatky  its name or its id (transport,
+//                                              housing, work, amenities,
+//                                              spaces, heritage); zones is
+//                                              housing and work, public is
+//                                              amenities and spaces
+//   house, block, fire_station, narodni_vybor…  a thing in all its sizes, by
+//                                              its name in the Build menu
+//   house_wide, fire_house, office_tower…      one size, by its id
+//   residential, business, heritage, park…     a tag (every type that has it)
 //   road, lane, footpath, railway             the network tools
 //   chronicle, photo, terrain, colors, assets, debug, export, import,
 //   new_map, fullscreen                        the buttons at the top (not in
@@ -31,10 +38,10 @@
 // stays otherwise.
 //
 // Everything is open unless locked. A locked type or size isn't in the
-// Build menu or among what a building can be turned into; a locked level
-// isn't grown into, nor offered as an upgrade. What already stands stays.
+// Build menu or among what a building can be turned into. What already
+// stands stays.
 //
-//   UNLOCKS.allows(type, level = 1)   may this type stand at this level?
+//   UNLOCKS.allows(type)              may this type be built?
 //   UNLOCKS.allowsTool(tool)          may this tool be picked up?
 //   UNLOCKS.allowsNetwork(kind)       'road' | 'lane' | 'path' | 'rail'
 //   UNLOCKS.allowsControl(id)         a button at the top, by its data-act ('debug'…)
@@ -73,15 +80,16 @@ const VEHICLES = {
   trucks: ['trucks', 'truck', 'lorries'],
   buses: ['buses', 'bus'],
 };
-const GROUP_NAMES = { zone: ['zones'], civic: ['public'], heritage: ['landmarks'], transport: ['transport'] };
+// More names for the Build menu groups (each is also called by its id and
+// its label, see CATEGORIES).
+const GROUP_NAMES = { transport: ['transport'], housing: ['zones'], work: ['zones'], amenities: ['public'], spaces: ['public'], heritage: ['landmarks'] };
 
-// The names that mean a type: all of it (`any`) or one level of it (`levels[i]`).
+// The names that mean a type: its group's, its tags, its name (which its
+// sizes share) and its id.
 function namesOf(def) {
-  const own = [def.id, ...(def.tags ?? [])].map(normalName);
   const group = categoryOf(def);
-  const any = new Set(['all', normalName(group), ...(GROUP_NAMES[group] ?? []), ...own]);
-  const levels = def.levels.map((level, i) => new Set(own.flatMap((n) => [`${n}_${normalName(level.name)}`, `${n}_level${i + 1}`, `${n}_level_${i + 1}`])));
-  return { any, levels };
+  const label = CATEGORIES.find((c) => c.id === group)?.label ?? group;
+  return new Set(['all', group, label, ...(GROUP_NAMES[group] ?? []), def.name, def.id, ...(def.tags ?? [])].map(normalName));
 }
 
 // A line of the file or a story command: { unlock, name, line }; and the
@@ -168,7 +176,7 @@ class Unlocks {
   known(name) {
     const n = normalName(name);
     if (['all', 'controls', 'vehicles'].includes(n) || [...Object.values(NETWORKS), ...Object.values(CONTROLS), ...Object.values(VEHICLES)].some((ns) => ns.includes(n))) return true;
-    return Object.values(this.namesFor()).some(({ any, levels }) => any.has(n) || levels.some((l) => l.has(n)));
+    return Object.values(this.namesFor()).some((names) => names.has(n));
   }
 
   namesFor() {
@@ -176,12 +184,12 @@ class Unlocks {
     return this.names;
   }
 
-  allows(type, level = 1) {
+  allows(type) {
     const names = this.namesFor()[type];
     if (!names) return true;
     let open = true;
     for (const r of this.rules) {
-      if (names.any.has(r.name) || names.levels[level - 1]?.has(r.name)) open = r.unlock;
+      if (names.has(r.name)) open = r.unlock;
     }
     return open;
   }
@@ -189,7 +197,7 @@ class Unlocks {
   allowsNetwork(kind) {
     let open = true;
     for (const r of this.rules) {
-      if (r.name === 'all' || r.name === 'transport' || NETWORKS[kind]?.includes(r.name)) open = r.unlock;
+      if (r.name === 'all' || r.name === 'transport' || r.name === 'doprava' || NETWORKS[kind]?.includes(r.name)) open = r.unlock;
     }
     return open;
   }
@@ -217,15 +225,6 @@ class Unlocks {
     if (tool.id in NETWORKS) return this.allowsNetwork(tool.id);
     if (tool.id === 'photo') return this.allowsControl('photo');
     return true; // select, erase
-  }
-
-  // The highest level a building of `type` may grow to from `level`: up to
-  // the first locked one above it.
-  ceiling(type, level) {
-    const def = STRUCTURE_TYPES[type];
-    let top = level;
-    while (top < def.levels.length && this.allows(type, top + 1)) top++;
-    return top;
   }
 }
 

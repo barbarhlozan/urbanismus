@@ -1,7 +1,7 @@
 // Tools are plain objects. Every hook is optional:
 //
 //   {
-//     id, label, hotkey,           // hotkey: single lowercase key
+//     id, label, hotkey,           // hotkey: a fixed key (photo, erase); build tools get theirs from the Build menu (ui/keys.js)
 //     toolbar: true,               // false = not shown as a toolbar button
 //     fineGrid: false,             // true = show the dense footpath dots while active
 //     snap(x, y) -> node,          // turn the pointer's world position into a node;

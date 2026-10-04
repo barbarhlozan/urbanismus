@@ -4,10 +4,10 @@
 # They are looked at in this order, every couple of seconds.
 
 #if minutes >= 0 trigger Arrival
-#if residential_house > 5 trigger IntroDialogue
+#if house > 5 trigger IntroDialogue
 #if church >= 1 trigger Bells
 #if railways > 0 and seen(IntroDialogue) trigger Railway
-#if residential_panel_block >= 1 trigger Panels
+#if block >= 1 trigger Panels
 #if residents >= 500 trigger Grown
 #if photos >= 1 trigger Photograph
 

@@ -1,17 +1,19 @@
 // Structure registry. To add a building: create a file next to this one
 // (copy residential.js), then import it and add it to the list below.
-// Toolbar buttons, the click menu, hotkeys, growth and the simulation pick it
-// up automatically.
+// Toolbar buttons, the click menu, shortcuts and the simulation pick it up
+// automatically. Every structure is one thing to build: nothing grows or
+// upgrades into something else.
 //
 // Optional definition fields beyond those documented in residential.js:
-//   category   toolbar group: 'zone' (default), 'transport', 'civic' or 'heritage' – see CATEGORIES
+//   category   Build menu group – see CATEGORIES (default 'housing')
 //   blurb      a few words for the Build menu on what it is, e.g. 'Trees and paths'
 //   size       label for the Size button when it shares a tool (default Small / Large)
-//   tags       extra names growth rules and agents can match, e.g. ['park']
+//   tags       extra names agents, the story and unlocks can match, e.g. ['park']
 //   access     'road' (default) or 'any' – 'any' also counts a footpath as access:
-//              such a building works and grows without a road, its people walk
+//              such a building works without a road, its people walk
 //              or cycle, and its surroundings leave out the car park and garages
 //   code       short prefix for annotations, e.g. 'R' -> "R-012" (default: first letter)
+//   trucks     how many trucks it keeps, if it is one of config.trucks.homes (default 1)
 //   site       true = fills its lot up to the road and merges with neighbouring
 //              sites; drawings get the area as g.site (parks, squares)
 //   canPlace(world, nodes, rotation) -> { ok, reason }
@@ -26,22 +28,21 @@
 //   busStop    true = buses call here (src/sim/agents.js, updateBuses)
 //   tracks     [{ pts, buffer }] extra railway drawn with the real lines, in
 //              local coordinates (stations' passing tracks and sidings)
-//   levels[i].tilt       true = may stand a little askew on its dot (see tiltOf)
+//   tilt       true = may stand a little askew on its dot (see tiltOf)
 //   keepsGrid  true = a single-dot structure never turned to a road at an angle
 //              to the grid (squares: their paving joins the neighbours')
 //   facesRoad  true = a single-dot structure that always faces its road (the
 //              player can't turn it; a bus stop). Other single-dot ones can
 //              be turned side or back to it (s.data.turn, World.facingRotation)
-//   levels[i].coverage   service radius in dots (services)
-//   levels[i].yards      surroundings styles it may get (see yards.js)
+//   yards      surroundings styles it may get (see yards.js)
 
 import { rotateQuarter } from '../src/core/grid.js';
 import { mulberry32 } from '../src/core/random.js';
 import { YARDS } from './yards.js';
 import { LOOK } from '../src/render/painter.js';
-import residential, { wide as residentialWide } from './residential.js';
-import business, { wide as businessWide } from './business.js';
-import industrial, { medium as industrialMedium, small as industrialSmall } from './industrial.js';
+import * as housing from './residential.js';
+import * as business from './business.js';
+import * as industry from './industrial.js';
 import * as park from './park.js';
 import * as square from './square.js';
 import * as services from './services.js';
@@ -50,43 +51,59 @@ import * as station from './station.js';
 import { busStop } from './busStop.js';
 import * as landmarks from './landmarks.js';
 import * as grounds from './grounds.js';
-import mine from './mine.js';
-import farm from './farm.js';
+import * as mine from './mine.js';
+import * as farm from './farm.js';
 import pool from './pool.js';
 
-// Toolbar groups, in toolbar order. The network tools (road, footpath,
-// railway) join 'transport' too (src/main.js).
+// Build menu groups, in order, named as the planners of the time did:
+// housing, production, civic amenities (občanská vybavenost – shops, pubs,
+// schools, clinics and culture alike, all of it public), open spaces and
+// landmarks. The network tools (road, footpath, railway) join 'transport'
+// too (src/main.js).
 export const CATEGORIES = [
-  { id: 'transport', label: 'Transport' },
-  { id: 'zone', label: 'Zones' },
-  { id: 'civic', label: 'Public' },
-  { id: 'heritage', label: 'Landmarks' },
-];
-
-export const STRUCTURES = [
-  residential, residentialWide, business, businessWide, industrial, industrialMedium, industrialSmall, mine, farm,
-  park.small, park.large, square.small, square.large, services.small, services.large, station.station, station.main, station.stop, busStop,
-  grounds.cemetery, pool,
-  heritage.chapel, heritage.church, heritage.townHallSmall, heritage.townHall, heritage.townHallLarge, heritage.memorial, heritage.castle,
-  landmarks.cultureHouse, landmarks.tvTower, landmarks.stadium,
+  { id: 'transport', label: 'Doprava' },
+  { id: 'housing', label: 'Bydlení' },
+  { id: 'work', label: 'Výroba' },
+  { id: 'amenities', label: 'Občanská vybavenost' },
+  { id: 'spaces', label: 'Prostranství' },
+  { id: 'heritage', label: 'Památky' },
 ];
 
 // Build menu entries: sizes of the same thing share one tool (S switches,
-// the first is the default). Every structure must be in exactly one.
+// the first is the default). Every structure is in exactly one; the
+// registry is these, in this order.
 export const BUILD_FAMILIES = [
+  // Doprava
   [station.station, station.main, station.stop], [busStop],
-  [residential, residentialWide], [business, businessWide], [industrial, industrialMedium, industrialSmall], [mine], [farm],
-  [park.small, park.large], [square.small, square.large], [services.small, services.large],
-  [grounds.cemetery], [landmarks.cultureHouse], [pool],
+  // Bydlení
+  [housing.house, housing.houseWide], [housing.apartments, housing.apartmentsWide], [housing.block, housing.blockWide],
+  // Výroba
+  [industry.workshop, industry.workshopMedium, industry.workshopLarge], [industry.works, industry.worksMedium],
+  [industry.factory], [industry.plantSmall, industry.plantMedium, industry.plant],
+  [mine.pit], [mine.colliery], [mine.deepMine],
+  [farm.farmstead], [farm.jzd], [farm.stateFarm],
+  // Občanská vybavenost
+  [business.jednota, business.jednotaWide], [business.hospoda, business.hospodaWide], [business.store, business.storeWide],
+  [business.tuzex], [business.office, business.officeWide, business.officeTower, business.officeTowerWide],
+  [business.postOffice], [business.hotel, business.hotelWide],
+  [services.fireHouse, services.fireStation, services.fireStationLarge], [services.police],
+  [services.healthCentre], [services.clinic], [services.hospital], [services.serviceCentre], [services.school],
+  [landmarks.cultureHouse], [pool], [grounds.cemetery],
+  // Prostranství
+  [park.green], [park.gardenPark], [park.pavilionPark], [park.meadow], [park.pondPark], [park.cityPark],
+  [square.plaza], [square.fountainSquare, square.fountainSquareLarge], [square.precinct, square.precinctLarge],
+  [square.monumentSquare], [square.marketSquare], [square.busStation], [square.grandSquare], [square.paradeSquare],
+  // Památky
   [heritage.chapel], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
-  [heritage.castle],
-  [landmarks.tvTower], [landmarks.stadium],
+  [heritage.castle], [landmarks.tvTower], [landmarks.stadium],
 ];
+
+export const STRUCTURES = BUILD_FAMILIES.flat();
 
 export const STRUCTURE_TYPES = Object.fromEntries(STRUCTURES.map((s) => [s.id, s]));
 
 export function categoryOf(def) {
-  return def.category ?? 'zone';
+  return def.category ?? 'housing';
 }
 
 // Does a structure definition answer to `name` (its id or one of its tags)?
@@ -106,34 +123,26 @@ export function codeOf(s) {
   return `${prefix}-${String(s.id).padStart(3, '0')}`;
 }
 
-export function maxLevel(def) {
-  return def.levels.length;
-}
-
-// The level definition ({ name, stats, agents, grow, draw }) for an instance.
-export function levelOf(def, s) {
-  const i = Math.min(Math.max((s.level ?? 1) - 1, 0), def.levels.length - 1);
-  return def.levels[i];
-}
-
 // Every building has a random `seed` that drives its look (see Painter
-// variation helpers). Each level gets its own look from the same seed.
+// variation helpers).
 export function newSeed() {
   return Math.floor(Math.random() * 2 ** 31);
 }
 
+// The seed its drawing is made from. (Mixed with 1 – once the level – so
+// buildings keep the look they had.)
 export function drawSeed(s) {
-  return (s.seed ^ Math.imul(s.level ?? 1, 0x9e3779b1)) >>> 0;
+  return (s.seed ^ 0x9e3779b1) >>> 0;
 }
 
 // Surroundings style for an instance: the player's choice (s.data.yard),
-// or one of the level's `yards` picked by seed. null = none. Without a road
+// or one of its type's `yards` picked by seed. null = none. Without a road
 // (cars: false) styles for cars (parking, garages) are left out.
 export function yardOf(def, s, { cars = true } = {}) {
   const chosen = s.data?.yard;
   if (chosen === 'none') return null;
   if (chosen && YARDS[chosen] && (cars || !YARDS[chosen].cars)) return chosen;
-  const options = (levelOf(def, s).yards ?? []).filter((y) => cars || !YARDS[y].cars);
+  const options = (def.yards ?? []).filter((y) => cars || !YARDS[y].cars);
   if (!options.length) return null;
   return options[Math.floor(mulberry32(drawSeed(s) ^ 0x51ed)() * options.length)];
 }
@@ -142,14 +151,14 @@ export function yardOf(def, s, { cars = true } = {}) {
 // road where that runs at an angle to the grid (a diagonal, a bend – see
 // roadFront); else a small turn so a street of houses doesn't line up like
 // a grid, up to LOOK.tilt degrees either way, seeded like the rest of its
-// look (only levels with `tilt: true`). Never while sharing a wall with a
+// look (only types with `tilt: true`). Never while sharing a wall with a
 // neighbour (the walls must meet). Without `world` (no road known) only the
 // small turn.
 export function tiltOf(def, s, join = { left: false, right: false }, world = null) {
   if ((def.footprint ?? [[0, 0]]).length !== 1 || join.left || join.right) return 0;
   const road = world ? roadFront(world, s).tilt : 0;
   if (Math.abs(road) > 1e-6) return road;
-  if (!LOOK.tilt || !levelOf(def, s).tilt) return 0;
+  if (!LOOK.tilt || !def.tilt) return 0;
   const r = mulberry32(drawSeed(s) ^ 0x7117)();
   return (r * 2 - 1) * LOOK.tilt * Math.PI / 180;
 }
@@ -194,12 +203,12 @@ export function roadFront(world, s) {
 
 // Joined buildings: neighbouring single-dot buildings facing the same road
 // can share a wall and read as one street front (a terrace of tenements, a
-// panel block in sections). A level opts in with
+// panel block in sections). A type opts in with
 //   join: { group, chance }
-// Two neighbours join when both levels are in the same group, they stand side
+// Two neighbours join when both are in the same group, they stand side
 // by side along their road (same drawn rotation), and a roll seeded by both
 // buildings is under the lower chance – so it stays put until one of them is
-// restyled or changes level. The draw function gets g.join = { left, right }.
+// restyled. The draw function gets g.join = { left, right }.
 export function joinSides(world, s) {
   return { left: !!joinedNeighbour(world, s, -1), right: !!joinedNeighbour(world, s, 1) };
 }
@@ -223,7 +232,7 @@ export function joinedRow(world, s) {
 // (dir 1) side, or null.
 function joinedNeighbour(world, s, dir) {
   const def = STRUCTURE_TYPES[s.type];
-  const join = def && levelOf(def, s).join;
+  const join = def?.join;
   if (!join || world.nodesOf(s).length !== 1) return null;
   if (s.data?.turn) return null; // turned away from the street front
   const rot = world.facingRotation(s.type, s.node, s.rotation);
@@ -234,7 +243,7 @@ function joinedNeighbour(world, s, dir) {
     const o = n >= 0 ? world.structureAt(n) : null;
     if (!o || o.id === s.id) return null;
     const odef = STRUCTURE_TYPES[o.type];
-    const ojoin = odef && levelOf(odef, o).join;
+    const ojoin = odef?.join;
     if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return null;
     if (o.data?.turn || world.facingRotation(o.type, o.node, o.rotation) !== rot) return null;
     const [a, b] = s.id < o.id ? [s, o] : [o, s];

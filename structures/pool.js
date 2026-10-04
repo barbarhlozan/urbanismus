@@ -4,7 +4,7 @@
 // fountain, one wooden shack (a hatch for lemonade and tickets at the
 // front, changing rooms behind), a volleyball net and a lawn under the
 // trees for lying in the sun.
-// Tagged 'park', so people come here to relax and nearby homes grow faster.
+// Tagged 'park', so people come here to relax.
 //
 // Local area covers x from about -0.4 to 2.4 and y from -0.4 to 1.4 (three
 // dots wide, two deep), front on -y. The pools are drawn on the ground; what
@@ -123,47 +123,41 @@ export default {
   id: 'pool',
   name: 'Swimming pool',
   blurb: 'Village pool',
-  category: 'civic',
+  category: 'amenities',
   access: 'any', // a footpath will do
   tags: ['park'],
   code: 'KP',
   footprint: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
   sim: { destinations: ['residential'] },
   plot: { props: 'green', boundary: 0.8, kinds: ['fence', 'hedge'], density: 0.35 },
+  stats: { jobs: 2 },
+  agents: 2,
+  yards: ['trees', 'garden'],
+  draw(g) {
+    // the shack by the way in, lemonade crates and bikes beside it
+    const sx = g.pick([-0.34, -0.2]);
+    shack(g, sx, -0.34, 0.42, 0.26);
+    crates(g, sx + 0.52, -0.26);
+    bench(g, sx + 0.21, 0.0, true, 1);
+    bikeRack(g, 0.45, 0.75, -0.3);
 
-  levels: [
-    {
-      name: 'Swimming pool',
-      stats: { jobs: 2 },
-      agents: 2,
-      yards: ['trees', 'garden'],
-      draw(g) {
-        // the shack by the way in, lemonade crates and bikes beside it
-        const sx = g.pick([-0.34, -0.2]);
-        shack(g, sx, -0.34, 0.42, 0.26);
-        crates(g, sx + 0.52, -0.26);
-        bench(g, sx + 0.21, 0.0, true, 1);
-        bikeRack(g, 0.45, 0.75, -0.3);
+    // the 25-metre basin, the low diving stand at its deep end, a
+    // springboard, a chair for the lifeguard (plavčík)
+    const px0 = g.range(0.25, 0.35), px1 = g.range(1.7, 1.85), py0 = 0.0, py1 = g.range(0.5, 0.58);
+    pool(g, px0, py0, px1, py1, g.int(3, 4));
+    divingStand(g, px1 + 0.08, (py0 + py1) / 2, g.range(0.16, 0.22), g.chance(0.4) ? 2 : 1);
+    springboard(g, px1 - 0.18, py1 + 0.01);
+    if (g.chance(0.6)) lifeguardChair(g, (px0 + px1) / 2, py0 - 0.06);
 
-        // the 25-metre basin, the low diving stand at its deep end, a
-        // springboard, a chair for the lifeguard (plavčík)
-        const px0 = g.range(0.25, 0.35), px1 = g.range(1.7, 1.85), py0 = 0.0, py1 = g.range(0.5, 0.58);
-        pool(g, px0, py0, px1, py1, g.int(3, 4));
-        divingStand(g, px1 + 0.08, (py0 + py1) / 2, g.range(0.16, 0.22), g.chance(0.4) ? 2 : 1);
-        springboard(g, px1 - 0.18, py1 + 0.01);
-        if (g.chance(0.6)) lifeguardChair(g, (px0 + px1) / 2, py0 - 0.06);
+    // children's corner: the paddling pool with its mushroom, a slide
+    paddlingPool(g, -0.05, 0.75, 0.16);
+    if (g.chance(0.6)) slide(g, -0.1, 1.15, true);
 
-        // children's corner: the paddling pool with its mushroom, a slide
-        paddlingPool(g, -0.05, 0.75, 0.16);
-        if (g.chance(0.6)) slide(g, -0.1, 1.15, true);
-
-        // the lawn: a volleyball net, parasols by the water, trees round it
-        volleyball(g, 2.15, 0.45, 1.05);
-        for (const x of [0.6, 1.0, 1.4]) if (g.chance(0.6)) parasol(g, x + g.range(-0.05, 0.05), py1 + 0.22);
-        for (const x of [0.35, 0.85, 1.35, 1.8]) tree(g, x + g.range(-0.06, 0.06), 1.28, g.range(0.9, 1.15));
-        tree(g, 2.3, -0.25, g.range(0.9, 1.1));
-        tree(g, 2.32, 1.3, 1);
-      },
-    },
-  ],
+    // the lawn: a volleyball net, parasols by the water, trees round it
+    volleyball(g, 2.15, 0.45, 1.05);
+    for (const x of [0.6, 1.0, 1.4]) if (g.chance(0.6)) parasol(g, x + g.range(-0.05, 0.05), py1 + 0.22);
+    for (const x of [0.35, 0.85, 1.35, 1.8]) tree(g, x + g.range(-0.06, 0.06), 1.28, g.range(0.9, 1.15));
+    tree(g, 2.3, -0.25, g.range(0.9, 1.1));
+    tree(g, 2.32, 1.3, 1);
+  },
 };

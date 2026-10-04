@@ -201,37 +201,31 @@ export const station = {
   name: 'Station',
   size: 'Station',
   blurb: 'Brings its own track',
-  hotkey: '5',
   code: 'ST',
   // front row along the line, the house in the back row
   footprint: [[-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]],
   // a passing track: off the line at one end, back onto it at the other
   tracks: [{ pts: track([-1.6, -1], [-0.8, -0.36], [0.8, -0.36], [1.6, -1]) }],
-  levels: [
-    {
-      name: 'Station',
-      stats: { jobs: 4 },
-      agents: 0,
-      // towards the road (when there is one behind): see structures/yards.js
-      yards: ['forecourt', 'forecourt', 'plaza', 'parking'],
-      draw(g) {
-        // island platform between the line and the passing track
-        g.box(-0.7, -0.87, 0, 1.4, 0.31, 0.03);
-        g.detailed(2, () => g.line([[-0.67, -0.82, 0.03], [0.67, -0.82, 0.03]]));
-        canopy(g, -0.45, 0.45, -0.8, -0.62);
-        nameBoard(g, -0.55, -0.7);
-        lamp(g, 0.58, -0.7);
-        // the house platform behind the passing track
-        g.box(-1.36, -0.24, 0, 2.72, 0.26, 0.03);
-        bench(g, 0.7, -0.12);
-        lamp(g, -1.15, -0.12);
-        stationHouse(g, -0.9, 0.9, 0.1, 0.52);
-        // bike stands and a flower bed behind, on the way to the road
-        bikeRack(g, -1.3, -1.0, 0.95);
-        flowerBed(g, 1.15, 0.95, 0.07);
-      },
-    },
-  ],
+  stats: { jobs: 4 },
+  agents: 0,
+  // towards the road (when there is one behind): see structures/yards.js
+  yards: ['forecourt', 'forecourt', 'plaza', 'parking'],
+  draw(g) {
+    // island platform between the line and the passing track
+    g.box(-0.7, -0.87, 0, 1.4, 0.31, 0.03);
+    g.detailed(2, () => g.line([[-0.67, -0.82, 0.03], [0.67, -0.82, 0.03]]));
+    canopy(g, -0.45, 0.45, -0.8, -0.62);
+    nameBoard(g, -0.55, -0.7);
+    lamp(g, 0.58, -0.7);
+    // the house platform behind the passing track
+    g.box(-1.36, -0.24, 0, 2.72, 0.26, 0.03);
+    bench(g, 0.7, -0.12);
+    lamp(g, -1.15, -0.12);
+    stationHouse(g, -0.9, 0.9, 0.1, 0.52);
+    // bike stands and a flower bed behind, on the way to the road
+    bikeRack(g, -1.3, -1.0, 0.95);
+    flowerBed(g, 1.15, 0.95, 0.07);
+  },
 };
 
 export const main = {
@@ -254,53 +248,48 @@ export const main = {
     { pts: track([-0.3, -0.2], [0.3, 0.4], [2.05, 0.4]), buffer: true },
     { pts: track([0.4, 0.4], [0.85, 0.7], [2.05, 0.7]), buffer: true },
   ],
-  levels: [
-    {
-      name: 'Main station',
-      stats: { jobs: 12 },
-      agents: 0,
-      yards: ['forecourt', 'plaza', 'parking'],
-      draw(g) {
-        // platform 1: an island between the line and the first through track
-        g.box(-0.8, -0.87, 0, 2.6, 0.24, 0.03);
-        g.detailed(2, () => g.line([[-0.77, -0.83, 0.03], [1.77, -0.83, 0.03]]));
-        canopy(g, 0, 1.3, -0.82, -0.66);
-        nameBoard(g, -0.45, -0.75);
-        lamp(g, 1.6, -0.75);
-        // platform 2: between the second through track and the first bay
-        g.box(0.45, -0.07, 0, 1.6, 0.34, 0.03);
-        canopy(g, 0.75, 1.75, -0.02, 0.22);
-        bench(g, 0.6, 0.1);
-        // platform 3 along the second bay, and the concourse across the
-        // bay ends joining the platforms
-        g.box(0.95, 0.83, 0, 1.45, 0.26, 0.03);
-        g.box(2.12, -0.07, 0, 0.3, 1.16, 0.03);
-        canopy(g, 2.14, 2.4, 0, 1.0, 0.2);
-        lamp(g, 1.1, 0.96);
-        footbridge(g, 1.55, [-0.75, 0.1, 0.96]);
+  stats: { jobs: 12 },
+  agents: 0,
+  yards: ['forecourt', 'plaza', 'parking'],
+  draw(g) {
+    // platform 1: an island between the line and the first through track
+    g.box(-0.8, -0.87, 0, 2.6, 0.24, 0.03);
+    g.detailed(2, () => g.line([[-0.77, -0.83, 0.03], [1.77, -0.83, 0.03]]));
+    canopy(g, 0, 1.3, -0.82, -0.66);
+    nameBoard(g, -0.45, -0.75);
+    lamp(g, 1.6, -0.75);
+    // platform 2: between the second through track and the first bay
+    g.box(0.45, -0.07, 0, 1.6, 0.34, 0.03);
+    canopy(g, 0.75, 1.75, -0.02, 0.22);
+    bench(g, 0.6, 0.1);
+    // platform 3 along the second bay, and the concourse across the
+    // bay ends joining the platforms
+    g.box(0.95, 0.83, 0, 1.45, 0.26, 0.03);
+    g.box(2.12, -0.07, 0, 0.3, 1.16, 0.03);
+    canopy(g, 2.14, 2.4, 0, 1.0, 0.2);
+    lamp(g, 1.1, 0.96);
+    footbridge(g, 1.55, [-0.75, 0.1, 0.96]);
 
-        // the hall: a vaulted roof over the middle, a clock tower, two wings
-        const y = 1.2, d = 1.0, h = 0.3;
-        g.vault(-0.2, y, 0, 1.5, d, h, 0.24, 8);
-        g.windows(-0.2, y, 1.5, d, 0, h, h / 2, 0.14, { skip: ['left', 'right'] });
-        door(g, 0.4, y, 0.1, 0.18);
-        door(g, 0.7, y, 0.1, 0.18);
-        backDoor(g, 0.4, y + d, 0.1, 0.18);
-        backDoor(g, 0.7, y + d, 0.1, 0.18);
-        clock(g, 0.55, [[y, [0, -1, 0]], [y + d, [0, 1, 0]]], h + 0.1, 0.07);
-        // clock tower at the left end of the hall
-        const tx = -0.42, ty = y + 0.35, t = 0.12, th = 0.78;
-        g.roofed(tx - t, ty - t, 0, 2 * t, 2 * t, th, { h: 0.16, hip: t });
-        g.windows(tx - t, ty - t, 2 * t, 2 * t, th - 0.16, th - 0.02, 0.14, 0.08);
-        clock(g, tx, [[ty - t, [0, -1, 0]]], th - 0.24, 0.045);
-        // wings
-        g.roofed(-1.36, y + 0.1, 0, 0.8, d - 0.2, 0.24, { h: 0.15, hip: 0.14 });
-        g.windows(-1.36, y + 0.1, 0.8, d - 0.2, 0, 0.24, 0.12, 0.11);
-        g.roofed(1.42, y + 0.1, 0, 0.98, d - 0.2, 0.24, { h: 0.15, hip: 0.14 });
-        g.windows(1.42, y + 0.1, 0.98, d - 0.2, 0, 0.24, 0.12, 0.11);
-      },
-    },
-  ],
+    // the hall: a vaulted roof over the middle, a clock tower, two wings
+    const y = 1.2, d = 1.0, h = 0.3;
+    g.vault(-0.2, y, 0, 1.5, d, h, 0.24, 8);
+    g.windows(-0.2, y, 1.5, d, 0, h, h / 2, 0.14, { skip: ['left', 'right'] });
+    door(g, 0.4, y, 0.1, 0.18);
+    door(g, 0.7, y, 0.1, 0.18);
+    backDoor(g, 0.4, y + d, 0.1, 0.18);
+    backDoor(g, 0.7, y + d, 0.1, 0.18);
+    clock(g, 0.55, [[y, [0, -1, 0]], [y + d, [0, 1, 0]]], h + 0.1, 0.07);
+    // clock tower at the left end of the hall
+    const tx = -0.42, ty = y + 0.35, t = 0.12, th = 0.78;
+    g.roofed(tx - t, ty - t, 0, 2 * t, 2 * t, th, { h: 0.16, hip: t });
+    g.windows(tx - t, ty - t, 2 * t, 2 * t, th - 0.16, th - 0.02, 0.14, 0.08);
+    clock(g, tx, [[ty - t, [0, -1, 0]]], th - 0.24, 0.045);
+    // wings
+    g.roofed(-1.36, y + 0.1, 0, 0.8, d - 0.2, 0.24, { h: 0.15, hip: 0.14 });
+    g.windows(-1.36, y + 0.1, 0.8, d - 0.2, 0, 0.24, 0.12, 0.11);
+    g.roofed(1.42, y + 0.1, 0, 0.98, d - 0.2, 0.24, { h: 0.15, hip: 0.14 });
+    g.windows(1.42, y + 0.1, 0.98, d - 0.2, 0, 0.24, 0.12, 0.11);
+  },
 };
 
 export const stop = {
@@ -310,32 +299,27 @@ export const stop = {
   size: 'Stop',
   code: 'SP',
   footprint: [[0, 0], [1, 0]],
-  levels: [
-    {
-      name: 'Stop',
-      stats: { jobs: 1 },
-      agents: 0,
-      yards: ['forecourt', 'trees'],
-      draw(g) {
-        platform(g, -0.36, 1.36);
-        // shelter on the platform and the name board
-        g.roofed(0.78, -0.82, 0.03, 0.38, 0.1, 0.13, { h: 0.04 });
-        g.windows(0.78, -0.82, 0.38, 0.1, 0.03, 0.16, 0.13, 0.1, { skip: ['front'] });
-        nameBoard(g, 0.45, -0.72);
-        // a little waiting house with a ticket window, right behind the platform
-        const x = -0.26, y = -0.5, w = 0.5, d = 0.36, h = 0.15;
-        g.roofed(x, y, 0, w, d, h, { h: 0.12 });
-        g.windows(x, y, w, d, 0, h, h, 0.12, { skip: ['front'] });
-        door(g, -0.1, y, 0.06, 0.11);
-        g.detailed(1, () => g.line([[0.04, y, 0.05], [0.14, y, 0.05], [0.14, y, 0.11], [0.04, y, 0.11], [0.04, y, 0.05]], { facing: [0, -1, 0] }));
-        chimney(g, 0.12, y + d / 2, h + 0.06, 0.08);
-        // behind: steps down from the platform, bike stands, a bench, a tree
-        g.box(0.5, BACK, 0, 0.12, 0.06, 0.015);
-        bikeRack(g, 0.72, 1.02, -0.38);
-        bench(g, 0.62, 0.05);
-        flowerBed(g, -0.02, 0.12, 0.07);
-        tree(g, 1.18, 0.12, 0.9);
-      },
-    },
-  ],
+  stats: { jobs: 1 },
+  agents: 0,
+  yards: ['forecourt', 'trees'],
+  draw(g) {
+    platform(g, -0.36, 1.36);
+    // shelter on the platform and the name board
+    g.roofed(0.78, -0.82, 0.03, 0.38, 0.1, 0.13, { h: 0.04 });
+    g.windows(0.78, -0.82, 0.38, 0.1, 0.03, 0.16, 0.13, 0.1, { skip: ['front'] });
+    nameBoard(g, 0.45, -0.72);
+    // a little waiting house with a ticket window, right behind the platform
+    const x = -0.26, y = -0.5, w = 0.5, d = 0.36, h = 0.15;
+    g.roofed(x, y, 0, w, d, h, { h: 0.12 });
+    g.windows(x, y, w, d, 0, h, h, 0.12, { skip: ['front'] });
+    door(g, -0.1, y, 0.06, 0.11);
+    g.detailed(1, () => g.line([[0.04, y, 0.05], [0.14, y, 0.05], [0.14, y, 0.11], [0.04, y, 0.11], [0.04, y, 0.05]], { facing: [0, -1, 0] }));
+    chimney(g, 0.12, y + d / 2, h + 0.06, 0.08);
+    // behind: steps down from the platform, bike stands, a bench, a tree
+    g.box(0.5, BACK, 0, 0.12, 0.06, 0.015);
+    bikeRack(g, 0.72, 1.02, -0.38);
+    bench(g, 0.62, 0.05);
+    flowerBed(g, -0.02, 0.12, 0.07);
+    tree(g, 1.18, 0.12, 0.9);
+  },
 };

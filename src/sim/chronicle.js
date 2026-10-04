@@ -11,25 +11,37 @@
 // 'town' or 'story'. world.chronicle.marks lists what has had its line
 // already ('first:park', 'residents:100'…), so nothing is written twice.
 
-import { STRUCTURE_TYPES, levelOf, matches } from '../../structures/index.js';
+import { STRUCTURE_TYPES, matches } from '../../structures/index.js';
 
-// How a first is written. Keys: a structure id, or id:level number. The
-// rest get "The first <level name> was built." (or "went up", for growth).
+// How a first is written, by structure id (sizes of one thing share a
+// line: the first of either is written). The rest get "The first <name>
+// was built."
 const FIRSTS = {
-  'residential:2': 'The first apartments went up.',
-  'residential:3': 'The first panel block went up.',
-  business: 'The first shop opened.',
-  'business:2': 'The first offices opened.',
-  industrial: 'The first workshop opened.',
-  mine: 'Coal was found, and the first pit was sunk.',
-  'mine:2': 'The pit became a colliery.',
-  'mine:3': 'The colliery went deep.',
-  farm: 'A farmstead was settled.',
-  'farm:2': 'The farmers joined into a JZD.',
-  park: 'The first park was planted.',
-  'park-large': 'A large park was laid out.',
-  square: 'The first square was paved.',
-  services: 'A clinic opened its doors.',
+  apartments: 'The first apartments went up.',
+  block: 'The first panel block went up.',
+  jednota: 'Jednota opened its first shop.',
+  hospoda: 'The first pub poured its first beer.',
+  store: 'The department store opened.',
+  tuzex: 'A Tuzex shop opened.',
+  office: 'The národní výbor moved into its offices.',
+  'post-office': 'The post office opened.',
+  hotel: 'The first hotel took in guests.',
+  workshop: 'The first workshop opened.',
+  factory: 'The first factory opened.',
+  pit: 'Coal was found, and the first pit was sunk.',
+  colliery: 'The first colliery opened.',
+  'deep-mine': 'A deep mine was sunk.',
+  farmstead: 'A farmstead was settled.',
+  jzd: 'The farmers joined into a JZD.',
+  'state-farm': 'A state farm was founded.',
+  green: 'The first park was planted.',
+  meadow: 'A large park was laid out.',
+  plaza: 'The first square was paved.',
+  'fire-house': 'The fire brigade got its fire house.',
+  'health-centre': 'A health centre opened its doors.',
+  clinic: 'A polyclinic opened its doors.',
+  hospital: 'The hospital opened.',
+  school: 'The first school rang its bell.',
   station: 'The railway station opened.',
   'station-main': 'The main station opened.',
   stop: 'A railway stop opened.',
@@ -40,6 +52,13 @@ const FIRSTS = {
 // Landmarks are written every time.
 const LANDMARK = (name) => `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name.toLowerCase()} was built.`;
 
+// The structure whose first stands for this type: sizes of one thing share
+// it (a wide house counts as a house), by sharing its name in the Build menu.
+function firstOf(type) {
+  const def = STRUCTURE_TYPES[type];
+  return Object.values(STRUCTURE_TYPES).find((d) => d.name === def.name && d.category === def.category)?.id ?? type;
+}
+
 const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
 const WORDS = { 15: 'fifteen', 20: 'twenty', 30: 'thirty', 50: 'fifty', 75: 'seventy-five', 100: 'a hundred' };
 
@@ -49,8 +68,8 @@ const PLACE_REACH = 2;
 const PLACES = [
   ['church', 'by the church'], ['chapel', 'by the chapel'], ['town-hall', 'by the town hall'],
   ['castle', 'below the castle'], ['pool', 'by the swimming pool'], ['station', 'near the station'],
-  ['station-main', 'near the station'], ['stop', 'by the railway stop'], ['square', 'on the square'],
-  ['square-large', 'on the square'], ['park', 'by the park'], ['park-large', 'by the park'],
+  ['station-main', 'near the station'], ['stop', 'by the railway stop'], ['hospoda', 'by the pub'],
+  ['hospoda-wide', 'by the pub'], ['square', 'on the square'], ['park', 'by the park'],
   ['cemetery', 'by the cemetery'], ['farm', 'by the farm'], ['mine', 'by the pit'], ['industrial', 'by the works'],
 ];
 
@@ -69,15 +88,16 @@ export class Chronicle {
     this.config = config.chronicle;
     this.timer = 0;
     this.residents = null;
-    this.levels = new Map([...world.structures.values()].map((s) => [s.id, s.level]));
+    this.types = new Map([...world.structures.values()].map((s) => [s.id, s.type]));
+    // (marks of a size, as old saves have them – 'first:apartments-wide' – are
+    // marks of the thing)
+    this.data.marks = [...new Set(this.data.marks.map((m) => m.replace(/^first:(.+)$/, (k, t) => (STRUCTURE_TYPES[t] ? `first:${firstOf(t)}` : k))))];
     this.unread = false;
 
     // a town without a chronicle yet (new, or saved before there were
     // chronicles): what's already there counts as written
     if (!this.data.entries.length) {
-      for (const s of world.structures.values()) {
-        for (let l = 1; l <= s.level; l++) this.mark(l === 1 ? `first:${s.type}` : `first:${s.type}:${l}`);
-      }
+      for (const s of world.structures.values()) this.mark(`first:${firstOf(s.type)}`);
       const houses = this.countHouses();
       for (let n = 1; n <= houses; n++) this.mark(`houses:${n}`);
       for (const kind of Object.keys(NETWORKS)) if (this.hasNetwork(kind)) this.mark(`first:${kind}`);
@@ -89,7 +109,7 @@ export class Chronicle {
     }
 
     world.events.on('structure:added', (s) => this.built(s));
-    world.events.on('structure:changed', (s) => this.levelled(s));
+    world.events.on('structure:changed', (s) => this.changed(s));
     world.events.on('structure:removed', (s) => this.removed(s));
     world.events.on('world:renamed', (name) => this.write(`The town took the name ${name}.`));
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
@@ -151,20 +171,24 @@ export class Chronicle {
   // ---------- inside ----------
 
   built(s) {
-    this.levels.set(s.id, s.level);
+    this.types.set(s.id, s.type);
     const def = STRUCTURE_TYPES[s.type];
-    if (matches(def, 'heritage')) return this.write(LANDMARK(levelOf(def, s).name));
-    if (matches(def, 'residential')) this.house(s);
-    else this.first(s.type, FIRSTS[s.type] ?? `The first ${levelOf(def, s).name.toLowerCase()} was built.`);
-    // (placed straight at a higher level: its levels count as reached)
-    for (let l = 2; l <= s.level; l++) this.reached(s, l);
+    if (matches(def, 'heritage')) return this.write(LANDMARK(def.name));
+    if (s.type === 'house' || s.type === 'house-wide') this.house(s);
+    else this.firstOf(s);
+  }
+
+  // The first of its kind (any size) gets its line.
+  firstOf(s) {
+    const key = firstOf(s.type);
+    this.first(key, FIRSTS[key] ?? `The first ${STRUCTURE_TYPES[s.type].name.toLowerCase()} was built.`);
   }
 
   // A new home: the first ten each get a line, with where they stand; after
   // that, the round numbers (config.chronicle.houses). Counted as they come,
   // so one pulled down and built again isn't written twice.
   house(s) {
-    this.mark(`first:${s.type}`);
+    this.mark(`first:${firstOf(s.type)}`);
     const n = this.countHouses();
     if (this.marked(`houses:${n}`)) return;
     this.mark(`houses:${n}`);
@@ -178,7 +202,7 @@ export class Chronicle {
 
   countHouses() {
     let n = 0;
-    for (const o of this.world.structures.values()) if (matches(STRUCTURE_TYPES[o.type], 'residential')) n++;
+    for (const o of this.world.structures.values()) if (o.type === 'house' || o.type === 'house-wide') n++;
     return n;
   }
 
@@ -213,25 +237,20 @@ export class Chronicle {
     return '';
   }
 
-  levelled(s) {
-    const was = this.levels.get(s.id);
-    this.levels.set(s.id, s.level);
-    if (was == null || s.level <= was) return;
-    for (let l = was + 1; l <= s.level; l++) this.reached(s, l);
-  }
-
-  reached(s, level) {
-    const def = STRUCTURE_TYPES[s.type];
-    const name = def.levels[level - 1]?.name;
-    if (!name) return;
-    const key = `${s.type}:${level}`;
-    this.first(key, FIRSTS[key] ?? (matches(def, 'heritage') ? `The ${name.toLowerCase()} was rebuilt.` : `The first ${name.toLowerCase()} went up.`));
+  // Turned into something else (World.convertStructure): a first, if it's
+  // the first of its kind; a restyle or new surroundings say nothing.
+  changed(s) {
+    const was = this.types.get(s.id);
+    this.types.set(s.id, s.type);
+    if (was == null || was === s.type) return;
+    if (matches(STRUCTURE_TYPES[s.type], 'heritage')) this.write(`The ${STRUCTURE_TYPES[was].name.toLowerCase()} was rebuilt as ${STRUCTURE_TYPES[s.type].name.toLowerCase()}.`);
+    else this.firstOf(s);
   }
 
   removed(s) {
-    this.levels.delete(s.id);
+    this.types.delete(s.id);
     const def = STRUCTURE_TYPES[s.type];
-    if (matches(def, 'heritage')) this.write(`The ${levelOf(def, s).name.toLowerCase()} was pulled down.`);
+    if (matches(def, 'heritage')) this.write(`The ${def.name.toLowerCase()} was pulled down.`);
   }
 
   hasNetwork(kind) {
@@ -250,7 +269,7 @@ export class Chronicle {
   countResidents() {
     let n = 0;
     for (const s of this.world.structures.values()) {
-      if (this.world.isServed(s)) n += levelOf(STRUCTURE_TYPES[s.type], s).stats?.residents ?? 0;
+      if (this.world.isServed(s)) n += STRUCTURE_TYPES[s.type].stats?.residents ?? 0;
     }
     return n;
   }

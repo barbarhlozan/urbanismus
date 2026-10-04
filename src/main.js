@@ -131,12 +131,12 @@ const story = new Storyteller({ world, agents, trains, dialogue, chronicle, conf
 
 const tools = new ToolManager(world.grid, 'inspect');
 tools.allowed = (tool) => UNLOCKS.allowsTool(tool);
-const ctx = { world, camera, tools, popup, growth, config: CONFIG };
+const ctx = { world, camera, tools, popup, growth, renderer, config: CONFIG };
 tools.register(createInspectTool(ctx));
-tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', hotkey: '1', group: 'transport', blurb: 'Cars and people' }));
-tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, label: 'Lane', hotkey: '2', group: 'transport', blurb: 'Single track, slow cars' }));
-tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', hotkey: '3', fineGrid: true, group: 'transport', blurb: 'People and bikes' }));
-tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', hotkey: '4', fineGrid: true, group: 'transport', blurb: 'Trains from the map edge' }));
+tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', group: 'transport', blurb: 'Cars and people' }));
+tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, label: 'Lane', group: 'transport', blurb: 'Single track, slow cars' }));
+tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', fineGrid: true, group: 'transport', blurb: 'People and bikes' }));
+tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', fineGrid: true, group: 'transport', blurb: 'Trains from the map edge' }));
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createBulldozeTool(ctx));
 const photoPrint = new PhotoPrint(uiRoot);
@@ -324,6 +324,9 @@ tools.onChange((tool) => {
   // dots only while building; Select and Photo show the bare map
   svg.classList.toggle('show-grid', tool.id !== 'inspect' && tool.id !== 'photo');
   svg.classList.toggle('show-fine', !!tool.fineGrid);
+  // only the dots the tool can use (renderGrid marks the others)
+  svg.classList.toggle('grid-building', tool.id.startsWith('build:'));
+  svg.classList.toggle('grid-roads', tool.id === 'road' || tool.id === 'lane');
 });
 tools.use('inspect');
 
@@ -383,8 +386,8 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
-  // by place on the keyboard (ui/keys.js): the letter and number rows are
-  // build tools, in Build menu order
+  // by place on the keyboard (ui/keys.js): the number row opens a Build
+  // menu group, the letter rows pick a tool in it; a few keys of their own
   const k = keyOf(e);
   if (k === '[') return actions.rotateLeft();
   if (k === ']') return actions.rotateRight();
@@ -392,10 +395,12 @@ window.addEventListener('keydown', (e) => {
   if (k === ' ') e.preventDefault(); // (Space: another look, while building; not a page scroll)
   if (k === '`') return actions.speed();
   if (k === 'backspace') e.preventDefault(); // (Erase: not the browser's Back)
-  const tool = tools.list().find((t) => t.hotkey === k || t.hotkeys?.includes(k));
+  const tool = tools.list().find((t) => t.hotkey === k);
   if (tool) {
     popup.hide();
-    tools.use(tool.id, { hotkey: k });
+    tools.use(tool.id);
+  } else if (hud.buildMenu.key(k)) {
+    popup.hide();
   }
 });
 

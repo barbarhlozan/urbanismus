@@ -55,7 +55,7 @@ import { InkLayer } from './ink.js';
 import { AgentCanvas, AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
 import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
-import { STRUCTURE_TYPES, levelOf, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
+import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
 import { YARDS } from '../../structures/yards.js';
 import { drawPlot } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
@@ -174,6 +174,8 @@ export class Renderer {
 
     const on = (type, ...layers) => world.events.on(type, () => layers.forEach((l) => this.dirty.add(l)));
     const near = (s) => this.touchAround(world.nodesOf(s).map((n) => world.grid.xy(n)));
+    // (the dots know what's on them: renderGrid)
+    for (const type of ['structure:added', 'structure:removed', 'roads:changed', 'rails:changed']) on(type, 'grid');
     for (const type of ['structure:added', 'structure:removed', 'structure:changed']) {
       on(type, 'roads', 'rails'); // stations draw tracks with the rails
       world.events.on(type, (s) => {
@@ -269,6 +271,19 @@ export class Renderer {
     }
   }
 
+  // The building or tree about to be erased (an objs key, 's12' / 'f3', or
+  // null): drawn in the secondary colour (.erasing in styles.css). Set by
+  // the Erase tool; frame() puts the class on its drawing, which may have
+  // been redrawn since.
+  markErasing() {
+    const entry = this.erasing ? this.objs.get(this.erasing) : null;
+    const els = entry ? [entry.g, entry.lg] : [];
+    if (this.erasingEls?.[0] === els[0] && this.erasingEls?.[1] === els[1]) return;
+    for (const el of this.erasingEls ?? []) el.classList.remove('erasing');
+    for (const el of els) el.classList.add('erasing');
+    this.erasingEls = els;
+  }
+
   frame(overlaySVG) {
     this.placeView();
     // labels that keep their screen size divide by this (styles.css); set
@@ -298,6 +313,7 @@ export class Renderer {
       this.agentEls.clear();
       this.trainEls.clear();
     }
+    this.markErasing();
     if (overlaySVG !== this.lastOverlay) {
       this.letGo(overlaySVG);
       this.layers.overlay.innerHTML = overlaySVG;
@@ -317,6 +333,7 @@ export class Renderer {
       const cs = getComputedStyle(el);
       const ring = el.classList.contains('hover');
       const ghost = el.classList.contains('ghost-anim');
+      const eraser = el.classList.contains('eraser-mark'); // shrinks away
       const len = parseFloat(cs.getPropertyValue('--len'));
       const from = ring ? parseFloat(cs.strokeDashoffset) : parseFloat(cs.opacity);
       if (still || (ring ? from >= len - 1 : from < 0.01)) continue; // never got drawn
@@ -329,7 +346,9 @@ export class Renderer {
         ? [{ strokeDashoffset: `${from}px` }, { strokeDashoffset: `${-len}px` }]
         : ghost
           ? [{ opacity: from, transform: `scale(${scale})` }, { opacity: 0, transform: 'scale(0.85)' }]
-          : [{ opacity: from }, { opacity: 0 }];
+          : eraser
+            ? [{ opacity: from, transform: 'none' }, { opacity: 0, transform: 'scale(0.3)' }]
+            : [{ opacity: from }, { opacity: 0 }];
       el.animate(frames, { duration: ring ? 220 : ghost ? 130 : 150, easing: 'ease-in', fill: 'forwards' })
         .finished.then(() => moved.remove(), () => moved.remove());
     }
@@ -454,12 +473,15 @@ export class Renderer {
   }
 
   // What the camera sees of the ground, the brows (brows.js) and the rock
-  // faces (rocks.js), worked out again for each rotation of the view; as
+  // faces (rocks.js), worked out for each rotation of the view and kept
+  // (per rotation and relief: turning back to a view finds them ready); as
   // pencil strokes, a path per kind and chunk of the map.
   renderBrows() {
     const { camera, world } = this;
     if (!BROWS.on || !camera.lift) return '';
-    if (this.brows?.rotation !== camera.rotation) {
+    if (this.brows?.lift !== camera.lift) this.brows = { lift: camera.lift, views: new Map() };
+    let view = this.brows.views.get(camera.rotation);
+    if (!view) {
       const { terrain, grid } = world;
       const m = 1.2; // (as the contours)
       const height = (x, y) => camera.lift(x, y) + terrain.heightAt(x, y);
@@ -471,10 +493,11 @@ export class Renderer {
       // the rock faces turned to the viewer (those turned away are brows)
       const rocks = rockLines(world, camera, height, [-0.5, -0.5, grid.width - 0.5, grid.height - 0.5], (x, y) => hiddenAt(vis, camera, x, y));
       const lips = rocks.lips.flatMap((l, n) => pencil(l, n, ROCK_LOOK.pencil));
-      this.brows = { rotation: camera.rotation, vis, tiers, lips, faces: rocks.faces };
+      view = { tiers, lips, faces: rocks.faces };
+      this.brows.views.set(camera.rotation, view);
     }
     const paths = (lines, cls) => chunked(lines, CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
-    const { tiers, lips, faces } = this.brows;
+    const { tiers, lips, faces } = view;
     return paths(tiers[0], 'brow light') + paths(tiers[1], 'brow') + paths(tiers[2], 'brow outline') + paths(faces, 'rock-face') + paths(lips, 'rock-lip');
   }
 
@@ -615,9 +638,7 @@ export class Renderer {
       return j * nx + i;
     };
     const field = (x, y) => Math.min(wet[sample(x, y)] / 0.06, 0.5);
-    for (const c of contours(field, box, { step, interval: 1, index: 99 })) {
-      if (c.level === 0) out[river ? 'bank' : 'shore'].push(c.points);
-    }
+    for (const c of contours(field, box, { step, interval: 1, index: 99, only: 0 })) out[river ? 'bank' : 'shore'].push(c.points);
     if (river) return;
     // Waves: at the point furthest from the shore (a two-pass chamfer
     // distance from the land samples), along the lake's long axis.
@@ -694,13 +715,20 @@ export class Renderer {
     return line(tiers[2], 'contour d2') + line(tiers[1], 'contour d1') + line(tiers[0], 'contour index') + labels;
   }
 
+  // The main dots, each marked with why nothing could be built on it, so
+  // the tool in hand shows only the dots it can use (styles.css): `steep`
+  // too steep for a building, `taken` a building, road or railway on it
+  // (`house`: a building – lines can't go through those either).
   renderGrid() {
-    const { grid, terrain } = this.world;
+    const world = this.world, { grid, terrain } = world;
     let out = '';
     for (let i = 0; i < grid.size; i++) {
       if (terrain.isWater(i)) continue;
       const [sx, sy] = this.project(...grid.xy(i));
-      out += `<circle class="grid-dot" cx="${r2(sx)}" cy="${r2(sy)}" r="${THEME.gridDotRadius}"/>`;
+      const house = !!world.structureAt(i);
+      const cls = (world.tooSteepToBuild(i) ? ' steep' : '')
+        + (house || world.hasRoad(i) || world.hasRail(i) ? ' taken' : '') + (house ? ' house' : '');
+      out += `<circle class="grid-dot${cls}" cx="${r2(sx)}" cy="${r2(sy)}" r="${THEME.gridDotRadius}"/>`;
     }
     this.layers.grid.innerHTML = out;
   }
@@ -951,8 +979,10 @@ export class Renderer {
       this.treeDetail = detail;
     }
     // shadow hatching: the stroke tiers that keep strokes apart on screen,
-    // on the ground (sz) and on walls (sw)
-    const tiers = `sz-${tierAt(this.camera.tile * z, groundSpacing())} sw-${tierAt(this.camera.tile * z, wallSpacing())}`;
+    // on the ground (sz) and on walls (sw) – when anything is hatched (a
+    // class change on the map restyles all of it)
+    const hatched = SUN.on && (SUN.walls === true || ['cast', 'hatch', 'scribble'].includes(SUN.ground));
+    const tiers = hatched ? `sz-${tierAt(this.camera.tile * z, groundSpacing())} sw-${tierAt(this.camera.tile * z, wallSpacing())}` : this.shadeTiers;
     if (tiers !== this.shadeTiers) {
       for (const s of [this.svg, this.ground, this.top]) {
         if (this.shadeTiers) s.classList.remove(...this.shadeTiers.split(' '));
@@ -1048,7 +1078,7 @@ export class Renderer {
         orderChanged = true;
       }
       const s = key[0] === 's' && world.structures.get(id);
-      const sig = s && `${s.type}|${s.level}|${s.seed}`;
+      const sig = s && `${s.type}|${s.seed}`;
       if (sig !== entry.sig && entry.sig && animate && swaps < DRAW.cap && !this.born.has(key) && entry.shown !== false) {
         // the old drawing is erased as a ghost, the new one drawn after it
         swaps++;
@@ -1285,7 +1315,7 @@ export class Renderer {
     painter.join = joinSides(world, s);
     painter.setTilt(tiltOf(def, s, painter.join, world));
     painter.roadGap = world.nodesOf(s).length === 1 ? roadFront(world, s).gap : 1; // see busStop.js
-    levelOf(def, s).draw(painter, s);
+    def.draw(painter, s);
     const core = painter.bounds;
 
     // Front yard between the building and its road.
@@ -1310,7 +1340,7 @@ export class Renderer {
     }
 
     // Plot: sides and back.
-    const plotDef = { ...def.plot, ...levelOf(def, s).plot };
+    const plotDef = def.plot ?? {};
     if (plotDef.props && core) {
       const pp = this.attachFree(new Painter(camera, { x, y, z }, 0, drawSeed(s) ^ 0x2c1b3c6d));
       pp.setTilt(this.roadTurn(s)); // a plot turned with its building to a diagonal road

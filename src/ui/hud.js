@@ -9,7 +9,7 @@
 
 const REFRESH_MS = 5000;
 
-import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { BuildMenu } from './buildMenu.js';
 import { statIcon, controlIcon } from './icons.js';
 import { resize, shrink, bump } from './motion.js';
@@ -212,8 +212,7 @@ export class Hud {
         unconnected++;
         continue;
       }
-      const def = STRUCTURE_TYPES[s.type];
-      for (const [k, v] of Object.entries(levelOf(def, s).stats ?? {})) totals[k] = (totals[k] ?? 0) + v;
+      for (const [k, v] of Object.entries(STRUCTURE_TYPES[s.type].stats ?? {})) totals[k] = (totals[k] ?? 0) + v;
     }
     const html = stat('residents', 'Residents', totals.residents ?? 0)
       + stat('jobs', 'Jobs', totals.jobs ?? 0)

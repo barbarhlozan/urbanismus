@@ -1,10 +1,9 @@
-// What may be built (story/unlocks.js): the file's rules, the story's
-// unlocks on top, and growth keeping to them.
+// What may be built (story/unlocks.js): the file's rules and the story's
+// unlocks on top.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { flatWorld, road } from './helpers.js';
 import { UNLOCKS, parseUnlocks, resolveScheme } from '../src/story/unlocks.js';
-import { GrowthSystem } from '../src/sim/growth.js';
 import { parseStory } from '../src/story/script.js';
 import { CONFIG } from '../src/config.js';
 
@@ -29,26 +28,37 @@ test('the last line that matches wins', () => {
     lock all
     unlock road
     unlock residential
-    lock residential_panel_block
+    lock block
+    unlock block_wide
   `);
   assert.equal(UNLOCKS.allows('castle'), false);
   assert.equal(UNLOCKS.allowsNetwork('road'), true);
   assert.equal(UNLOCKS.allowsNetwork('path'), false);
-  assert.equal(UNLOCKS.allows('residential'), true);
-  assert.equal(UNLOCKS.allows('residential-wide'), true); // (shares the name)
-  assert.equal(UNLOCKS.allows('residential', 2), true);
-  assert.equal(UNLOCKS.allows('residential', 3), false);
-  assert.equal(UNLOCKS.allows('residential-wide', 3), false);
+  assert.equal(UNLOCKS.allows('house'), true);       // (by its tag)
+  assert.equal(UNLOCKS.allows('apartments-wide'), true);
+  assert.equal(UNLOCKS.allows('block'), false);      // (by its name: every size)
+  assert.equal(UNLOCKS.allows('block-wide'), true);  // one size, by its id
 });
 
-test('groups, sizes and levels by number', () => {
-  rules('lock landmarks\nlock park_large\nlock mine_level3\nunlock chapel');
+test('groups, by id, label or old name, and sizes', () => {
+  rules('lock landmarks\nlock fountain_square_large\nlock deep-mine\nunlock chapel');
   assert.equal(UNLOCKS.allows('castle'), false);
   assert.equal(UNLOCKS.allows('chapel'), true);
-  assert.equal(UNLOCKS.allows('park'), true);
-  assert.equal(UNLOCKS.allows('park-large'), false);
-  assert.equal(UNLOCKS.allows('mine', 2), true);
-  assert.equal(UNLOCKS.allows('mine', 3), false);
+  assert.equal(UNLOCKS.allows('fountain-square'), true);
+  assert.equal(UNLOCKS.allows('fountain-square-large'), false);
+  assert.equal(UNLOCKS.allows('colliery'), true);
+  assert.equal(UNLOCKS.allows('deep-mine'), false);
+  rules('lock Národní výbor');
+  assert.equal(UNLOCKS.allows('office-tower-wide'), false);
+  assert.equal(UNLOCKS.allows('post-office'), true);
+  rules('lock Občanská vybavenost\nunlock hospoda');
+  assert.equal(UNLOCKS.allows('jednota'), false);
+  assert.equal(UNLOCKS.allows('school'), false);
+  assert.equal(UNLOCKS.allows('hospoda'), true);
+  assert.equal(UNLOCKS.allows('plaza'), true);
+  rules('lock public');
+  assert.equal(UNLOCKS.allows('plaza'), false);
+  assert.equal(UNLOCKS.allows('house'), true);
 });
 
 test('tools: a family needs one open size, networks their own', () => {
@@ -75,33 +85,16 @@ test('the story unlocks on top of the file, kept with the town', () => {
 test('mistakes: what is not a line, what is not a name', () => {
   assert.equal(parseUnlocks('unlcok road').errors.length, 1);
   assert.equal(UNLOCKS.known('castle'), true);
-  assert.equal(UNLOCKS.known('residential_panel_block'), true);
+  assert.equal(UNLOCKS.known('block_wide'), true);
+  assert.equal(UNLOCKS.known('residential_panel_block'), false); // levels are gone
   assert.equal(UNLOCKS.known('footpaths'), true);
   assert.equal(UNLOCKS.known('spaceport'), false);
 });
 
 test('unlock and lock in a branch', () => {
-  const { branches, errors } = parseStory('::A::\nunlock station\nlock residential_panel_block\nGrandma: hi');
+  const { branches, errors } = parseStory('::A::\nunlock station\nlock block\nGrandma: hi');
   assert.deepEqual(errors, []);
-  assert.deepEqual(branches.get('a').steps.map((s) => [s.kind, s.unlock, s.name]).slice(0, 2), [['unlock', true, 'station'], ['unlock', false, 'residential_panel_block']]);
-});
-
-test('growth stops below a locked level, and nothing shrinks for it', () => {
-  const w = flatWorld();
-  UNLOCKS.setWorld(w);
-  const growth = new GrowthSystem(w, CONFIG);
-  road(w, [2, 5], [12, 5]);
-  road(w, [2, 8], [12, 8]);
-  for (let x = 2; x < 12; x++) for (const y of [6, 7]) w.placeStructure('residential', w.grid.index(x, y), { level: 2 });
-  const tall = [...w.structures.values()][0];
-  w.setStructureLevel(tall.id, 3);
-  rules('lock residential_apartments');
-  const s = [...w.structures.values()][5];
-  w.setStructureLevel(s.id, 1);
-  for (let i = 0; i < 30; i++) growth.step();
-  assert.equal(s.level, 1); // can't grow into apartments
-  assert.equal(growth.explain(s).needs.length, 0); // and isn't told it could
-  assert.equal(tall.level, 3); // already a panel block: stays
+  assert.deepEqual(branches.get('a').steps.map((s) => [s.kind, s.unlock, s.name]).slice(0, 2), [['unlock', true, 'station'], ['unlock', false, 'block']]);
 });
 
 test('the buttons at the top: by name or all together, not with `all`', () => {
@@ -147,9 +140,9 @@ test('no cars: nobody drives, car parks stand empty; no trucks: industry keeps n
   const parking = new ParkingSystem(w);
   const agents = new AgentSystem(w, CONFIG, parking);
   road(w, [1, 5], [28, 5]);
-  const home = w.placeStructure('residential', w.grid.index(2, 6));
-  const shop = w.placeStructure('business', w.grid.index(26, 6));
-  const works = w.placeStructure('industrial', w.grid.index(12, 6));
+  const home = w.placeStructure('house', w.grid.index(2, 6));
+  const shop = w.placeStructure('jednota', w.grid.index(26, 6));
+  const works = w.placeStructure('workshop-large', w.grid.index(12, 6));
   assert.ok(home && shop && works);
   for (const s of [home, shop, works]) agents.sync(s);
   parking.spots.set(shop.id, [[26, 6], [26.2, 6]]);

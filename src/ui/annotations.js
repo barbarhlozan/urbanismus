@@ -10,7 +10,7 @@
 // LOG_LINES are kept in annotations.lines, newest first, for debugging from
 // the console (window.urbanismus.annotations.lines).
 
-import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { ELEVATION } from '../terrain/elevation.js';
 import { HILLS } from '../terrain/hills.js';
@@ -66,7 +66,7 @@ export class Annotations {
       if (hill) return { pos: [hill.x, hill.y], height: 0.15, lines: [`${hill.name} · ${Math.round(ELEVATION.base + hill.height)} m`] };
     }
     const s = world.structureAt(node);
-    if (s) return { pos: world.centerOf(s), height: 0.5, lines: [levelOf(STRUCTURE_TYPES[s.type], s).name] };
+    if (s) return { pos: world.centerOf(s), height: 0.5, lines: [STRUCTURE_TYPES[s.type].name] };
     if (world.roadExits().some((e) => e.node === node)) return { ...at(0.1), lines: ['Road out of town'] };
     if (world.railExits().some((e) => e.node === world.coarseToFine(node))) return { ...at(0.1), lines: ['Railway out of town'] };
     if (world.hasRail(node)) return { ...at(0.1), lines: [world.hasRoad(node) ? 'Level crossing' : 'Railway'] };

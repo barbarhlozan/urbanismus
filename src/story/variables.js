@@ -1,12 +1,10 @@
 // The numbers a story's conditions can read (see story/README.md), counted
 // from the town as it is now. Names go through normalName (script.js), so
-// `residential_house_amount`, `Residential.House` and `residential-house`
-// are all the same.
+// `block_wide_amount`, `Block.Wide` and `block-wide` are all the same.
 //
-//   <type or tag>              how many: residential, park, church, heritage…
-//   <type or tag>_<level>      how many at that level, by the level's name:
-//                              residential_house, residential_panel_block,
-//                              park_green, mine_deep_mine
+//   <type or tag>              how many: house, block, block_wide, jednota,
+//                              residential (every home), business, park,
+//                              church, heritage…
 //   residents, jobs            people living and working in town (as in the panel)
 //   buildings                  everything built
 //   roads, lanes, streets, footpaths, railways   how many dots long
@@ -16,7 +14,7 @@
 //   minutes                    how long the town has been running (game time)
 //   photos                     photographs taken
 
-import { STRUCTURE_TYPES, levelOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { normalName } from './script.js';
 
 export function townVariables(world, { agents = null, trains = null, photos = 0 } = {}) {
@@ -25,23 +23,16 @@ export function townVariables(world, { agents = null, trains = null, photos = 0 
     const key = normalName(name);
     v.set(key, (v.get(key) ?? 0) + n);
   };
-  // every type, tag and level name is known, even at nought
+  // every type and tag is known, even at nought
   for (const def of Object.values(STRUCTURE_TYPES)) {
-    for (const name of [def.id, ...(def.tags ?? [])]) {
-      add(name, 0);
-      for (const level of def.levels) add(`${name}_${level.name}`, 0);
-    }
+    for (const name of [def.id, ...(def.tags ?? [])]) add(name, 0);
   }
   for (const name of ['residents', 'jobs', 'walking', 'cycling', 'driving', 'trains', 'buses']) add(name, 0);
 
   for (const s of world.structures.values()) {
     const def = STRUCTURE_TYPES[s.type];
-    const level = levelOf(def, s);
-    for (const name of [def.id, ...(def.tags ?? [])]) {
-      add(name);
-      add(`${name}_${level.name}`);
-    }
-    if (world.isServed(s)) for (const [k, n] of Object.entries(level.stats ?? {})) add(k, n);
+    for (const name of [def.id, ...(def.tags ?? [])]) add(name);
+    if (world.isServed(s)) for (const [k, n] of Object.entries(def.stats ?? {})) add(k, n);
   }
   v.set('buildings', world.structures.size);
 

@@ -29,7 +29,8 @@
 const KEYWORDS = new Set(['and', 'or', 'not', 'true', 'false']);
 
 export function normalName(name) {
-  return String(name).trim().toLowerCase().replace(/[\s.\-]+/g, '_').replace(/_(amount|count|number)$/, '');
+  return String(name).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s.\-]+/g, '_').replace(/_(amount|count|number)$/, '');
 }
 
 // ---------- conditions ----------

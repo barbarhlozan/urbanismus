@@ -1,7 +1,7 @@
 // The Assets page: a full-screen catalogue of every structure in the game
 // (opened from the top-right Assets button), grouped like the Build menu.
 // Buildings pick their look at random (kind of roof, house style, …), so
-// each level shows a row of rolls with different seeds, drawn close up in
+// each one shows a row of rolls with different seeds, drawn close up in
 // the map's own style. Built on first open: it's a few hundred drawings.
 
 import { STRUCTURES, CATEGORIES, categoryOf } from '../../structures/index.js';
@@ -20,10 +20,10 @@ function footprintSize(def) {
   return `${Math.max(...xs) - Math.min(...xs) + 1}×${Math.max(...ys) - Math.min(...ys) + 1}`;
 }
 
-function levelRow(def, levelDef, level) {
+function structureRow(def) {
   const tiles = Array.from({ length: VARIANTS }, (_, k) => `
-    <figure class="asset-tile">${structureDrawing(def, { level, seed: seedOf(k) })}<figcaption>#${k}</figcaption></figure>`).join('');
-  const title = def.levels.length > 1 ? `${def.name} · ${levelDef.name ?? `Level ${level}`}` : def.name;
+    <figure class="asset-tile">${structureDrawing(def, { seed: seedOf(k) })}<figcaption>#${k}</figcaption></figure>`).join('');
+  const title = def.size ? `${def.name} · ${def.size}` : def.name;
   return `
     <div class="asset-row">
       <h3>${esc(title)} <span>${[def.blurb, footprintSize(def)].filter(Boolean).map(esc).join(' · ')}</span></h3>
@@ -89,7 +89,7 @@ export class AssetsPage {
       .map((g) => `
         <section>
           <h2>${esc(g.label)}</h2>
-          ${g.defs.map((def) => def.levels.map((l, i) => levelRow(def, l, i + 1)).join('')).join('')}
+          ${g.defs.map(structureRow).join('')}
         </section>`)
       .join('') + `
       <section>

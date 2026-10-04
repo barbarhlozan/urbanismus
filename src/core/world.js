@@ -19,11 +19,15 @@ import { riverField } from '../terrain/rivers.js';
 import { RoadNetwork, edgeKey } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
 import { validateRoute } from '../roads/routing.js';
-import { STRUCTURE_TYPES, footprintOffsets, maxLevel, newSeed } from '../../structures/index.js';
+import { STRUCTURE_TYPES, footprintOffsets, newSeed } from '../../structures/index.js';
 import { mulberry32 } from './random.js';
+import { upgrade, upgradeMarks } from './legacy.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 
-export const SAVE_VERSION = 3; // 3: railways on the fine grid
+// grade(): how finely a segment's climb is measured along it (grid units)
+const GRADE_STEP = 0.2;
+
+export const SAVE_VERSION = 4; // 3: railways on the fine grid; 4: no building levels (legacy.js)
 
 export class World {
   constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1 }) {
@@ -35,7 +39,7 @@ export class World {
     this.grid = new Grid(width, height);
     this.fine = new Grid(2 * width - 1, 2 * height - 1);
     this.terrain = new Terrain(this.grid);
-    this.structures = new Map();      // id -> { id, type, node, rotation, level, seed, data }
+    this.structures = new Map();      // id -> { id, type, node, rotation, seed, data }
     this.features = new Map();        // id -> { id, type, node, ox, oy, variant, scale }
     this.structureAtNode = new Map(); // node -> structure id (every footprint node)
     this.featureAtNode = new Map();   // node -> feature id
@@ -340,8 +344,10 @@ export class World {
     return r.hills;
   }
 
-  // Too steep at this main dot to put up a building (CONFIG.steep.build).
-  tooSteepToBuild(node) {
+  // Too steep at this main dot to put up a building (CONFIG.steep.build);
+  // never for a `type` laid out on any slope (parks).
+  tooSteepToBuild(node, type = null) {
+    if (STRUCTURE_TYPES[type]?.anySlope) return false;
     return this.slopeAt(node) > CONFIG.steep.build;
   }
 
@@ -361,11 +367,20 @@ export class World {
   }
 
   // How steeply a segment of a network climbs: metres per grid step of its
-  // length, between its two ends.
+  // length, at its steepest – measured piece by piece along it, so a stretch
+  // whose ends sit at the same height can't hide a steep climb in between.
   grade(layer, a, b) {
     const [ax, ay] = layer.pos(a), [bx, by] = layer.pos(b);
     const len = Math.hypot(bx - ax, by - ay);
-    return len ? Math.abs(this.elevation(bx, by) - this.elevation(ax, ay)) / len : 0;
+    if (!len) return 0;
+    const n = Math.max(2, Math.ceil(len / GRADE_STEP));
+    let worst = 0, prev = this.elevation(ax, ay);
+    for (let k = 1; k <= n; k++) {
+      const z = this.elevation(ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n);
+      worst = Math.max(worst, Math.abs(z - prev));
+      prev = z;
+    }
+    return worst / (len / n);
   }
 
   relief() {
@@ -448,7 +463,7 @@ export class World {
       if (this.railNear(n)) return { ok: false, reason: 'Railway' };
       const f = this.featureAt(n);
       if (f && FEATURE_TYPES[f.type]?.clearable === false) return { ok: false, reason: 'Blocked' };
-      if (this.tooSteepToBuild(n)) return { ok: false, reason: 'Too steep' };
+      if (this.tooSteepToBuild(n, type)) return { ok: false, reason: 'Too steep' };
     }
     if (this.fineCoveredBy(nodes).some((f) => this.paths.hasNode(f))) return { ok: false, reason: 'Footpath' };
     return { ok: true };
@@ -712,7 +727,7 @@ export class World {
     return false;
   }
 
-  // Reachable enough to work and grow: a road, or for `access: 'any'`
+  // Reachable enough to work: a road, or for `access: 'any'`
   // structures (homes, shops, parks…) a footpath is fine too – people walk
   // or cycle there, nobody drives.
   isServed(s) {
@@ -722,9 +737,9 @@ export class World {
 
   // ---------- mutations ----------
 
-  placeStructure(type, node, { rotation = 0, level = 1, seed = newSeed(), data = {} } = {}) {
+  placeStructure(type, node, { rotation = 0, seed = newSeed(), data = {} } = {}) {
     if (!this.canPlaceStructure(type, node, rotation).ok) return null;
-    const s = { id: this.nextId++, type, node, rotation, level, seed, data };
+    const s = { id: this.nextId++, type, node, rotation, seed, data };
     this._insertStructure(s);
     this.nodesOf(s).forEach((n) => this.clearFeaturesAt(n));
     STRUCTURE_TYPES[type].placed?.(this, s); // e.g. a station lays its track
@@ -738,19 +753,6 @@ export class World {
     this._unindexStructure(s);
     this.structures.delete(id);
     this.events.emit('structure:removed', s);
-    return true;
-  }
-
-  // manual = set by the player; locks automatic growth for this building.
-  setStructureLevel(id, level, { manual = false } = {}) {
-    const s = this.structures.get(id);
-    if (!s) return false;
-    const next = Math.min(Math.max(level, 1), maxLevel(STRUCTURE_TYPES[s.type]));
-    if (manual) s.data.locked = true;
-    if (next === s.level && !manual) return false;
-    s.level = next;
-    s.data.growth = 0;
-    this.events.emit('structure:changed', s);
     return true;
   }
 
@@ -771,14 +773,6 @@ export class World {
     this.events.emit('structure:changed', s);
   }
 
-  setGrowthLocked(id, locked) {
-    const s = this.structures.get(id);
-    if (!s) return;
-    s.data.locked = locked;
-    s.data.growth = 0;
-    this.events.emit('structure:changed', s);
-  }
-
   canConvert(id, type) {
     const s = this.structures.get(id);
     if (!s || s.type === type) return { ok: false, reason: 'Same type' };
@@ -790,8 +784,6 @@ export class World {
     const s = this.structures.get(id);
     this._unindexStructure(s);
     s.type = type;
-    s.level = Math.min(s.level, maxLevel(STRUCTURE_TYPES[type]));
-    s.data.growth = 0;
     this._insertStructure(s);
     this.nodesOf(s).forEach((n) => this.clearFeaturesAt(n));
     this.events.emit('structure:changed', s);
@@ -1095,11 +1087,11 @@ export class World {
     world.absorbSidewalks(false); // footpaths drawn beside roads before streets existed
 
     for (const s of data.structures) {
-      if (!STRUCTURE_TYPES[s.type]) continue;
       s.rotation ??= 0;
-      s.level ??= 1;
       s.seed ??= Math.imul(s.id, 2654435761) >>> 0;
       s.data ??= {};
+      if ((data.version ?? 1) < 4) upgrade(s); // buildings with levels: the structure each level is now
+      if (!STRUCTURE_TYPES[s.type]) continue;
       // Stations saved facing away from their track: turn them round.
       const rule = STRUCTURE_TYPES[s.type].canPlace;
       const fits = rule?.(world, world.footprintNodes(s.type, s.node, s.rotation), s.rotation);
@@ -1117,7 +1109,8 @@ export class World {
     world.nextId = data.nextId;
     world.time = data.time ?? 0;
     world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [] };
-    world.chronicle = { entries: data.chronicle?.entries ?? [], marks: data.chronicle?.marks ?? [] };
+    const marks = data.chronicle?.marks ?? [];
+    world.chronicle = { entries: data.chronicle?.entries ?? [], marks: (data.version ?? 1) < 4 ? upgradeMarks(marks) : marks };
     return world;
   }
 }

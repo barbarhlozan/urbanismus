@@ -1,4 +1,4 @@
-// Moving dots. Each structure spawns `agents` (per level) people who live or
+// Moving dots. Each structure spawns `agents` (its type's) people who live or
 // work there. Each time one sets off it picks an activity (config.activities,
 // weighted by def.sim.activities – 'resident' or 'worker'): stay in a while
 // longer, potter about in front of the house, a loop walk, a park, an errand,
@@ -33,7 +33,7 @@
 //
 // Trucks (config.trucks, agent.truck): drivers too, drawn as one long body
 // from its front (a.x / a.y) to its back (a.tx / a.ty). Industrial buildings keep a few
-// (perLevel) that export goods off the map – out through an exit, away a
+// (def.trucks, default 1) that export goods off the map – out through an exit, away a
 // while, back – or make service runs to businesses and other industry.
 // Delivery trucks also arrive from outside like visitors (updateDeliveries).
 // They don't use parking lots, and drive a bit slower than cars.
@@ -58,7 +58,7 @@
 //
 // The renderer only reads visible() and x / y / trip.mode.
 
-import { STRUCTURE_TYPES, levelOf, matches, codeOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES, matches, codeOf } from '../../structures/index.js';
 import { compass } from '../ui/annotations.js';
 import { findPath } from '../roads/pathfinding.js';
 import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, roadway } from '../roads/geometry.js';
@@ -107,12 +107,12 @@ export class AgentSystem {
     for (const s of world.structures.values()) this.sync(s);
   }
 
-  // Match the number of agents (and trucks) to the structure's current level.
+  // Match the number of agents (and trucks) to the structure's type.
   sync(s) {
     const def = STRUCTURE_TYPES[s.type];
-    const count = def ? levelOf(def, s).agents ?? 1 : 0;
+    const count = def ? def.agents ?? 1 : 0;
     const trucks = this.config.trucks;
-    const fleet = def && can('trucks') && trucks.homes.some((n) => matches(def, n)) ? trucks.perLevel[(s.level ?? 1) - 1] ?? 0 : 0;
+    const fleet = def && can('trucks') && trucks.homes.some((n) => matches(def, n)) ? def.trucks ?? 1 : 0;
     this.syncCount(s, '', count, () => this.homeDwell(s) * Math.random());
     this.syncCount(s, 't', fleet, () => trucks.firstTrip * Math.random(), { truck: true });
   }
@@ -180,7 +180,7 @@ export class AgentSystem {
     const workplaces = [];
     for (const s of this.world.structures.values()) {
       if (!this.world.isServed(s)) continue;
-      const stats = levelOf(STRUCTURE_TYPES[s.type], s).stats ?? {};
+      const stats = STRUCTURE_TYPES[s.type].stats ?? {};
       residents += stats.residents ?? 0;
       jobs += stats.jobs ?? 0;
       if (stats.jobs) workplaces.push(s);
@@ -860,7 +860,7 @@ export class AgentSystem {
       case 'errand':
         return this.goTo(a, home, this.config.activities.errands, 'errand');
       case 'work': {
-        const lives = levelOf(STRUCTURE_TYPES[home.type], home).stats?.residents;
+        const lives = STRUCTURE_TYPES[home.type].stats?.residents;
         if (lives && Math.random() < this.outboundShare()) { // not enough jobs in town
           const leave = this.planLeave(home, 'goes to work outside', true);
           if (leave) return this.begin(a, leave.plan, leave.dest);

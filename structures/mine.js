@@ -1,8 +1,8 @@
-// Coal mine, 4×3: pit -> colliery -> deep mine, after the Ostrava and
-// Kladno coalfields. Headframes (timber, steel trestle, concrete tower)
+// Coal mines, 4×3: a pit, a colliery and a deep mine, after the Ostrava
+// and Kladno coalfields. Headframes (timber, steel trestle, concrete tower)
 // over the shafts, winding houses, the pithead baths, a coal preparation
 // plant on a conveyor, and the spoil heap (halda) that keeps growing.
-// Tagged 'industrial', so growth rules, trucks and trips treat it as industry.
+// Tagged 'industrial' and 'mine', so trucks and trips treat them as industry.
 //
 // Local area covers x from about -0.4 to 3.4 and y from -0.4 to 2.4 (four
 // dots wide, three deep), front on -y: the pithead in front, the siding
@@ -123,123 +123,125 @@ function loadingBin(g, x, y) {
   g.box(x - 0.14, y - 0.09, 0.2, 0.28, 0.18, 0.16);
 }
 
-export default {
-  id: 'mine',
-  name: 'Coal mine',
-  blurb: 'Headframes, spoil heaps',
-  hotkey: 'r',
-  category: 'zone',
-  tags: ['industrial'],
+export const pit = {
+  id: 'pit',
+  name: 'Pit',
+  blurb: 'A timber headframe, a spoil heap',
+  category: 'work',
+  tags: ['industrial', 'mine'],
   code: 'M',
   footprint: [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [3, 1], [0, 2], [1, 2], [2, 2], [3, 2]],
   plot: { props: 'works', boundary: 0.7, kinds: ['tall'], density: 0.35 },
   sim: { destinations: ['residential'] },
+  stats: { jobs: 12 },
+  agents: 1,
+  yards: ['depot'],
+  draw(g) {
+    // a timber headframe over the shaft, the winding house and its
+    // boiler, the lamp room, tubs on a short track, the first heap
+    timberFrame(g, 0.3, 0.55, 0.6);
+    windingHouse(g, 0.75, 0.35, 0.4, 0.45, 0.22);
+    door(g, 0.95, 0.35, 0.06, 0.11);
+    ropes(g, 0.35, 0.69, 0.75, 0.22, [0.55]);
+    g.roofed(1.25, 0.4, 0, 0.32, 0.36, 0.2, { h: 0.1 });
+    g.windows(1.25, 0.4, 0.32, 0.36, 0, 0.2, 0.2, 0.1, { h: 0.45 });
+    stack(g, 1.68, 0.9, 0.75, 0.055);
+    g.roofed(-0.32, -0.32, 0, 0.46, 0.3, 0.15, { h: 0.12 });  // lamp room
+    g.windows(-0.32, -0.32, 0.46, 0.3, 0, 0.15, 0.15, 0.1, { h: 0.45 });
+    door(g, -0.1, -0.32, 0.06, 0.11);
+    wagons(g, 0.35, -0.15, 4);
+    heap(g, 1.25, -0.15, 0.1);
+    propYard(g, 1.9, 2.3, 0.0, 0.5);
+    // the ventilation shaft's fan house, tubs running out to the tip
+    g.roofed(-0.3, 1.45, 0, 0.36, 0.3, 0.18, { h: 0.1 });
+    stack(g, 0.2, 1.6, 0.45, 0.04);
+    wagons(g, 1.0, 1.75, 6);
+    pond(g, 2.5, -0.2, 3.3, 0.75);
+    halda(g, 2.75, 1.65, 0.5, 0.42);
+  },
+};
 
-  levels: [
-    {
-      name: 'Pit',
-      stats: { jobs: 12 },
-      agents: 1,
-      yards: ['depot'],
-      draw(g) {
-        // a timber headframe over the shaft, the winding house and its
-        // boiler, the lamp room, tubs on a short track, the first heap
-        timberFrame(g, 0.3, 0.55, 0.6);
-        windingHouse(g, 0.75, 0.35, 0.4, 0.45, 0.22);
-        door(g, 0.95, 0.35, 0.06, 0.11);
-        ropes(g, 0.35, 0.69, 0.75, 0.22, [0.55]);
-        g.roofed(1.25, 0.4, 0, 0.32, 0.36, 0.2, { h: 0.1 });
-        g.windows(1.25, 0.4, 0.32, 0.36, 0, 0.2, 0.2, 0.1, { h: 0.45 });
-        stack(g, 1.68, 0.9, 0.75, 0.055);
-        g.roofed(-0.32, -0.32, 0, 0.46, 0.3, 0.15, { h: 0.12 });  // lamp room
-        g.windows(-0.32, -0.32, 0.46, 0.3, 0, 0.15, 0.15, 0.1, { h: 0.45 });
-        door(g, -0.1, -0.32, 0.06, 0.11);
-        wagons(g, 0.35, -0.15, 4);
-        heap(g, 1.25, -0.15, 0.1);
-        propYard(g, 1.9, 2.3, 0.0, 0.5);
-        // the ventilation shaft's fan house, tubs running out to the tip
-        g.roofed(-0.3, 1.45, 0, 0.36, 0.3, 0.18, { h: 0.1 });
-        stack(g, 0.2, 1.6, 0.45, 0.04);
-        wagons(g, 1.0, 1.75, 6);
-        pond(g, 2.5, -0.2, 3.3, 0.75);
-        halda(g, 2.75, 1.65, 0.5, 0.42);
-      },
-    },
-    {
-      name: 'Colliery',
-      stats: { jobs: 36 },
-      agents: 2,
-      yards: ['depot', 'parking'],
-      grow: {
-        requires: [{ type: 'residential', count: 4, radius: 6 }],
-      },
-      draw(g) {
-        // pithead baths and offices along the front, a steel headframe, the
-        // winding house, the boiler house and its chimney, wagons on the
-        // siding and a spoil heap
-        g.roofed(-0.32, -0.36, 0, 1.62, 0.28, 0.26, { h: 0.12, hip: 0.1 });
-        g.windows(-0.32, -0.36, 1.62, 0.28, 0, 0.26, 0.13, 0.1);
-        door(g, 0.5, -0.36, 0.08, 0.12);
-        steelFrame(g, 0.25, 0.55, 1.25, 0.5);
-        windingHouse(g, 0.85, 0.3, 0.45, 0.55, 0.32);
-        door(g, 1.07, 0.3, 0.08, 0.14);
-        ropes(g, 0.3, 1.39, 0.85, 0.32, [0.515, 0.585]);
-        g.roofed(1.45, 0.35, 0, 0.36, 0.45, 0.3, { h: 0.1 });
-        g.windows(1.45, 0.35, 0.36, 0.45, 0, 0.3, 0.3, 0.11, { w: 0.4, h: 0.6 });
-        stack(g, 1.63, 1.02, g.range(1.25, 1.4), 0.075);
-        wagons(g, 1.45, -0.2, 3, true);
-        transformer(g, 2.25, 0.25);
-        propYard(g, -0.25, 0.75, 1.45, 1.75);
-        loadingBin(g, 1.2, 2.15);
-        wagons(g, -0.25, 2.15, 7, true);
-        g.roofed(2.2, -0.34, 0, 0.9, 0.3, 0.22, { h: 0.1, hip: 0.1 }); // lamp room and offices
-        g.windows(2.2, -0.34, 0.9, 0.3, 0, 0.22, 0.11, 0.1);
-        door(g, 2.65, -0.34, 0.07, 0.11);
-        pond(g, 2.55, 0.15, 3.3, 0.9);
-        halda(g, 2.8, 1.6, 0.55, 0.52);
-      },
-    },
-    {
-      name: 'Deep mine',
-      stats: { jobs: 75 },
-      agents: 3,
-      yards: ['depot', 'parking'],
-      grow: {
-        requires: [
-          { type: 'residential', count: 10, radius: 6 },
-          { type: 'residential', count: 3, radius: 6, minLevel: 2 },
-        ],
-        coveredBy: ['services'],
-      },
-      draw(g) {
-        // a concrete tower headframe over the main shaft, a steel one over
-        // the second with its winding house, the coal preparation plant fed
-        // by a conveyor gallery, two chimneys, the baths and a big heap
-        const th = towerFrame(g, 0.1, 0.55, g.range(1.4, 1.5));
-        steelFrame(g, 0.75, 1.0, 1.1, 0.42);
-        windingHouse(g, 1.2, 0.8, 0.36, 0.45, 0.3);
-        ropes(g, 0.8, 1.24, 1.2, 0.3, [0.965, 1.035]);
-        g.box(1.35, -0.32, 0, 0.95, 0.7, 0.62);
-        g.windows(1.35, -0.32, 0.95, 0.7, 0, 0.62, 0.155, 0.1, { ribbon: true });
-        g.box(1.6, -0.2, 0.62, 0.45, 0.45, 0.14);
-        g.windows(1.6, -0.2, 0.45, 0.45, 0.62, 0.76, 0.14, 0.1, { ribbon: true, h: 0.5 });
-        gallery(g, [0.23, 0.45, th * 0.55], [1.35, 0.1, 0.48], 0.06, 0.06);
-        g.box(-0.34, -0.36, 0, 1.24, 0.26, 0.26);
-        g.windows(-0.34, -0.36, 1.24, 0.26, 0, 0.26, 0.13, 0.1, { ribbon: true });
-        door(g, 0.3, -0.36, 0.08, 0.12);
-        for (const x of [1.95, 2.2]) stack(g, x, 0.72, g.range(1.45, 1.6), 0.08);
-        pipes(g, [1.7, 0.4], [1.7, 0.62], 0.2);
-        // the pit's own power station and its cooling tower, a conveyor
-        // from the preparation plant to the loading bin over the siding
-        coolingTower(g, 3.0, 0.15, g.range(0.9, 1.0), 0.26);
-        g.box(2.45, 0.55, 0, 0.5, 0.4, 0.42);
-        g.windows(2.45, 0.55, 0.5, 0.4, 0.06, 0.4, 0.34, 0.09, { w: 0.5, h: 0.85 });
-        loadingBin(g, 1.75, 2.1);
-        gallery(g, [1.85, 0.38, 0.5], [1.75, 1.95, 0.36], 0.06, 0.06);
-        wagons(g, -0.3, 2.1, 9, true);
-        propYard(g, -0.25, 1.1, 1.55, 1.8);
-        halda(g, 2.85, 1.75, 0.55, 0.6);
-      },
-    },
-  ],
+export const colliery = {
+  id: 'colliery',
+  name: 'Colliery',
+  blurb: 'Steel headframes, the pithead baths',
+  category: 'work',
+  tags: ['industrial', 'mine'],
+  code: 'M',
+  footprint: [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [3, 1], [0, 2], [1, 2], [2, 2], [3, 2]],
+  plot: { props: 'works', boundary: 0.7, kinds: ['tall'], density: 0.35 },
+  sim: { destinations: ['residential'] },
+  stats: { jobs: 36 },
+  agents: 2,
+  yards: ['depot', 'parking'],
+  draw(g) {
+    // pithead baths and offices along the front, a steel headframe, the
+    // winding house, the boiler house and its chimney, wagons on the
+    // siding and a spoil heap
+    g.roofed(-0.32, -0.36, 0, 1.62, 0.28, 0.26, { h: 0.12, hip: 0.1 });
+    g.windows(-0.32, -0.36, 1.62, 0.28, 0, 0.26, 0.13, 0.1);
+    door(g, 0.5, -0.36, 0.08, 0.12);
+    steelFrame(g, 0.25, 0.55, 1.25, 0.5);
+    windingHouse(g, 0.85, 0.3, 0.45, 0.55, 0.32);
+    door(g, 1.07, 0.3, 0.08, 0.14);
+    ropes(g, 0.3, 1.39, 0.85, 0.32, [0.515, 0.585]);
+    g.roofed(1.45, 0.35, 0, 0.36, 0.45, 0.3, { h: 0.1 });
+    g.windows(1.45, 0.35, 0.36, 0.45, 0, 0.3, 0.3, 0.11, { w: 0.4, h: 0.6 });
+    stack(g, 1.63, 1.02, g.range(1.25, 1.4), 0.075);
+    wagons(g, 1.45, -0.2, 3, true);
+    transformer(g, 2.25, 0.25);
+    propYard(g, -0.25, 0.75, 1.45, 1.75);
+    loadingBin(g, 1.2, 2.15);
+    wagons(g, -0.25, 2.15, 7, true);
+    g.roofed(2.2, -0.34, 0, 0.9, 0.3, 0.22, { h: 0.1, hip: 0.1 }); // lamp room and offices
+    g.windows(2.2, -0.34, 0.9, 0.3, 0, 0.22, 0.11, 0.1);
+    door(g, 2.65, -0.34, 0.07, 0.11);
+    pond(g, 2.55, 0.15, 3.3, 0.9);
+    halda(g, 2.8, 1.6, 0.55, 0.52);
+  },
+};
+
+export const deepMine = {
+  id: 'deep-mine',
+  name: 'Deep mine',
+  blurb: 'Concrete towers, a preparation plant',
+  category: 'work',
+  tags: ['industrial', 'mine'],
+  code: 'M',
+  trucks: 2,
+  footprint: [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [3, 1], [0, 2], [1, 2], [2, 2], [3, 2]],
+  plot: { props: 'works', boundary: 0.7, kinds: ['tall'], density: 0.35 },
+  sim: { destinations: ['residential'] },
+  stats: { jobs: 75 },
+  agents: 3,
+  yards: ['depot', 'parking'],
+  draw(g) {
+    // a concrete tower headframe over the main shaft, a steel one over
+    // the second with its winding house, the coal preparation plant fed
+    // by a conveyor gallery, two chimneys, the baths and a big heap
+    const th = towerFrame(g, 0.1, 0.55, g.range(1.4, 1.5));
+    steelFrame(g, 0.75, 1.0, 1.1, 0.42);
+    windingHouse(g, 1.2, 0.8, 0.36, 0.45, 0.3);
+    ropes(g, 0.8, 1.24, 1.2, 0.3, [0.965, 1.035]);
+    g.box(1.35, -0.32, 0, 0.95, 0.7, 0.62);
+    g.windows(1.35, -0.32, 0.95, 0.7, 0, 0.62, 0.155, 0.1, { ribbon: true });
+    g.box(1.6, -0.2, 0.62, 0.45, 0.45, 0.14);
+    g.windows(1.6, -0.2, 0.45, 0.45, 0.62, 0.76, 0.14, 0.1, { ribbon: true, h: 0.5 });
+    gallery(g, [0.23, 0.45, th * 0.55], [1.35, 0.1, 0.48], 0.06, 0.06);
+    g.box(-0.34, -0.36, 0, 1.24, 0.26, 0.26);
+    g.windows(-0.34, -0.36, 1.24, 0.26, 0, 0.26, 0.13, 0.1, { ribbon: true });
+    door(g, 0.3, -0.36, 0.08, 0.12);
+    for (const x of [1.95, 2.2]) stack(g, x, 0.72, g.range(1.45, 1.6), 0.08);
+    pipes(g, [1.7, 0.4], [1.7, 0.62], 0.2);
+    // the pit's own power station and its cooling tower, a conveyor
+    // from the preparation plant to the loading bin over the siding
+    coolingTower(g, 3.0, 0.15, g.range(0.9, 1.0), 0.26);
+    g.box(2.45, 0.55, 0, 0.5, 0.4, 0.42);
+    g.windows(2.45, 0.55, 0.5, 0.4, 0.06, 0.4, 0.34, 0.09, { w: 0.5, h: 0.85 });
+    loadingBin(g, 1.75, 2.1);
+    gallery(g, [1.85, 0.38, 0.5], [1.75, 1.95, 0.36], 0.06, 0.06);
+    wagons(g, -0.3, 2.1, 9, true);
+    propYard(g, -0.25, 1.1, 1.55, 1.8);
+    halda(g, 2.85, 1.75, 0.55, 0.6);
+  },
 };

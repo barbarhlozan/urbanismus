@@ -4,7 +4,7 @@
 
 import { smoothPolyline } from '../roads/geometry.js';
 import { Painter } from './painter.js';
-import { levelOf, drawSeed, tiltOf, roadFront } from '../../structures/index.js';
+import { drawSeed, tiltOf, roadFront } from '../../structures/index.js';
 import { fitSite } from './lots.js';
 import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
@@ -79,6 +79,27 @@ export class OverlayKit {
     return `<path class="cross-halo" d="${sign}"/><path class="steep-sign" d="${sign}"/><path class="steep-wedge" d="${wedge}"/>`;
   }
 
+  // Erase mode, over what would go: the eraser from the Erase icon
+  // (icons.js, without its smudge), tilted, pen-drawn, filled with the
+  // paper so it reads over anything.
+  eraserAt(x, y, size = 0.16) {
+    const [cx, cy] = this.project(x, y);
+    const s = (size * this.camera.tile) / 11; // the icon's 32-box, around its middle
+    const k = 1 / this.camera.zoom, seed = seedOf(x, y, 11);
+    const p = ([px, py]) => [cx + (px - 16.2) * s, cy + (py - 18.2) * s];
+    const body = [[6, 22], [20.1, 7.9], [26.5, 14.3], [12.4, 28.4]].map(p);
+    const [a, b] = [p([10.9, 17.1]), p([17.3, 23.5])]; // where the rubber tip starts
+    const outline = body.map((q, i) => sketchLine(q, body[(i + 1) % 4], seed + i, { k, over: 1 })).join('')
+      + sketchLine(a, b, seed + 5, { k, over: 0.5 });
+    const fill = `M${body.map(([qx, qy]) => `${r2(qx)} ${r2(qy)}`).join('L')}Z`;
+    const tip = `M${[body[0], a, b, body[3]].map(([qx, qy]) => `${r2(qx)} ${r2(qy)}`).join('L')}Z`;
+    // data-anim: it pops up once where it lands, not again on every redraw
+    // of a pan, and shrinks away when it goes (Renderer.keepAnimating, letGo)
+    return `<g class="eraser-mark" data-anim="erase-${seed}">`
+      + `<path class="cross-halo" d="${outline}"/><path class="eraser-body" d="${fill}"/>`
+      + `<path class="eraser-tip" d="${tip}"/><path class="eraser" d="${outline}"/></g>`;
+  }
+
   steep(node, size) {
     return node < 0 ? '' : this.steepAt(...this.world.grid.xy(node), size);
   }
@@ -100,23 +121,23 @@ export class OverlayKit {
   // footprint's middle, so the animated one scales about the building's
   // base; data-anim keeps the animation going across overlay redraws
   // (Renderer.keepAnimating) and plays the exit (Renderer.letGo).
-  ghost(def, node, rotation = 0, level = 1, seed = 1, { blocked = false } = {}) {
+  ghost(def, node, rotation = 0, seed = 1, { blocked = false } = {}) {
     const [x, y] = this.world.grid.xy(node);
-    const instance = { type: def.id, node, rotation, level, seed, data: {} };
+    const instance = { type: def.id, node, rotation, seed, data: {} };
     const painter = new Painter(this.camera, { x, y, z: this.world.terrain.heightAt(x, y) }, rotation, drawSeed(instance));
     // stays square, like the built one (Renderer.buildStructure)
     const nodes = this.world.footprintNodes(def.id, node, rotation).filter((n) => n >= 0).map((n) => this.world.grid.xy(n));
     painter.rigid = nodes.length ? [nodes.reduce((a, p) => a + p[0], 0) / nodes.length, nodes.reduce((a, p) => a + p[1], 0) / nodes.length] : [x, y];
     if (def.site) {
       painter.setSite(fitSite(this.world, this.config, this.world.siteArea(def.id, node, rotation)));
-      const s = { id: -1, type: def.id, node, rotation, level, seed, data: {} };
+      const s = { id: -1, type: def.id, node, rotation, seed, data: {} };
       painter.setSitePaths(this.world.sitePaths(s));
     }
     painter.setTilt(tiltOf(def, instance, undefined, this.world));
     painter.roadGap = (def.footprint ?? [[0, 0]]).length === 1 ? roadFront(this.world, instance).gap : 1;
-    levelOf(def, instance).draw(painter, instance);
+    def.draw(painter, instance);
     const [sx, sy] = this.camera.project(...painter.rigid, this.world.terrain.heightAt(...painter.rigid)).map(r2);
-    const key = `ghost:${def.id}:${node}:${rotation}:${level}:${seed}:${blocked ? 1 : 0}`;
+    const key = `ghost:${def.id}:${node}:${rotation}:${seed}:${blocked ? 1 : 0}`;
     return `<g transform="translate(${sx} ${sy})"><g class="ghost-anim" data-anim="${key}">`
       + `<g class="ghost${blocked ? ' blocked' : ''}" transform="translate(${-sx} ${-sy})">${painter.toGroundSVG()}${painter.toSVG()}</g></g></g>`;
   }
@@ -159,14 +180,5 @@ export class OverlayKit {
     // the camera from the Photo button up top, standing on the spot
     const s = 0.24 * (this.camera.tile / 32);
     return out + `<g class="photo-cam" transform="translate(${r2(sx - 8 * s)} ${r2(sy - 12.6 * s)}) scale(${r2(s)})">${controlArt('photo')}</g>`;
-  }
-
-  // Outline of a rectangle on the ground (world coordinates).
-  groundRect(x0, y0, x1, y1, cls = 'coverage') {
-    const d = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y], i) => {
-      const [sx, sy] = this.project(x, y);
-      return `${i ? 'L' : 'M'}${r2(sx)} ${r2(sy)}`;
-    }).join('') + 'Z';
-    return `<path class="${cls}" d="${d}"/>`;
   }
 }

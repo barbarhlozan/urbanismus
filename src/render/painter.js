@@ -70,7 +70,7 @@
 //
 // Joins – g.join = { left, right }: true where this building shares a wall
 // with its neighbour on the local -x (left) / +x (right) side. Draw up to
-// x = ∓0.5 there (levels opt in with `join`, see structures/index.js).
+// x = ∓0.5 there (structures opt in with `join`, see structures/index.js).
 //
 // Spots – g.spot(x, y, dir) marks a parking stall (cars are drawn and simulated
 // separately, see src/sim/parking.js).
@@ -108,7 +108,7 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //   floors  draw g.floors() lines (storey bands); off for the sparer sketch look
 //   roads   how far roads, paths and what moves on them stray from the ruler
 //           line, in grid units (0 = straight; see wobble())
-//   tilt    houses stand askew by up to this many degrees either way (levels
+//   tilt    houses stand askew by up to this many degrees either way (types
 //           with `tilt: true`, see tiltOf in structures/index.js; 0 = square)
 export const LOOK = {
   eave: 0.03, fascia: 0, sill: false, tall: true, sketch: 5,
@@ -593,8 +593,12 @@ export class Painter {
       this._footOf(points, n);
     }
     if (!this._facing(n, points[0])) return this;
+    // SUN.walls 'tone': a wall turned away from the sun is just a shade
+    // darker (styles.css .shade-1 / .shade-2), no strokes of its own
+    const tone = opts.shadow !== false && SUN.walls === 'tone' ? this._shadeShare(n) : 0;
+    if (tone > 0) opts = { ...opts, cls: [opts.cls, tone < 1 ? 'shade-1' : 'shade-2'].filter(Boolean).join(' ') };
     this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
-    if (opts.shadow !== false) this._shade(points, n);
+    if (opts.shadow !== false && SUN.walls !== 'tone') this._shade(points, n);
     return this;
   }
 
@@ -603,6 +607,16 @@ export class Painter {
   // ground's), stopping short of the wall's edges by a seeded amount. A
   // wall only a little turned away gets only some of them. Drawn right after
   // the wall, so what is drawn on it later (ink windows) covers them.
+  // How much a face with local normal n is turned away from the sun (0 =
+  // not at all, or not a wall, 1 = fully shaded; see shadows.js shadeShare).
+  _shadeShare(n) {
+    if (!SUN.on || !SUN.walls) return 0;
+    const w = this._wallNormal(n);
+    if (!w) return 0;
+    this._sun ??= sunFor(this.camera);
+    return shadeShare(awayFrom(w, this._sun), this._sun);
+  }
+
   _shade(points, n) {
     if (!SUN.on || !SUN.walls) return;
     const w = this._wallNormal(n);
@@ -640,7 +654,7 @@ export class Painter {
   // counter-clockwise), on a wall that is lit – a shaded one is hatched all
   // over already.
   _eaveBand(a, b, zt) {
-    if (!SUN.on || !SUN.walls || !SUN.eaveBand) return;
+    if (!SUN.on || !SUN.walls || SUN.walls === 'tone' || !SUN.eaveBand) return;
     const pts = [[a[0], a[1], zt - SUN.eaveBand], [b[0], b[1], zt - SUN.eaveBand], [b[0], b[1], zt], [a[0], a[1], zt]];
     const n = newellNormal(pts);
     if (!this._facing(n, pts[0])) return;

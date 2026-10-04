@@ -51,7 +51,8 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //            illustrator keeps the light over one shoulder: rotating the
 //            view keeps shadows falling the same way on screen
 //   length   shadow length on the ground per unit of height (1 = 45° sun)
-//   ground   'cast', 'hatch' or 'scribble' (see above)
+//   ground   'cast', 'hatch', 'scribble' (see above), 'tone' (one flat
+//            shape, no strokes) or 'none'
 //   low      faces lower than this (paving, lawns) cast nothing
 //   gap      screen px the strokes keep apart at the least, as tiers drop out
 //   drift    how far a stroke bows off its line, grid units of the map's
@@ -68,7 +69,9 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //   fade     how fast the rows thin out and shorten away from the wall
 //            (0 = not at all)
 // walls:
-//   walls    shade walls turned away from the sun (Painter._shade)
+//   walls    shade walls turned away from the sun: true – hatched
+//            (Painter._shade), 'tone' – just filled a shade darker
+//            (styles.css .shade-1 / .shade-2, no strokes), false – not
 //   wallAngle the strokes' direction on screen (a steep lean, apart from
 //            the ground's)
 //   wallSpacing between the stroke lines, across them on screen, grid units
@@ -90,7 +93,7 @@ export const SUN = {
   on: true,
   fall: 150,
   length: 0.55,
-  ground: 'hatch',
+  ground: 'none',
   low: 0.03,
   gap: 2.6,
   drift: 0.002,
@@ -100,7 +103,7 @@ export const SUN = {
   reach: 0.8,
   rowGap: 0.012,
   fade: 1,
-  walls: true,
+  walls: 'tone',
   wallAngle: -68,
   wallSpacing: 0.004,
   wallFrom: 0.1,
@@ -391,8 +394,12 @@ function scribbleFeet(feet, project, sun, d) {
 // ground point -> scene px, with the object's relief and warp.
 export function shadowPaths({ casts = [], feet = [], project }, sun) {
   const d = ['', '', '', ''];
-  if (!sun.on) return d;
-  if (sun.ground === 'hatch') hatchFeet(feet, project, sun, d);
+  if (!sun.on || sun.ground === 'none') return d;
+  if (sun.ground === 'tone') {
+    // one flat shape: the hulls together (as subpaths of one path, filled
+    // nonzero, they read as their union), the building covering its part
+    for (const h of shadowHulls(casts, sun)) d[0] += `M${h.map(([x, y]) => project(x, y).map(r2).join(' ')).join('L')}Z`;
+  } else if (sun.ground === 'hatch') hatchFeet(feet, project, sun, d);
   else if (sun.ground === 'scribble') scribbleFeet(feet, project, sun, d);
   else {
     const polys = shadowHulls(casts, sun).map((h) => h.map(([x, y]) => project(x, y)));
@@ -404,6 +411,6 @@ export function shadowPaths({ casts = [], feet = [], project }, sun) {
 // An object's ground shadow as SVG markup: a <path> per density tier.
 export function shadowSVG(shade, sun) {
   return shadowPaths(shade, sun)
-    .map((d, n) => (d ? `<path d="${d}" class="shadow${tierClass(n)}"/>` : ''))
+    .map((d, n) => (d ? `<path d="${d}" class="shadow${sun.ground === 'tone' ? ' tone' : tierClass(n)}"/>` : ''))
     .join('');
 }

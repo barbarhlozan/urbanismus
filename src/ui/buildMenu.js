@@ -6,6 +6,10 @@
 // name with its options (size, rotate, another look…) beside it and an × to
 // put it down.
 //
+// Keys (ui/keys.js): the number row opens a group, the letter rows pick a
+// tool in the open group, its tiles in reading order – the keys shown on
+// the tabs and tiles, given out again whenever what's unlocked changes.
+//
 // Clicking the active tool again puts it down: that's select mode (the
 // default tool has no entry). Picking a tool (here or by its key) folds the
 // panel, to give the map back; on a wide screen it opens again when the
@@ -14,14 +18,14 @@
 import { CATEGORIES } from '../../structures/index.js';
 import { toolIcon } from './icons.js';
 import { isNarrow } from './device.js';
-import { keyLabel } from './keys.js';
+import { keyLabel, GROUP_KEYS, SLOT_KEYS } from './keys.js';
 import { corner, fadeIn, cascade } from './motion.js';
 
 const FOLD_KEY = 'urbanismus.buildMenuFolded';
 const GROUP_KEY = 'urbanismus.buildMenuGroup';
 
 // the tool whose drawing stands for each group on its tab
-const TAB_ICON = { transport: 'road', zone: 'build:residential', civic: 'build:park', heritage: 'build:chapel' };
+const TAB_ICON = { transport: 'road', housing: 'build:house', work: 'build:factory', amenities: 'build:jednota', spaces: 'build:green', heritage: 'build:chapel' };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -45,7 +49,7 @@ export class BuildMenu {
     this.group = this.groups.some((g) => g.id === saved) ? saved : this.groups[0]?.id;
 
     const tile = (t) => `
-      <button class="bm-tool" data-tool="${t.id}" data-group="${t.group ?? ''}" title="${esc(t.label)}${t.hotkey ? ` (${esc(keyLabel(t.hotkey))})` : ''}">
+      <button class="bm-tool" data-tool="${t.id}" data-group="${t.group ?? ''}" title="${esc(t.label)}${t.hotkey ? ` (${esc(keyLabel(t.hotkey))})` : ''}" data-label="${esc(t.label)}">
         <span class="bm-icon">${toolIcon(t)}</span>
         <span class="bm-name">${esc(t.label)}</span>
         <span class="key">${esc(t.hotkey ? keyLabel(t.hotkey) : '')}</span>
@@ -61,7 +65,7 @@ export class BuildMenu {
       <div class="bm-panel">
         <div class="bm-head">
           <div class="bm-tabs" role="tablist">${this.groups.map((c) => `
-            <button class="bm-tab" role="tab" data-tab="${c.id}" title="${esc(c.label)}" aria-label="${esc(c.label)}">${tabIcon(c)}</button>`).join('')}
+            <button class="bm-tab" role="tab" data-tab="${c.id}" title="${esc(c.label)}" aria-label="${esc(c.label)}">${tabIcon(c)}<span class="key"></span></button>`).join('')}
           </div>
           <button class="close bm-fold" aria-label="Fold the build menu">–</button>
         </div>
@@ -124,6 +128,7 @@ export class BuildMenu {
     });
 
     this.showGroup(false);
+    this.giveKeys(this.groups);
     let folded = isNarrow();
     try {
       const saved = localStorage.getItem(FOLD_KEY);
@@ -140,6 +145,46 @@ export class BuildMenu {
     const open = this.groups.filter((g) => this.el.querySelector(`.bm-tools[data-group="${g.id}"] .bm-tool:not(.locked)`));
     for (const t of this.el.querySelectorAll('.bm-tab')) t.classList.toggle('locked', !open.some((g) => g.id === t.dataset.tab));
     if (open.length && !open.some((g) => g.id === this.group)) this.openGroup(open[0].id, false);
+    this.giveKeys(open);
+  }
+
+  // Keys for what's shown: a number for each open group's tab, and in each
+  // group a letter for each tool, in reading order.
+  giveKeys(open) {
+    this.groupKeys = new Map(open.map((g, i) => [GROUP_KEYS[i], g.id]));
+    this.slotKeys = new Map(); // group id -> Map(key -> tool id)
+    for (const tab of this.el.querySelectorAll('.bm-tab')) {
+      const k = [...this.groupKeys].find(([, id]) => id === tab.dataset.tab)?.[0];
+      tab.querySelector('.key').textContent = k ?? '';
+      tab.title = k ? `${tab.getAttribute('aria-label')} (${k})` : tab.getAttribute('aria-label');
+    }
+    for (const g of this.groups) {
+      const keys = new Map();
+      const tiles = [...this.el.querySelectorAll(`.bm-tools[data-group="${g.id}"] .bm-tool:not(.locked)`)];
+      tiles.forEach((b, i) => {
+        const k = SLOT_KEYS[i];
+        if (k) keys.set(k, b.dataset.tool);
+        b.querySelector('.key').textContent = k ? keyLabel(k) : '';
+        b.title = k ? `${b.dataset.label} (${keyLabel(k)})` : b.dataset.label;
+      });
+      this.slotKeys.set(g.id, keys);
+    }
+  }
+
+  // A key pressed on the map: a number opens its group (and the panel), a
+  // letter picks up that tool of the open group (or puts it down if it's
+  // the one in hand). Returns whether it was one of the menu's keys.
+  key(k) {
+    const group = this.groupKeys?.get(k);
+    if (group) {
+      this.openGroup(group);
+      if (this.folded) this.fold(false);
+      return true;
+    }
+    const id = this.slotKeys?.get(this.group)?.get(k);
+    if (!id) return false;
+    this.tools.use(this.tools.active?.id === id ? this.tools.defaultId : id);
+    return true;
   }
 
   get folded() {

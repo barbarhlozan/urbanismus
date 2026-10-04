@@ -84,8 +84,10 @@ function makeHills(seed, k = 1) {
 // Contour polylines over box = [x0, y0, x1, y1] in world units.
 // Returns [{ level, tier, points: [[x, y]…] }], tier 0 = index line,
 // 1 = every other line, 2 = the rest. `skip(x, y)` hides segments
-// (e.g. over water), breaking the line there.
-export function contours(elev, [x0, y0, x1, y1], { step, interval, index }, skip = null) {
+// (e.g. over water), breaking the line there. `only`: just the line at
+// that level (each level is a pass over every sample, and a field that
+// runs far below or above the one wanted would have hundreds of them).
+export function contours(elev, [x0, y0, x1, y1], { step, interval, index, only = null }, skip = null) {
   const nx = Math.ceil((x1 - x0) / step) + 1;
   const ny = Math.ceil((y1 - y0) / step) + 1;
   const v = new Float32Array(nx * ny);
@@ -100,7 +102,9 @@ export function contours(elev, [x0, y0, x1, y1], { step, interval, index }, skip
   }
 
   const out = [];
-  for (let k = Math.ceil(lo / interval); k * interval <= hi; k++) {
+  const [kLo, kHi] = only == null ? [Math.ceil(lo / interval), Infinity] : [only / interval, only / interval];
+  for (let k = kLo; k <= kHi && k * interval <= hi; k++) {
+    if (k * interval < lo) continue;
     const level = k * interval;
     // Edge ids: horizontal edge (i, j)-(i+1, j) = 2 * (j * nx + i),
     // vertical edge (i, j)-(i, j+1) = 2 * (j * nx + i) + 1.

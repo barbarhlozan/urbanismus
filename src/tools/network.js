@@ -8,9 +8,9 @@
 import { planRoute, validateRoute, BEND } from '../roads/routing.js';
 import { isTouch } from '../ui/device.js';
 
-// options: { kind, id (default: kind), lane (roads: build lanes), label, hotkey, group (Build menu group), blurb, fineGrid, curve (config key), hoverRadius }
+// options: { kind, id (default: kind), lane (roads: build lanes), label, group (Build menu group), blurb, fineGrid, curve (config key), hoverRadius }
 export function createNetworkTool({ world, config }, options) {
-  const { kind, label, hotkey, lane = false, fineGrid = false, hoverRadius = 0.32 } = options;
+  const { kind, label, lane = false, fineGrid = false, hoverRadius = 0.32 } = options;
   const layer = world.networks[kind];
   const curve = config[options.curve ?? kind];
   const noun = label.toLowerCase();
@@ -60,7 +60,6 @@ export function createNetworkTool({ world, config }, options) {
     group: options.group,
     blurb: options.blurb ?? '',
     label,
-    hotkey,
     fineGrid,
     // the start dot is set with one tap; the end dot needs a confirming tap
     touchConfirm: () => start >= 0,
