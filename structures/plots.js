@@ -6,16 +6,24 @@
 // A structure type (or a level) sets `plot`:
 //   props      a style from PLOT_STYLES below
 //   boundary   chance (0–1) that the plot has a boundary line
+//   lone       the same with no other building around (default: boundary
+//              times LONE – out in the open few bother; 'tall' security
+//              fences stay), see boundaryChance()
 //   kinds      boundary kinds it may pick from: 'fence', 'hedge', 'tall'
 //
 // Coordinates: plot painters use world axes, (0, 0) = the building's anchor dot.
 
 import { tree, bush, shed, bench, bins, crates, pallets, bricks, cableDrum, concreteRings, woodpile, trailer, fenceAlong, hedgeAlong, carpetRack, dryingFrame, sandpit, climbingFrame, barrels, timber, heap, tank, transformer } from './kit.js';
 
+// Share of the trees a garden would have that it gets (the rest of their
+// spots stay open lawn): fewer, so a street of gardens isn't too busy.
+// The garden front yard (yards.js) uses it too.
+export const GARDEN_TREES = 0.8;
+
 // Weighted props per style: [weight, radius, draw(g, x, y)]
 export const PLOT_STYLES = {
   garden: [
-    [5, 0.07, (g, x, y) => tree(g, x, y, g.range(0.75, 1.05))],
+    [5, 0.07, (g, x, y) => g.chance(GARDEN_TREES) && tree(g, x, y, g.range(0.75, 1.05))],
     [4, 0.045, (g, x, y) => bush(g, x, y, g.range(0.03, 0.045))],
     [1, 0.09, (g, x, y) => shed(g, x, y)],
   ],
@@ -53,6 +61,17 @@ export const PLOT_STYLES = {
     [1, 0.06, (g, x, y) => transformer(g, x, y)],
   ],
 };
+
+// Share of the boundary chance kept by a structure with no other building
+// around (Renderer.isAlone), unless its plot sets `lone`.
+export const LONE = 0.25;
+
+export function boundaryChance(plotDef, alone) {
+  const chance = plotDef.boundary ?? 0;
+  if (!alone) return chance;
+  if (plotDef.lone != null) return plotDef.lone;
+  return plotDef.kinds?.includes('tall') ? chance : chance * LONE;
+}
 
 const BOUNDARY = {
   fence: (g, pts) => fenceAlong(g, pts, 0.06),

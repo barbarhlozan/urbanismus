@@ -151,17 +151,7 @@ export const tvTower = {
   agents: 0,
   yards: ['trees', 'garden'],
   draw(g) {
-    const kind = g.pick(['hyperboloid', 'shaft', 'lattice', 'lookout']);
-    if (kind === 'hyperboloid') {
-      // Ještěd-like: a hotel and transmitter in one flaring
-      // hyperboloid tapering into a needle, drawn as a smooth body with
-      // the hotel's floors as rings round its foot
-      g.lathe(0, 0, 0, [
-        [0.26, 0], [0.235, 0.065], [0.2, 0.13], [0.165, 0.195], [0.13, 0.32], [0.1, 0.48],
-        [0.072, 0.66], [0.053, 0.83], [0.039, 1.0], [0.026, 1.2], [0.014, 1.48], [0, 1.95],
-      ], 24, { smooth: true, rings: [1, 2, 3] });
-      return;
-    }
+    const kind = g.pick(['shaft', 'lattice', 'lookout']);
     if (kind === 'shaft') {
       // concrete TV tower: a tapering shaft, the transmitter cabin with a
       // glazed gallery near the top, an aerial mast, the station house
@@ -246,7 +236,7 @@ export const stadium = {
   blurb: 'Sports ground',
   // 3×2: local x from about -0.4 to 2.4, y from -0.4 to 1.4
   footprint: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
-  plot: { props: 'green', boundary: 0.5, kinds: ['fence', 'hedge'], density: 0.3 },
+  plot: { props: 'green', boundary: 0.5, lone: 0.5, kinds: ['fence', 'hedge'], density: 0.3 }, // fenced in, wherever it is
   stats: { jobs: 4 },
   agents: 2,
   yards: ['parking', 'trees'],

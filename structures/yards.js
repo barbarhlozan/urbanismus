@@ -10,6 +10,7 @@
 //   yard.profile        that edge as a polyline [[x, y]…]
 //   yard.outline        polygon of the whole yard
 //   yard.flat           true if the edge is straight
+//   yard.alone          true if no other building stands around (Renderer.isAlone)
 // Stay inside the outline, and leave a way through from the door (x = 0) to
 // the road – the yard replaces the plain driveway.
 //
@@ -18,6 +19,7 @@
 // `cars: true` styles are only for buildings with a road (see yardOf).
 
 import { tree, bush, hedge, fenceAlong, bench, crates, bricks, cableDrum, concreteRings, woodpile, trailer, lamp, paving, garages, flowerBed, kiosk, bikeRack } from './kit.js';
+import { LONE, GARDEN_TREES } from './plots.js';
 
 const spots = (x0, x1, step) => {
   const out = [];
@@ -54,13 +56,15 @@ export const YARDS = {
       g.groundLine([[-0.035, -0.18], [-0.035, f]]);
       g.groundLine([[0.035, -0.18], [0.035, f]]);
       const useHedge = yard.flat && g.chance(0.5);
-      for (const [a, b] of [[x0 + 0.05, -0.09], [0.09, x1 - 0.05]]) {
+      // with no building around, mostly left open to the road (LONE)
+      const fenced = !yard.alone || g.chance(LONE);
+      for (const [a, b] of fenced ? [[x0 + 0.05, -0.09], [0.09, x1 - 0.05]] : []) {
         if (useHedge) hedge(g, a, b, yard.frontAt(a) + 0.06);
         else fenceAlong(g, edgeLine(yard, 0.06, a, b));
       }
       for (const side of [-1, 1]) {
         const x = side * g.range(0.18, (side < 0 ? -x0 : x1) - 0.1);
-        const tall = g.chance(0.7);
+        const tall = g.chance(0.7 * GARDEN_TREES);
         if (room(yard, x, 0.12) < 0.08) continue;
         const y = (yard.frontAt(x) + 0.12 + y1) / 2 + g.range(-0.04, 0.04);
         if (tall) tree(g, x, y, g.range(0.8, 1.1));

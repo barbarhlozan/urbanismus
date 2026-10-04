@@ -129,7 +129,7 @@ export default {
   code: 'KP',
   footprint: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
   sim: { destinations: ['residential'] },
-  plot: { props: 'green', boundary: 0.8, kinds: ['fence', 'hedge'], density: 0.35 },
+  plot: { props: 'green', boundary: 0.8, lone: 0.8, kinds: ['fence', 'hedge'], density: 0.35 }, // fenced in, wherever it is
   stats: { jobs: 2 },
   agents: 2,
   yards: ['trees', 'garden'],
