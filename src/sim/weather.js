@@ -1,6 +1,7 @@
-// The weather: one for the whole map. It holds for a while, then moves one
-// step along config.weather.kinds (fair, cloudy, overcast, rain – so rain
-// always comes with clouds first and clears through overcast). The state is
+// The weather: one for the whole map. It holds for a while (config.weather
+// .lasts), then turns to one of the kinds that may follow it, by the weights
+// in config.weather.next – mostly cloudy, rain only out of overcast, a storm
+// only out of rain, so it always clouds over first. The state is
 // world.weather = { kind, until, n }: `until` in world.time, `n` how many
 // changes there have been. What comes next depends only on the world's seed
 // and n, so a town's weather is the same however it is played.
@@ -38,12 +39,11 @@ export class WeatherSystem {
   update() {
     const w = this.world.weather;
     while (this.world.time >= w.until) {
-      const { kinds } = this.config;
-      const i = kinds.indexOf(w.kind);
-      const options = [kinds[i - 1], kinds[i + 1]].filter(Boolean);
+      const options = Object.entries(this.config.next[w.kind] ?? { [this.config.start]: 1 });
       const rnd = this.rnd(w);
       rnd(); // (the first draw is the length of the spell that just ended)
-      w.kind = options[Math.floor(rnd() * options.length)];
+      let r = rnd() * options.reduce((sum, [, p]) => sum + p, 0);
+      w.kind = options.find(([, p]) => (r -= p) < 0)?.[0] ?? options[0][0];
       w.n++;
       w.until += this.lasts(w);
     }

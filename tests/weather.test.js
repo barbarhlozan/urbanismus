@@ -18,12 +18,30 @@ function run(world, seconds, step = 5) {
   return seen;
 }
 
-test('the weather changes only to a neighbouring kind', () => {
+test('the weather turns only to what may follow it', () => {
   const seen = run(flatWorld(), 40000);
   assert.ok(seen.length > 5, 'it changes over time');
   for (let i = 1; i < seen.length; i++) {
-    assert.equal(Math.abs(kinds.indexOf(seen[i]) - kinds.indexOf(seen[i - 1])), 1);
+    assert.ok(seen[i] in CONFIG.weather.next[seen[i - 1]], `${seen[i - 1]} -> ${seen[i]}`);
   }
+});
+
+test('it is mostly cloudy, and rains now and then', () => {
+  const time = {};
+  for (let seed = 1; seed <= 10; seed++) {
+    const world = flatWorld();
+    world.seed = seed;
+    const sys = new WeatherSystem(world, CONFIG);
+    for (let t = 0; t < 100000; t += 10) {
+      world.time = t;
+      sys.update();
+      time[world.weather.kind] = (time[world.weather.kind] ?? 0) + 1;
+    }
+  }
+  const most = Object.entries(time).sort((a, b) => b[1] - a[1])[0][0];
+  assert.equal(most, 'cloudy');
+  const total = Object.values(time).reduce((a, b) => a + b);
+  assert.ok((time.rain + time.storm) / total < 0.25);
 });
 
 test('the same seed gives the same weather', () => {
@@ -45,7 +63,7 @@ test('the weather survives saving and loading, and old saves start fair', () => 
   const json = JSON.parse(JSON.stringify(world.toJSON()));
   assert.deepEqual(World.fromJSON(json).weather, world.weather);
   delete json.weather;
-  assert.equal(World.fromJSON(json).weather.kind, 'fair');
+  assert.equal(World.fromJSON(json).weather.kind, 'fair'); // (World's own default, before the system starts it)
 });
 
 test('set() makes the weather so, for a spell', () => {

@@ -162,7 +162,6 @@
 # As it is, everything is open.
 
 lock assets
-lock debug
 #lock all
 #unlock road
 #unlock footpath

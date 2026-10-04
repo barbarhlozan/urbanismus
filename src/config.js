@@ -180,8 +180,19 @@ export const CONFIG = {
   // simulated seconds [shortest, longest]; src/sim/weather.js.
   weather: {
     kinds: ['fair', 'cloudy', 'overcast', 'rain', 'storm'],
-    start: 'fair',
-    lasts: { fair: [600, 1500], cloudy: [300, 800], overcast: [240, 600], rain: [180, 500], storm: [90, 240] },
+    start: 'cloudy',
+    // what can follow each kind, and how likely (the weights are shares) –
+    // mostly cloudy, now and then clearing up or clouding over into rain,
+    // a storm only out of rain. Over a long time this comes to roughly
+    // cloudy 50 %, fair 19 %, overcast 15 %, rain 14 %, storm 2 %.
+    next: {
+      fair: { cloudy: 1 },
+      cloudy: { fair: 0.45, overcast: 0.55 },
+      overcast: { cloudy: 0.5, rain: 0.5 },
+      rain: { overcast: 0.5, cloudy: 0.2, storm: 0.3 },
+      storm: { rain: 1 },
+    },
+    lasts: { fair: [400, 900], cloudy: [500, 1100], overcast: [150, 400], rain: [240, 540], storm: [120, 260] },
     // how much the sun shades the walls turned away from it (1 full, 0 none):
     // under a grey sky there is little to tell one side from the other
     sun: { fair: 1, cloudy: 1, overcast: 0.25, rain: 0.2, storm: 0.15 },
