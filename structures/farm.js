@@ -1,4 +1,4 @@
-// Farms, 3×2, three kinds to build. The village side of the era: an old
+// Farms: a 1×1 smallholding, and three kinds 3×2. The village side of the era: an old
 // courtyard farm (statek), the collective farm (JZD) with its long
 // cowsheds, silage towers and tractors, and the big state farm (státní
 // statek) with steel silos, a grain drier and a machine station. Tagged 'farm' – homes send workers here, trucks come and go.
@@ -52,6 +52,43 @@ function barnDoor(g, x, y, w, h) {
   g.line([[x, y, 0], [x, y, h], [x + w, y, h], [x + w, y, 0]], { facing: FRONT });
   g.detailed(2, () => g.line([[x, y, 0], [x + w, y, h]], { facing: FRONT }));
 }
+
+// ----- 1×1 -----
+
+// A smallholding (hospodářství): a cottage with its gable to the street, a
+// byre behind it with a barn door, a haystack, the dung heap in the yard
+// and a fruit tree. The few cows that stay out of the JZD.
+export const smallholding = {
+  id: 'smallholding',
+  name: 'Hospodářství',
+  blurb: 'A cottage with a byre',
+  category: 'work',
+  tags: ['farm'],
+  code: 'F',
+  footprint: [[0, 0]],
+  access: 'any', // a footpath will do
+  plot: { props: 'garden', boundary: 0.3, kinds: ['fence'], density: 0.35 },
+  sim: { destinations: ['residential'] },
+  stats: { jobs: 1 },
+  agents: 1,
+  yards: ['garden', 'trees'],
+  draw(g) {
+    // (the cottage and the byre side by side, not overlapping, so each
+    // sorts in depth on its own)
+    const w = g.range(0.26, 0.3), h = 0.13;
+    g.gableY(-0.36, -0.32, 0, w, 0.4, h, g.range(0.13, 0.16));
+    g.windows(-0.36, -0.32, w, 0.4, 0, h, h, 0.1, { h: 0.5 });
+    door(g, -0.36 + w * 0.5, -0.32, 0.05, 0.09);
+    const bw = g.range(0.44, 0.52);
+    g.gable(-0.36, 0.12, 0, bw, 0.24, 0.11, 0.1);
+    barnDoor(g, -0.36 + bw * 0.62, 0.12, 0.13, 0.1);
+    haystack(g, 0.27, -0.2, 0.07);
+    heap(g, 0.06, -0.06, 0.05);
+    tree(g, 0.28, 0.26, 0.75, 'spreading');
+  },
+};
+
+// ----- 3×2 -----
 
 export const farmstead = {
   id: 'farmstead',

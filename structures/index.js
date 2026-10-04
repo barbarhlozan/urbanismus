@@ -56,15 +56,15 @@ import * as farm from './farm.js';
 import pool from './pool.js';
 
 // Build menu groups, in order, named as the planners of the time did:
-// housing, production, civic amenities (občanská vybavenost – shops, pubs,
-// schools, clinics and culture alike, all of it public), open spaces and
-// landmarks. The network tools (road, footpath, railway) join 'transport'
-// too (src/main.js).
+// housing, civic amenities (občanská vybavenost – shops, pubs, schools,
+// clinics and culture alike, all of it public), production, open spaces
+// and landmarks. The network tools (road, footpath, railway) join 'transport'
+// too, the fence 'work' (src/main.js).
 export const CATEGORIES = [
   { id: 'transport', label: 'Doprava' },
   { id: 'housing', label: 'Bydlení' },
-  { id: 'work', label: 'Výroba' },
   { id: 'amenities', label: 'Občanská vybavenost' },
+  { id: 'work', label: 'Výroba' },
   { id: 'spaces', label: 'Prostranství' },
   { id: 'heritage', label: 'Památky' },
 ];
@@ -77,11 +77,6 @@ export const BUILD_FAMILIES = [
   [station.station, station.main, station.stop], [busStop],
   // Bydlení
   [housing.house, housing.houseWide], [housing.apartments, housing.apartmentsWide], [housing.block, housing.blockWide],
-  // Výroba
-  [industry.workshop, industry.workshopMedium, industry.workshopLarge], [industry.works, industry.worksMedium],
-  [industry.factory], [industry.plantSmall, industry.plantMedium, industry.plant],
-  [mine.pit], [mine.colliery], [mine.deepMine],
-  [farm.farmstead], [farm.jzd], [farm.stateFarm],
   // Občanská vybavenost
   [business.jednota, business.jednotaWide], [business.hospoda, business.hospodaWide], [business.store, business.storeWide],
   [business.tuzex], [business.office, business.officeWide, business.officeTower, business.officeTowerWide],
@@ -89,6 +84,11 @@ export const BUILD_FAMILIES = [
   [services.fireHouse, services.fireStation, services.fireStationLarge], [services.police],
   [services.healthCentre], [services.clinic], [services.hospital], [services.serviceCentre], [services.school],
   [landmarks.cultureHouse], [pool], [grounds.cemetery],
+  // Výroba
+  [industry.workshop, industry.workshopMedium, industry.workshopLarge], [industry.works, industry.worksMedium],
+  [industry.factory], [industry.plantSmall, industry.plantMedium, industry.plant],
+  [mine.pit], [mine.colliery], [mine.deepMine],
+  [farm.smallholding], [farm.farmstead], [farm.jzd], [farm.stateFarm],
   // Prostranství
   [park.green], [park.gardenPark], [park.pavilionPark], [park.meadow], [park.pondPark], [park.cityPark],
   [square.plaza], [square.fountainSquare, square.fountainSquareLarge], [square.precinct, square.precinctLarge],
