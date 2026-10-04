@@ -3,11 +3,12 @@
 
 import { mulberry32, valueNoise2D } from '../core/random.js';
 import { makeElevation } from './elevation.js';
-import { RIVER } from './rivers.js';
+import { RIVER_SIZES, STREAM } from './rivers.js';
 
 export function generateWorld(world, config) {
   const rng = mulberry32(world.seed);
   generateRiver(world, rng, config.terrain);
+  generateTributaries(world, rng, config.terrain);
   generateLakes(world, rng, config.terrain);
   generateTrees(world, rng, config.terrain);
 }
@@ -28,7 +29,8 @@ function mapCenter(grid) {
 // with a little noise so it meanders, keeping out of the map centre and off
 // the side edges. Smoothed into a curve that runs out past both edges; its
 // water falls steadily from the higher end, and World.elevation cuts the
-// valley for it.
+// valley for it. `opts.riverSize`: 'river' or 'stream' (RIVER_SIZES), or
+// null for either.
 function generateRiver(world, rng, opts) {
   if (rng() >= opts.riverChance) return;
   const { grid, terrain } = world;
@@ -118,9 +120,18 @@ function generateRiver(world, rng, opts) {
   for (let pass = 0; pass < 2; pass++) points = chaikin(points);
   if (hills(...points[0]) < hills(...points[points.length - 1])) points.reverse();
 
-  // the water falls all the way: never above the ground it has come over
-  // (the lowest near its line, as the meanders swing it up the valley
-  // sides), and a little lower with every step
+  const z = waterLevels(points, hills);
+
+  const { width: w, vary, bend, wet, wall, reach } = RIVER_SIZES[opts.riverSize ?? (rng() < 0.5 ? 'river' : 'stream')];
+  terrain.rivers = [{ points, z, width: w, vary, bend, wet, wall, reach }];
+  const field = world.riverField;
+  for (let i = 0; i < size; i++) if (field.wet(...grid.xy(i)) > 0) terrain.water[i] = 2;
+}
+
+// The water's surface along a river's points: it falls all the way, never
+// above the ground it has come over (the lowest near its line, as the
+// meanders swing it up the valley sides), and a little lower with every step.
+function waterLevels(points, hills) {
   const lowest = (x, y) => {
     let e = hills(x, y);
     for (let r = 1; r <= 3; r++) {
@@ -135,13 +146,176 @@ function generateRiver(world, rng, opts) {
   for (let k = 0; k < points.length; k++) {
     const ground = lowest(...points[k]);
     if (!k) { z.push(ground); continue; }
-    const step = Math.hypot(points[k][0] - points[k - 1][0], points[k][1] - points[k - 1][1]);
-    z.push(Math.min(ground, z[k - 1] - 0.15 * step));
+    z.push(Math.min(ground, z[k - 1] - FALL * dist(points[k], points[k - 1])));
   }
+  return z;
+}
 
-  terrain.rivers = [{ points, z, width: RIVER.width, vary: RIVER.vary, bend: RIVER.bend, wet: RIVER.wet }];
-  const field = world.riverField;
-  for (let i = 0; i < size; i++) if (field.wet(...grid.xy(i)) > 0) terrain.water[i] = 2;
+const FALL = 0.15; // metres the water drops at least per grid step
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+// the distance along a line to each of its points
+const arcLengths = (points) => points.reduce((out, p, j) => (out.push(j ? out[j - 1] + dist(p, points[j - 1]) : 0), out), []);
+
+// Tributaries: `opts.tributaries` streams from the map's edge into the
+// river (or into one another; fewer when there is no room). Each starts
+// high on an edge, away from the rivers and the other starts, and takes
+// the cheapest way down to the nearest river dot – as the river does,
+// higher ground costing more, with a little noise – keeping out of the
+// map centre. Smoothed and set meandering, it runs out past its edge and
+// at the other end bends downstream into the river, where its water comes
+// down to meet the river's.
+const TRIBUTARY = {
+  apart: 10,      // grid steps a start keeps from the rivers…
+  spread: 12,     // …and from the other starts
+  corner: 6,      // and from the map's corners
+  mouth: 6,       // grid steps a junction keeps from the map edges
+  edge: 6,        // grid steps from the edges within which it costs more (so it leaves its edge, not runs along it)
+  downstream: 1,  // grid steps down the river from the nearest point that it joins
+  meander: [[1.1, 9], [0.4, 4]], // bends: grid steps it swings to the sides, and the length of a swing
+  meet: 5,        // grid steps over which it comes down (or up) to the river's level
+};
+
+function generateTributaries(world, rng, opts) {
+  if (!opts.tributaries || !world.terrain.rivers.length) return;
+  const { grid, terrain } = world;
+  const { width, height, size } = grid;
+  const [mx, my] = mapCenter(grid);
+  const hills = makeElevation(world.seed, null, world.hilliness);
+  const h = new Float32Array(size);
+  for (let i = 0; i < size; i++) h[i] = hills(...grid.xy(i));
+  const lo = Math.min(...h), hi = Math.max(...h);
+  const meander = valueNoise2D(world.seed + 53, 4);
+  const toEdge = (x, y) => Math.min(x, y, width - 1 - x, height - 1 - y);
+  const cost = (i) => {
+    const [x, y] = grid.xy(i);
+    let c = 1 + 4 * (h[i] - lo) / (hi - lo) + 3 * meander(x, y);
+    if (Math.hypot(x - mx, y - my) < opts.clearRadius) c += 20;
+    const edge = toEdge(x, y);
+    if (edge < TRIBUTARY.edge) c += (TRIBUTARY.edge - edge) * 2;
+    return c;
+  };
+  const starts = [];
+
+  for (let k = 0; k < opts.tributaries; k++) {
+    const field = world.riverField;
+    // the start: the highest of a few edge dots far enough from everything
+    const edge = [];
+    for (let i = 0; i < size; i++) {
+      const [x, y] = grid.xy(i);
+      if (toEdge(x, y) > 0) continue;
+      if (Math.min(x, width - 1 - x) < TRIBUTARY.corner && Math.min(y, height - 1 - y) < TRIBUTARY.corner) continue;
+      if ((field.at(x, y)?.d ?? Infinity) < TRIBUTARY.apart) continue;
+      if (starts.some((s) => dist(grid.xy(s), [x, y]) < TRIBUTARY.spread)) continue;
+      edge.push(i);
+    }
+    if (!edge.length) return;
+    let start = -1;
+    for (let n = 0; n < 12; n++) {
+      const i = edge[Math.floor(rng() * edge.length)];
+      if (start < 0 || h[i] > h[start]) start = i;
+    }
+    starts.push(start);
+
+    // the cheapest way to a river dot clear of the edges
+    const total = new Float32Array(size).fill(Infinity);
+    const prev = new Int32Array(size).fill(-1);
+    const queue = new MinHeap((a, b) => total[a] - total[b]);
+    total[start] = cost(start);
+    queue.push(start);
+    let end = -1;
+    while (queue.size) {
+      const n = queue.pop();
+      if (terrain.isRiver(n) && toEdge(...grid.xy(n)) >= TRIBUTARY.mouth) { end = n; break; }
+      const [nx, ny] = grid.xy(n);
+      for (const m of grid.neighbors(n)) {
+        const t = total[n] + dist(grid.xy(m), [nx, ny]) * cost(m);
+        if (t < total[m]) { total[m] = t; prev[m] = n; queue.push(m); }
+      }
+    }
+    if (end < 0) continue;
+    const route = [];
+    for (let n = end; n >= 0; n = prev[n]) route.unshift(grid.xy(n));
+
+    // where it joins: a little downstream of the river's nearest point
+    const join = joinPoint(terrain.rivers, route[route.length - 1], TRIBUTARY.downstream);
+
+    // smoothed (a Gaussian over the route, its ends kept), out past the
+    // edge, meandering (not near the junction), and into the river
+    const last = route.length - 1;
+    let points = route.map((p, k) => {
+      if (k === 0 || k === last) return p;
+      let sx = 0, sy = 0, sw = 0;
+      for (let j = Math.max(0, k - 3); j <= Math.min(last, k + 3); j++) {
+        const w = Math.exp(-((j - k) ** 2) / 4);
+        sx += route[j][0] * w; sy += route[j][1] * w; sw += w;
+      }
+      return [sx / sw, sy / sw];
+    });
+    const [x0, y0] = route[0];
+    const out = [x0 === 0 ? -1 : x0 === width - 1 ? 1 : 0, y0 === 0 ? -1 : y0 === height - 1 ? 1 : 0];
+    points.unshift([x0 + out[0] * 4, y0 + out[1] * 4], [x0 + out[0] * 2, y0 + out[1] * 2]);
+    points.push(join.point);
+    let along = arcLengths(points), length = along[along.length - 1];
+    const bends = TRIBUTARY.meander.map(([amp, wave]) => ({ amp, wave, phase: rng() * Math.PI * 2 }));
+    points = points.map((p, j) => {
+      if (j === 0 || j === points.length - 1) return p;
+      const [ax, ay] = points[j - 1], [bx, by] = points[j + 1];
+      const l = Math.hypot(bx - ax, by - ay) || 1;
+      const fade = smoothstep(0, 3, length - along[j]);
+      const o = fade * bends.reduce((sum, { amp, wave, phase }) => sum + amp * Math.sin((along[j] / wave) * Math.PI * 2 + phase), 0);
+      return [p[0] - ((by - ay) / l) * o, p[1] + ((bx - ax) / l) * o];
+    });
+    for (let pass = 0; pass < 2; pass++) points = chaikin(points);
+
+    // its water falls to the river's level at the junction: the last few
+    // steps brought down to it, or (rarely, where the river runs higher)
+    // raised so it still falls all the way
+    const z = waterLevels(points, hills);
+    along = arcLengths(points);
+    length = along[along.length - 1];
+    const over = Math.max(0, z[z.length - 1] - join.z);
+    for (let j = 0; j < z.length; j++) z[j] -= over * smoothstep(TRIBUTARY.meet, 0, length - along[j]);
+    z[z.length - 1] = join.z;
+    for (let j = z.length - 2; j >= 0; j--) z[j] = Math.max(z[j], z[j + 1] + FALL * dist(points[j], points[j + 1]));
+
+    const { width: w, vary, bend, wet, wall, reach } = STREAM;
+    terrain.rivers = [...terrain.rivers, { points, z, width: w, vary, bend, wet, wall, reach }];
+    const wider = world.riverField;
+    for (let i = 0; i < size; i++) if (wider.wet(...grid.xy(i)) > 0) terrain.water[i] = 2;
+  }
+}
+
+// The point `ahead` grid steps downstream of the rivers' line nearest to
+// `at`, and the water's height there: { point, z }.
+function joinPoint(rivers, at, ahead) {
+  let best = null;
+  for (const { points, z } of rivers) {
+    for (let s = 1; s < points.length; s++) {
+      const a = points[s - 1], b = points[s];
+      const vx = b[0] - a[0], vy = b[1] - a[1], len2 = vx * vx + vy * vy || 1e-9;
+      const t = Math.min(Math.max(((at[0] - a[0]) * vx + (at[1] - a[1]) * vy) / len2, 0), 1);
+      const d = Math.hypot(a[0] + vx * t - at[0], a[1] + vy * t - at[1]);
+      if (!best || d < best.d) best = { d, points, z, s, t };
+    }
+  }
+  // walk on down the line (points run downstream)
+  let { points, z, s, t } = best, left = ahead;
+  while (true) {
+    const a = points[s - 1], b = points[s], len = dist(a, b);
+    const rest = (1 - t) * len;
+    if (rest >= left || s === points.length - 1) {
+      t = Math.min(1, t + (len ? left / len : 0));
+      return { point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], z: z[s - 1] + (z[s] - z[s - 1]) * t };
+    }
+    left -= rest;
+    s++;
+    t = 0;
+  }
+}
+
+function smoothstep(a, b, x) {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+  return t * t * (3 - 2 * t);
 }
 
 // Corner cutting: each segment's middle half kept, ends fixed.

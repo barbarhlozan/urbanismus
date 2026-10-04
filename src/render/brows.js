@@ -15,7 +15,7 @@
 //   hiddenAt(vis, camera, x, y)  is the ground at world (x, y) hidden
 //   browLines(vis, camera)  -> [{ points: [[x, y]…], s: [strength…] }]
 //                          the brow points joined across the columns, in
-//                          world units
+//                          screen units (tiles)
 //
 // View units: t = rx + ry grows towards the viewer, u = rx - ry runs across
 // the screen (rx, ry: Camera.rotated). A ground point at height h shows at
@@ -38,6 +38,9 @@ const COS30 = Math.cos(Math.PI / 6);
 //   from    back-slope steepness (r) where a brow begins
 //   drop    a back slope must fall at least this far (grid units of height)
 //   smooth  steepness averaged over this many samples either way
+//   fold    a fold is an outline when the ground behind it drops at least
+//           this far out of sight (tiles down the screen)...
+//   deepest ...and is drawn darkest from this deep
 //   link    neighbouring columns' brow points join up when this close in
 //           screen height (tiles)
 //   gap     ...also across this many columns without one
@@ -55,11 +58,13 @@ export const BROWS = {
   from: 0.2,
   drop: 0.12,
   smooth: 3,
-  link: 0.3,
+  fold: 0.06,
+  deepest: 0.4,
+  link: 0.2,
   gap: 2,
   min: 1.2,
   taper: 0.8,
-  join: 0.6,
+  join: 0.4,
   tiers: [0.4, 1],
   pencil: { len: [0.8, 2.4], gap: [-0.05, 0.12], drift: 0.02, skip: 0 },
 };
@@ -73,7 +78,7 @@ function worldOf(camera, u, t) {
 // `height(x, y)`: the ground's height as drawn, in grid units (the relief's
 // lift plus the terrain's own). `box`: [x0, y0, x1, y1], the ground there.
 export function visibility(camera, height, box, opts = BROWS) {
-  const { du, dt, from, drop, smooth } = opts;
+  const { du, dt, from, drop, smooth, fold, deepest } = opts;
   const z = camera.zScale;
   const [x0, y0, x1, y1] = box;
   const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => {
@@ -144,13 +149,19 @@ export function visibility(camera, height, box, opts = BROWS) {
       for (let j = a; j <= b; j++) {
         if (Y[j] > Y[j - 1] && !(Y[j - 1] > Y[j - 2])) folds.push(j - 1);
       }
-      for (let f = 0; f < folds.length; f++) {
-        let rmax = 1;
-        for (let j = folds[f] + 1; j <= (folds[f + 1] ?? b); j++) rmax = Math.max(rmax, S[j]);
-        const at = folds[f];
-        if (!hidden[at]) ev.push({ t: T[at], y: Y[at], s: 1 + Math.min(1, rmax - 1) });
+      // A fold counts when it hides something: the ground behind it drops
+      // at least `fold` tiles down the screen before it shows again (on a
+      // wall seen edge-on, the relief's small wrinkles fold too).
+      let edges = 0;
+      for (const at of folds) {
+        if (hidden[at]) continue;
+        let deep = 0;
+        for (let j = at + 1; j < n && Y[j] >= Y[at]; j++) deep = Math.max(deep, Y[j] - Y[at]);
+        if (deep < fold) continue;
+        ev.push({ t: T[at], y: Y[at], s: 1 + Math.min(1, deep / deepest) });
+        edges++;
       }
-      if (folds.length) continue;
+      if (edges) continue;
       // steep, not folding: on the slope's steepest line
       let top = a;
       for (let j = a; j <= b; j++) if (S[j] > S[top]) top = j;
@@ -169,7 +180,10 @@ export function hiddenAt(vis, camera, x, y) {
 }
 
 // The brow points joined into lines across the columns (screen left to
-// right), smoothed, faded in at their ends, in world units.
+// right), smoothed, faded in at their ends – in screen units (tiles, as
+// the scene before its scale: x = u cos30, y), as a brow is a line on the
+// picture. (Smoothed in world units, a line along a wall seen edge-on
+// would average points far apart on the ground, off the outline.)
 export function browLines(vis, camera, opts = BROWS) {
   const { link, gap, min, taper, join } = opts;
   const { events, columns, du } = vis;
@@ -180,9 +194,13 @@ export function browLines(vis, camera, opts = BROWS) {
     open = open.filter((c) => i - c.pts[c.pts.length - 1].i <= gap + 1);
     const pairs = [];
     ev.forEach((e, k) => open.forEach((c, m) => {
-      const end = c.pts[c.pts.length - 1];
-      const d = Math.abs(e.y - end.y);
-      if (d <= link * (i - end.i)) pairs.push([d, k, m]);
+      // against where the line was heading (its last step), so it carries
+      // on smoothly rather than hopping to whatever is near
+      const end = c.pts[c.pts.length - 1], before = c.pts[c.pts.length - 2];
+      const di = i - end.i;
+      const heading = before ? Math.max(-link, Math.min(link, (end.y - before.y) / (end.i - before.i))) : 0;
+      const d = Math.abs(e.y - (end.y + heading * di));
+      if (d <= link * di) pairs.push([d, k, m]);
     }));
     pairs.sort((p, q) => p[0] - q[0]);
     const usedE = new Set(), usedC = new Set();
@@ -223,6 +241,8 @@ export function browLines(vis, camera, opts = BROWS) {
     for (const other of kept) {
       if (other === full) continue;
       for (const p of other) {
+        if (Math.abs(p.y - e.y) > join * 0.5) continue; // (no steep ticks)
+        if (end ? p.i <= e.i : p.i >= e.i) continue; // (onwards, not hooking back)
         const d = Math.hypot((p.i - e.i) * step, p.y - e.y);
         if (d < dist) { dist = d; best = p; }
       }
@@ -238,14 +258,15 @@ export function browLines(vis, camera, opts = BROWS) {
       for (let j = Math.max(0, k - r); j <= Math.min(full.length - 1, k + r); j++) { sum += full[j][key]; n++; }
       return sum / n;
     });
-    const t = avg('t', 2), s = avg('s', 3);
+    const y = avg('y', 2), s = avg('s', 3);
     const n = full.length;
     const [head, tail] = ends[c];
     const fade = (k) => Math.min(1, ((head ? Infinity : k) * step) / taper, ((tail ? Infinity : n - 1 - k) * step) / taper);
-    const points = full.map((p, k) => worldOf(camera, columns[p.i].u, t[k]));
+    const at = (p, py) => [columns[p.i].u * COS30, py];
+    const points = full.map((p, k) => at(p, y[k]));
     const strength = s.map((v, k) => v * fade(k));
-    if (head) { points.unshift(worldOf(camera, columns[head.i].u, head.t)); strength.unshift(strength[0]); }
-    if (tail) { points.push(worldOf(camera, columns[tail.i].u, tail.t)); strength.push(strength[strength.length - 1]); }
+    if (head) { points.unshift(at(head, head.y)); strength.unshift(strength[0]); }
+    if (tail) { points.push(at(tail, tail.y)); strength.push(strength[strength.length - 1]); }
     out.push({ points, s: strength });
   });
   return out;

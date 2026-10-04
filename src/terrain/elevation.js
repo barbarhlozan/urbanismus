@@ -8,7 +8,6 @@
 //   contours(elev, box, opts)  polylines of equal elevation (marching squares)
 
 import { valueNoise2D } from '../core/random.js';
-import { RIVER } from './rivers.js';
 
 export const ELEVATION = {
   relief: 160,   // metres from the lowest to the highest possible point
@@ -22,10 +21,10 @@ export const ELEVATION = {
   step: 0.2,     // sampling step in grid units (smaller = smoother, slower)
 };
 
-// `rivers`: a riverField (terrain/rivers.js) or null. Around a river the
+// `rivers`: a riverField (terrain/rivers.js) or null. Around each river the
 // ground is shaped into a valley: flat at the water across the channel,
-// then rising by RIVER.wall per step. Higher ground is cut down to it,
-// blended in softly and fading out by RIVER.reach – so the contour lines
+// then rising by its `wall` per step. Higher ground is cut down to it,
+// blended in softly and fading out by its `reach` – so the contour lines
 // bend upstream where they cross – and ground lower than the water is
 // banked up right beside the channel, so no river runs along a hillside.
 // `hilliness` scales the hills (1 = as generated, below 1 flatter, above
@@ -33,19 +32,21 @@ export const ELEVATION = {
 export function makeElevation(seed, rivers = null, hilliness = 1) {
   const hills = makeHills(seed, hilliness);
   if (!rivers) return hills;
-  const { wall, reach } = RIVER;
   const fade = (d, from, to) => {
     const t = Math.min(Math.max((d - from) / (to - from), 0), 1);
     return 1 - t * t * (3 - 2 * t);
   };
   return (x, y) => {
-    const e = hills(x, y);
-    const r = rivers.at(x, y);
-    if (!r || r.d >= reach) return e;
-    const bank = rivers.halfWidth(x, y);
-    const valley = r.z + Math.max(0, r.d - bank) * wall;
-    if (e < valley) return e + (valley - e) * fade(r.d, bank, bank + 2);
-    return e - (e - softMin(e, valley, 4)) * fade(r.d, reach / 2, reach);
+    let e = hills(x, y);
+    for (const r of rivers.each(x, y)) {
+      const { wall, reach } = r.river;
+      if (r.d >= reach) continue;
+      const bank = r.river.bank(x, y);
+      const valley = r.z + Math.max(0, r.d - bank) * wall;
+      if (e < valley) e += (valley - e) * fade(r.d, bank, bank + 2);
+      else e -= (e - softMin(e, valley, 4)) * fade(r.d, reach / 2, reach);
+    }
+    return e;
   };
 }
 
