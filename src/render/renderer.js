@@ -154,6 +154,7 @@ export class Renderer {
     this.deferView = true;  // move on the GPU while the camera moves (placeView)
     this.showAgents = true; // (both switchable in the temporary debug panel)
     this.cullOn = true;     // hide objects outside the view (cull)
+    this.hiddenKinds = new Set(); // TEMPORARY (debug panel): objects hidden by key letter, 's' buildings, 'f' trees, 'k' street lamps…
     this.contours = STYLE.contours;
     this.meadow = new Map();        // chunk key 'cx,cy' -> { g, box, svg, shown }
     this.meadowDirty = new Set();   // chunk keys to rebuild
@@ -402,15 +403,21 @@ export class Renderer {
   }
 
   // The bridges (render/bridges.js) with their deck, found again when a
-  // network changes. { key, list, deck }.
+  // network changes. { list, deck, and the counts it was found for }.
+  // Every moving thing asks for its deck each frame (projectDeck), so the
+  // counts are compared one by one rather than joined into a key string.
   bridgeState() {
-    const { networks, terrain } = this.world;
-    const key = `${networks.road.version}|${networks.rail.version}|${networks.path.version}|${this.world.sidewalks.size}|${this.world.lanes.size}|${terrain.rivers.length}`;
-    if (this.bridges?.key !== key) {
-      const list = terrain.rivers.length ? findBridges(this.world) : [];
-      this.bridges = { key, list, deck: makeDeck(list, this.camera.lift) };
-      this.bridgeKey = list.map((b) => `${b.kind}${b.a}${b.b}`).join('|');
-    }
+    const { networks, terrain, sidewalks, lanes } = this.world;
+    const b = this.bridges;
+    if (b && b.road === networks.road.version && b.rail === networks.rail.version && b.path === networks.path.version
+      && b.sidewalks === sidewalks.size && b.lanes === lanes.size && b.rivers === terrain.rivers.length) return b;
+    const list = terrain.rivers.length ? findBridges(this.world) : [];
+    this.bridges = {
+      list, deck: makeDeck(list, this.camera.lift),
+      road: networks.road.version, rail: networks.rail.version, path: networks.path.version,
+      sidewalks: sidewalks.size, lanes: lanes.size, rivers: terrain.rivers.length,
+    };
+    this.bridgeKey = list.map((b) => `${b.kind}${b.a}${b.b}`).join('|');
     return this.bridges;
   }
 
@@ -1731,7 +1738,7 @@ export class Renderer {
   cull(entries = [...this.objs.values(), ...this.ghosts.values()]) {
     if (!this.viewBox) return;
     for (const e of entries) {
-      const show = !e.box || !this.cullOn || this.inView(e.box);
+      const show = !this.hiddenKinds.has(e.key?.[0]) && (!e.box || !this.cullOn || this.inView(e.box));
       if (show === e.shown) continue;
       e.shown = show;
       if (show && e.stale) this.objsDirty.add(e.key); // drawn for an old view: redraw (renderObjects)
@@ -1849,11 +1856,13 @@ export class Renderer {
   // Each agent keeps a little record (`el`) of what it looks like: its
   // shapes, where it stands, which way it faces.
   renderAgents() {
-    const seen = new Set();
     const now = performance.now();
     const pop = drawEnabled() && this.agentsShown;
+    // the share of walkers under an umbrella (config.weather.people), the
+    // same for everyone this frame
+    this.umbrellas = this.config.weather?.people?.[this.world.weather?.kind]?.umbrellas ?? 0;
+    const close = this.camera.zoom >= VEHICLES.minZoom;
     for (const a of this.agents.visible()) {
-      seen.add(a.id);
       const kind = a.bus ? 'bus' : a.truck ? 'truck' : a.trip.mode === 'drive' ? 'car' : a.trip.mode === 'cycle' ? 'cyclist' : 'walker';
       let el = this.agentEls.get(a.id);
       if (el && el.kind !== kind) {
@@ -1861,9 +1870,10 @@ export class Renderer {
         el = null;
       }
       if (!el) {
-        el = { kind, born: pop ? now : -Infinity };
+        el = agentEl(kind, pop ? now : -Infinity);
         this.agentEls.set(a.id, el);
       }
+      el.seen = now; // (gone: not seen this frame)
       const k = growScale(now - el.born);
       if (kind === 'truck' || kind === 'bus') {
         this.placeVehicle(el, a, kind === 'bus' ? 'bus' : truckFor(a.id));
@@ -1872,10 +1882,22 @@ export class Renderer {
       }
       const [wx, wy] = wobble(a.x, a.y); // on the swaying road
       const [sx, sy] = this.projectDeck(a.x + wx, a.y + wy, 0.04);
+      // off screen: not placed (choosing a model, leaning it, stepping),
+      // which zoomed in is most of the work; only where it is is kept, so
+      // its ghost shrinks in the right place if it goes in meanwhile
+      if (!this.pen.onScreen(sx, sy)) {
+        el.sx = sx;
+        el.sy = sy;
+        continue;
+      }
       if (kind === 'car') {
         this.placeCar(el, a);
-        const t = ((el.heading ?? 0) / VEHICLES.headings) * Math.PI * 2, [ux, uy] = [Math.cos(t) * 0.08, Math.sin(t) * 0.08];
-        el.shear = this.slopeShear([a.x + wx - ux, a.y + wy - uy], [a.x + wx + ux, a.y + wy + uy]);
+        // further out a car is a square dot: leaning it wouldn't show, and
+        // finding the lean is four projections per car per frame
+        if (close) {
+          const t = ((el.heading ?? 0) / VEHICLES.headings) * Math.PI * 2, ux = Math.cos(t) * 0.08, uy = Math.sin(t) * 0.08;
+          el.shear = this.slopeShear([a.x + wx - ux, a.y + wy - uy], [a.x + wx + ux, a.y + wy + uy]);
+        } else el.shear = 0;
       }
       // facing left: mirrored
       el.mirror = kind !== 'car' && this.placePerson(el, a, kind, sx);
@@ -1884,7 +1906,7 @@ export class Renderer {
       this.drawAgent(el, k);
     }
     for (const [id, el] of this.agentEls) {
-      if (!seen.has(id)) {
+      if (el.seen !== now) {
         this.agentGone(el, now, pop);
         this.agentEls.delete(id);
       }
@@ -1898,7 +1920,7 @@ export class Renderer {
   }
 
   agentGone(el, now, pop) {
-    if (!pop) return;
+    if (!pop || !el.shapes && !el.parts) return; // (never placed: never seen)
     el.gone = now;
     this.agentGhosts.add(el);
   }
@@ -2060,9 +2082,10 @@ export class Renderer {
       : 1;
     const close = cam.zoom >= VEHICLES.minZoom;
     const heading = el.heading ?? 0;
-    // in the rain most walkers (config.weather.people) put up an umbrella
-    const share = this.config.weather?.people?.[this.world.weather?.kind]?.umbrellas ?? 0;
-    const brolly = kind === 'walker' && share > 0 && ((bodyFor(`${a.id}u`) + 0.5) / PEOPLE.bodies) <= share;
+    // in the rain most walkers (this.umbrellas, from config.weather.people)
+    // put up an umbrella; who does is fixed per walker, so worked out once
+    const share = this.umbrellas;
+    const brolly = kind === 'walker' && share > 0 && ((el.brolly ??= bodyFor(`${a.id}u`)) + 0.5) / PEOPLE.bodies <= share;
     const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.rotation}` : `w${body}${brolly ? 'u' : ''}`;
     if (el.key !== key) {
       el.key = key;
@@ -2093,3 +2116,15 @@ export class Renderer {
 
 // The plain mark for a car far out: a square dot.
 let CAR_MARK = null;
+
+// What renderAgents keeps about one agent, with every field it may get set
+// up front in one order (all undefined until then): read for thousands of
+// agents every frame, records that grew their fields in different orders
+// would make each read a slow lookup in the engine.
+function agentEl(kind, born) {
+  return {
+    kind, born, seen: 0, gone: undefined, key: undefined, shapes: undefined, parts: undefined, body: undefined,
+    model: undefined, brolly: undefined, at: undefined, heading: undefined, walked: undefined, left: undefined,
+    squash: undefined, mirror: undefined, shear: undefined, sx: 0, sy: 0, dot: undefined, path: undefined,
+  };
+}

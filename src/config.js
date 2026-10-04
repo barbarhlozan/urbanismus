@@ -359,6 +359,8 @@ export const CONFIG = {
     slowdown: 0.45,       // each car over capacity cuts speed by this share (compounding)
     minSpeed: 0.2,        // never slower than this share of full speed
     ease: 0.9,            // how quickly cars brake / pick up speed (per second)
+    laneCell: 0.05,       // whether a car is on a lane is remembered per square this size
+    interval: 0.1,        // cars are counted (and their speeds eased) every this many simulated seconds
   },
 
   // The story (src/story/, written in story/story.txt – see story/README.md).

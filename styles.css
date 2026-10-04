@@ -1431,6 +1431,8 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 }
 .debug-panel .debug-head > span { padding: 5px 0; align-self: center; }
 .debug-panel .fps { flex: 1; text-align: right; font-weight: 400; font-variant-numeric: tabular-nums; }
+.debug-panel .svg-count { padding: 2px 0 4px; font-variant-numeric: tabular-nums; }
+.debug-no-trees #objects :is(.tree, .leaf, .trunk, .twig, .limb) { display: none; }
 .debug-panel label { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
 .debug-panel input { accent-color: var(--fg); margin: 0; }
 @media (max-width: 640px) {
