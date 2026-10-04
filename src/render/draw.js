@@ -56,8 +56,8 @@ function plan(groups, tile, speed, scale) {
   const phases = [[], [], []];
   groups.forEach((root, gi) => {
     if (!root?.isConnected) return;
-    // non-scaling strokes dash in screen px: path lengths are measured in
-    // the group's units, so scale them
+    // a non-scaling stroke (photos' figures) dashes in screen px: path
+    // lengths are measured in the group's units, so scale those
     if (scale == null) {
       const m = root.getScreenCTM?.();
       scale = m ? Math.hypot(m.a, m.b) : 1;
@@ -72,7 +72,8 @@ function plan(groups, tile, speed, scale) {
       const fill = cs.fill !== 'none';
       const dashed = cs.strokeDasharray !== 'none';
       const phase = gi === 0 ? 0 : fill && !el.classList.contains('ink') ? 1 : 2;
-      phases[phase].push({ el, len, px: len * scale, stroke: stroke && !dashed, fill });
+      const px = cs.vectorEffect === 'non-scaling-stroke' ? len * scale : len;
+      phases[phase].push({ el, len, px, stroke: stroke && !dashed, fill });
     }
   });
   const items = phases.flat();

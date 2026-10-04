@@ -92,6 +92,9 @@ const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
 // redrawn, and how far past each window edge the map is drawn.
 const VIEW_SETTLE = 150;
+// A drawn element (painter.js) carrying detail class d2, or d1 / d2 (atDetail).
+const DETAIL_2 = /<(?:path|polygon|polyline|circle|ellipse|rect|line)\b[^>]*\bclass="[^"]*\bd2\b[^"]*"[^>]*\/>/g;
+const DETAIL_1_2 = /<(?:path|polygon|polyline|circle|ellipse|rect|line)\b[^>]*\bclass="[^"]*\bd[12]\b[^"]*"[^>]*\/>/g;
 const OVERSCAN = 0.25;
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -154,6 +157,10 @@ export class Renderer {
     this.deferView = true;  // move on the GPU while the camera moves (placeView)
     this.showAgents = true; // (both switchable in the temporary debug panel)
     this.cullOn = true;     // hide objects outside the view (cull)
+    this.constantStrokes = true; // line widths kept on screen as the zoom changes (updateStroke)
+    this.rebuildQueue = [];   // object keys to redraw for a new level of detail, nearest the middle last (queueRebuild)
+    this.rebuildCost = 1;     // ms that redrawing one of them took lately (frame)
+    this.hiddenKinds = new Set(); // TEMPORARY (debug panel): objects hidden by key letter, 's' buildings, 'f' trees, 'k' street lamps…
     this.contours = STYLE.contours;
     this.meadow = new Map();        // chunk key 'cx,cy' -> { g, box, svg, shown }
     this.meadowDirty = new Set();   // chunk keys to rebuild
@@ -317,7 +324,26 @@ export class Renderer {
     if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
     for (const ink of Object.values(this.ink)) if (ink.busy) ink.tick();
     if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
-    if (this.objsAll || this.treesAll || this.objsDirty.size) this.renderObjects();
+    // a new level of detail: the objects in sight, as many as fit in
+    // config.render.rebuildBudget ms by what they took so far (queueRebuild),
+    // once the view has settled – each batch repaints the whole objects layer
+    let batch = 0;
+    if (this.rebuildQueue.length && !this.objsAll && performance.now() - this.movedAt > VIEW_SETTLE) {
+      const n = Math.max(1, Math.floor(this.config.render.rebuildBudget / this.rebuildCost));
+      while (batch < n && this.rebuildQueue.length) {
+        const key = this.rebuildQueue.pop();
+        if (!this.objs.get(key)?.stale) continue;
+        this.objsDirty.add(key);
+        batch++;
+      }
+    }
+    if (this.objsAll || this.objsDirty.size) {
+      const t0 = performance.now();
+      const n = this.objsDirty.size;
+      this.renderObjects();
+      if (batch) this.rebuildCost += ((performance.now() - t0) / n - this.rebuildCost) * 0.3;
+    }
+    if (this.objsPlace) this.placeObjects();
     if (this.ghosts.size) this.reapGhosts();
     if (this.showAgents) {
       this.pen.begin(this.camera);
@@ -402,15 +428,21 @@ export class Renderer {
   }
 
   // The bridges (render/bridges.js) with their deck, found again when a
-  // network changes. { key, list, deck }.
+  // network changes. { list, deck, and the counts it was found for }.
+  // Every moving thing asks for its deck each frame (projectDeck), so the
+  // counts are compared one by one rather than joined into a key string.
   bridgeState() {
-    const { networks, terrain } = this.world;
-    const key = `${networks.road.version}|${networks.rail.version}|${networks.path.version}|${this.world.sidewalks.size}|${this.world.lanes.size}|${terrain.rivers.length}`;
-    if (this.bridges?.key !== key) {
-      const list = terrain.rivers.length ? findBridges(this.world) : [];
-      this.bridges = { key, list, deck: makeDeck(list, this.camera.lift) };
-      this.bridgeKey = list.map((b) => `${b.kind}${b.a}${b.b}`).join('|');
-    }
+    const { networks, terrain, sidewalks, lanes } = this.world;
+    const b = this.bridges;
+    if (b && b.road === networks.road.version && b.rail === networks.rail.version && b.path === networks.path.version
+      && b.sidewalks === sidewalks.size && b.lanes === lanes.size && b.rivers === terrain.rivers.length) return b;
+    const list = terrain.rivers.length ? findBridges(this.world) : [];
+    this.bridges = {
+      list, deck: makeDeck(list, this.camera.lift),
+      road: networks.road.version, rail: networks.rail.version, path: networks.path.version,
+      sidewalks: sidewalks.size, lanes: lanes.size, rivers: terrain.rivers.length,
+    };
+    this.bridgeKey = list.map((b) => `${b.kind}${b.a}${b.b}`).join('|');
     return this.bridges;
   }
 
@@ -1039,6 +1071,7 @@ export class Renderer {
         this.drawn = { view, zoom: cam.zoom, panX: cam.panX, panY: cam.panY };
         const t = `translate(${cam.panX + ox} ${cam.panY + oy}) scale(${cam.zoom})`;
         for (const scene of this.scenes) scene.setAttribute('transform', t);
+        this.updateStroke(cam.zoom);
         // the drawn area (the window and the overscan past it) in scene px
         this.viewBox = [(-ox - cam.panX) / cam.zoom, (-oy - cam.panY) / cam.zoom, (W + ox - cam.panX) / cam.zoom, (H + oy - cam.panY) / cam.zoom];
         this.cull();
@@ -1047,10 +1080,25 @@ export class Renderer {
     }
     if (css !== this.css) {
       this.css = css;
-      // on the wrapper, not the SVGs: a transform on an <svg> itself makes
-      // Chrome recompute every non-scaling stroke in it
+      // on the wrappers, not the SVGs: a transform on an <svg> itself
+      // makes the browser lay it out again
       for (const w of this.wrappers) w.style.transform = css;
     }
+  }
+
+  // Line widths for the zoom `z` (--stroke in styles.css): 1 / z rounded to
+  // a step of config.render.strokeStep, so lines keep about their width on
+  // screen. Set only when the step changes – it restyles every line on the
+  // map. With constantStrokes off (debug panel) lines scale with the map.
+  // The widths are in device pixels, as Chrome drew the non-scaling strokes
+  // the map had before: a 1.2 line is 1.2 pixels of a sharp screen, not 1.2
+  // CSS px (twice as thick there).
+  updateStroke(z) {
+    const step = this.config.render.strokeStep;
+    const k = this.constantStrokes ? step ** -Math.round(Math.log(z) / Math.log(step)) / (devicePixelRatio || 1) : 1;
+    if (k === this.strokeK) return;
+    this.strokeK = k;
+    for (const s of [this.svg, this.ground, this.top]) s.style.setProperty('--stroke', k);
   }
 
   updateLod(z) {
@@ -1073,7 +1121,7 @@ export class Renderer {
     const { trees } = this.config.render;
     const detail = z >= trees.medium ? 0 : z >= trees.far ? 1 : 2;
     if (detail !== this.treeDetail) {
-      if (this.treeDetail !== undefined) this.treesAll = true;
+      if (this.treeDetail !== undefined) this.queueRebuild((key) => key[0] === 'f');
       this.treeDetail = detail;
     }
     // shadow hatching: the stroke tiers that keep strokes apart on screen,
@@ -1094,6 +1142,8 @@ export class Renderer {
       s.classList.remove(`lod-${this.lodLevel}`);
       s.classList.add(`lod-${level}`);
     }
+    // the objects are drawn with this level's detail only (atDetail)
+    if (this.lodLevel !== undefined) this.queueRebuild(() => true);
     this.lodLevel = level;
   }
 
@@ -1102,12 +1152,8 @@ export class Renderer {
     let keys = this.objsDirty;
     this.objsDirty = new Set(); // (cull() may add to it while we go)
     // Only the view changed (rotation…): objects out of sight are just
-    // placed, and drawn once they come into view (cull()). The same for
-    // the forest trees when their detail changes (updateLod).
+    // placed, and drawn once they come into view (cull()).
     const lazy = this.objsAll && !this.worldAll && this.cullOn;
-    const lazyTrees = this.treesAll && this.cullOn;
-    if (this.treesAll) for (const id of this.world.features.keys()) keys.add(`f${id}`);
-    this.treesAll = false;
     if (this.objsAll) {
       keys = new Set(this.objs.keys());
       for (const id of world.structures.keys()) keys.add(`s${id}`);
@@ -1137,7 +1183,7 @@ export class Renderer {
     for (const key of keys) {
       const id = Number(key.slice(1));
       let entry = this.objs.get(key);
-      if ((lazy || (lazyTrees && key[0] === 'f')) && entry?.at && !this.born.has(key) && this.exists(key)) {
+      if (lazy && entry?.at && !this.born.has(key) && this.exists(key)) {
         const { bounds, box } = this.placeOf(entry.at);
         if (!this.inView(box)) {
           if (['minX', 'maxX', 'minY', 'maxY'].some((k) => entry.bounds[k] !== bounds[k])) orderChanged = true;
@@ -1215,8 +1261,9 @@ export class Renderer {
 
     if (orderChanged) {
       const order = isoSort([...this.objs.values(), ...this.ghosts.values()].map((e) => ({ ...e.bounds, entry: e }))).map((i) => i.entry);
-      placeInOrder(this.layers.objects, order.map((e) => e.g));
+      placeInOrder(this.layers.objects, order.filter((e) => e.shown !== false).map((e) => e.g)); // (out of sight: out of the page, see cull)
       this.order = order;
+      this.objsPlace = false;
     }
 
     // after the DOM is in place: the pen needs computed styles and lengths
@@ -1310,7 +1357,7 @@ export class Renderer {
     const out = this.paintStreet(key);
     if (!out) return null;
     const { painter, x, y } = out;
-    return { svg: mergeRuns(painter.toSVG()), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
+    return { svg: mergeRuns(this.atDetail(painter.toSVG())), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
   }
 
   // The painters behind buildStreet / buildFeature / buildStructure, for any
@@ -1341,7 +1388,35 @@ export class Renderer {
     const out = this.paintFeature(f, this.camera, this.treeDetail);
     if (!out) return null;
     const { painter, x, y } = out;
-    return { svg: mergeRuns(painter.toSVG()), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
+    return { svg: mergeRuns(this.atDetail(painter.toSVG())), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
+  }
+
+  // A drawing without the details the current level hides (.lod-1 .d2,
+  // .lod-2 .d1 in styles.css): left out rather than only hidden, as the
+  // browser restyles and lays out hidden elements too. Changing the level
+  // redraws the objects (updateLod, queueRebuild).
+  atDetail(svg) {
+    const level = this.lodLevel ?? 0;
+    return level ? svg.replace(level >= 2 ? DETAIL_1_2 : DETAIL_2, '') : svg;
+  }
+
+  // Redraw the objects whose key passes test(key), for a new level of
+  // detail: those in sight a batch per frame (config.render.rebuildPerFrame,
+  // see frame()), the rest once they come into sight (stale, see cull()).
+  // The middle of the window goes first: the queue is taken from its end.
+  queueRebuild(test) {
+    const queued = new Set(this.rebuildQueue);
+    for (const [key, e] of this.objs) {
+      if (!test(key)) continue;
+      e.stale = true;
+      if (e.shown !== false) queued.add(key);
+    }
+    const v = this.viewBox, cx = v ? (v[0] + v[2]) / 2 : 0, cy = v ? (v[1] + v[3]) / 2 : 0;
+    const far = (key) => {
+      const b = this.objs.get(key)?.box;
+      return b ? Math.hypot((b[0] + b[2]) / 2 - cx, (b[1] + b[3]) / 2 - cy) : Infinity;
+    };
+    this.rebuildQueue = [...queued].map((key) => [far(key), key]).sort((a, b) => b[0] - a[0]).map(([, key]) => key);
   }
 
   paintFeature(f, camera = this.camera, detail = 0) {
@@ -1364,7 +1439,7 @@ export class Renderer {
     const out = this.paintStructure(s);
     if (!out) return null;
     const { painter, points } = out;
-    return { svg: mergeRuns(painter.toSVG()), ground: mergeRuns(painter.toGroundSVG()), shade: this.shadeOf(painter), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
+    return { svg: mergeRuns(this.atDetail(painter.toSVG())), ground: mergeRuns(this.atDetail(painter.toGroundSVG())), shade: this.shadeOf(painter), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
   }
 
   // An object's shadow (shadows.js): what casts it and the feet of its
@@ -1731,12 +1806,31 @@ export class Renderer {
   cull(entries = [...this.objs.values(), ...this.ghosts.values()]) {
     if (!this.viewBox) return;
     for (const e of entries) {
-      const show = !e.box || !this.cullOn || this.inView(e.box);
+      const show = !this.hiddenKinds.has(e.key?.[0]) && (!e.box || !this.cullOn || this.inView(e.box));
       if (show === e.shown) continue;
       e.shown = show;
       if (show && e.stale) this.objsDirty.add(e.key); // drawn for an old view: redraw (renderObjects)
-      e.g.style.display = e.lg.style.display = e.sg.style.display = show ? '' : 'none';
+      // out of sight is out of the page, not just hidden: the browser still
+      // restyles hidden elements whenever the line widths change (--stroke)
+      if (show) {
+        this.layers.lots.appendChild(e.lg);
+        this.layers.shadows.appendChild(e.sg);
+        this.objsPlace = true; // its drawing goes back in its place (placeObjects)
+      } else {
+        e.g.remove();
+        e.lg.remove();
+        e.sg.remove();
+      }
     }
+  }
+
+  // Put the drawings of the objects in sight back in the objects layer, in
+  // the painter's order (this.order): after cull() showed some again.
+  placeObjects() {
+    this.objsPlace = false;
+    if (!this.order) return;
+    const live = new Set([...this.objs.values(), ...this.ghosts.values()]);
+    placeInOrder(this.layers.objects, this.order.filter((e) => e.shown !== false && live.has(e)).map((e) => e.g));
   }
 
   // Does a scene box overlap the drawn view?
@@ -1849,11 +1943,13 @@ export class Renderer {
   // Each agent keeps a little record (`el`) of what it looks like: its
   // shapes, where it stands, which way it faces.
   renderAgents() {
-    const seen = new Set();
     const now = performance.now();
     const pop = drawEnabled() && this.agentsShown;
+    // the share of walkers under an umbrella (config.weather.people), the
+    // same for everyone this frame
+    this.umbrellas = this.config.weather?.people?.[this.world.weather?.kind]?.umbrellas ?? 0;
+    const close = this.camera.zoom >= VEHICLES.minZoom;
     for (const a of this.agents.visible()) {
-      seen.add(a.id);
       const kind = a.bus ? 'bus' : a.truck ? 'truck' : a.trip.mode === 'drive' ? 'car' : a.trip.mode === 'cycle' ? 'cyclist' : 'walker';
       let el = this.agentEls.get(a.id);
       if (el && el.kind !== kind) {
@@ -1861,9 +1957,10 @@ export class Renderer {
         el = null;
       }
       if (!el) {
-        el = { kind, born: pop ? now : -Infinity };
+        el = agentEl(kind, pop ? now : -Infinity);
         this.agentEls.set(a.id, el);
       }
+      el.seen = now; // (gone: not seen this frame)
       const k = growScale(now - el.born);
       if (kind === 'truck' || kind === 'bus') {
         this.placeVehicle(el, a, kind === 'bus' ? 'bus' : truckFor(a.id));
@@ -1872,10 +1969,22 @@ export class Renderer {
       }
       const [wx, wy] = wobble(a.x, a.y); // on the swaying road
       const [sx, sy] = this.projectDeck(a.x + wx, a.y + wy, 0.04);
+      // off screen: not placed (choosing a model, leaning it, stepping),
+      // which zoomed in is most of the work; only where it is is kept, so
+      // its ghost shrinks in the right place if it goes in meanwhile
+      if (!this.pen.onScreen(sx, sy)) {
+        el.sx = sx;
+        el.sy = sy;
+        continue;
+      }
       if (kind === 'car') {
         this.placeCar(el, a);
-        const t = ((el.heading ?? 0) / VEHICLES.headings) * Math.PI * 2, [ux, uy] = [Math.cos(t) * 0.08, Math.sin(t) * 0.08];
-        el.shear = this.slopeShear([a.x + wx - ux, a.y + wy - uy], [a.x + wx + ux, a.y + wy + uy]);
+        // further out a car is a square dot: leaning it wouldn't show, and
+        // finding the lean is four projections per car per frame
+        if (close) {
+          const t = ((el.heading ?? 0) / VEHICLES.headings) * Math.PI * 2, ux = Math.cos(t) * 0.08, uy = Math.sin(t) * 0.08;
+          el.shear = this.slopeShear([a.x + wx - ux, a.y + wy - uy], [a.x + wx + ux, a.y + wy + uy]);
+        } else el.shear = 0;
       }
       // facing left: mirrored
       el.mirror = kind !== 'car' && this.placePerson(el, a, kind, sx);
@@ -1884,7 +1993,7 @@ export class Renderer {
       this.drawAgent(el, k);
     }
     for (const [id, el] of this.agentEls) {
-      if (!seen.has(id)) {
+      if (el.seen !== now) {
         this.agentGone(el, now, pop);
         this.agentEls.delete(id);
       }
@@ -1898,7 +2007,7 @@ export class Renderer {
   }
 
   agentGone(el, now, pop) {
-    if (!pop) return;
+    if (!pop || !el.shapes && !el.parts) return; // (never placed: never seen)
     el.gone = now;
     this.agentGhosts.add(el);
   }
@@ -2060,9 +2169,10 @@ export class Renderer {
       : 1;
     const close = cam.zoom >= VEHICLES.minZoom;
     const heading = el.heading ?? 0;
-    // in the rain most walkers (config.weather.people) put up an umbrella
-    const share = this.config.weather?.people?.[this.world.weather?.kind]?.umbrellas ?? 0;
-    const brolly = kind === 'walker' && share > 0 && ((bodyFor(`${a.id}u`) + 0.5) / PEOPLE.bodies) <= share;
+    // in the rain most walkers (this.umbrellas, from config.weather.people)
+    // put up an umbrella; who does is fixed per walker, so worked out once
+    const share = this.umbrellas;
+    const brolly = kind === 'walker' && share > 0 && ((el.brolly ??= bodyFor(`${a.id}u`)) + 0.5) / PEOPLE.bodies <= share;
     const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.rotation}` : `w${body}${brolly ? 'u' : ''}`;
     if (el.key !== key) {
       el.key = key;
@@ -2093,3 +2203,15 @@ export class Renderer {
 
 // The plain mark for a car far out: a square dot.
 let CAR_MARK = null;
+
+// What renderAgents keeps about one agent, with every field it may get set
+// up front in one order (all undefined until then): read for thousands of
+// agents every frame, records that grew their fields in different orders
+// would make each read a slow lookup in the engine.
+function agentEl(kind, born) {
+  return {
+    kind, born, seen: 0, gone: undefined, key: undefined, shapes: undefined, parts: undefined, body: undefined,
+    model: undefined, brolly: undefined, at: undefined, heading: undefined, walked: undefined, left: undefined,
+    squash: undefined, mirror: undefined, shear: undefined, sx: 0, sy: 0, dot: undefined, path: undefined,
+  };
+}

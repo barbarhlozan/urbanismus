@@ -34,15 +34,14 @@ export class OverlayKit {
   // A ring on the ground, circled by pen (sketch.js): the same stroke for
   // the same spot, so it doesn't flicker while the pointer rests there.
   // --len and data-anim are for the pen animation (.hover in styles.css,
-  // kept running across redraws by Renderer.keepAnimating). The stroke
-  // doesn't scale (non-scaling-stroke), so its dashes are measured on
-  // screen: the length is too.
+  // kept running across redraws by Renderer.keepAnimating), in the
+  // ring's own units like its dashes.
   ringAt(x, y, r, cls = 'hover') {
     const [sx, sy] = this.project(x, y);
     const [rx, ry] = this.camera.groundEllipse(r);
     const seed = seedOf(x, y, cls.length);
     const d = sketchEllipse(sx, sy, rx, ry, seed);
-    const len = Math.ceil(pathLength(d) * this.camera.zoom * 1.05); // a little spare: mid-zoom the scene lags the camera
+    const len = Math.ceil(pathLength(d) * 1.05); // a little spare for the round caps
     return `<path class="${cls}" d="${d}" style="--len:${len}px" data-anim="${seed}"/>`;
   }
 

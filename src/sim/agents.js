@@ -125,7 +125,7 @@ export class AgentSystem {
       const id = `${s.id}:${tag}${k}`;
       if (k < count) {
         if (!this.agents.has(id)) {
-          this.agents.set(id, { id, home: s.id, state: 'home', timer: timer(), trip: null, s: 0, x: 0, y: 0, ...extra });
+          this.agents.set(id, newAgent({ id, home: s.id, state: 'home', timer: timer(), ...extra }));
         }
       } else if (this.agents.has(id)) {
         this.agents.delete(id);
@@ -574,7 +574,7 @@ export class AgentSystem {
       const nodes = findPath(world.networks.road, exit.node, to.road);
       if (!nodes) continue;
       const id = `v${++this.visitorSeq}`;
-      const a = { id, home: null, visitor: true, commuter, truck, state: 'out', timer: 0, trip: null, s: 0, x: 0, y: 0 };
+      const a = newAgent({ id, visitor: true, commuter, truck, state: 'out' });
       a.trip = this.buildTrip({ mode: 'drive', nodes, fromPoint: this.offMap(exit), toDoor: to.door }, dest.id);
       a.trip.visitor = true;
       a.trip.commuter = commuter;
@@ -699,7 +699,7 @@ export class AgentSystem {
     }
 
     const id = `b${++this.busSeq}`;
-    const a = { id, home: null, visitor: true, bus: true, state: 'out', timer: 0, s: 0, x: 0, y: 0, legs, leg: 0, call: 0, pause: 0, left: -Infinity };
+    const a = newAgent({ id, visitor: true, bus: true, state: 'out', legs, leg: 0, call: 0, pause: 0, left: -Infinity });
     a.trip = { mode: 'drive', dest: null, outside: true, visitor: true, exit, nodes, out: legs[0].leg, back: null };
     this.beginLeg(a, a.trip.out);
     this.placeBus(a);
@@ -795,14 +795,27 @@ export class AgentSystem {
   }
 
   // Structures matching any of `names` (ids or tags), excluding home.
+  // A fresh list (callers take from it) of the other structures matching
+  // `names`. Every trip out asks, so the matches are kept per set of names
+  // until a structure is built, removed or converted (world.structureVersion).
   candidates(home, names = []) {
-    const out = [];
-    if (!names.length) return out;
-    for (const s of this.world.structures.values()) {
-      const def = STRUCTURE_TYPES[s.type];
-      if (s.id !== home.id && names.some((n) => matches(def, n))) out.push(s);
+    if (!names.length) return [];
+    const version = this.world.structureVersion ?? 0;
+    if (this.matchedVersion !== version) {
+      this.matchedVersion = version;
+      this.matched = new Map();
     }
-    return out;
+    const key = names.join('|');
+    let all = this.matched.get(key);
+    if (!all) {
+      all = [];
+      for (const s of this.world.structures.values()) {
+        const def = STRUCTURE_TYPES[s.type];
+        if (names.some((n) => matches(def, n))) all.push(s);
+      }
+      this.matched.set(key, all);
+    }
+    return all.filter((s) => s.id !== home.id);
   }
 
   // Sets off from home: true (a trip out), another state to switch to, or
@@ -935,20 +948,30 @@ export class AgentSystem {
   // car there going the same way beyond `capacity` slows it down (oncoming
   // traffic doesn't). Factors ease towards their target so cars brake and
   // accelerate smoothly.
+  // Counting goes over every car, so it's done every config.traffic.interval
+  // seconds rather than every frame (the factors ease over seconds anyway),
+  // and it reuses its map and list.
   trafficSpeeds(dt) {
-    const { cell, capacity, slowdown, minSpeed, ease } = this.config.traffic;
-    const key = ([x, y], dir) => (Math.round(x / cell) * 4096 + Math.round(y / cell)) * 4 + dir;
-    const counts = new Map();
-    const cars = [];
-    const onRoad = this.roadway();
-    for (const a of this.visible()) {
-      if (a.trip.mode !== 'drive') continue;
+    const { cell, capacity, slowdown, minSpeed, ease, interval } = this.config.traffic;
+    const factor = (this.trafficFactor ??= (a) => (a.speed ?? 1) * (a.laneK ?? 1));
+    this.trafficDt = (this.trafficDt ?? 0) + dt;
+    if (this.trafficDt < interval) return factor;
+    dt = this.trafficDt;
+    this.trafficDt = 0;
+    const key = (x, y, dir) => (Math.round(x / cell) * 4096 + Math.round(y / cell)) * 4 + dir;
+    const counts = (this.trafficCounts ??= new Map());
+    const cars = (this.trafficCars ??= []);
+    counts.clear();
+    cars.length = 0;
+    const onLane = this.laneTest();
+    for (const a of this.agents.values()) {
+      if (!VISIBLE.has(a.state) || a.trip.mode !== 'drive') continue;
       const leg = a.state === 'out' ? a.trip.out : a.trip.back;
       const ahead = pointAt(leg, Math.min(leg.total, a.s + 0.6 * cell));
       const dx = ahead[0] - a.x, dy = ahead[1] - a.y;
       const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 0 : 1) : dy > 0 ? 2 : 3;
-      a.cell = key([a.x, a.y], dir);
-      a.ahead = key(ahead, dir);
+      a.cell = key(a.x, a.y, dir);
+      a.ahead = key(ahead[0], ahead[1], dir);
       counts.set(a.cell, (counts.get(a.cell) ?? 0) + 1);
       cars.push(a);
     }
@@ -962,12 +985,12 @@ export class AgentSystem {
       a.speed += (target - a.speed) * Math.min(1, ease * dt);
       sum += a.speed;
       // lanes: slower, but that's not congestion (not in flow)
-      const lane = onRoad([a.x, a.y]) === 'lane' ? this.config.lane.speed : 1;
+      const lane = onLane(a.x, a.y) ? this.config.lane.speed : 1;
       a.laneK = a.laneK ?? lane;
       a.laneK += (lane - a.laneK) * Math.min(1, ease * dt);
     }
     this.flow = cars.length ? sum / cars.length : 1; // average car speed, 1 = free flowing
-    return (a) => (a.speed ?? 1) * (a.laneK ?? 1);
+    return factor;
   }
 
   driveRoute(home, dest) {
@@ -1073,6 +1096,25 @@ export class AgentSystem {
     return this.roadwayTest;
   }
 
+  // (x, y) -> is it on a single-track lane? The roadway test looks up
+  // nearby segments, and every car asks it every frame (trafficSpeeds), so
+  // its answers are kept per small square (config.traffic.laneCell) until
+  // the roads change.
+  laneTest() {
+    const test = this.roadway();
+    if (this.laneTestFor !== test) {
+      this.laneTestFor = test;
+      this.laneSeen = new Map();
+    }
+    const seen = this.laneSeen, q = this.config.traffic.laneCell;
+    return (x, y) => {
+      const k = Math.round(x / q) * 65536 + Math.round(y / q);
+      let lane = seen.get(k);
+      if (lane === undefined) seen.set(k, (lane = test([x, y]) === 'lane'));
+      return lane;
+    };
+  }
+
   // A measured leg, remembering which of its ends is at a building's door.
   leg(points, doorStart, doorEnd) {
     return { ...measurePolyline(points), doorStart, doorEnd };
@@ -1130,6 +1172,20 @@ export class AgentSystem {
 
 // States in which an agent is out and about (drawn).
 const VISIBLE = new Set(['out', 'back', 'linger', 'wait']);
+
+// A new agent with every field it may get later, always in this order: the
+// update and the renderer read them for thousands of agents every frame,
+// and objects that grew the same fields in different orders (a car gets
+// its traffic fields, a walker its wander…) make each of those reads a
+// slow lookup in the engine. `fields` only sets some of them.
+function newAgent(fields) {
+  return Object.assign({
+    id: null, home: null, state: 'home', timer: 0, trip: null, s: 0, x: 0, y: 0, tx: 0, ty: 0,
+    visitor: false, commuter: false, truck: false, bus: false,
+    speed: undefined, laneK: undefined, cell: 0, ahead: 0, waitKey: null, slot: 0, wander: null, retry: null,
+    legs: null, leg: 0, call: 0, pause: 0, left: 0,
+  }, fields);
+}
 
 function between(min, max) {
   return min + Math.random() * (max - min);

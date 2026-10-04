@@ -24,6 +24,15 @@ export const CONFIG = {
     // Forest trees are drawn plainer further out (smoother crown outlines,
     // see features/trees.js): below `medium` a little, below `far` more.
     trees: { medium: 1.5, far: 0.9 },
+    // Line widths are kept about the same on screen by rescaling them when
+    // the zoom has changed by this factor (styles.css, --stroke): in between
+    // they grow and shrink with the map, at most by its square root (±12 %).
+    // Each rescale restyles the whole map, so not on every zoom.
+    strokeStep: 1.25,
+    // When the level of detail changes the objects in sight are redrawn
+    // with it (Renderer.atDetail), from the middle of the window out, for at
+    // most about this many ms each frame.
+    rebuildBudget: 6,
   },
 
   road: {
@@ -370,6 +379,8 @@ export const CONFIG = {
     slowdown: 0.45,       // each car over capacity cuts speed by this share (compounding)
     minSpeed: 0.2,        // never slower than this share of full speed
     ease: 0.9,            // how quickly cars brake / pick up speed (per second)
+    laneCell: 0.05,       // whether a car is on a lane is remembered per square this size
+    interval: 0.1,        // cars are counted (and their speeds eased) every this many simulated seconds
   },
 
   // The story (src/story/, written in story/story.txt – see story/README.md).
