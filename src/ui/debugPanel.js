@@ -29,7 +29,7 @@ export class DebugPanel {
     const toggles = [
       ['Relief (hills lift the map)', (on) => { camera.lift = on ? lift : null; renderer.invalidate(); }],
       ['Move map on GPU while panning / zooming', (on) => { renderer.deferView = on; }],
-      ['Constant line width', (on) => document.body.classList.toggle('scaling-strokes', !on)],
+      ['Constant line width', (on) => { renderer.constantStrokes = on; renderer.updateStroke(camera.zoom); }],
       ['People, bikes, cars', (on) => { renderer.showAgents = on; }],
       ['Hide buildings outside the view', (on) => { renderer.cullOn = on; renderer.cull(); renderer.cullMeadow(); }],
       ['Buildings', kind('s')],

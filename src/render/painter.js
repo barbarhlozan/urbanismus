@@ -199,8 +199,9 @@ function attrs(opts, lod = 0, base = '') {
   let style = '';
   if (opts.fill) style += `fill:${color(opts.fill)};`;
   if (opts.stroke) style += `stroke:${color(opts.stroke)};`;
-  if (opts.width) style += `stroke-width:${opts.width};`;
-  if (opts.dash) style += `stroke-dasharray:${opts.dash};`;
+  // (widths and dashes times the map's --stroke, as in styles.css)
+  if (opts.width) style += `stroke-width:calc(${opts.width}px * var(--stroke, 1));`;
+  if (opts.dash) style += `stroke-dasharray:${String(opts.dash).split(/[\s,]+/).map((n) => `calc(${n}px * var(--stroke, 1))`).join(' ')};`;
   const cls = [base, opts.cls, lod > 0 ? `d${lod}` : ''].filter(Boolean).join(' ');
   return (style ? ` style="${style}"` : '') + (cls ? ` class="${cls}"` : '');
 }

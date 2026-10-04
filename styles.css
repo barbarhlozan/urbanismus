@@ -90,7 +90,12 @@ html, body {
 }
 #input.panning { cursor: grabbing; }
 
-.scene * { vector-effect: non-scaling-stroke; }
+/* Line widths stay about the same on screen at any zoom: every stroke
+   width and dash is multiplied by --stroke, which the renderer sets on the
+   map's <svg>s to 1 / zoom in steps, in device pixels (Renderer.updateStroke). Not
+   vector-effect: non-scaling-stroke: with it the browser recomputes every
+   stroke in the map whenever the view moves. Elsewhere (photos, icons)
+   --stroke isn't set and widths are as written. */
 
 .grid-dot { fill: var(--detail); }
 /* the dots only show while building (any tool but Select, see main.js) */
@@ -102,34 +107,34 @@ html, body {
 #world.grid-building .grid-dot.taken,
 #world.grid-roads .grid-dot.house { display: none; }
 
-.hatch { stroke: var(--detail); stroke-width: 0.8; }
+.hatch { stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); }
 
-.contour { fill: none; stroke: var(--contour); stroke-width: 0.7; stroke-linejoin: round; }
-.contour.index { stroke: var(--contourIndex); stroke-width: 0.9; }
+.contour { fill: none; stroke: var(--contour); stroke-width: calc(0.7px * var(--stroke, 1)); stroke-linejoin: round; }
+.contour.index { stroke: var(--contourIndex); stroke-width: calc(0.9px * var(--stroke, 1)); }
 /* brows: where a hill turns away out of sight (render/brows.js) */
-.brow { fill: none; stroke: color-mix(in srgb, var(--detail) 55%, var(--bg)); stroke-width: 0.8; stroke-linecap: round; stroke-linejoin: round; }
-.brow.light { stroke: color-mix(in srgb, var(--detail) 32%, var(--bg)); stroke-width: 0.7; }
-.brow.outline { stroke: var(--detail); stroke-width: 1.1; }
+.brow { fill: none; stroke: color-mix(in srgb, var(--detail) 55%, var(--bg)); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.brow.light { stroke: color-mix(in srgb, var(--detail) 32%, var(--bg)); stroke-width: calc(0.7px * var(--stroke, 1)); }
+.brow.outline { stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); }
 /* slopes too steep to build on, outside the terrain view (render/steep.js) */
-.steep { fill: none; stroke: color-mix(in srgb, var(--detail) 28%, var(--bg)); stroke-width: 0.6; stroke-linecap: round; stroke-linejoin: round; }
+.steep { fill: none; stroke: color-mix(in srgb, var(--detail) 28%, var(--bg)); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 /* rock faces turned to the viewer: the lip, strokes down the face (render/rocks.js) */
-.rock-lip { fill: none; stroke: color-mix(in srgb, var(--detail) 62%, var(--bg)); stroke-width: 0.85; stroke-linecap: round; stroke-linejoin: round; }
-.rock-face { fill: none; stroke: color-mix(in srgb, var(--detail) 45%, var(--bg)); stroke-width: 0.6; stroke-linecap: round; }
+.rock-lip { fill: none; stroke: color-mix(in srgb, var(--detail) 62%, var(--bg)); stroke-width: calc(0.85px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.rock-face { fill: none; stroke: color-mix(in srgb, var(--detail) 45%, var(--bg)); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; }
 /* a named hill's top (terrain/hills.js): a little pen triangle; hovering it
    shows the name and height (ui/annotations.js) */
-.summit { fill: none; stroke: var(--detail); stroke-width: 1; stroke-linejoin: round; stroke-linecap: round; }
+.summit { fill: none; stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
 /* lakes and rivers (Renderer.renderWater): a lake's shoreline with
    two wave strokes inside, a river's banks thinner and lighter; all in the
    detail pen */
-.shore { fill: none; stroke: var(--detail); stroke-width: 1.1; stroke-linejoin: round; }
-.bank { fill: none; stroke: color-mix(in srgb, var(--detail) 75%, var(--bg)); stroke-width: 0.8; stroke-linejoin: round; }
-.wave { fill: none; stroke: var(--detail); stroke-width: 0.8; stroke-linecap: round; }
+.shore { fill: none; stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linejoin: round; }
+.bank { fill: none; stroke: color-mix(in srgb, var(--detail) 75%, var(--bg)); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }
+.wave { fill: none; stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; }
 
 /* roads: their two edge lines (roadEdges in src/roads/geometry.js) */
 .road {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 1.2;
+  stroke-width: calc(1.2px * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -138,7 +143,7 @@ html, body {
 .kerb {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 1;
+  stroke-width: calc(1px * var(--stroke, 1));
   stroke-linecap: round;
 }
 
@@ -146,49 +151,49 @@ html, body {
 .zebra {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 1.6;
+  stroke-width: calc(1.6px * var(--stroke, 1));
   stroke-linecap: butt;
 }
 
 .road-exit {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 1.2;
-  stroke-dasharray: 3 4;
+  stroke-width: calc(1.2px * var(--stroke, 1));
+  stroke-dasharray: calc(3px * var(--stroke, 1)) calc(4px * var(--stroke, 1));
 }
 
 /* footpaths: two narrow edge lines, like small roads (roadEdges) */
 .footpath {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 0.9;
+  stroke-width: calc(0.9px * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 /* fences round pastures: a rail along the top, short posts close together */
-.fence, .fence-post { fill: none; stroke: var(--detail); stroke-width: 1; stroke-linecap: round; } /* as the garden fences (.layer-objects .ln) */
+.fence, .fence-post { fill: none; stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); stroke-linecap: round; } /* as the garden fences (.layer-objects .ln) */
 /* a gate's pillars, either side of a footpath through the fence */
-.fence-pillar { fill: none; stroke: var(--detail); stroke-width: 1.8; stroke-linecap: butt; }
+.fence-pillar { fill: none; stroke: var(--detail); stroke-width: calc(1.8px * var(--stroke, 1)); stroke-linecap: butt; }
 /* railways: the map symbol – a solid line with dashes of background
    colour inside it; faded dashes past the map edge, a bar at dead ends */
-.rail { fill: none; stroke: var(--fg); stroke-width: 3.6; stroke-linejoin: round; }
-.rail-dash { fill: none; stroke: var(--bg); stroke-width: 1.4; stroke-dasharray: 7 7; stroke-linejoin: round; }
-.rail-exit { fill: none; stroke: var(--fg); stroke-width: 3.6; stroke-dasharray: 3 5; }
-.rail-buffer { fill: none; stroke: var(--fg); stroke-width: 1.4; stroke-linecap: square; }
+.rail { fill: none; stroke: var(--fg); stroke-width: calc(3.6px * var(--stroke, 1)); stroke-linejoin: round; }
+.rail-dash { fill: none; stroke: var(--bg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-dasharray: calc(7px * var(--stroke, 1)) calc(7px * var(--stroke, 1)); stroke-linejoin: round; }
+.rail-exit { fill: none; stroke: var(--fg); stroke-width: calc(3.6px * var(--stroke, 1)); stroke-dasharray: calc(3px * var(--stroke, 1)) calc(5px * var(--stroke, 1)); }
+.rail-buffer { fill: none; stroke: var(--fg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-linecap: square; }
 /* bridges (render/bridges.js): railings, the deck's side, piers, a truss;
    thinner posts */
-.bridge { fill: none; stroke: var(--fg); stroke-width: 1; stroke-linejoin: round; stroke-linecap: round; }
-.bridge-post { fill: none; stroke: var(--fg); stroke-width: 0.7; stroke-linecap: round; }
+.bridge { fill: none; stroke: var(--fg); stroke-width: calc(1px * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+.bridge-post { fill: none; stroke: var(--fg); stroke-width: calc(0.7px * var(--stroke, 1)); stroke-linecap: round; }
 
-.driveway { fill: none; stroke: var(--detail); stroke-width: 1; }
+.driveway { fill: none; stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); }
 /* paths drawn inside parks, in the footpath style */
-.gnd.fp { stroke: var(--main); stroke-width: 0.9; stroke-linecap: round; }
+.gnd.fp { stroke: var(--main); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linecap: round; }
 
 /* flat ground drawing: lawns, paving, parking lines (texture: detail color) */
 .gnd {
   fill: none;
   stroke: var(--detail);
-  stroke-width: 0.8;
+  stroke-width: calc(0.8px * var(--stroke, 1));
   stroke-linejoin: round;
   stroke-linecap: round;
 }
@@ -205,7 +210,7 @@ html, body {
 .ghost .filled {
   fill: var(--bg);
   stroke: var(--fg);
-  stroke-width: 1.2;
+  stroke-width: calc(1.2px * var(--stroke, 1));
   stroke-linejoin: round;
 }
 /* lines on and around buildings (windows, floors, fences, props): detail */
@@ -215,18 +220,18 @@ html, body {
 .ghost .ln {
   fill: none;
   stroke: var(--detail);
-  stroke-width: 1;
+  stroke-width: calc(1px * var(--stroke, 1));
   stroke-linecap: round;
 }
-.ghost polygon, .ghost polyline, .ghost .sk { stroke-dasharray: 3 3; }
+.ghost polygon, .ghost polyline, .ghost .sk { stroke-dasharray: calc(3px * var(--stroke, 1)) calc(3px * var(--stroke, 1)); }
 /* hand-drawn marks (LOOK in src/render/painter.js): the stroke along a
    building's foot in the outline pen, roof hatching and
    ink windows as texture */
-.layer-objects .foot { stroke: var(--main); stroke-width: 1.2; }
-.layer-objects .roof-hatch { stroke: var(--main); stroke-width: 0.7; }
-.layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: 0.8; stroke-linejoin: round; }
+.layer-objects .foot { stroke: var(--main); stroke-width: calc(1.2px * var(--stroke, 1)); }
+.layer-objects .roof-hatch { stroke: var(--main); stroke-width: calc(0.7px * var(--stroke, 1)); }
+.layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }
 /* cast shadows: pen hatching on the ground (src/render/shadows.js) */
-.shadow { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; }
+.shadow { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; }
 /* SUN.ground / SUN.walls 'tone': flat shade instead of strokes */
 .shadow.tone { fill: color-mix(in srgb, var(--detail) 16%, var(--bg)); stroke: none; }
 /* --sun: how much the sun shades them, from the weather (config.weather.sun,
@@ -235,25 +240,25 @@ html, body {
 #objects { transition: --sun 4s; }
 .layer-objects .filled.shade-1 { fill: color-mix(in srgb, var(--detail) calc(9% * var(--sun)), var(--bg)); }
 .layer-objects .filled.shade-2 { fill: color-mix(in srgb, var(--detail) calc(18% * var(--sun)), var(--bg)); }
-.layer-objects .wall-shade { stroke: var(--detail); stroke-width: 0.6; }
+.layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); }
 /* screen-facing line drawings (trees, see features/trees.js) */
-.glyph { fill: none; stroke: var(--detail); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round; }
-.glyph.trunk { stroke-width: 1.4; }
-.glyph.trunk.thick { stroke-width: 2.4; }
-.glyph.limb { stroke-width: 1.15; }
-.glyph.twig { stroke-width: 0.6; }
+.glyph { fill: none; stroke: var(--detail); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.glyph.trunk { stroke-width: calc(1.4px * var(--stroke, 1)); }
+.glyph.trunk.thick { stroke-width: calc(2.4px * var(--stroke, 1)); }
+.glyph.limb { stroke-width: calc(1.15px * var(--stroke, 1)); }
+.glyph.twig { stroke-width: calc(0.6px * var(--stroke, 1)); }
 /* hatching in leafy crowns (LEAFY in features/trees.js) */
-.glyph.leaf { stroke-width: 0.7; }
+.glyph.leaf { stroke-width: calc(0.7px * var(--stroke, 1)); }
 /* spruce outlines are trees too */
-.layer-objects .filled.tree { stroke: var(--detail); stroke-width: 1; }
+.layer-objects .filled.tree { stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); }
 /* grass and wild flowers on open ground (src/render/meadow.js); tiers
    t1 / t2 show from a zoom up (mz0/1/2 set on the layer by the renderer) */
 /* a hair under the crowns' hatching (.glyph.leaf): a tuft's blades double back on themselves, so it reads heavier */
-.layer-meadow path { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; stroke-linejoin: round; }
-.layer-meadow .thin { stroke-width: 0.5; }
-.layer-meadow .ink { fill: var(--detail); stroke-width: 0.4; }
+.layer-meadow path { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.layer-meadow .thin { stroke-width: calc(0.5px * var(--stroke, 1)); }
+.layer-meadow .ink { fill: var(--detail); stroke-width: calc(0.4px * var(--stroke, 1)); }
 .mz0 .t1, .mz0 .t2, .mz1 .t2 { display: none; }
-.ghost .gnd { fill: none; stroke-width: 0.8; }
+.ghost .gnd { fill: none; stroke-width: calc(0.8px * var(--stroke, 1)); }
 /* the build preview: all in the detail pen, solid lines (the dashed .ghost
    look above is for buildings being erased); faded where it can't go */
 .overlay .ghost polygon, .overlay .ghost circle, .overlay .ghost .filled { stroke: var(--detail); }
@@ -262,23 +267,23 @@ html, body {
 .overlay .ghost.blocked { opacity: 0.5; }
 
 .agent { fill: var(--fg); }
-.agent.truck { stroke: var(--fg); stroke-width: 0.9; stroke-linejoin: round; }
+.agent.truck { stroke: var(--fg); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
 /* vehicles close up (src/render/vehicles.js): paper bodies in the outline
    pen, inked wheels and windows; parked cars sit back in the detail color */
-.vb { fill: var(--bg); stroke: var(--main); stroke-width: 0.9; stroke-linejoin: round; }
-.vi { fill: var(--main); stroke: var(--main); stroke-width: 0.3; stroke-linejoin: round; }
+.vb { fill: var(--bg); stroke: var(--main); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
+.vi { fill: var(--main); stroke: var(--main); stroke-width: calc(0.3px * var(--stroke, 1)); stroke-linejoin: round; }
 /* level crossing signs in photos (on the map: agentCanvas.js) */
-.sgl { fill: none; stroke: var(--main); stroke-width: 0.9; }
-.flash { fill: none; stroke: var(--main); stroke-width: 1.1; stroke-linecap: round; }
+.sgl { fill: none; stroke: var(--main); stroke-width: calc(0.9px * var(--stroke, 1)); }
+.flash { fill: none; stroke: var(--main); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; }
 /* people close up (src/render/people.js): paper bodies, open heads, wheel rings */
-.fig-body { fill: var(--bg); stroke: var(--main); stroke-width: 0.9; stroke-linejoin: round; }
-.fig-head, .fig-wheel, .fig-line { fill: none; stroke: var(--main); stroke-width: 0.8; stroke-linecap: round; }
-.fig-ink { fill: var(--main); stroke: var(--main); stroke-width: 0.5; stroke-linejoin: round; }
+.fig-body { fill: var(--bg); stroke: var(--main); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
+.fig-head, .fig-wheel, .fig-line { fill: none; stroke: var(--main); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; }
+.fig-ink { fill: var(--main); stroke: var(--main); stroke-width: calc(0.5px * var(--stroke, 1)); stroke-linejoin: round; }
 .parked-car .vb { stroke: var(--detail); }
 .parked-car .vi { fill: var(--detail); stroke: var(--detail); }
-.agent.cyclist { stroke: var(--fg); stroke-width: 0.4; stroke-linejoin: round; }
-.train { fill: var(--fg); stroke: var(--fg); stroke-width: 0.9; stroke-linejoin: round; }
-.parked { fill: var(--bg); stroke: var(--detail); stroke-width: 1.1; }
+.agent.cyclist { stroke: var(--fg); stroke-width: calc(0.4px * var(--stroke, 1)); stroke-linejoin: round; }
+.train { fill: var(--fg); stroke: var(--fg); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
+.parked { fill: var(--bg); stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); }
 
 /* Shadow hatching density (src/render/shadows.js): stroke tiers above the
    one the zoom allows hide – on the ground (s, sz) and on walls (w, sw) */
@@ -300,11 +305,11 @@ html, body {
 .overlay .hover, .overlay .anchor {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 1.2;
+  stroke-width: calc(1.2px * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.overlay .anchor { stroke-width: 1.7; }
+.overlay .anchor { stroke-width: calc(1.7px * var(--stroke, 1)); }
 /* the hover ring is circled by pen once, from the start of the stroke to
    its end, then stays (--len: its length on screen, see OverlayKit.ringAt).
    It waits a moment first, so sweeping the pointer across the map doesn't
@@ -329,19 +334,19 @@ html, body {
 .overlay .preview {
   fill: none;
   stroke: var(--fg);
-  stroke-width: 2.4;
+  stroke-width: calc(2.4px * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 1 5;
+  stroke-dasharray: calc(1px * var(--stroke, 1)) calc(5px * var(--stroke, 1));
 }
-.overlay .preview.path { stroke-width: 1.1; }
-.overlay .preview.lane { stroke-width: 1.6; }
-.overlay .preview.rail { stroke-width: 1.4; stroke-dasharray: 1 2.5; }
-.overlay .preview.invalid { stroke-width: 1; stroke-dasharray: 6 4; }
-.overlay .cross { fill: none; stroke: var(--fg); stroke-width: 1.6; stroke-linecap: round; }
-.overlay .cross-halo { fill: none; stroke: var(--bg); stroke-width: 5; stroke-linecap: round; }
+.overlay .preview.path { stroke-width: calc(1.1px * var(--stroke, 1)); }
+.overlay .preview.lane { stroke-width: calc(1.6px * var(--stroke, 1)); }
+.overlay .preview.rail { stroke-width: calc(1.4px * var(--stroke, 1)); stroke-dasharray: calc(1px * var(--stroke, 1)) calc(2.5px * var(--stroke, 1)); }
+.overlay .preview.invalid { stroke-width: calc(1px * var(--stroke, 1)); stroke-dasharray: calc(6px * var(--stroke, 1)) calc(4px * var(--stroke, 1)); }
+.overlay .cross { fill: none; stroke: var(--fg); stroke-width: calc(1.6px * var(--stroke, 1)); stroke-linecap: round; }
+.overlay .cross-halo { fill: none; stroke: var(--bg); stroke-width: calc(5px * var(--stroke, 1)); stroke-linecap: round; }
 /* too steep: a warning sign with the slope in it (OverlayKit.steepAt) */
-.overlay .steep-sign { fill: none; stroke: var(--fg); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.overlay .steep-sign { fill: none; stroke: var(--fg); stroke-width: calc(1.5px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 /* Erase: what would go turns to the secondary colour (Renderer.markErasing:
    its drawing's own colours, so everything in it follows) … */
 .erasing { --main: var(--detail); --fg: var(--detail); }
@@ -353,8 +358,8 @@ html, body {
 /* Erase: the eraser over what would go (OverlayKit.eraserAt) */
 .overlay .eraser-body { fill: var(--bg); stroke: none; }
 .overlay .eraser-tip { fill: color-mix(in srgb, var(--fg) 25%, var(--bg)); stroke: none; }
-.overlay .eraser { fill: none; stroke: var(--fg); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.overlay .steep-wedge { fill: var(--fg); stroke: var(--fg); stroke-width: 0.6; stroke-linejoin: round; }
+.overlay .eraser { fill: none; stroke: var(--fg); stroke-width: calc(1.5px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.overlay .steep-wedge { fill: var(--fg); stroke: var(--fg); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linejoin: round; }
 
 /* ---------- UI ---------- */
 
@@ -488,7 +493,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
    stats' fold button across from it */
 #ui .controls .menu-toggle { flex: 0 0 auto; width: var(--cell); } /* #ui: over .close's width */
 .controls .menu-icon { width: 14px; height: 14px; }
-.controls .menu-icon path { stroke-width: 1.3; stroke-linecap: round; }
+.controls .menu-icon path { stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; }
 .controls .menu-icon .bars, .controls.folded .menu-icon .cross { display: none; }
 .controls.folded .menu-icon .bars { display: inline; }
 .controls.folded { width: auto; }
@@ -614,8 +619,8 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 
 .tag { fill: var(--fg); font-family: var(--ui-font); stroke: none; }
 .tag-fill { fill: var(--bg); }
-.tag-box { fill: none; stroke: var(--fg); stroke-width: 1.2; stroke-linecap: round; }
-.tag-line { fill: none; stroke: var(--detail); stroke-width: 1.1; stroke-linecap: round; }
+.tag-box { fill: none; stroke: var(--fg); stroke-width: calc(1.2px * var(--stroke, 1)); stroke-linecap: round; }
+.tag-line { fill: none; stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; }
 .tag-dot { fill: var(--fg); }
 
 /* ---------- Dialogue (src/ui/dialogue.js) ---------- */
@@ -810,7 +815,7 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
    loading (drawing a line along its length would stutter then). */
 .intro-pen, .intro-pen-reveal { display: block; width: 160px; height: 12px; overflow: hidden; }
 .intro-pen svg { display: block; width: 160px; height: 12px; }
-.intro-pen path { fill: none; stroke: var(--main); stroke-width: 1.4; stroke-linecap: round; }
+.intro-pen path { fill: none; stroke: var(--main); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-linecap: round; }
 .intro-pen-reveal, .intro-pen svg { transform: translateX(-100%); }
 .intro-pen svg { transform: translateX(100%); }
 .intro-card.shown .intro-pen-reveal { animation: intro-pen 650ms cubic-bezier(0.5, 0, 0.3, 1) 220ms both; }
@@ -1044,23 +1049,23 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 /* icons: the map's line style at a small size */
 .icon { width: 100%; height: 100%; overflow: visible; }
 .icon * { vector-effect: non-scaling-stroke; }
-.icon polygon, .icon circle, .icon .filled { fill: var(--bg); stroke: currentColor; stroke-width: 0.9; stroke-linejoin: round; }
-.icon polyline, .icon path, .icon line { fill: none; stroke: currentColor; stroke-width: 0.7; stroke-linecap: round; }
-.icon .gnd { stroke-width: 0.5; }
-.icon .glyph { stroke-width: 0.6; }
+.icon polygon, .icon circle, .icon .filled { fill: var(--bg); stroke: currentColor; stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
+.icon polyline, .icon path, .icon line { fill: none; stroke: currentColor; stroke-width: calc(0.7px * var(--stroke, 1)); stroke-linecap: round; }
+.icon .gnd { stroke-width: calc(0.5px * var(--stroke, 1)); }
+.icon .glyph { stroke-width: calc(0.6px * var(--stroke, 1)); }
 .icon .d2 { display: none; }
 .bm-tool.active .icon polygon, .bm-tool.active .icon circle, .bm-tool.active .icon .filled { fill: var(--fg); }
-.icon .i-road { stroke-width: 2.4; }
-.icon .i-lane { stroke-width: 1.5; }
-.icon .i-path { stroke-width: 1.2; stroke-dasharray: 3 2.5; stroke-linecap: butt; }
-.icon .i-fence { stroke-width: 1.1; stroke-linecap: round; }
-.icon .i-rail { stroke-width: 3.6; stroke-linecap: butt; stroke-linejoin: round; }
+.icon .i-road { stroke-width: calc(2.4px * var(--stroke, 1)); }
+.icon .i-lane { stroke-width: calc(1.5px * var(--stroke, 1)); }
+.icon .i-path { stroke-width: calc(1.2px * var(--stroke, 1)); stroke-dasharray: calc(3px * var(--stroke, 1)) calc(2.5px * var(--stroke, 1)); stroke-linecap: butt; }
+.icon .i-fence { stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; }
+.icon .i-rail { stroke-width: calc(3.6px * var(--stroke, 1)); stroke-linecap: butt; stroke-linejoin: round; }
 /* dashes in the colour behind the icon, as .rail-dash on the map */
-.icon .i-rail-dash { stroke: var(--bg); stroke-width: 1.4; stroke-dasharray: 3.5 3.5; stroke-linecap: butt; stroke-linejoin: round; }
+.icon .i-rail-dash { stroke: var(--bg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-dasharray: calc(3.5px * var(--stroke, 1)) calc(3.5px * var(--stroke, 1)); stroke-linecap: butt; stroke-linejoin: round; }
 #ui .bm-tool:hover .icon .i-rail-dash { stroke: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
 #ui .bm-tool.active .icon .i-rail-dash { stroke: var(--fg); }
-.icon .i-eraser { stroke-width: 1.4; stroke-linejoin: round; }
-.icon .i-smudge { stroke-width: 1.2; stroke-dasharray: 2 2; }
+.icon .i-eraser { stroke-width: calc(1.4px * var(--stroke, 1)); stroke-linejoin: round; }
+.icon .i-smudge { stroke-width: calc(1.2px * var(--stroke, 1)); stroke-dasharray: calc(2px * var(--stroke, 1)) calc(2px * var(--stroke, 1)); }
 
 /* ---------- Colors menu (src/ui/colorMenu.js) ---------- */
 
@@ -1222,7 +1227,7 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 .newmap-panel .newmap-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
 .newmap-panel .newmap-row .field-name { flex: 0 0 76px; display: flex; align-items: center; gap: 7px; color: var(--detail); }
 .newmap-panel .newmap-row .ctl-icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--fg); }
-.newmap-panel .newmap-row .ctl-icon path { stroke-width: 1.1; fill: none; }
+.newmap-panel .newmap-row .ctl-icon path { stroke-width: calc(1.1px * var(--stroke, 1)); fill: none; }
 .newmap-panel .slot { flex: 1; min-width: 0; }
 .newmap-panel .value { flex: 0 0 44px; text-align: right; font-weight: 700; transform-origin: right center; }
 /* hills, lakes and forests: a picture (landscapePreview.js) over their
@@ -1232,12 +1237,12 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 .newmap-scene { margin: 2px 0 8px; }
 .newmap-scene svg { display: block; width: 100%; height: auto; overflow: visible; }
 .newmap-scene .lp-fill { fill: var(--bg); stroke: none; }
-.newmap-scene .lp-back { fill: none; stroke: var(--detail); stroke-width: 1.1; stroke-linejoin: round; }
-.newmap-scene .lp-near { fill: none; stroke: var(--fg); stroke-width: 1.2; stroke-linejoin: round; }
-.newmap-scene .lp-hatch { fill: none; stroke: var(--detail); stroke-width: 0.7; stroke-linecap: round; }
-.newmap-scene .lp-lake { fill: color-mix(in srgb, var(--detail) 12%, var(--bg)); stroke: var(--fg); stroke-width: 1; }
-.newmap-scene .lp-ripple { fill: none; stroke: var(--detail); stroke-width: 0.8; stroke-linecap: round; }
-.newmap-scene .lp-tree { fill: var(--bg); stroke: var(--fg); stroke-width: 0.9; stroke-linejoin: round; stroke-linecap: round; }
+.newmap-scene .lp-back { fill: none; stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linejoin: round; }
+.newmap-scene .lp-near { fill: none; stroke: var(--fg); stroke-width: calc(1.2px * var(--stroke, 1)); stroke-linejoin: round; }
+.newmap-scene .lp-hatch { fill: none; stroke: var(--detail); stroke-width: calc(0.7px * var(--stroke, 1)); stroke-linecap: round; }
+.newmap-scene .lp-lake { fill: color-mix(in srgb, var(--detail) 12%, var(--bg)); stroke: var(--fg); stroke-width: calc(1px * var(--stroke, 1)); }
+.newmap-scene .lp-ripple { fill: none; stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; }
+.newmap-scene .lp-tree { fill: var(--bg); stroke: var(--fg); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
 /* trees and lakes grow from where they stand, and shrink away */
 .newmap-scene .lp-grow {
   transform: scale(0);
@@ -1248,7 +1253,7 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 }
 .newmap-scene .lp-lakes .lp-grow { transform-origin: 50% 50%; }
 .newmap-scene .lp-flow { stroke: none; }
-.newmap-scene .lp-bank { fill: none; stroke: var(--fg); stroke-width: 0.8; stroke-linecap: round; }
+.newmap-scene .lp-bank { fill: none; stroke: var(--fg); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; }
 /* the water runs out of the hills towards you */
 .newmap-scene .lp-water .lp-grow { transform: scale(1, 0); transform-origin: 50% 0; }
 .newmap-scene .lp-water .on > .lp-grow { transform: none; }
@@ -1294,11 +1299,11 @@ body.touch #ui .newmap-confirm button { min-height: 44px; }
 /* ---- the pen-drawn slider (src/ui/sketchSlider.js) ---- */
 .sk-slider { position: relative; height: 26px; cursor: pointer; touch-action: none; outline: none; }
 .sk-slider svg { display: block; width: 100%; height: 26px; overflow: visible; }
-.sk-slider .sk-track { fill: none; stroke: var(--detail); stroke-width: 1.1; stroke-linecap: round; }
-.sk-slider .sk-fill { fill: none; stroke: var(--fg); stroke-width: 2.2; stroke-linecap: round; }
+.sk-slider .sk-track { fill: none; stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; }
+.sk-slider .sk-fill { fill: none; stroke: var(--fg); stroke-width: calc(2.2px * var(--stroke, 1)); stroke-linecap: round; }
 .sk-slider .sk-knob { transition: transform 0.32s cubic-bezier(0.34, 1.6, 0.64, 1); } /* springs onto its stop */
 .sk-slider.dragging .sk-knob { transition-duration: 0.06s; }
-.sk-slider .sk-knob path { fill: var(--bg); stroke: var(--fg); stroke-width: 1.4; stroke-linejoin: round; }
+.sk-slider .sk-knob path { fill: var(--bg); stroke: var(--fg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-linejoin: round; }
 .sk-slider:hover .sk-knob path, .sk-slider:focus-visible .sk-knob path { fill: var(--fg); }
 body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a finger */
 
@@ -1322,7 +1327,7 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
   overflow: visible;
   z-index: 3;
 }
-.sk-frame path { fill: none; stroke: var(--main); stroke-width: 1.3; stroke-linecap: round; }
+.sk-frame path { fill: none; stroke: var(--main); stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; }
 
 /* ---------- Touch ---------- */
 
@@ -1495,8 +1500,6 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
   .asset-tile { width: calc(50% - 3px); height: auto; aspect-ratio: 1; }
 }
 
-/* "Constant line width" off: lines scale with the zoom */
-body.scaling-strokes .scene * { vector-effect: none; }
 
 /* secondary text on highlighted rows / buttons takes the row's text colour */
 #ui .bm-tool.active .key,
@@ -1504,8 +1507,8 @@ body.scaling-strokes .scene * { vector-effect: none; }
 
 /* ---------- Photo mode (tools/photo.js, render/photo.js) ---------- */
 
-.overlay .photo-cone-hatch { fill: none; stroke: var(--main); stroke-width: 0.75; stroke-linecap: round; }
-.overlay .photo-cam path, .overlay .photo-cam circle { fill: var(--bg); stroke: var(--main); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.overlay .photo-cone-hatch { fill: none; stroke: var(--main); stroke-width: calc(0.75px * var(--stroke, 1)); stroke-linecap: round; }
+.overlay .photo-cam path, .overlay .photo-cam circle { fill: var(--bg); stroke: var(--main); stroke-width: calc(2px / 0.24 * var(--stroke, 1)); /* drawn at scale(0.24), OverlayKit.photoCone */ stroke-linejoin: round; stroke-linecap: round; }
 
 
 
@@ -1533,15 +1536,15 @@ body.scaling-strokes .scene * { vector-effect: none; }
 
 svg.photo .photo-sky { fill: var(--bg); }
 svg.photo .photo-ground { fill: var(--bg); stroke: none; }
-svg.photo .photo-horizon { fill: none; stroke: var(--detail); stroke-width: 0.8; }
-svg.photo .photo-cloud { fill: var(--bg); stroke: var(--detail); stroke-width: 0.8; stroke-linejoin: round; }
+svg.photo .photo-horizon { fill: none; stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); }
+svg.photo .photo-cloud { fill: var(--bg); stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }
 svg.photo .photo-cloud-fill { fill: var(--bg); stroke: none; }
-svg.photo .photo-cloud-edge { fill: none; stroke: var(--detail); stroke-width: 0.8; stroke-linecap: round; }
-svg.photo .photo-cloud-under { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; opacity: 0.7; }
-svg.photo .photo-rain { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; opacity: 0.6; }
+svg.photo .photo-cloud-edge { fill: none; stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; }
+svg.photo .photo-cloud-under { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
+svg.photo .photo-rain { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.6; }
 svg.photo .photo-figure * { vector-effect: non-scaling-stroke; } /* deer, cows, sheep: the map's line widths */
-svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: 0.6; stroke-linejoin: round; }
-svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: 0.8; stroke-linejoin: round; }
-svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
-svg.photo .photo-hatch { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; opacity: 0.7; }
-svg.photo .photo-ripples { fill: none; stroke: var(--main); stroke-width: 0.7; stroke-linecap: round; opacity: 0.8; }
+svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linejoin: round; }
+svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }
+svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+svg.photo .photo-hatch { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
+svg.photo .photo-ripples { fill: none; stroke: var(--main); stroke-width: calc(0.7px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.8; }

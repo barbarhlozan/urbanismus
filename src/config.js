@@ -24,6 +24,15 @@ export const CONFIG = {
     // Forest trees are drawn plainer further out (smoother crown outlines,
     // see features/trees.js): below `medium` a little, below `far` more.
     trees: { medium: 1.5, far: 0.9 },
+    // Line widths are kept about the same on screen by rescaling them when
+    // the zoom has changed by this factor (styles.css, --stroke): in between
+    // they grow and shrink with the map, at most by its square root (±12 %).
+    // Each rescale restyles the whole map, so not on every zoom.
+    strokeStep: 1.25,
+    // When the level of detail changes the objects in sight are redrawn
+    // with it (Renderer.atDetail), from the middle of the window out, for at
+    // most about this many ms each frame.
+    rebuildBudget: 6,
   },
 
   road: {
