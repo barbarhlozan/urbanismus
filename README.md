@@ -8,7 +8,7 @@ A little black-and-white isometric city builder. Plain JS, no build step.
 python3 serve.py
 ```
 
-Then open http://localhost:8173. The city saves itself in the browser; **New map** starts over, after you pick the new town's name, lakes, forests, hills and river.
+Then open http://localhost:8173. The city saves itself in the browser; **New map** starts over, after you pick the new town's name, lakes, forests, hills and water (none, a stream, a river, or a river with streams).
 
 ## Controls
 
@@ -26,7 +26,7 @@ with a **Size** button (**Shift**). While a tool is in hand, its options (size, 
 another look, bend…) are buttons above the bottom edge.
 
 Shortcuts come in two steps that follow the Build menu: the **number row** opens a group
-(**1** Doprava, **2** Bydlení, **3** Výroba, **4** Občanská vybavenost, **5** Prostranství,
+(**1** Doprava, **2** Bydlení, **3** Občanská vybavenost, **4** Výroba, **5** Prostranství,
 **6** Památky – the numbers are on the tabs), and the **letter rows** pick a tool in the
 group that's open, its tiles in reading order (**Q W E R T Y U I O**, then **A S D F G H J
 K**, then **Z X C V B N M , . /** – each tile shows its key). The group stays open, so **2**,
@@ -66,10 +66,10 @@ a Czech or German layout.
 - **Bus stop** (**1 Y**, 1×1), beside a road, facing it: a shelter, the stop sign, a bench. Buses only
   come when a road leads off the map: in through an exit, a few stops (nearest next), out again.
 - **Bydlení** (**2**): house / apartments / block, each also wide (**Shift**)
-- **Výroba** (**3**): workshops, works, factory and plants in their sizes, the three mines,
-  farmstead / JZD / státní statek
-- **Občanská vybavenost** (**4**): Jednota, hospoda, obchodní dům, Tuzex, národní výbor, pošta,
+- **Občanská vybavenost** (**3**): Jednota, hospoda, obchodní dům, Tuzex, národní výbor, pošta,
   hotel, the services, school, house of culture, swimming pool, cemetery
+- **Výroba** (**4**): workshops, works, factory and plants in their sizes, the three mines,
+  farmstead / JZD / státní statek
 - **Prostranství** (**5**): every park and square
 - **Památky** (**6**): chapel, church, town hall (**Shift** switches small, medium, large),
   memorial, castle, tower, stadium

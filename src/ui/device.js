@@ -16,3 +16,8 @@ export function notePointer(e) {
 
 // Narrow screens get a bottom-sheet menu instead of a popup at the pointer.
 export const isNarrow = () => innerWidth <= 640;
+
+// Wide screens (a computer, a tablet held sideways) get the Build menu as a
+// rail of groups along the right edge; anything narrower keeps it at the
+// bottom. (1024: a large tablet upright still counts as narrow.)
+export const isWide = () => innerWidth > 1024;

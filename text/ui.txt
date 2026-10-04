@@ -1,0 +1,888 @@
+# The words of the game's screens: buttons, menus, hints. How to write it:
+# text/README.md. Czech is the original; the English stays as close to it
+# as it can.
+
+# ---------- Everywhere ----------
+
+cancel
+  cs: Zrušit
+  en: Cancel
+
+close
+  cs: Zavřít
+  en: Close
+
+done
+  cs: Hotovo
+  en: Done
+
+back
+  cs: Zpět
+  en: Back
+
+town.name
+  cs: Jméno obce
+  en: Name of the town
+
+right-click.stop
+  cs: pravé tlačítko: konec
+  en: right-click to stop
+
+# ---------- The town's numbers (top left) ----------
+
+hud.chronicle
+  cs: Kronika
+  en: Chronicle
+
+hud.fold
+  cs: Schovat
+  en: Hide
+
+hud.unfold
+  cs: Ukázat
+  en: Show
+
+stat.residents
+  cs: Obyvatelé
+  en: Residents
+
+stat.jobs
+  cs: Pracovní místa
+  en: Jobs
+
+stat.buildings
+  cs: Budovy
+  en: Buildings
+
+stat.cutoff
+  cs: {n} budova odříznutá od cest | {n} budovy odříznuté od cest | {n} budov odříznutých od cest
+  en: {n} cut off from the roads | {n} cut off from the roads
+
+stat.walk
+  cs: Pěšky
+  en: On foot
+
+stat.cycle
+  cs: Na kole
+  en: Cycling
+
+stat.drive
+  cs: Autem
+  en: Driving
+
+stat.trucks
+  cs: Nákladní auta
+  en: Trucks
+
+stat.buses
+  cs: Autobusy
+  en: Buses
+
+# the weather (the picture and its name when pointing at it, top left)
+
+weather.fair
+  cs: Jasno
+  en: Fair
+
+weather.cloudy
+  cs: Polojasno
+  en: Partly cloudy
+
+weather.overcast
+  cs: Zataženo
+  en: Overcast
+
+weather.rain
+  cs: Déšť
+  en: Rain
+
+weather.storm
+  cs: Bouřka
+  en: Storm
+
+# ---------- The buttons (top right) ----------
+
+controls.fold
+  cs: Schovat nabídku
+  en: Hide the menu
+
+controls.unfold
+  cs: Ukázat nabídku
+  en: Show the menu
+
+control.photo
+  cs: Fotografie
+  en: Photograph
+
+control.terrain
+  cs: Terén
+  en: Terrain
+
+control.colors
+  cs: Barvy
+  en: Colours
+
+control.assets
+  cs: Katalog
+  en: Catalogue
+
+control.debug
+  cs: Ladění
+  en: Debug
+
+control.export
+  cs: Export
+  en: Export
+
+control.import
+  cs: Import
+  en: Import
+
+control.newMap
+  cs: Nová mapa
+  en: New map
+
+control.language
+  cs: Jazyk
+  en: Language
+
+fullscreen
+  cs: Celá obrazovka
+  en: Full screen
+
+fullscreen.leave
+  cs: Zmenšit z celé obrazovky
+  en: Leave full screen
+
+fullscreen.iphone
+  cs: Safari na iPhonu neumí stránky na celou obrazovku. Přidej si hru na plochu:
+  en: Safari on iPhone can't show pages on the full screen. Add the game to your home screen:
+
+fullscreen.iphone.share
+  cs: 1. Klepni na Sdílet (čtvereček se šipkou)
+  en: 1. Tap Share (the square with the arrow)
+
+fullscreen.iphone.add
+  cs: 2. Vyber Přidat na plochu
+  en: 2. Choose Add to Home Screen
+
+fullscreen.iphone.open
+  cs: Otevři ji odtamtud: vyplní obrazovku jako aplikace.
+  en: Open it from there: it fills the screen like an app.
+
+# ---------- Opening a town from a file ----------
+
+import.ask
+  cs: Otevřít obec {town}?
+  en: Open the town {town}?
+
+import.buildings
+  cs: {n} budova | {n} budovy | {n} budov
+  en: {n} building | {n} buildings
+
+import.replace
+  cs: Nahradit tuhle obec
+  en: Replace this town
+
+import.replace.note
+  cs: bude ztracena
+  en: it will be lost
+
+import.failed
+  cs: Nepodařilo se otevřít
+  en: Could not open
+
+import.storage
+  cs: Prohlížeč obec neuložil.
+  en: The browser would not store the town.
+
+import.not-city
+  cs: Tenhle soubor není obec z Urbanismu.
+  en: This file is not a town from Urbanismus.
+
+import.newer
+  cs: Obec uložila novější verze hry.
+  en: The town was saved by a newer version of the game.
+
+import.damaged
+  cs: Soubor s obcí je poškozený a nedá se otevřít.
+  en: The town's file is damaged and can't be opened.
+
+# ---------- Colours ----------
+
+color.bg
+  cs: Pozadí
+  en: Background
+
+color.main
+  cs: Čáry
+  en: Lines
+
+color.detail
+  cs: Detail
+  en: Detail
+
+scheme.blue-pen
+  cs: Modré pero
+  en: Blue pen
+
+scheme.black-pen
+  cs: Černé pero
+  en: Black pen
+
+scheme.night
+  cs: Noc
+  en: Night
+
+scheme.countryside
+  cs: Venkov
+  en: Countryside
+
+scheme.custom
+  cs: Vlastní
+  en: Own
+
+# ---------- New map ----------
+
+newmap.name
+  cs: Jméno
+  en: Name
+
+newmap.reroll
+  cs: Jiné jméno
+  en: Another name
+
+newmap.create
+  cs: Vytvořit novou mapu
+  en: Create a new map
+
+# asked before the new map replaces the town
+newmap.confirm
+  cs: Současná obec bude smazána.
+  en: The current town will be deleted.
+
+newmap.export-continue
+  cs: Exportovat a pokračovat
+  en: Export it, then continue
+
+newmap.continue
+  cs: Pokračovat bez uložení
+  en: Continue without saving
+
+newmap.lakes
+  cs: Jezera
+  en: Lakes
+
+newmap.lakes.none
+  cs: Žádné
+  en: None
+
+newmap.forest
+  cs: Lesy
+  en: Forests
+
+newmap.forest.none
+  cs: Žádné
+  en: None
+
+newmap.forest.few
+  cs: Málo
+  en: Few
+
+newmap.forest.some
+  cs: Pár
+  en: Some
+
+newmap.forest.many
+  cs: Hodně
+  en: Many
+
+newmap.forest.lots
+  cs: Spousta
+  en: Lots
+
+newmap.hills
+  cs: Krajina
+  en: Land
+
+newmap.hills.flat
+  cs: Rovina
+  en: Flat
+
+newmap.hills.gentle
+  cs: Mírná
+  en: Gentle
+
+newmap.hills.hilly
+  cs: Kopcovitá
+  en: Hilly
+
+newmap.hills.steep
+  cs: Strmá
+  en: Steep
+
+newmap.hills.mountains
+  cs: Hory
+  en: Mountains
+
+newmap.river
+  cs: Řeka
+  en: River
+
+newmap.river.none
+  cs: Žádná
+  en: None
+
+newmap.river.stream
+  cs: Potok
+  en: Stream
+
+newmap.river.river
+  cs: Řeka
+  en: River
+
+newmap.river.streams
+  cs: Řeka s potoky
+  en: River and streams
+
+# ---------- The Build menu ----------
+
+build
+  cs: Stavět
+  en: Build
+
+build.open
+  cs: Otevřít stavební nabídku
+  en: Open the building menu
+
+build.fold
+  cs: Schovat stavební nabídku
+  en: Hide the building menu
+
+build.drop
+  cs: Odložit
+  en: Put it down
+
+build.pin
+  cs: Připíchnout
+  en: Pin
+
+build.pinned
+  cs: Připíchnuto
+  en: Pinned
+
+group.transport
+  cs: Doprava
+  en: Transport
+
+group.housing
+  cs: Bydlení
+  en: Housing
+
+group.work
+  cs: Výroba
+  en: Production
+
+group.amenities
+  cs: Občanská vybavenost
+  en: Civic amenities
+
+group.spaces
+  cs: Prostranství
+  en: Open spaces
+
+group.heritage
+  cs: Památky
+  en: Monuments
+
+# ---------- Tools ----------
+
+tool.select
+  cs: Vybrat
+  en: Select
+
+select.click
+  cs: Klikni na mapu · pravé tlačítko: stavět další takové · tažením posun · kolečkem přiblížení · [ / ] otočení
+  en: Click the map · right-click: build more of what's there · drag to move · scroll to zoom · [ / ] turn
+
+select.tap
+  cs: Klepni na mapu · tažením posun · sevřením přiblížení
+  en: Tap the map · drag to move · pinch to zoom
+
+tool.road
+  cs: Silnice
+  en: Road
+
+tool.road.blurb
+  cs: Auta i lidé
+  en: Cars and people
+
+tool.lane
+  cs: Úzká silnice
+  en: Narrow road
+
+tool.lane.blurb
+  cs: Jeden pruh, auta pomalu
+  en: One lane, cars go slowly
+
+tool.path
+  cs: Pěšina
+  en: Footpath
+
+tool.path.blurb
+  cs: Chodci a kola
+  en: Walkers and bikes
+
+tool.rail
+  cs: Železnice
+  en: Railway
+
+tool.rail.blurb
+  cs: Vlaky od kraje mapy
+  en: Trains from the edge of the map
+
+tool.fence
+  cs: Ohrada
+  en: Fence
+
+tool.fence.blurb
+  cs: Uzavřená dokola je pastvina
+  en: Closed all round, a pasture
+
+tool.erase
+  cs: Vymazat
+  en: Erase
+
+tool.erase.blurb
+  cs: Odstranit cokoli
+  en: Remove anything
+
+erase.click
+  cs: Klikni a odstraň budovu, pěšinu, chodníky, kus silnice, železnice nebo ohrady, nebo stromy
+  en: Click to remove a building, footpath, sidewalks, a piece of road, railway or fence, or trees
+
+erase.tap
+  cs: Klepni na to, co odstranit, a klepni znovu
+  en: Tap what to remove, and tap again
+
+# while drawing roads, footpaths and railways
+
+bend
+  cs: Ohyb
+  en: Bend
+
+bend.diagonal
+  cs: nejdřív šikmo
+  en: diagonal first
+
+bend.straight
+  cs: nejdřív rovně
+  en: straight first
+
+network.start.road
+  cs: Klikni na tečku, odkud povede silnice
+  en: Click the dot the road starts from
+
+network.start.lane
+  cs: Klikni na tečku, odkud povede úzká silnice · přes silnici nebo pěšinu ji zúží
+  en: Click the dot the narrow road starts from · over a road or footpath it narrows it
+
+network.start.path
+  cs: Klikni na tečku, odkud povede pěšina
+  en: Click the dot the footpath starts from
+
+network.start.path.road
+  cs: Podél silnice z ní budou chodníky · u úzké silnice chodník na té straně
+  en: Along a road it becomes sidewalks · by a narrow road, a sidewalk on that side
+
+network.start.rail
+  cs: Klikni na tečku, odkud povede železnice · vyveď ji za kraj mapy a přijedou vlaky
+  en: Click the dot the railway starts from · lead it off the edge of the map and trains come
+
+network.start.fence
+  cs: Klikni na tečku, odkud povede ohrada · uzavři ji dokola a bude z ní pastvina pro krávy nebo ovce
+  en: Click the dot the fence starts from · close it all round and it becomes a pasture for cows or sheep
+
+network.tap.road
+  cs: Klepni na tečku, odkud povede silnice
+  en: Tap the dot the road starts from
+
+network.tap.lane
+  cs: Klepni na tečku, odkud povede úzká silnice · přes silnici nebo pěšinu ji zúží
+  en: Tap the dot the narrow road starts from · over a road or footpath it narrows it
+
+network.tap.path
+  cs: Klepni na tečku, odkud povede pěšina · podél silnice z ní budou chodníky
+  en: Tap the dot the footpath starts from · along a road it becomes sidewalks
+
+network.tap.rail
+  cs: Klepni na tečku, odkud povede železnice
+  en: Tap the dot the railway starts from
+
+network.tap.fence
+  cs: Klepni na tečku, odkud povede ohrada · uzavři ji dokola a bude pastvina
+  en: Tap the dot the fence starts from · close it all round for a pasture
+
+network.tap.end
+  cs: Klepni, kde má skončit
+  en: Tap where it should end
+
+network.tap.build
+  cs: Klepni znovu a postav
+  en: Tap again to build
+
+network.end
+  cs: Klikni na konec · Tab: {bend} · pravé tlačítko: konec
+  en: Click the end · Tab: {bend} · right-click to stop
+
+network.stop.road
+  cs: Ukončit silnici
+  en: End the road
+
+network.stop.lane
+  cs: Ukončit úzkou silnici
+  en: End the narrow road
+
+network.stop.path
+  cs: Ukončit pěšinu
+  en: End the footpath
+
+network.stop.rail
+  cs: Ukončit železnici
+  en: End the railway
+
+network.stop.fence
+  cs: Ukončit ohradu
+  en: End the fence
+
+network.sidewalks.road
+  cs: Podél silnice z ní budou chodníky
+  en: Along the road it becomes sidewalks
+
+network.sidewalks.lane
+  cs: Podél úzké silnice z ní bude chodník na téhle straně
+  en: Along the narrow road it becomes a sidewalk on this side
+
+network.sidewalks.on-lane
+  cs: Na úzké silnici z ní bude chodník po pravé straně
+  en: On the narrow road it becomes a sidewalk on its right
+
+network.narrows
+  cs: Zúží silnici
+  en: Narrows the road
+
+network.widens
+  cs: Rozšíří úzkou silnici
+  en: Widens the narrow road
+
+# while placing buildings
+
+build.click
+  cs: Klikni a postav: {name}
+  en: Click to build: {name}
+
+build.tap
+  cs: Klepni na tečku pro náhled, znovu a postav: {name}
+  en: Tap a dot to preview, again to build: {name}
+
+size
+  cs: Velikost
+  en: Size
+
+rotate
+  cs: Otočit
+  en: Turn
+
+another-look
+  cs: Jiná podoba
+  en: Another look
+
+# photographs
+
+photo.click.stand
+  cs: Klikni, kde stát
+  en: Click where to stand
+
+photo.tap.stand
+  cs: Klepni, kde stát
+  en: Tap where to stand
+
+photo.tap.look
+  cs: Klepni, kam se dívat
+  en: Tap where to look
+
+photo.tap.take
+  cs: Vyfoť, nebo klepni a dívej se jinam
+  en: Take the photo, or tap to look elsewhere
+
+photo.aim
+  cs: Miř ukazatelem, kliknutím vyfoť
+  en: Aim with the pointer, click to take the photo
+
+photo.take
+  cs: Vyfotit
+  en: Take the photo
+
+photo.lens
+  cs: Objektiv
+  en: Lens
+
+photo.move
+  cs: Přejít
+  en: Move
+
+photo.save
+  cs: Uložit PNG
+  en: Save PNG
+
+# ---------- Clicking something on the map ----------
+
+inspect.needs.any
+  cs: Potřebuje silnici nebo pěšinu
+  en: Needs a road or footpath
+
+inspect.needs.road
+  cs: Potřebuje silnici vedle sebe
+  en: Needs a road beside it
+
+inspect.change
+  cs: Změnit
+  en: Change
+
+inspect.change-look
+  cs: Jiná podoba
+  en: Another look
+
+inspect.turn-into
+  cs: Přestavět na
+  en: Rebuild into
+
+inspect.yard
+  cs: Okolí
+  en: Surroundings
+
+inspect.yard.auto
+  cs: Samo
+  en: By itself
+
+inspect.yard.none
+  cs: Žádné
+  en: None
+
+inspect.remove.road
+  cs: Odstranit silnici
+  en: Remove the road
+
+inspect.remove.lane
+  cs: Odstranit úzkou silnici
+  en: Remove the narrow road
+
+inspect.remove.rail
+  cs: Odstranit železnici
+  en: Remove the railway
+
+inspect.remove.path
+  cs: Odstranit pěšinu
+  en: Remove the footpath
+
+inspect.remove.fence
+  cs: Odstranit ohradu
+  en: Remove the fence
+
+inspect.clear.tree
+  cs: Vykácet stromy
+  en: Fell the trees
+
+inspect.crossing
+  cs: Železniční přejezd
+  en: Level crossing
+
+feature.tree
+  cs: Stromy
+  en: Trees
+
+yard.garden
+  cs: Zahrada
+  en: Garden
+
+yard.trees
+  cs: Stromořadí
+  en: Row of trees
+
+yard.parking
+  cs: Parkoviště
+  en: Car park
+
+yard.plaza
+  cs: Náměstíčko
+  en: Little square
+
+yard.forecourt
+  cs: Předprostor
+  en: Forecourt
+
+yard.garages
+  cs: Garáže
+  en: Garages
+
+yard.depot
+  cs: Dvůr
+  en: Yard
+
+# ---------- Why it can't be built (reason.*: world.js, routing.js, structures) ----------
+
+reason.off-the-map
+  cs: Mimo mapu
+  en: Off the map
+
+reason.water
+  cs: Voda
+  en: Water
+
+reason.occupied
+  cs: Obsazeno
+  en: Occupied
+
+reason.road
+  cs: Silnice
+  en: Road
+
+reason.railway
+  cs: Železnice
+  en: Railway
+
+reason.blocked
+  cs: Zablokováno
+  en: Blocked
+
+reason.too-steep
+  cs: Příliš strmé
+  en: Too steep
+
+reason.footpath
+  cs: Pěšina
+  en: Footpath
+
+reason.too-short
+  cs: Příliš krátké
+  en: Too short
+
+reason.something-is-in-the-way
+  cs: Něco stojí v cestě
+  en: Something is in the way
+
+reason.crosses-another-line
+  cs: Kříží jinou trať
+  en: Crosses another line
+
+reason.runs-along-another-line
+  cs: Vede po jiné trati
+  en: Runs along another line
+
+reason.too-sharp-a-bend-for-trains
+  cs: Na vlaky příliš ostrý oblouk
+  en: Too sharp a bend for trains
+
+reason.a-bridge-needs-land-at-both-ends
+  cs: Most potřebuje pevninu na obou koncích
+  en: A bridge needs land at both ends
+
+reason.bridges-only-cross-rivers
+  cs: Mosty vedou jen přes řeky
+  en: Bridges only cross rivers
+
+reason.too-wide-to-bridge
+  cs: Příliš široké na most
+  en: Too wide to bridge
+
+reason.a-bridge-has-to-be-straight
+  cs: Most musí být rovný
+  en: A bridge has to be straight
+
+reason.needs-a-hilltop
+  cs: Potřebuje vrchol kopce
+  en: Needs a hilltop
+
+reason.needs-a-road-alongside
+  cs: Potřebuje silnici podél
+  en: Needs a road alongside
+
+reason.railway-in-the-way
+  cs: V cestě je železnice
+  en: Railway in the way
+
+# ---------- The chronicle ----------
+
+chronicle.title
+  cs: Kronika obce {town}
+  en: Chronicle of the town {town}
+
+chronicle.day
+  cs: Den {day}
+  en: Day {day}
+
+chronicle.close
+  cs: Zavřít kroniku
+  en: Close the chronicle
+
+chronicle.back
+  cs: Obrátit zpět
+  en: Turn back
+
+chronicle.next
+  cs: Obrátit list
+  en: Turn the page
+
+# ---------- The catalogue ----------
+
+assets.vehicles
+  cs: Vozidla
+  en: Vehicles
+
+vehicle.saloon
+  cs: Osobní auto
+  en: Passenger car
+
+vehicle.saloon.blurb
+  cs: jako Škoda 120
+  en: like a Škoda 120
+
+vehicle.hatchback
+  cs: Malé auto
+  en: Small car
+
+vehicle.hatchback.blurb
+  cs: něco mezi Favoritem a Trabantem
+  en: somewhere between a Favorit and a Trabant
+
+vehicle.van
+  cs: Dodávka
+  en: Van
+
+vehicle.van.blurb
+  cs: skříň jako Avia nebo Barkas
+  en: a box like an Avia or a Barkas
+
+vehicle.truck
+  cs: Nákladní auto
+  en: Truck
+
+vehicle.truck.blurb
+  cs: kabina a skříňový návěs
+  en: a cab and a box trailer
+
+vehicle.bus
+  cs: Autobus
+  en: Bus
+
+vehicle.bus.blurb
+  cs: městská Karosa
+  en: a town Karosa
+
+vehicle.train
+  cs: Vlak
+  en: Train
+
+vehicle.train.blurb
+  cs: lokomotiva a vagóny
+  en: a locomotive and coaches

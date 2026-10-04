@@ -1,6 +1,6 @@
 // Annotations (switchable in render/style.js):
-//   hover tags  a leader line and a boxed label naming the building / road /
-//               exit under the pointer, e.g. "Clinic"; with the Terrain
+//   hover tags  a leader line and a boxed label naming the building under
+//               the pointer, e.g. "Clinic"; with the Terrain
 //               lines on, a hill's top mark tells its name and height
 //               ("Holý vrch · 570 m", terrain/hills.js)
 //
@@ -8,13 +8,13 @@
 // (visitors, residents leaving, buildings growing…). The player doesn't
 // see it – the chronicle (sim/chronicle.js) is their record – but the last
 // LOG_LINES are kept in annotations.lines, newest first, for debugging from
-// the console (window.urbanismus.annotations.lines).
+// the console (cmd.log()).
 
 import { STRUCTURE_TYPES } from '../../structures/index.js';
-import { FEATURE_TYPES } from '../../features/index.js';
 import { ELEVATION } from '../terrain/elevation.js';
 import { HILLS } from '../terrain/hills.js';
 import { STYLE } from '../render/style.js';
+import { nameOf } from './names.js';
 import { sketchRect, sketchPolyline, seedOf } from '../render/sketch.js';
 
 const LOG_LINES = 200;
@@ -59,22 +59,14 @@ export class Annotations {
     const { world } = this;
     const node = world.grid.nodeAt(x, y);
     if (node < 0) return null;
-    const at = (height) => ({ pos: world.grid.xy(node), height });
     // a hill's top mark (with the Terrain lines showing): its name and height
     if (this.heights()) {
       const hill = world.hills.find((hl) => Math.hypot(hl.x - x, hl.y - y) <= HILLS.hover);
       if (hill) return { pos: [hill.x, hill.y], height: 0.15, lines: [`${hill.name} · ${Math.round(ELEVATION.base + hill.height)} m`] };
     }
+    // only buildings get a tag – roads, rails, paths and trees don't
     const s = world.structureAt(node);
-    if (s) return { pos: world.centerOf(s), height: 0.5, lines: [STRUCTURE_TYPES[s.type].name] };
-    if (world.roadExits().some((e) => e.node === node)) return { ...at(0.1), lines: ['Road out of town'] };
-    if (world.railExits().some((e) => e.node === world.coarseToFine(node))) return { ...at(0.1), lines: ['Railway out of town'] };
-    if (world.hasRail(node)) return { ...at(0.1), lines: [world.hasRoad(node) ? 'Level crossing' : 'Railway'] };
-    if (world.hasRoad(node)) return { ...at(0.1), lines: [world.laneOnly(node) ? 'Lane' : 'Road'] };
-    if (world.paths.hasNode(world.coarseToFine(node))) return { ...at(0.05), lines: ['Footpath'] };
-    const f = world.featureAt(node);
-    const name = f && FEATURE_TYPES[f.type]?.name;
-    if (name) return { ...at(0.5), lines: [name] };
+    if (s) return { pos: world.centerOf(s), height: 0.5, lines: [nameOf(STRUCTURE_TYPES[s.type])] };
     return null;
   }
 

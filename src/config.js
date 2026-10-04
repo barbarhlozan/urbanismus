@@ -88,6 +88,63 @@ export const CONFIG = {
     queue: { drive: 0.17, cycle: 0.09, walk: 0.07 }, // …and this far behind the one in front
   },
 
+  // canoes down the rivers and streams (sim/boats.js)
+  boats: {
+    first: 20,           // seconds before the first group
+    interval: [60, 150], // seconds between groups, at random
+    group: [1, 5],       // canoes in a group (fewer more likely)
+    max: 12,             // on the map at once
+    speed: 0.16,         // grid steps per second, about
+    gap: 0.4,            // grid steps between canoes in a group, about
+    pair: 0.65,          // share of canoes with two aboard (else one, at the back)
+    switch: 3,           // seconds between paddlers switching sides, about
+    fromHome: 0.35,      // share of launches by a house near the water (when there is one)…
+    homeReach: 3,        // …a house within this many grid steps of the river's line
+    homeGroup: 2,        // …and at most this many canoes from there
+  },
+
+  // deer out of the forests to graze (sim/deer.js)
+  deer: {
+    first: 15,           // seconds before the first herd
+    interval: [40, 120], // seconds between herds, at random
+    herd: [1, 4],        // deer in a herd (fewer more likely)
+    max: 10,             // on the map at once
+    forest: 12,          // trees a map needs before any come
+    reach: 8,            // grid steps from the trees they'll go to graze
+    graze: [40, 110],    // seconds they graze, at random
+    roam: 0.4,           // grid steps they shuffle about while grazing
+    speed: 0.16,         // grid steps per second, walking
+    run: 0.7,            // …and running off
+    gap: 0.35,           // grid steps between deer walking in file
+    shy: 1.5,            // grid steps: anyone this near sends them off
+    red: 0.3,            // share of herds that are red deer (else roe)
+    male: 0.35,          // share of herds led by a stag / buck
+    fawn: 0.5,           // share of herds of 2+ with a fawn
+  },
+
+  // fences (the 'fence' network, render/renderer.js), drawn as the garden
+  // fences are (structures/kit.js fenceAlong): a rail along the top, short
+  // posts close together; heights as the map's (a walker is about 0.08)
+  fence: {
+    cornerRadius: 0,     // (straight runs, sharp corners)
+    curveSamples: 1,
+    post: 0.06,          // as high as a garden fence
+    rails: [0.06],       // heights of the rails: one, along the top
+    spacing: 0.1,        // grid steps between posts, about
+    gate: 0.07,          // grid steps from a gate's middle to its pillars, either side of the footpath through it
+  },
+
+  // cows and sheep in fenced pastures (sim/livestock.js)
+  livestock: {
+    steep: 6,                       // average slope (World.slopeAt) from which a pasture keeps sheep, below it cows
+    area: { cow: 3, sheep: 1.5 },   // grid squares of pasture per head
+    most: 16,                       // in one pasture at most
+    speed: { cow: 0.1, sheep: 0.13 }, // grid steps per second, wandering
+    wander: 1.2,                    // grid steps they wander at a time, at most
+    room: 0.3,                      // grid steps they keep from each other
+    lie: [30, 90],                  // seconds lying down, at random
+  },
+
   growth: {
     interval: 6,               // simulated seconds between checks
     // A church appears by itself now and then (chance per check) where at
@@ -97,6 +154,8 @@ export const CONFIG = {
 
   terrain: {
     riverChance: 0.6,     // share of maps with a river across them
+    riverSize: null,      // 'river' or 'stream' (terrain/rivers.js), null: either, at random
+    tributaries: 0,       // streams running into it from the map's edges (generate.js)
     meander: [2.2, 0.7],  // grid steps the river swings to the sides: wide bends, small wiggles
     lakes: [1, 3],        // wanted per map, picked at random; fewer when the land has no hollows for them
     lakeSize: [8, 60],    // nodes: smaller hollows stay dry, bigger ones are only partly filled
@@ -112,8 +171,37 @@ export const CONFIG = {
   // along the way (World.grade) – so a road may still run across a steep
   // hillside, just not straight up it. Footpaths go anywhere (steps);
   // bridges are level. 14 for roads: about three contour lines a step; on
-  // a Hilly map that leaves out roughly one stretch in sixteen.
-  steep: { build: 14, road: 14, rail: 8 },
+  // a Hilly map that leaves out roughly one stretch in sixteen. Lanes
+  // (narrow, slow) may climb steeper, `lane`.
+  steep: { build: 14, road: 14, lane: 16, rail: 8 },
+
+  // Weather: one for the whole map, moving one step at a time along `kinds`
+  // (fair never turns to rain without clouds first). How long each lasts, in
+  // simulated seconds [shortest, longest]; src/sim/weather.js.
+  weather: {
+    kinds: ['fair', 'cloudy', 'overcast', 'rain', 'storm'],
+    start: 'fair',
+    lasts: { fair: [600, 1500], cloudy: [300, 800], overcast: [240, 600], rain: [180, 500], storm: [90, 240] },
+    // how much the sun shades the walls turned away from it (1 full, 0 none):
+    // under a grey sky there is little to tell one side from the other
+    sun: { fair: 1, cloudy: 1, overcast: 0.25, rain: 0.2, storm: 0.15 },
+    // how hard it rains (render/rain.js: 1 = rain)
+    rain: { rain: 1, storm: 2.4 },
+    // the grey sky's shade over the whole map (styles.css #gloom): the detail
+    // colour laid over it at this opacity
+    gloom: { overcast: 0.3, rain: 0.2, storm: 0.4 },
+    // the wind in the trees (Renderer.swayTrees): how far a tree's top leans,
+    // as a share of its height
+    wind: { fair: 0.025, cloudy: 0.045, overcast: 0.05, rain: 0.07, storm: 0.14 },
+    // what people do in it (sim/agents.js, render/people.js): their
+    // activities' weights scaled (config.activities: more stay in, fewer go
+    // for a walk), the share still cycling, how often visitors come, and the
+    // share of walkers under an umbrella
+    people: {
+      rain: { activities: { stay: 2.5, porch: 0.3, stroll: 0.3, park: 0.2, lunch: 0.5 }, bike: 0.4, visitors: 0.7, umbrellas: 0.8 },
+      storm: { activities: { stay: 8, porch: 0, stroll: 0, park: 0, errand: 0.3, lunch: 0, leave: 0.3 }, bike: 0.1, visitors: 0.3, umbrellas: 1 },
+    },
+  },
 
   time: {
     // First entry is the starting speed; T / the speed button cycles through them.

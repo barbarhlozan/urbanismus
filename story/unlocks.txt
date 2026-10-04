@@ -18,10 +18,10 @@
 #   doprava, transport                Road, Lane, Footpath, Railway, the stations,
 #                                     Bus stop
 #   bydleni, housing                  House, Apartments, Block
-#   vyroba, work                      Workshop, Works, Factory, Plant, the mines,
-#                                     the farms
 #   obcanska_vybavenost, amenities    shops, pubs, offices, services, school,
 #                                     House of culture, Swimming pool, Cemetery
+#   vyroba, work                      Workshop, Works, Factory, Plant, the mines,
+#                                     the farms
 #   prostranstvi, spaces              parks and squares
 #   pamatky, heritage, landmarks      Chapel, Church, Town hall, Memorial, Castle,
 #                                     Tower, Stadium
@@ -58,17 +58,6 @@
 #     house              house, house_wide
 #     apartments         apartments, apartments_wide
 #     block              block, block_wide
-#   Výroba
-#     workshop           workshop, workshop_medium, workshop_large
-#     works              works, works_medium
-#     factory            factory
-#     plant              plant_small, plant_medium, plant
-#     pit                pit
-#     colliery           colliery
-#     deep_mine          deep_mine
-#     farmstead          farmstead
-#     jzd                jzd
-#     statni_statek      state_farm
 #   Občanská vybavenost
 #     jednota            jednota, jednota_wide
 #     hospoda            hospoda, hospoda_wide
@@ -87,6 +76,17 @@
 #     house_of_culture   culture_house
 #     swimming_pool      pool
 #     cemetery           cemetery
+#   Výroba
+#     workshop           workshop, workshop_medium, workshop_large
+#     works              works, works_medium
+#     factory            factory
+#     plant              plant_small, plant_medium, plant
+#     pit                pit
+#     colliery           colliery
+#     deep_mine          deep_mine
+#     farmstead          farmstead
+#     jzd                jzd
+#     statni_statek      state_farm
 #   Prostranství
 #     green              green
 #     garden_park        garden_park

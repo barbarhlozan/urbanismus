@@ -45,6 +45,7 @@ export class World {
     this.featureAtNode = new Map();   // node -> feature id
     this.nextId = 1;
     this.time = 0; // simulated seconds the town has been running (the clock, kept in the save)
+    this.weather = { kind: 'fair', until: 0, n: 0 }; // the weather now, until when (world.time), and how many changes so far (src/sim/weather.js)
     this.story = { seen: [], vars: {}, unlocks: [] }; // what the story has told and unlocked (src/story/)
     this.chronicle = { entries: [], marks: [] }; // the town's chronicle (src/sim/chronicle.js)
 
@@ -60,7 +61,7 @@ export class World {
         scale: 1,
         isBlocked: (n) => this.isRoadBlocked(n),
         conflicts: (a, b) => this.railAlong(a, b),
-        steep: (a, b) => this.grade(this.networks.road, a, b) > CONFIG.steep.road,
+        steep: (a, b, { lane = false } = {}) => this.grade(this.networks.road, a, b) > (lane ? CONFIG.steep.lane : CONFIG.steep.road),
         coarseOf: (n) => n,
         // drivers weigh a lane by the time it takes (CONFIG.lane.speed)
         cost: (a, b) => this.grid.distance(a, b) / (this.isLane(a, b) ? CONFIG.lane.speed : 1),
@@ -104,6 +105,18 @@ export class World {
           span: 5,
           taken: () => false,
         },
+      }),
+      // Fences round pastures (sim/livestock.js), on the dense dots like
+      // footpaths and up any slope. Not along a road or railway (crossing
+      // one is allowed, but leaves a gap there), not over water.
+      fence: new NetworkLayer({
+        id: 'fence',
+        grid: this.fine,
+        scale: 0.5,
+        isBlocked: (f) => this.isPathBlocked(f),
+        conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
+        coarseOf: (f) => this.fineToCoarse(f),
+        event: 'fences:changed',
       }),
     };
     this.networks.rail.pos = (f) => this.railPos(f);
@@ -209,6 +222,10 @@ export class World {
 
   get rails() {
     return this.networks.rail.graph;
+  }
+
+  get fences() {
+    return this.networks.fence.graph;
   }
 
   // ---------- fine grid ----------
@@ -818,7 +835,7 @@ export class World {
   // over existing road, a lane narrows it and a road widens a lane.
   buildNetwork(kind, nodes, { lane = false } = {}) {
     const layer = this.networks[kind];
-    const check = validateRoute(layer, nodes);
+    const check = validateRoute(layer, nodes, { lane });
     if (!check.ok) return check;
     for (const n of nodes) {
       // a railway clears the trees along its way, also between dots
@@ -1055,6 +1072,7 @@ export class World {
       structures: [...this.structures.values()],
       features: [...this.features.values()],
       time: Math.round(this.time),
+      weather: this.weather,
       story: this.story,
       chronicle: this.chronicle,
     };
@@ -1108,6 +1126,7 @@ export class World {
     }
     world.nextId = data.nextId;
     world.time = data.time ?? 0;
+    if (data.weather) world.weather = { kind: data.weather.kind, until: data.weather.until, n: data.weather.n ?? 0 }; // (older saves start fair)
     world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [] };
     const marks = data.chronicle?.marks ?? [];
     world.chronicle = { entries: data.chronicle?.entries ?? [], marks: (data.version ?? 1) < 4 ? upgradeMarks(marks) : marks };

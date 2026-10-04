@@ -9,6 +9,7 @@
 import { reveal } from './motion.js';
 import { sketchFrame } from './sketchFrame.js';
 import { isNarrow } from './device.js';
+import { t } from '../core/text.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -24,12 +25,12 @@ export class ChronicleBook {
     this.el.className = 'chron-book hidden';
     this.el.setAttribute('role', 'dialog');
     this.el.innerHTML = `
-      <div class="chron-head"><span class="chron-title"></span><button class="close" data-act="close" aria-label="Close the chronicle">×</button></div>
+      <div class="chron-head"><span class="chron-title"></span><button class="close" data-act="close" aria-label="${t('chronicle.close')}">×</button></div>
       <div class="chron-pages"><div class="chron-flow"></div></div>
       <div class="chron-foot">
-        <button data-act="prev" aria-label="Turn back">‹</button>
+        <button data-act="prev" aria-label="${t('chronicle.back')}">‹</button>
         <span class="chron-folio"></span>
-        <button data-act="next" aria-label="Turn over">›</button>
+        <button data-act="next" aria-label="${t('chronicle.next')}">›</button>
       </div>`;
     root.append(this.backdrop, this.el);
     sketchFrame(this.el);
@@ -89,13 +90,13 @@ export class ChronicleBook {
   }
 
   render(toEnd = false) {
-    this.el.querySelector('.chron-title').textContent = `Chronicle of ${this.world.name}`;
+    this.el.querySelector('.chron-title').textContent = t('chronicle.title', { town: this.world.name });
     let day = null;
     const html = [];
     for (const e of this.chronicle.entries) {
       if (e.day !== day) {
         day = e.day;
-        html.push(`<h4 class="chron-day">Day ${day}</h4>`);
+        html.push(`<h4 class="chron-day">${t('chronicle.day', { day })}</h4>`);
       }
       html.push(`<p class="chron-entry ${e.kind === 'story' ? 'story' : ''}">${esc(e.text)}</p>`);
     }

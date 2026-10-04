@@ -19,8 +19,14 @@ import { OverlayKit } from './render/overlay.js';
 import { AgentSystem } from './sim/agents.js';
 import { GrowthSystem } from './sim/growth.js';
 import { SimClock } from './sim/clock.js';
+import { WeatherSystem } from './sim/weather.js';
+import { RainCanvas } from './render/rain.js';
+import { CloudShadows } from './render/cloudShadows.js';
 import { ParkingSystem } from './sim/parking.js';
 import { TrainSystem } from './sim/trains.js';
+import { BoatSystem } from './sim/boats.js';
+import { DeerSystem } from './sim/deer.js';
+import { LivestockSystem } from './sim/livestock.js';
 import { ToolManager } from './tools/manager.js';
 import { createInspectTool } from './tools/inspect.js';
 import { createNetworkTool } from './tools/network.js';
@@ -34,15 +40,20 @@ import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
 import { ColorMenu } from './ui/colorMenu.js';
 import { NewMapMenu } from './ui/newMapMenu.js';
+import { askLanguage, LanguageMenu } from './ui/languages.js';
 import { AssetsPage } from './ui/assetsPage.js';
 import { sketchFrames } from './ui/sketchFrame.js';
 import { reveal } from './ui/motion.js';
 import { attachInput } from './ui/input.js';
 import { exportCity, pickCity } from './ui/saveFile.js';
+import { createCommands } from './dev/commands.js';
 import { BUILD_FAMILIES } from '../structures/index.js';
 import { keyOf } from './ui/keys.js';
+import { loadText, t, language, saveLanguage, needsLanguage } from './core/text.js';
 
 applyTheme();
+// the words for everything on screen (text/*.txt), before any of it is built
+await loadText();
 
 // ---------- world ----------
 
@@ -114,9 +125,28 @@ const parking = new ParkingSystem(world);
 const agents = new AgentSystem(world, CONFIG, parking);
 const growth = new GrowthSystem(world, CONFIG);
 const trains = new TrainSystem(world, CONFIG);
+const boats = new BoatSystem(world, CONFIG);
+const deer = new DeerSystem(world, CONFIG, agents);
+const livestock = new LivestockSystem(world, CONFIG);
+const weather = new WeatherSystem(world, CONFIG);
+const rain = new RainCanvas(document.getElementById('rain'));
+const cloudShadows = new CloudShadows(document.getElementById('cloud-shadows'), world.seed);
+// the walls' shading follows the sun (styles.css --sun), and a grey sky
+// shades the whole map (#gloom) and, a little less, the UI's paper (--gloom)
+const objectsSvg = document.getElementById('objects');
+const gloomEl = document.getElementById('gloom');
+let sunFor = null;
+let wind = 0;
+const showSun = (kind) => {
+  if (kind === sunFor) return;
+  sunFor = kind;
+  objectsSvg.style.setProperty('--sun', CONFIG.weather.sun[kind] ?? 1);
+  gloomEl.style.opacity = CONFIG.weather.gloom[kind] ?? 0;
+  uiRoot.style.setProperty('--gloom', `${Math.round((CONFIG.weather.gloom[kind] ?? 0) * 100)}%`);
+};
 agents.trains = trains;
 trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
-const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, parking, config: CONFIG });
+const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, boats, deer, livestock, parking, config: CONFIG });
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);
 const annotations = new Annotations({ world, camera, clock, heights: () => renderer.contours });
@@ -133,11 +163,12 @@ const tools = new ToolManager(world.grid, 'inspect');
 tools.allowed = (tool) => UNLOCKS.allowsTool(tool);
 const ctx = { world, camera, tools, popup, growth, renderer, config: CONFIG };
 tools.register(createInspectTool(ctx));
-tools.register(createNetworkTool(ctx, { kind: 'road', label: 'Road', group: 'transport', blurb: 'Cars and people' }));
-tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, label: 'Lane', group: 'transport', blurb: 'Single track, slow cars' }));
-tools.register(createNetworkTool(ctx, { kind: 'path', label: 'Footpath', fineGrid: true, group: 'transport', blurb: 'People and bikes' }));
-tools.register(createNetworkTool(ctx, { kind: 'rail', label: 'Railway', fineGrid: true, group: 'transport', blurb: 'Trains from the map edge' }));
+tools.register(createNetworkTool(ctx, { kind: 'road', group: 'transport' }));
+tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, group: 'transport' }));
+tools.register(createNetworkTool(ctx, { kind: 'path', fineGrid: true, group: 'transport' }));
+tools.register(createNetworkTool(ctx, { kind: 'rail', fineGrid: true, group: 'transport' }));
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
+tools.register(createNetworkTool(ctx, { kind: 'fence', fineGrid: true, group: 'work' }));
 tools.register(createBulldozeTool(ctx));
 const photoPrint = new PhotoPrint(uiRoot);
 tools.register(createPhotoTool(ctx, {
@@ -149,13 +180,13 @@ tools.register(createPhotoTool(ctx, {
 }));
 
 const actions = {
-  debug: () => debugPanel.toggle(),
+  debug: () => { debugPanel.toggle(); if (debugPanel.open) hud.buildMenu.makeRoom(); },
   rotateLeft: () => { camera.rotate(-1, ...viewport); renderer.invalidate(); },
   rotateRight: () => { camera.rotate(1, ...viewport); renderer.invalidate(); },
   pause: () => { clock.paused = !clock.paused; },
   speed: () => clock.cycleSpeed(),
   terrain: () => setContours(!renderer.contours),
-  colors: () => colorMenu.toggle(),
+  colors: () => { colorMenu.toggle(); if (colorMenu.open) hud.buildMenu.makeRoom(); },
   assets: () => assetsPage.toggle(),
   newMap: () => newMapMenu.toggle(),
   photo: () => tools.use(tools.active?.id === 'photo' ? 'inspect' : 'photo'),
@@ -163,7 +194,26 @@ const actions = {
   import: () => importCity(),
   fullscreen: () => toggleFullscreen(),
   chronicle: () => { if (UNLOCKS.allowsControl('chronicle')) chronicleBook.toggle(); },
+  language: () => { languageMenu.toggle(); if (languageMenu.open) hud.buildMenu.makeRoom(); },
 };
+
+// Another language (picked in the Language menu or on the opening cover):
+// everything on screen was written in the old one, so the town is saved
+// straight away and the game loads again (behind the opening cover).
+function switchLanguage(code) {
+  saveLanguage(code);
+  world.events.off('*', scheduleSave);
+  clearTimeout(saveTimer);
+  try {
+    localStorage.setItem(CONFIG.storageKey, JSON.stringify(world.toJSON()));
+  } catch (err) {
+    console.warn('Save before switching language failed.', err);
+  }
+  // (picked now: ?ask-language, for trying the question, has done its job)
+  const url = new URL(location.href);
+  url.searchParams.delete('ask-language');
+  location.replace(url);
+}
 
 // Full screen: the whole page, UI and all. Safari (iPad too) wants its own
 // prefixed names. An iPhone has no full screen for pages at all: there the
@@ -189,11 +239,11 @@ function toggleFullscreen() {
 // opens without Safari's bars – say how, under the button.
 function explainHomeScreen() {
   const at = uiRoot.querySelector('[data-act="fullscreen"]').getBoundingClientRect();
-  popup.show(at.left, at.bottom, 'Full screen', [
-    { label: 'Safari can’t show web pages full screen on iPhone. Add the game to your home screen instead:', info: true },
-    { label: '1. Tap Share (the square with the arrow)', info: true },
-    { label: '2. Choose Add to Home Screen', info: true },
-    { label: 'Open it from there: it fills the screen like an app.', info: true },
+  popup.show(at.left, at.bottom, t('fullscreen'), [
+    { label: t('fullscreen.iphone'), info: true },
+    { label: t('fullscreen.iphone.share'), info: true },
+    { label: t('fullscreen.iphone.add'), info: true },
+    { label: t('fullscreen.iphone.open'), info: true },
   ]);
 }
 
@@ -219,14 +269,14 @@ async function importCity() {
   try {
     city = await pickCity();
   } catch (err) {
-    return say('Could not import', [{ label: err.message, info: true }]);
+    return say(t('import.failed'), [{ label: err.message, info: true }]);
   }
   if (!city) return;
   const n = city.structures.size;
-  say(`Import ${city.name}?`, [
-    { label: `${n} ${n === 1 ? 'building' : 'buildings'}`, info: true },
-    { label: 'Replace this city', note: 'it will be lost', action: () => replaceCity(city) },
-    { label: 'Cancel', action: () => {} },
+  say(t('import.ask', { town: city.name }), [
+    { label: t('import.buildings', { n }), info: true },
+    { label: t('import.replace'), note: t('import.replace.note'), action: () => replaceCity(city) },
+    { label: t('cancel'), action: () => {} },
   ]);
   function replaceCity(city) {
     world.events.off('*', scheduleSave);
@@ -235,7 +285,7 @@ async function importCity() {
       localStorage.setItem(CONFIG.storageKey, JSON.stringify(city.toJSON()));
     } catch {
       world.events.on('*', scheduleSave);
-      return say('Could not import', [{ label: 'This browser would not store the city.', info: true }]);
+      return say(t('import.failed'), [{ label: t('import.storage'), info: true }]);
     }
     location.reload();
   }
@@ -252,10 +302,10 @@ const followUnlocks = () => {
   // cars, trucks and buses: off the map if locked, and the car parks follow
   agents.followVehicles();
   renderer.dirty.add('parked');
-  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .hud .chron')) {
+  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act], .hud .chron')) {
     btn.classList.toggle('locked', !UNLOCKS.allowsControl(btn.dataset.act ?? 'chronicle'));
   }
-  const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu };
+  const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu, language: languageMenu };
   for (const [id, panel] of Object.entries(panels)) {
     if (panel?.open && !UNLOCKS.allowsControl(id)) (panel.hide ? panel.hide() : panel.toggle(false));
   }
@@ -284,8 +334,7 @@ story.onScheme = () => colorMenu.refresh();
   const show = () => {
     const full = !!fs.element();
     btn.classList.toggle('full', full);
-    btn.title = full ? 'Leave full screen' : 'Full screen';
-    btn.querySelector('.label').textContent = full ? 'Leave full screen' : 'Full screen';
+    btn.title = btn.querySelector('.label').textContent = t(full ? 'fullscreen.leave' : 'fullscreen');
   };
   document.addEventListener('fullscreenchange', show);
   document.addEventListener('webkitfullscreenchange', show);
@@ -294,11 +343,12 @@ const debugPanel = new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
 debugPanel.onToggle = (open) => uiRoot.querySelector('[data-act="debug"]').classList.toggle('on', open);
 const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"]'));
 const assetsPage = new AssetsPage(uiRoot);
-const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMap"]'), { onCreate: newMap });
+const languageMenu = new LanguageMenu(uiRoot, uiRoot.querySelector('[data-act="language"]'), { onPick: switchLanguage });
+const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMap"]'), { onCreate: newMap, onExport: () => exportCity(world) });
 UNLOCKS.onChange(followUnlocks); // (once the panels it closes exist)
 followUnlocks();
 // pen-drawn frames on every UI box, to match the sketched map
-sketchFrames(uiRoot, '.hud, .controls, .actions, .popup, .bm-panel, .bm-dock, .debug-panel, .color-panel, .newmap-panel');
+sketchFrames(uiRoot, '.hud, .controls, .actions, .popup, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
 
 // Terrain contour lines: off unless switched on (remembered in this browser).
 
@@ -345,6 +395,7 @@ function pickUp() {
   if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation, turn: s.data?.turn ?? 0 }];
   else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
   else if (world.rails.hasNode(world.networks.rail.nodeAt(...p))) tool = tools.registry.get('rail');
+  else if (world.fences.hasNode(world.networks.fence.nodeAt(...p))) tool = tools.registry.get('fence');
   else if (world.hasRoad(node)) tool = tools.registry.get(world.laneOnly(node) ? 'lane' : 'road');
   if (!tool) return;
   tools.use(tool.id, params);
@@ -423,6 +474,7 @@ const INTRO = {
   delay: 180,  // ms before the hole starts opening (the name fades meanwhile)
   open: 1300,  // ms for the hole to open (as .intro.opening in styles.css)
   panels: 650, // ms after it starts that the panels come in
+  picked: 350, // ms the language picked on the cover shows ticked before the map opens
 };
 let opening = true;
 async function openIntro() {
@@ -452,6 +504,19 @@ async function openIntro() {
     name.textContent = world.name;
   }
   await wait(Math.max(0, window.introShownAt + (window.introTitle ? INTRO.named : INTRO.underline) - performance.now()));
+  // never picked a language: asked here, under the name, before the map
+  // opens (the guess it's loaded in, from the browser, comes ticked)
+  if (card && needsLanguage()) {
+    const code = await askLanguage(card);
+    if (code !== language()) return switchLanguage(code);
+    saveLanguage(code);
+    const url = new URL(location.href);
+    if (url.searchParams.has('ask-language')) {
+      url.searchParams.delete('ask-language');
+      history.replaceState(null, '', url);
+    }
+    await wait(INTRO.picked);
+  }
   // the pen gets the middle ready under the cover (each drawing hidden
   // until its turn), a couple of frames before the hole opens on it
   const start = performance.now() + 50;
@@ -492,10 +557,20 @@ function loop(now) {
   try {
     const simDt = clock.step(dt);
     world.time = clock.elapsed;
+    weather.update();
     agents.update(simDt);
     trains.update(simDt);
+    boats.update(simDt);
+    deer.update(simDt);
+    livestock.update(simDt);
     growth.update(simDt);
     renderer.frame(tools.overlay(overlayKit) + annotations.overlay(overlayKit, tools.point, tools.active?.id));
+    cloudShadows.frame(simDt, camera, world.weather.kind);
+    rain.frame(simDt, camera, CONFIG.weather.rain[world.weather.kind] ?? 0);
+    showSun(world.weather.kind);
+    // the wind eases to the weather's
+    wind += ((CONFIG.weather.wind[world.weather.kind] ?? 0) - wind) * Math.min(1, simDt / 4);
+    renderer.swayTrees(world.time, wind);
     hud.update();
     chronicle.update(dt);
     if (!opening) story.update(dt); // (the story waits for the map to be drawn)
@@ -506,5 +581,5 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 
-// Handy for debugging from the console.
-window.urbanismus = { world, camera, clock, agents, trains, growth, parking, tools, renderer, annotations, hud, story, chronicle, dialogue };
+// Handy for debugging from the console: cmd.help() (src/dev/commands.js).
+window.cmd = createCommands({ world, config: CONFIG, clock, weather, agents, trains, boats, deer, livestock, growth, story, annotations, unlocks: UNLOCKS });

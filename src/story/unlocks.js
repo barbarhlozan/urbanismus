@@ -43,7 +43,7 @@
 //
 //   UNLOCKS.allows(type)              may this type be built?
 //   UNLOCKS.allowsTool(tool)          may this tool be picked up?
-//   UNLOCKS.allowsNetwork(kind)       'road' | 'lane' | 'path' | 'rail'
+//   UNLOCKS.allowsNetwork(kind)       'road' | 'lane' | 'path' | 'rail' | 'fence'
 //   UNLOCKS.allowsControl(id)         a button at the top, by its data-act ('debug'…)
 //   UNLOCKS.allowsVehicle(kind)       'cars' | 'trucks' | 'buses'
 //   UNLOCKS.scheme                    the file's `scheme` line: { value, line } or null
@@ -59,6 +59,7 @@ const NETWORKS = {
   lane: ['lane', 'lanes'],
   path: ['footpath', 'footpaths', 'path', 'paths'],
   rail: ['railway', 'railways', 'rail', 'rails'],
+  fence: ['fence', 'fences', 'pasture', 'pastures'],
 };
 // The buttons at the top (data-act -> names that mean it). `all` leaves
 // them be; `controls` is all of them.

@@ -5,8 +5,8 @@ watch the town, and **branches** of dialogue that the rules start. Reload the
 game after editing it. Any mistakes are listed in the dialogue window when it
 loads, with their line numbers.
 
-A branch is told once per town. To hear it again, run `urbanismus.story.reset()`
-in the browser console, or `urbanismus.story.play('IntroDialogue')` to tell one
+A branch is told once per town. To hear it again, run `cmd.story.reset()`
+in the browser console, or `cmd.story.play('IntroDialogue')` to tell one
 straight away.
 
 ## Rules

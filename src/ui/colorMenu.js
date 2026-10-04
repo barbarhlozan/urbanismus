@@ -5,8 +5,16 @@
 
 import { SCHEMES, CUSTOM, COLOR_NAMES, applyTheme, setCustomColor, normalizeHex, schemeChoice } from '../theme.js';
 import { reveal, isShown } from './motion.js';
+import { t, hasText } from '../core/text.js';
 
-const LABELS = { bg: 'Background', main: 'Lines', detail: 'Detail' };
+// the three colours' names (color.bg, color.main, color.detail)
+const label = (n) => t(`color.${n}`);
+// a scheme's name on screen, scheme.<name-in-dashes> (its own name stays
+// what story/unlocks.txt calls it: scheme Night)
+const schemeName = (s) => {
+  const key = `scheme.${s.name.toLowerCase().replace(/\s+/g, '-')}`;
+  return hasText(key) ? t(key) : s.name;
+};
 
 // three dots in a scheme's colors
 const swatches = (s) => `<span class="swatches">${COLOR_NAMES.map((n) => `<i data-c="${n}" style="background:${s[n]}"></i>`).join('')}</span>`;
@@ -19,15 +27,15 @@ export class ColorMenu {
     this.el = document.createElement('div');
     this.el.className = 'color-panel hidden';
     this.el.innerHTML = `
-      <div class="color-head"><span>Colors</span><button class="close" aria-label="Close">×</button></div>
-      ${SCHEMES.map((s, i) => `<button class="scheme" data-choice="${i}">${swatches(s)}${s.name}</button>`).join('')}
-      <button class="scheme" data-choice="custom">${swatches(CUSTOM)}Custom</button>
+      <div class="color-head"><span>${t('control.colors')}</span><button class="close" aria-label="${t('close')}">×</button></div>
+      ${SCHEMES.map((s, i) => `<button class="scheme" data-choice="${i}">${swatches(s)}${schemeName(s)}</button>`).join('')}
+      <button class="scheme" data-choice="custom">${swatches(CUSTOM)}${schemeName(CUSTOM)}</button>
       <div class="custom-fields">
         ${COLOR_NAMES.map((n) => `
           <label data-c="${n}">
-            <input type="color" data-c="${n}" value="${CUSTOM[n]}" aria-label="${LABELS[n]} color">
-            <span class="field-name">${LABELS[n]}</span>
-            <input type="text" class="hex" data-c="${n}" value="${CUSTOM[n]}" maxlength="7" spellcheck="false" autocomplete="off" aria-label="${LABELS[n]} hex code">
+            <input type="color" data-c="${n}" value="${CUSTOM[n]}" aria-label="${label(n)}">
+            <span class="field-name">${label(n)}</span>
+            <input type="text" class="hex" data-c="${n}" value="${CUSTOM[n]}" maxlength="7" spellcheck="false" autocomplete="off" aria-label="${label(n)} (hex)">
           </label>`).join('')}
       </div>`;
     root.appendChild(this.el);
@@ -85,6 +93,6 @@ export class ColorMenu {
     for (const input of this.el.querySelectorAll('.custom-fields input')) {
       if (input !== editing) input.value = CUSTOM[input.dataset.c];
     }
-    this.button.title = `Colors: ${schemeChoice === 'custom' ? 'Custom' : SCHEMES[schemeChoice].name}`;
+    this.button.title = `${t('control.colors')}: ${schemeName(schemeChoice === 'custom' ? CUSTOM : SCHEMES[schemeChoice])}`;
   }
 }

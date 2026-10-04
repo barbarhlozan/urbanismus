@@ -54,6 +54,12 @@ export class Camera {
     return rotateQuarter(x - this.cx, y - this.cy, this.rotation);
   }
 
+  // The structure rotation that turns a building's front (local -y) to the
+  // viewer – towards the bottom left of the screen – in this view.
+  facingViewer() {
+    return (1 - this.rotation + 4) % 4;
+  }
+
   // Larger = closer to the viewer = drawn later.
   depth(x, y) {
     const [rx, ry] = rotateQuarter(x - this.cx, y - this.cy, this.rotation);

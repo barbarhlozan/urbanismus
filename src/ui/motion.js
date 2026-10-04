@@ -151,6 +151,31 @@ export function slide(el, open, { rows = null } = {}) {
   running.set(el, [a]);
 }
 
+// A drawer sliding out from beside its rail (the Build menu on a wide
+// screen) or tucking back in: `from` is where the rail is ([x, y] px).
+// Resolves like corner().
+export function drawer(el, show, from = [12, 0]) {
+  stop(el);
+  if (still()) return Promise.resolve(true);
+  const frames = [{ opacity: 0, transform: `translate(${from[0]}px, ${from[1]}px) scale(0.96)` }, { opacity: 1, transform: 'none' }];
+  const anims = [el.animate(show ? frames : frames.reverse(),
+    { duration: show ? MOTION.in : MOTION.out, easing: show ? MOTION.spring : MOTION.easeOut, fill: show ? 'none' : 'forwards' })];
+  if (show) anims.push(...follow(el.querySelectorAll('.bm-head, .bm-tools:not(.hidden) .bm-tool')));
+  // the pen frame drawn round as it comes, rubbed out as it goes (as reveal())
+  const frame = frameOf(el);
+  if (frame) {
+    anims.push(frame.animate(show
+      ? [{ strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }]
+      : [{ strokeDasharray: '1 1', strokeDashoffset: 0 }, { strokeDasharray: '1 1', strokeDashoffset: -1 }],
+    show ? { duration: MOTION.in * 1.4, easing: MOTION.easeIn } : { duration: MOTION.out, easing: MOTION.easeOut, fill: 'forwards' }));
+  }
+  running.set(el, anims);
+  return anims[0].finished.then(() => {
+    if (!show) stop(el);
+    return true;
+  }, () => false);
+}
+
 // A panel opening out of (show) or folding back into its button below it:
 // `size` is that button's [width, height], `at` where it sits under the
 // panel – 'right' (the corner) or 'center'. Resolves true when done, false

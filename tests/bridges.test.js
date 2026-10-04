@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { flatWorld, road, river, run } from './helpers.js';
 import { findBridges, bridgeLines, makeDeck, BRIDGE_STYLES } from '../src/render/bridges.js';
+import { RIVER_SIZES, riverField } from '../src/terrain/rivers.js';
 
 test('a road crosses a narrow river on a bridge', () => {
   const w = flatWorld();
@@ -49,4 +50,34 @@ test('every style draws, and leaves out what the deck hides on the far side', ()
       assert.ok(below(seen) <= below(all));
     }
   }
+});
+
+// A straight river (or stream) down the map at x = 10, its water dots from
+// its field, on level ground (no valley).
+function laidRiver(size) {
+  const w = flatWorld();
+  const { width, vary, bend, wet, wall, reach } = RIVER_SIZES[size];
+  w.terrain.rivers = [{ points: [[10, -4], [10, 24]], z: [0, 0], width, vary, bend, wet, wall, reach }];
+  const field = riverField(w.terrain.rivers);
+  w._relief = { rivers: w.terrain.rivers, field, elevation: () => 0, rock: () => 0 };
+  for (let i = 0; i < w.grid.size; i++) if (field.wet(...w.grid.xy(i)) > 0) w.terrain.water[i] = 2;
+  return w;
+}
+
+test('a bridge reaches from bank to bank: shorter and lower over a stream', () => {
+  const deckOf = (size) => {
+    const w = laidRiver(size);
+    assert.equal(road(w, [6, 5], [14, 5]).ok, true);
+    const [b] = findBridges(w);
+    const len = Math.hypot(b.b[0] - b.a[0], b.b[1] - b.a[1]);
+    return { length: (b.to - b.from) * len, clearance: b.clearance, piers: b.piers.length, deck: makeDeck([b], null) };
+  };
+  const river = deckOf('river'), stream = deckOf('stream');
+  assert.ok(stream.length < river.length, `stream ${stream.length} vs river ${river.length}`);
+  assert.ok(stream.length < 1);
+  assert.ok(stream.clearance < river.clearance);
+  assert.equal(stream.piers, 0);
+  // over the water the deck is up, on the land dots either side it is down
+  assert.ok(stream.deck(10, 5) > 0);
+  assert.equal(stream.deck(9.4, 5), 0);
 });

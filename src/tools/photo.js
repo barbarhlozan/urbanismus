@@ -10,6 +10,7 @@
 
 import { PHOTO } from '../render/photo.js';
 import { isTouch } from '../ui/device.js';
+import { t } from '../core/text.js';
 
 const LENSES = PHOTO.lenses;
 
@@ -34,7 +35,7 @@ export function createPhotoTool({ world }, { shoot }) {
 
   return {
     id: 'photo',
-    label: 'Photo',
+    label: t('control.photo'),
     hotkey: 'p',
     toolbar: false, // its button is up top, with the map controls (hud.js)
 
@@ -48,9 +49,9 @@ export function createPhotoTool({ world }, { shoot }) {
     },
 
     hint() {
-      if (!spot) return isTouch() ? 'Tap where to stand' : 'Click where to stand · right-click to stop';
-      if (isTouch()) return aim ? 'Take photo, or tap to look elsewhere' : 'Tap where to look';
-      return 'Aim with the pointer, click to take the photo · Shift: lens · Esc: move';
+      if (!spot) return isTouch() ? t('photo.tap.stand') : `${t('photo.click.stand')} · ${t('right-click.stop')}`;
+      if (isTouch()) return t(aim ? 'photo.tap.take' : 'photo.tap.look');
+      return `${t('photo.aim')} · Shift: ${t('photo.lens').toLowerCase()} · Esc: ${t('photo.move').toLowerCase()}`;
     },
 
     click(node, e) {
@@ -79,9 +80,9 @@ export function createPhotoTool({ world }, { shoot }) {
     },
 
     actions: () => [
-      ...(aim ? [{ label: 'Take photo', key: 'Enter', run: take }] : []),
-      { label: `Lens: ${LENSES[lens].label}`, key: 'Shift', run: cycleLens },
-      ...(spot ? [{ label: 'Move', run: () => place(null) }] : []),
+      ...(aim ? [{ label: t('photo.take'), key: 'Enter', run: take }] : []),
+      { label: `${t('photo.lens')}: ${LENSES[lens].label}`, key: 'Shift', run: cycleLens },
+      ...(spot ? [{ label: t('photo.move'), run: () => place(null) }] : []),
     ],
 
     cursor() {

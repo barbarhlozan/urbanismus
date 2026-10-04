@@ -236,6 +236,7 @@ export class Painter {
     this.current = null;
     this.rigid = null;    // world [x, y]: move as one piece, see _project()
     this.follow = false;  // with rigid: still rise and fall with the ground, see _liftAt()
+    this.sways = false;   // trees drawn in it lean in the wind on their own (swayFrom, toSVG)
     this._onGround = false;
     this.top = 0;         // highest z drawn at (local), for the renderer's screen box
     this.detail = 0;      // how plain to draw, for drawings that care (0 = full; trees, see features/trees.js)
@@ -1281,7 +1282,17 @@ export class Painter {
     return this.ground.join('');
   }
 
+  // The solid just started is a tree that leans in the wind about its foot
+  // (local x, y): toSVG wraps it in a <g class="sway"> carrying the foot's
+  // scene point, which Renderer.swayTrees tilts. Only with `sways` (garden
+  // trees in a building's drawing; forest clumps lean as a whole).
+  swayFrom(x, y) {
+    if (this.sways && this.current) this.current.sway = this._project(...this._world(x, y, 0));
+  }
+
   toSVG() {
-    return orderSolids(this.solids).map((s) => s.parts.join('')).join('');
+    return orderSolids(this.solids).map((s) => (s.sway
+      ? `<g class="sway" data-foot="${r2(s.sway[0])} ${r2(s.sway[1])}">${s.parts.join('')}</g>`
+      : s.parts.join(''))).join('');
   }
 }

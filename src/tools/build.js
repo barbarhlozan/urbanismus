@@ -8,13 +8,16 @@ import { footprintCenter, newSeed, categoryOf } from '../../structures/index.js'
 import { isTouch } from '../ui/device.js';
 import { keyOf } from '../ui/keys.js';
 import { UNLOCKS } from '../story/unlocks.js';
+import { t } from '../core/text.js';
+import { nameOf, blurbOf, sizeOf } from '../ui/names.js';
 
-// Label of a variant for the Size button: its own `size`, else by footprint.
-const sizeOf = (def) => def.size ?? (def.footprint.length > 1 ? 'Large' : 'Small');
 
-export function createBuildTool({ world }, defs) {
+export function createBuildTool({ world, camera }, defs) {
   let variant = 0;
+  // quarter turns from facing the viewer (Tab): buildings come facing
+  // whoever's looking, whichever way the view is turned
   let rotation = 0;
+  const placed = () => (rotation + camera.facingViewer()) % 4;
   let seed = newSeed();
   const def = () => defs[variant];
   // single-dot buildings turn relative to their road (s.data.turn), except
@@ -35,8 +38,8 @@ export function createBuildTool({ world }, defs) {
 
   return {
     id: `build:${defs[0].id}`,
-    label: defs[0].name,
-    blurb: defs[0].blurb ?? '',
+    label: nameOf(defs[0]),
+    blurb: blurbOf(defs[0]),
     defs,
     group: categoryOf(defs[0]),
     touchConfirm: true,
@@ -47,24 +50,30 @@ export function createBuildTool({ world }, defs) {
       const i = defs.findIndex((d) => d.id === params.type && UNLOCKS.allows(d.id));
       if (i >= 0) variant = i;
       else if (!UNLOCKS.allows(def().id)) resize();
-      if (params.rotation != null) rotation = params.rotation;
+      if (params.rotation != null) rotation = (params.rotation - camera.facingViewer() + 4) % 4;
       if (params.turn != null && single()) rotation = params.turn;
     },
 
     snap(x, y) {
-      const [cx, cy] = footprintCenter(def(), rotation);
+      const [cx, cy] = footprintCenter(def(), placed());
       return world.grid.nodeAt(x - cx, y - cy);
     },
 
     hint() {
-      const name = def().name.toLowerCase();
-      if (isTouch()) return `Tap a dot to preview, tap again to place ${name}`;
-      return `Click to place ${name}${turnable() ? ' · Tab: rotate' : ''} · Space: another look${open().length > 1 ? ' · Shift: size' : ''} · right-click to stop`;
+      const name = nameOf(def());
+      if (isTouch()) return t('build.tap', { name });
+      return [
+        t('build.click', { name }),
+        turnable() && `Tab: ${t('rotate').toLowerCase()}`,
+        `Space: ${t('another-look').toLowerCase()}`,
+        open().length > 1 && `Shift: ${t('size').toLowerCase()}`,
+        t('right-click.stop'),
+      ].filter(Boolean).join(' · ');
     },
 
     click(node) {
       if (!UNLOCKS.allows(def().id)) return;
-      const at = world.placementFor(def().id, node, rotation);
+      const at = world.placementFor(def().id, node, placed());
       const data = turn() ? { turn: turn() } : {};
       if (world.placeStructure(def().id, at.node, { rotation: at.rotation, seed, data })) seed = newSeed();
     },
@@ -78,15 +87,15 @@ export function createBuildTool({ world }, defs) {
     },
 
     actions: () => [
-      ...(open().length > 1 ? [{ label: `Size: ${sizeOf(def())}`, key: 'Shift', run: resize }] : []),
-      ...(turnable() ? [{ label: 'Rotate', key: 'Tab', run: rotate }] : []),
-      { label: 'Another look', key: 'Space', run: reroll },
+      ...(open().length > 1 ? [{ label: `${t('size')}: ${sizeOf(def())}`, key: 'Shift', run: resize }] : []),
+      ...(turnable() ? [{ label: t('rotate'), icon: 'rotate', key: 'Tab', run: rotate }] : []),
+      { label: t('another-look'), icon: 'another-look', key: 'Space', run: reroll },
     ],
 
     overlay(kit, hover) {
       if (hover < 0) return '';
       const d = def();
-      const at = world.placementFor(d.id, hover, rotation);
+      const at = world.placementFor(d.id, hover, placed());
       if (at.check.ok) {
         let out = kit.ghost(d, at.node, world.facingRotation(d.id, at.node, at.rotation, turn()), seed);
         // the track a station will lay
@@ -96,8 +105,8 @@ export function createBuildTool({ world }, defs) {
       // it can't go here: still show it where it would stand, faded, with
       // a cross on each of its dots – or, where the ground is too steep to
       // build on, a steep-hill sign
-      const nodes = world.footprintNodes(d.id, hover, rotation);
-      const ghost = nodes.includes(-1) ? '' : kit.ghost(d, hover, world.facingRotation(d.id, hover, rotation, turn()), seed, { blocked: true });
+      const nodes = world.footprintNodes(d.id, hover, placed());
+      const ghost = nodes.includes(-1) ? '' : kit.ghost(d, hover, world.facingRotation(d.id, hover, placed(), turn()), seed, { blocked: true });
       return ghost + nodes.map((n) => (n >= 0 && world.tooSteepToBuild(n, d.id) ? kit.steep(n) : kit.cross(n))).join('');
     },
   };

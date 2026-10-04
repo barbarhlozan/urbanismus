@@ -2,12 +2,13 @@
 // border and a caption, with a button to save it as a PNG.
 
 import { sketchFrame } from './sketchFrame.js';
+import { t } from '../core/text.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // computed styles copied onto each element for the PNG (the page's CSS does
 // not reach an SVG drawn into a canvas)
-const PROPS = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'opacity', 'fill-opacity', 'stroke-opacity', 'display', 'visibility'];
+const PROPS = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'opacity', 'fill-opacity', 'stroke-opacity', 'display', 'visibility', 'vector-effect'];
 
 export class PhotoPrint {
   constructor(root) {
@@ -28,8 +29,8 @@ export class PhotoPrint {
       <div class="photo-frame">${svg}</div>
       <div class="photo-caption">${esc(caption)}</div>
       <div class="photo-buttons">
-        <button data-act="save">Save PNG</button>
-        <button data-act="close">Close</button>
+        <button data-act="save">${t('photo.save')}</button>
+        <button data-act="close">${t('close')}</button>
       </div>`;
     this.el.classList.remove('hidden');
   }

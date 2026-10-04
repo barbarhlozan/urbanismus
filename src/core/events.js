@@ -4,7 +4,7 @@
 // Events emitted by World:
 //   structure:added (s)   structure:removed (s)   structure:changed (s)  – level / type / lock
 //   feature:added (f)     feature:removed (f)
-//   roads:changed / paths:changed ({ layer, nodes }) – nodes whose lines changed
+//   roads:changed / paths:changed / fences:changed ({ layer, nodes }) – nodes whose lines changed
 //   terrain:changed ()
 //
 // Emitted by other systems:

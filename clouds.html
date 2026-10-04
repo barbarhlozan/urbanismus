@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Urbanismus – cloud sketches</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--main); font: 12px system-ui; margin: 16px; }
+    h2 { font-weight: 500; margin: 28px 0 2px; }
+    p { margin: 0 0 8px; color: var(--detail); max-width: 70ch; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; }
+    svg { display: block; position: static; border: 1px solid #8884; }
+    figure { margin: 0; }
+    figcaption { font-size: 15px; font-weight: 500; margin-bottom: 3px; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: the skies of photographs. Each frame is a photo's 480 × 320
+    // with a made-up horizon of hills, one row per kind of weather.
+    //   clouds.html?scheme=1&seed=3&scale=0.8
+    import { applyTheme } from './src/theme.js';
+    import { mulberry32 } from './src/core/random.js';
+    import { cloudsSVG } from './src/render/clouds.js';
+    import { PHOTO } from './src/render/photo.js';
+    const q = new URLSearchParams(location.search);
+    applyTheme(q.has('scheme') ? +q.get('scheme') : undefined);
+    const SEED = +(q.get('seed') ?? 1), SCALE = +(q.get('scale') ?? 0.9);
+    const { width, height } = PHOTO;
+
+    // a hilly skyline at the horizon, like skyline() in photo.js
+    const hills = (rnd) => {
+      let d = '';
+      const a = rnd() * 6, b = rnd() * 6;
+      for (let x = -4; x <= width + 4; x += 4) {
+        const y = height / 2 - 6 - 7 * Math.sin(x / 70 + a) - 4 * Math.sin(x / 23 + b);
+        d += `${d ? 'L' : 'M'}${x} ${y.toFixed(1)}`;
+      }
+      return `<path class="photo-ground" d="${d}L${width + 4} ${height + 4}L-4 ${height + 4}Z"/><path class="photo-horizon" d="${d}"/>`;
+    };
+
+    const ROWS = [
+      ['fair', 'Fair (jasno)', 'A few scattered heaps: bumpy outlines, a few strokes along the flat underside. Big and spread out overhead, small and flat towards the horizon.', {}],
+      ['cloudy', 'Cloudy (polojasno)', 'More heaps, wider, and one long layer low on the horizon.', {}],
+      ['overcast', 'Overcast (zataženo)', 'Layers of low cloud stacked up the sky, their lower edges scalloped, a little hatching beneath.', {}],
+      ['rain', 'Rain, distant showers (déšť)', 'The overcast, heavier underneath, with a few showers hanging from the cloud base to the hills.', { rain: 'showers' }],
+      ['rain', 'Rain, all over (déšť)', 'The same cloud, with rain streaks over the whole sky.', { rain: 'whole' }],
+      ['storm', 'Storm (bouřka)', 'The heaviest cloud, with hard rain all over.', {}],
+    ];
+
+    const out = document.getElementById('out');
+    out.insertAdjacentHTML('beforeend', '<h1 style="font-weight:500">Cloud sketches</h1><p>Each row is one kind of weather, drawn for three different spots (seeds), labelled a, b and c. Add <code>?seed=N</code> for other skies, <code>?scheme=N</code> for other colours.</p>');
+    for (const [kind, title, note, opts] of ROWS) {
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2><p>${note}</p>`);
+      const row = document.createElement('div');
+      row.className = 'row';
+      for (let i = 0; i < 3; i++) {
+        const rnd = mulberry32(SEED * 7919 + i * 104729 + 11);
+        row.insertAdjacentHTML('beforeend',
+          `<figure><figcaption>${'abc'[i]}</figcaption><svg class="photo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width * SCALE}" height="${height * SCALE}">`
+          + `<rect class="photo-sky" width="${width}" height="${height}"/>`
+          + cloudsSVG(rnd, width, height, kind, opts) + hills(rnd) + '</svg></figure>');
+      }
+      out.appendChild(row);
+    }
+  </script>
+</body>
+</html>

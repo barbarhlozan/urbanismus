@@ -26,7 +26,7 @@ test('a gentle hill hides nothing and gets no brow', () => {
 test('a steep hill hides the ground behind it and is outlined', () => {
   for (const rotation of [0, 1, 2, 3]) {
     const camera = ridgeCamera(rotation);
-    const vis = visibility(camera, ridge(4), BOX);
+    const vis = visibility(camera, ridge(7), BOX);
     assert.ok(vis.columns.some((c) => c.hidden.length), `rotation ${rotation}: hidden ground`);
     const lines = browLines(vis, camera);
     assert.ok(lines.length >= 1, `rotation ${rotation}: a brow`);
@@ -39,4 +39,11 @@ test('a middling slope gets a light brow, not an outline', () => {
   const lines = browLines(visibility(camera, ridge(1.2), BOX), camera);
   assert.ok(lines.length >= 1);
   assert.ok(lines.every((l) => Math.max(...l.s) < 1));
+});
+
+test('a slope that only just folds (hiding a sliver) is not outlined', () => {
+  const camera = ridgeCamera();
+  const vis = visibility(camera, ridge(4), BOX);
+  assert.ok(vis.columns.some((c) => c.hidden.length), 'it does fold');
+  assert.ok(browLines(vis, camera).every((l) => Math.max(...l.s) < 1));
 });

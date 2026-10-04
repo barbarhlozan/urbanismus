@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Urbanismus – cow and sheep sketches</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--main); font: 12px system-ui; margin: 16px; }
+    h1 { font-weight: 500; }
+    h2 { font-weight: 500; margin: 28px 0 2px; }
+    p { margin: 0 0 8px; color: var(--detail); max-width: 76ch; }
+    svg { display: block; position: static; border: 1px solid #8884; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: cows and sheep sketched to match the deer (render/deer.js) –
+    // the same pen parts (fig-body, fig-ink, fig-line, fig-head) in scene px
+    // round the ground point, a walker and a doe first for scale.
+    //   livestock.html?scheme=1&zoom=34&small=6&seed=3
+    import { applyTheme } from './src/theme.js';
+    import { mulberry32 } from './src/core/random.js';
+    import { walkerSVG } from './src/render/people.js';
+    import { deerSVG } from './src/render/deer.js';
+    const q = new URLSearchParams(location.search);
+    applyTheme(q.has('scheme') ? +q.get('scheme') : undefined);
+    const Z = +(q.get('zoom') ?? 34), SMALL = +(q.get('small') ?? 6), SEED = +(q.get('seed') ?? 1);
+
+    const r2 = (n) => Math.round(n * 100) / 100;
+    const P = ([x, y]) => `${r2(x)} ${r2(y)}`;
+    const poly = (pts, close = true) => `M${pts.map(P).join('L')}${close ? 'Z' : ''}`;
+    const ball = ([cx, cy], r, ry = r) => `M${r2(cx - r)} ${r2(cy)}a${r2(r)} ${r2(ry)} 0 1 0 ${r2(2 * r)} 0a${r2(r)} ${r2(ry)} 0 1 0 ${r2(-2 * r)} 0`;
+    const mid = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    // a closed shape with its corners rounded off by `k` (0–0.5 of each side)
+    const rounded = (pts, k) => {
+      const n = pts.length;
+      let d = `M${P(mid(pts[0], pts[1], k))}`;
+      for (let i = 1; i <= n; i++) {
+        const a = pts[(i - 1) % n], b = pts[i % n], c = pts[(i + 1) % n];
+        d += `L${P(mid(a, b, 1 - k))}Q${P(b)} ${P(mid(b, c, k))}`;
+      }
+      return `${d}Z`;
+    };
+    // a fleece: round bumps all along a rounded box (corners clockwise from top left)
+    const cloud = (pts, bumps, rnd) => {
+      // walk the box's outline, `bumps` points evenly round it
+      const segs = pts.map((p, i) => [p, pts[(i + 1) % pts.length]]);
+      const lens = segs.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1])), total = lens.reduce((a, b) => a + b);
+      const at = (u) => { let d = u * total, i = 0; while (d > lens[i]) d -= lens[i++]; return mid(...segs[i], d / lens[i]); };
+      const ring = Array.from({ length: bumps }, (_, i) => at((i + 0.3) / bumps));
+      let d = `M${P(ring[0])}`;
+      for (let i = 1; i <= bumps; i++) {
+        const b = ring[i % bumps], r = (total / bumps) * (0.55 + rnd() * 0.15);
+        d += `A${r2(r)} ${r2(r)} 0 0 1 ${P(b)}`;
+      }
+      return `${d}Z`;
+    };
+    // four legs (x positions, back to front), apart when stepping
+    const legs = (xs, bot, spread, bend = true) => xs.map((x, i) => {
+      const f = spread * (i === 0 || i === 3 ? 1 : -1);
+      return poly(x < 0 && bend
+        ? [[x, bot + 0.02], [x - 0.05 + f / 2, bot * 0.45], [x - 0.01 + f, 0]]
+        : [[x, bot + 0.02], [x + 0.01 + f / 2, bot * 0.5], [x + f, 0]], false);
+    }).join('');
+    // lying down: legs folded under, a short stroke forward along the ground
+    const tucked = (x0, x1) => poly([[x0, -0.02], [x1, -0.02]], false);
+
+    // ---------- cows ----------
+    // style: 'patched' (inked patches on a light coat), 'plain', 'dark'
+    // (inked all over); head: 'long' (a long face, horns), 'ball' (as the deer)
+    function cow(style, head, pose, variant) {
+      const rnd = mulberry32(variant * 2654435761 + 3);
+      const s = 0.95 + rnd() * 0.1;
+      const lying = pose === 'lie';
+      const legH = lying ? 0.06 : 0.52, depth = 0.62, rear = -0.85, chest = 0.78;
+      const bot = -legH, top = bot - depth;
+      const S = ([x, y]) => [x * s, y * s];
+      const sp = (pts) => pts.map(S);
+      const parts = [];
+      if (!lying) parts.push(['fig-line', legs([rear + 0.12, rear + 0.24, chest - 0.26, chest - 0.14].map((x) => x * s), bot * s, pose === 'step' ? 0.09 : 0)]);
+      else parts.push(['fig-line', tucked(...[chest - 0.3, chest + 0.02].map((x) => x * s))]);
+      // the body: a long rounded box, a hint of a hip at the back
+      const body = sp([[rear, top + 0.02], [rear + 0.25, top - 0.03], [chest - 0.05, top + 0.02], [chest + 0.02, bot + 0.08], [rear + 0.02, bot + 0.02]]);
+      parts.push([style === 'dark' ? 'fig-ink' : 'fig-body', rounded(body, 0.25)]);
+      // patches, kept inside the body
+      if (style === 'patched') {
+        let d = '';
+        for (let k = 2 + Math.floor(rnd() * 2); k > 0; k--) {
+          const cx = rear + 0.2 + rnd() * (chest - rear - 0.45), cy = top + 0.15 + rnd() * (depth - 0.3);
+          const w = 0.08 + rnd() * 0.09, h = 0.07 + rnd() * 0.07;
+          d += rounded(sp([[cx - w, cy - h], [cx + w * 0.8, cy - h * 1.2], [cx + w, cy + h * 0.7], [cx - w * 0.6, cy + h]]), 0.35);
+        }
+        parts.push(['fig-ink', d]);
+      }
+      // a tail down the back, a tuft at its end
+      const tail = lying ? [[rear, top + 0.1], [rear - 0.14, top + 0.3], [rear - 0.2, -0.04]] : [[rear + 0.01, top + 0.08], [rear - 0.11, top + 0.3], [rear - 0.13, bot + 0.04]];
+      parts.push(['fig-line', poly(sp(tail), false)]);
+      const [tx, ty] = S(tail.at(-1)), tt = 0.05 * s;
+      parts.push(['fig-ink', poly([[tx - tt, ty - tt], [tx + tt, ty - tt], [tx + tt, ty + tt], [tx - tt, ty + tt]])]);
+      // the head: low in front, on a short thick neck; down in the grass when grazing
+      const hc = pose === 'graze' ? [chest + 0.38, -0.26] : lying ? [chest + 0.3, top - 0.04] : [chest + 0.4, top - 0.04];
+      parts.push(['fig-line', poly(sp([[chest - 0.1, top + 0.1], [hc[0] - 0.04, hc[1] - 0.04]]), false)]); // a single stroke of a neck, as the deer's
+      const ink = style === 'dark' || rnd() < 0.3;
+      if (head === 'long') {
+        const [cx, cy] = hc;
+        parts.push([ink ? 'fig-ink' : 'fig-body', rounded(sp([[cx - 0.12, cy - 0.16], [cx + 0.11, cy - 0.15], [cx + 0.2, cy + 0.19], [cx + 0.0, cy + 0.21]]), 0.3)]);
+        parts.push(['fig-line', poly(sp([[cx - 0.08, cy - 0.15], [cx - 0.14, cy - 0.3]]), false) + poly(sp([[cx + 0.05, cy - 0.15], [cx + 0.1, cy - 0.3]]), false)
+          + poly(sp([[cx - 0.11, cy - 0.08], [cx - 0.28, cy - 0.04]]), false)]);
+      } else {
+        const [cx, cy] = S(hc);
+        parts.push(['fig-line', poly(sp([[hc[0] - 0.06, hc[1] - 0.14], [hc[0] - 0.12, hc[1] - 0.3]]), false) + poly(sp([[hc[0] + 0.06, hc[1] - 0.14], [hc[0] + 0.1, hc[1] - 0.3]]), false)
+          + poly(sp([[hc[0] - 0.12, hc[1] - 0.05], [hc[0] - 0.3, hc[1] - 0.02]]), false)]);
+        parts.push([ink ? 'fig-ink' : 'fig-head', ball([cx, cy], 0.17 * s)]);
+      }
+      return parts;
+    }
+
+    // ---------- sheep ----------
+    // style: 'cloud' (a fleece of bumps), 'bean' (a smooth body as the deer,
+    // a few curls on it), 'black' (a cloud inked in, one in a flock);
+    // head: 'ink' or 'open'
+    function sheep(style, head, pose, variant) {
+      const rnd = mulberry32(variant * 2654435761 + 5);
+      const s = 0.92 + rnd() * 0.16;
+      const lying = pose === 'lie';
+      const legH = lying ? 0.03 : 0.3, depth = 0.5, rear = -0.5, front = 0.42;
+      const bot = -legH, top = bot - depth;
+      const S = ([x, y]) => [x * s, y * s];
+      const sp = (pts) => pts.map(S);
+      const parts = [];
+      if (!lying) parts.push(['fig-line', legs([rear + 0.14, rear + 0.24, front - 0.24, front - 0.14].map((x) => x * s), bot * s, pose === 'step' ? 0.06 : 0, false)]);
+      // the head, tucked in against the front of the fleece
+      const hc = pose === 'graze' ? [front + 0.1, -0.15] : lying ? [front + 0.06, top + 0.1] : [front + 0.1, top + 0.08];
+      const hs = S(hc), hr = 0.13 * s;
+      const face = head === 'ink' || style === 'black' ? 'fig-ink' : 'fig-head';
+      const box = sp([[rear, top], [front, top], [front, bot], [rear, bot]]);
+      if (style === 'bean') {
+        parts.push(['fig-body', rounded(sp([[rear, top + 0.04], [front - 0.04, top], [front, bot], [rear + 0.02, bot]]), 0.4)]);
+        // a few curls of wool
+        let d = '';
+        for (let k = 0; k < 3; k++) {
+          const [cx, cy] = S([rear + 0.2 + k * 0.25 + (rnd() - 0.5) * 0.08, top + 0.18 + (k % 2) * 0.14]);
+          d += `M${P([cx - 0.06 * s, cy])}a${r2(0.05 * s)} ${r2(0.05 * s)} 0 1 1 ${r2(0.1 * s)} 0`;
+        }
+        parts.push(['fig-line', d]);
+      } else {
+        parts.push([style === 'black' ? 'fig-ink' : 'fig-body', cloud(box, 11 + Math.floor(rnd() * 3), rnd)]);
+      }
+      parts.push(['fig-line', poly(sp([[hc[0] - 0.04, hc[1] - 0.08], [hc[0] - 0.16, hc[1] - 0.2]]), false)]); // an ear, up and back
+      parts.push([face, ball(hs, hr * 1.05, hr * 0.85)]);
+      return parts;
+    }
+
+    const svgOf = (parts) => parts.map(([cls, d]) => `<path class="${cls}" d="${d}"/>`).join('');
+    const POSES = ['stand', 'step', 'graze', 'lie'];
+    const SECTIONS = [
+      ['Cow · A · patched, long face', (p, v) => cow('patched', 'long', p, v), 'A long rounded body with inked patches, a single stroke of a neck, a long face with two horns and an ear out sideways; a tail with a square tuft.'],
+      ['Cow · B · patched, round head', (p, v) => cow('patched', 'ball', p, v), 'The same, but the round head of the deer (open or inked), horns and ear on it.'],
+      ['Cow · C · plain', (p, v) => cow('plain', 'long', p, v), 'No patches – a light coat (and some inked faces).'],
+      ['Cow · D · dark', (p, v) => cow('dark', 'long', p, v), 'Inked all over: a dark cow, to mix into a herd.'],
+      ['Sheep · A · cloud, inked head', (p, v) => sheep('cloud', 'ink', p, v), 'A fleece of round bumps on short thin legs, an inked head tucked in front, an ear up and back.'],
+      ['Sheep · B · cloud, open head', (p, v) => sheep('cloud', 'open', p, v), 'The same with an open head – lighter, closer to the deer.'],
+      ['Sheep · C · bean with curls', (p, v) => sheep('bean', 'ink', p, v), 'The deer\'s smooth body, a few curls of wool drawn on it.'],
+      ['Sheep · D · black sheep', (p, v) => sheep('black', 'ink', p, v), 'A fleece inked in – one now and then in a flock.'],
+    ];
+
+    const out = document.getElementById('out');
+    out.insertAdjacentHTML('beforeend', '<h1>Cow and sheep sketches</h1><p>Each row: a walker and a doe for scale, then standing, stepping, grazing and lying down – twice, with two variants. Drawn at the map\'s scale (a walker is 2.5 scene px tall), shown large, then nearer the map\'s size.</p>');
+    const CELL = 2.9, H = 3.2;
+    for (const [title, draw, note] of SECTIONS) {
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2><p>${note}</p>`);
+      const items = [walkerSVG(SEED % 12), deerSVG('doe', 'stand', SEED),
+        ...[0, 1].flatMap((k) => POSES.map((p) => svgOf(draw(p, SEED * 17 + k))))];
+      for (const z of [Z, SMALL]) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const w = items.length * CELL;
+        svg.setAttribute('viewBox', `-1 ${-H} ${w} ${H + 0.4}`);
+        svg.style.cssText = `width:${w * z}px;height:${(H + 0.4) * z}px;margin-bottom:6px`;
+        svg.innerHTML = `<g class="scene"><path class="fig-line" d="M-1 0H${w}" style="opacity:.3"/>${items.map((html, i) => `<g transform="translate(${i * CELL + (i ? 0.2 : 0.4)} 0)">${html}</g>`).join('')}</g>`;
+        out.appendChild(svg);
+      }
+    }
+  </script>
+</body>
+</html>

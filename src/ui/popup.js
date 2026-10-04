@@ -11,6 +11,7 @@
 
 import { isNarrow } from './device.js';
 import { reveal, isShown } from './motion.js';
+import { t } from '../core/text.js';
 
 const GHOST_MS = 400;
 const ROWS = '.popup-body > :not(.title)'; // they follow the menu in, one by one
@@ -88,7 +89,7 @@ export class Popup {
 
   render(title, items) {
     this.items = items;
-    this.body.innerHTML = `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="Close">×</button></div>` + items.map((item, i) => {
+    this.body.innerHTML = `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="${t('close')}">×</button></div>` + items.map((item, i) => {
       if (item.block != null) return `<div class="popup-block">${item.block}</div>`;
       if (item.section != null) return `<div class="popup-section">${esc(item.section)}</div>`;
       const disabled = item.disabled || item.info || !item.action;

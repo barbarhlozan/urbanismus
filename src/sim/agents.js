@@ -56,6 +56,9 @@
 // visitors or commuters come in by car, industry keeps no trucks and none
 // deliver, and no buses come. followVehicles() clears those already out.
 //
+// Weather (config.weather.people): in rain and storms more people stay in
+// and fewer go for a walk, fewer cycle, fewer visitors come (see weather()).
+//
 // The renderer only reads visible() and x / y / trip.mode.
 
 import { STRUCTURE_TYPES, matches, codeOf } from '../../structures/index.js';
@@ -532,7 +535,7 @@ export class AgentSystem {
     if (!exits.length || size === 0 || !can('cars')) return;
     if ((this.visitorTimer -= dt) > 0) return;
     // average gap between arrivals: interval per exit, scaled by city size
-    this.visitorTimer = (cfg.interval / exits.length / size) * (0.5 + Math.random());
+    this.visitorTimer = (cfg.interval / exits.length / size / (this.weather().visitors ?? 1)) * (0.5 + Math.random());
     if (this.visitorCount() < cfg.max) this.spawnVisitor();
   }
 
@@ -815,6 +818,7 @@ export class AgentSystem {
       if (leave) return this.begin(a, leave.plan, leave.dest);
     }
     const weights = { ...this.config.activities[this.profile(home)] };
+    for (const [k, f] of Object.entries(this.weather().activities ?? {})) if (k in weights) weights[k] *= f;
     for (;;) {
       const pick = pickWeighted(weights);
       if (!pick) return false;
@@ -908,12 +912,20 @@ export class AgentSystem {
     return ride && { mode: 'cycle', ...ride };
   }
 
-  // Chance of cycling a trip of length d rather than driving it.
+  // Chance of cycling a trip of length d rather than driving it (fewer in
+  // the rain).
   bikeChance(d) {
     const { near, far, nearShare, farShare, share } = this.config.bike;
-    if (d <= near) return nearShare;
-    if (d <= far) return nearShare + ((d - near) / (far - near)) * (farShare - nearShare);
-    return share;
+    const f = this.weather().bike ?? 1;
+    if (d <= near) return nearShare * f;
+    if (d <= far) return (nearShare + ((d - near) / (far - near)) * (farShare - nearShare)) * f;
+    return share * f;
+  }
+
+  // How the weather now changes what people do (config.weather.people; {}
+  // in fair weather).
+  weather() {
+    return this.config.weather?.people?.[this.world.weather?.kind] ?? {};
   }
 
   // ----- traffic -----

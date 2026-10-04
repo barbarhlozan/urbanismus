@@ -1,10 +1,12 @@
 // People close up: little blocky pen figures after the figure sheet – a
 // box of a body on two stub legs, topped by something round: a round head
 // (open or inked in), or a knob on a smaller box, or a bobble on a pointed
-// hood; maybe a line across the coat, and some carry an inked-in bag. They
+// hood; maybe a line across the coat, and some carry an inked-in bag; in
+// the rain an umbrella over the head (umbrella()), open or inked in. They
 // face the viewer like the map's other glyphs; the renderer mirrors them to
 // face the way they walk. A cyclist is the same kind of figure, shorter,
-// seated and empty-handed, on a sketched bike set along the way it rides.
+// seated and empty-handed, on a sketched bike set along the way it rides;
+// in a canoe (canoeSVG), one or two of them seated, paddling.
 //
 // Drawn in scene px around the figure's ground point. PEOPLE.bodies
 // variants per kind, picked by the agent's id; the cyclists' wheels come in
@@ -100,15 +102,36 @@ function figure(variant, height, bottom = 0, seated = false, ox = 0) {
   return parts;
 }
 
+// An umbrella held up over a figure's head, to one side: a dome with a
+// scalloped rim, on a handle that comes down to the hand at the body's side.
+function umbrella(variant, height, parts) {
+  const rnd = mulberry32(variant * 2246822519 + 5);
+  const [sx, sy, w] = parts.shoulder;
+  const side = rnd() < 0.5 ? -1 : 1;
+  const cx = sx + side * w * 1.05, hand = sy + height * 0.12;
+  const uw = height * (0.34 + rnd() * 0.06), rim = -height * (1.14 + rnd() * 0.05), rise = height * 0.2;
+  const pt = (x, y) => `${r2(x)} ${r2(y)}`;
+  let d = `M${pt(cx - uw, rim)}A${r2(uw)} ${r2(rise)} 0 0 1 ${pt(cx + uw, rim)}`;
+  for (let i = 2; i >= 0; i--) { // three scallops back along the rim
+    const x0 = cx - uw + (2 * uw * (i + 1)) / 3, x1 = cx - uw + (2 * uw * i) / 3;
+    d += `Q${pt((x0 + x1) / 2, rim - rise * 0.3)} ${pt(x1, rim)}`;
+  }
+  parts.push(['fig-line', `M${pt(cx, rim - rise)}L${pt(cx, hand)}`]);
+  parts.push([rnd() < 0.5 ? 'fig-ink' : 'fig-body', `${d}Z`]);
+}
+
 const svgOf = (parts) => parts.map(([cls, d]) => `<path class="${cls}" d="${d}"/>`).join('');
 
 const cache = new Map();
 
 // Inner SVG of a walker (body variant `variant`).
-export function walkerSVG(variant) {
-  const key = `w${variant}`;
+// `rain`: under an umbrella.
+export function walkerSVG(variant, rain = false) {
+  const key = `w${variant}${rain ? 'u' : ''}`;
   if (!cache.has(key)) {
-    cache.set(key, svgOf(figure(variant, PEOPLE.height)));
+    const parts = figure(variant, PEOPLE.height);
+    if (rain) umbrella(variant, PEOPLE.height, parts);
+    cache.set(key, svgOf(parts));
   }
   return cache.get(key);
 }
@@ -146,4 +169,96 @@ export function cyclistSVG(camera, heading, variant) {
     cache.set(key, `<path class="fig-wheel" d="${ring(at(...back)) + ring(at(...front)) + frame}"/><path class="fig-ink" d="${seatBar}"/>${svgOf(f)}${arm && `<path class="fig-line" d="${arm}"/>`}`);
   }
   return cache.get(key);
+}
+
+// A canoe as the figures' pen draws it, heading along `angle` (snapped to
+// VEHICLES.headings) for `camera`: a long boat pointed and raised at both
+// ends – its hull down to the water, the gunwale round the top – with the
+// crew sat in it (`crew`: body variants, the back one first; one alone sits
+// at the back), each with a paddle across, its blade in the water on one
+// side (`stroke` 0 / 1: which; two paddle on opposite sides).
+export const CANOE = { length: 0.15, beam: 0.042, rim: 0.27, rise: 0.22, crew: 0.72 };
+
+export function canoeSVG(camera, heading, crew, stroke) {
+  const key = `k${heading}|${crew.join(',')}|${stroke}|${camera.rotation}|${camera.tile}`;
+  if (cache.has(key)) return cache.get(key);
+  const a = (heading / VEHICLES.headings) * Math.PI * 2;
+  const screen = (wx, wy) => {
+    const [rx, ry] = rotateQuarter(wx, wy, camera.rotation);
+    return [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile];
+  };
+  const A = screen(Math.cos(a) * CANOE.length / 2, Math.sin(a) * CANOE.length / 2); // middle to the bow
+  const N = screen(-Math.sin(a) * CANOE.beam / 2, Math.cos(a) * CANOE.beam / 2);   // middle to one side
+  const H = PEOPLE.height; // heights in scene px, from the figures
+  // t along (-1 stern, 1 bow), u across (-1, 1), h up
+  const at = (t, u, h) => [t * A[0] + u * N[0], t * A[1] + u * N[1] - h];
+  const rim = (t) => H * (CANOE.rim + CANOE.rise * t ** 4); // the gunwale, swept up at the ends
+  const width = (t) => Math.sqrt(Math.max(0, 1 - t * t)) * (1 - 0.15 * t * t);
+  const ts = Array.from({ length: 17 }, (_, i) => -1 + i / 8);
+  const P = ([x, y]) => `${r2(x)} ${r2(y)}`;
+  const poly = (pts, close = true) => `M${pts.map(P).join('L')}${close ? 'Z' : ''}`;
+  // the nearer side: the one drawn lower on screen
+  const near = N[1] >= 0 ? 1 : -1;
+  const gunwale = (u) => ts.map((t) => at(t, u * width(t), rim(t)));
+  const water = (u) => ts.map((t) => at(t * 0.92, u * width(t) * 0.8, 0));
+
+  const parts = [];
+  // the hull: everything from the waterline up to the gunwale, as one shape
+  parts.push(['fig-body', poly(hull([...gunwale(1), ...gunwale(-1), ...water(1), ...water(-1)]))]);
+  parts.push(['fig-line', poly([...gunwale(-near), ...gunwale(near).reverse()])]);
+
+  // the crew, the one further back on screen first, and their paddles
+  const seats = crew.length > 1 ? [-0.5, 0.45] : [-0.48];
+  const sitters = crew.map((variant, i) => {
+    const t = seats[i], [x, y] = at(t, 0, rim(t) * 0.6);
+    const side = (i + stroke) % 2 ? 1 : -1;
+    return { variant, t, x, y, side };
+  }).sort((p, q) => p.y - q.y);
+  const paddles = [];
+  for (const { variant, t, x, y, side } of sitters) {
+    const f = figure(variant, H * CANOE.crew, y, true, x);
+    parts.push(...f);
+    // the paddle: from above the far shoulder down across the body to the
+    // water out on its side, a blade at the end
+    const [shx, shy, shw] = f.shoulder;
+    const blade = at(t + 0.12, side * 1.6, 0);
+    const top = [shx - Math.sign(blade[0] - shx || 1) * shw * 1.2, shy - H * 0.22];
+    const dx = blade[0] - top[0], dy = blade[1] - top[1], l = Math.hypot(dx, dy) || 1;
+    const bw = H * 0.07, bl = H * 0.22, ux = dx / l, uy = dy / l;
+    const b0 = [blade[0] - ux * bl, blade[1] - uy * bl];
+    const paddle = [
+      ['fig-line', `M${P(top)}L${P(b0)}`],
+      ['fig-ink', poly([[b0[0] - uy * bw, b0[1] + ux * bw], [blade[0] - uy * bw, blade[1] + ux * bw], [blade[0] + uy * bw, blade[1] - ux * bw], [b0[0] + uy * bw, b0[1] - ux * bw]])],
+    ];
+    // a blade on the far side goes behind the near side of the hull
+    if (side === near) paddles.push(...paddle);
+    else parts.push(...paddle);
+  }
+  // the near side of the hull over their legs: from its gunwale down to the water
+  parts.push(['fig-body', poly([...gunwale(near), ...water(near).reverse()])]);
+  parts.push(...paddles);
+  const svg = svgOf(parts);
+  cache.set(key, svg);
+  return svg;
+}
+
+// Far out: the canoe's outline from above, inked in.
+export function canoeMarkSVG(camera, heading) {
+  return canoeSVG(camera, heading, [], 0).match(/<path class="fig-body" d="[^"]*"\/>/)[0].replace('fig-body', 'fig-ink');
+}
+
+// The convex hull of points (the hull's outline seen from anywhere).
+function hull(pts) {
+  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list) => {
+    const out = [];
+    for (const q of list) {
+      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+      out.push(q);
+    }
+    out.pop();
+    return out;
+  };
+  return [...half(p), ...half(p.reverse())];
 }

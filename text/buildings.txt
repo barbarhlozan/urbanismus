@@ -1,0 +1,527 @@
+# What everything that can be built is called, and its few words in the
+# Build menu. How to write it: text/README.md. Read by src/ui/names.js.
+#
+# The key is the thing's name as story/unlocks.txt calls it (narodni_vybor,
+# deep_mine); <name>.blurb its few words, shared by its sizes, or <id>.blurb
+# for one size of it. The names are those used in Czechoslovakia between
+# the 1950s and the 1980s; the English follows the Czech as closely as it
+# can, and leaves the names of the time's own institutions as they were
+# (JZD, Jednota, Tuzex, VB, ČSAD).
+
+# ---------- Sizes (on the Size button: "Velikost: Široká") ----------
+
+size.small
+  cs: Malá
+  en: Small
+
+size.medium
+  cs: Střední
+  en: Medium
+
+size.large
+  cs: Velká
+  en: Large
+
+size.wide
+  cs: Na dvě parcely
+  en: Two plots
+
+size.tower
+  cs: Výšková
+  en: High-rise
+
+size.wide_tower
+  cs: Výšková na dvě parcely
+  en: High-rise, two plots
+
+size.village
+  cs: Vesnická
+  en: Village
+
+size.town
+  cs: Městská
+  en: Town
+
+size.station
+  cs: Nádraží
+  en: Station
+
+size.main_station
+  cs: Hlavní nádraží
+  en: Main station
+
+size.stop
+  cs: Zastávka
+  en: Halt
+
+# ---------- Doprava ----------
+
+station
+  cs: Nádraží
+  en: Station
+
+station.blurb
+  cs: Přiveze si vlastní koleje
+  en: Brings its own tracks
+
+main_station
+  cs: Hlavní nádraží
+  en: Main station
+
+main_station.blurb
+  cs: Přiveze si vlastní koleje
+  en: Brings its own tracks
+
+stop
+  cs: Železniční zastávka
+  en: Railway halt
+
+stop.blurb
+  cs: Nástupiště a čekárna
+  en: A platform and a waiting room
+
+bus_stop
+  cs: Zastávka ČSAD
+  en: ČSAD bus stop
+
+bus_stop.blurb
+  cs: Přístřešek u silnice
+  en: A shelter by the road
+
+# ---------- Bydlení ----------
+
+house
+  cs: Rodinný domek
+  en: Family house
+
+house.blurb
+  cs: Domek se zahrádkou
+  en: A little house with a garden
+
+house-wide.blurb
+  cs: Domky na dvou parcelách
+  en: Little houses on two plots
+
+apartments
+  cs: Činžovní dům
+  en: Tenement house
+
+apartments.blurb
+  cs: Činžáky a městské bloky
+  en: Tenements and town blocks
+
+apartments-wide.blurb
+  cs: Městský blok na dvou parcelách
+  en: A town block on two plots
+
+block
+  cs: Panelák
+  en: Panel block
+
+block.blurb
+  cs: Sídliště z panelů
+  en: A housing estate of panels
+
+block-wide.blurb
+  cs: Panelová deska na dvou parcelách
+  en: A panel slab on two plots
+
+# ---------- Výroba ----------
+
+workshop
+  cs: Dílny
+  en: Workshops
+
+workshop.blurb
+  cs: Dílny komunálního podniku a dvůr
+  en: Workshops of the communal enterprise, and a yard
+
+works
+  cs: Provozovna
+  en: Works
+
+works.blurb
+  cs: Pekárna, mlékárna, tiskárna
+  en: A bakery, a dairy, a printing house
+
+factory
+  cs: Továrna
+  en: Factory
+
+factory.blurb
+  cs: Národní podnik: cihlové haly a komín
+  en: A national enterprise: brick halls and a chimney
+
+plant
+  cs: Kombinát
+  en: Combine
+
+plant.blurb
+  cs: Těžký průmysl, elektrárna, chemie
+  en: Heavy industry, a power plant, chemistry
+
+pit
+  cs: Šachta
+  en: Shaft
+
+pit.blurb
+  cs: Dřevěná těžní věž a halda
+  en: A wooden headframe and a spoil heap
+
+colliery
+  cs: Uhelný důl
+  en: Coal mine
+
+colliery.blurb
+  cs: Ocelové těžní věže a řetízkové šatny
+  en: Steel headframes and the chain changing rooms
+
+deep_mine
+  cs: Hlubinný důl
+  en: Deep mine
+
+deep_mine.blurb
+  cs: Betonové těžní věže a úpravna uhlí
+  en: Concrete headframes and a coal preparation plant
+
+hospodarstvi
+  cs: Hospodářství
+  en: Smallholding
+
+hospodarstvi.blurb
+  cs: Chalupa s chlévem
+  en: A cottage with a byre
+
+farmstead
+  cs: Statek
+  en: Farmstead
+
+farmstead.blurb
+  cs: Starý selský dvůr
+  en: An old farmer's courtyard
+
+jzd
+  cs: JZD
+  en: JZD
+
+jzd.blurb
+  cs: Jednotné zemědělské družstvo
+  en: The Unified Agricultural Cooperative
+
+statni_statek
+  cs: Státní statek
+  en: State farm
+
+statni_statek.blurb
+  cs: Sila, sušárna obilí a stroje
+  en: Silos, a grain drier and machines
+
+# ---------- Občanská vybavenost ----------
+
+jednota
+  cs: Jednota
+  en: Jednota
+
+jednota.blurb
+  cs: Družstevní prodejna
+  en: The cooperative shop
+
+hospoda
+  cs: Hospoda
+  en: Pub
+
+hospoda.blurb
+  cs: Výčep a sál
+  en: A taproom and a hall
+
+obchodni_dum
+  cs: Obchodní dům
+  en: Department store
+
+obchodni_dum.blurb
+  cs: Prior: zboží všeho druhu
+  en: Prior: goods of every kind
+
+tuzex
+  cs: Tuzex
+  en: Tuzex
+
+tuzex.blurb
+  cs: Západní zboží za bony
+  en: Western goods for vouchers
+
+narodni_vybor
+  cs: Národní výbor
+  en: National Committee
+
+narodni_vybor.blurb
+  cs: Úřadovny místní správy
+  en: Offices of the local administration
+
+posta
+  cs: Pošta
+  en: Post office
+
+posta.blurb
+  cs: Pošta a Státní spořitelna
+  en: The post office and the State Savings Bank
+
+hotel
+  cs: Hotel
+  en: Hotel
+
+hotel.blurb
+  cs: Pokoje pro hosty
+  en: Rooms for guests
+
+fire_station
+  cs: Požární stanice
+  en: Fire station
+
+fire_station.blurb
+  cs: Hasičská auta a siréna
+  en: Fire engines and the siren
+
+police_post
+  cs: Oddělení VB
+  en: VB post
+
+police_post.blurb
+  cs: Veřejná bezpečnost
+  en: Public Security, the police
+
+health_centre
+  cs: Zdravotní středisko
+  en: Health centre
+
+health_centre.blurb
+  cs: Obvodní lékař a zubař
+  en: The district doctor and the dentist
+
+polyclinic
+  cs: Poliklinika
+  en: Polyclinic
+
+polyclinic.blurb
+  cs: Lékaři všech oborů
+  en: Doctors of every field
+
+hospital
+  cs: Nemocnice
+  en: Hospital
+
+hospital.blurb
+  cs: Pavilony kolem hlavní budovy
+  en: Pavilions around a main building
+
+service_centre
+  cs: Středisko služeb
+  en: Centre of services
+
+service_centre.blurb
+  cs: Hasiči a lékaři pod jednou střechou
+  en: Firemen and doctors under one roof
+
+school
+  cs: Škola
+  en: School
+
+school.blurb
+  cs: Třídy, tělocvična a hřiště
+  en: Classrooms, a gym and a playground
+
+house_of_culture
+  cs: Kulturní dům
+  en: House of culture
+
+house_of_culture.blurb
+  cs: Kino a taneční sál
+  en: A cinema and a dance hall
+
+swimming_pool
+  cs: Koupaliště
+  en: Open-air pool
+
+swimming_pool.blurb
+  cs: Obecní koupaliště
+  en: The village pool
+
+cemetery
+  cs: Hřbitov
+  en: Cemetery
+
+cemetery.blurb
+  cs: Tichá procházka
+  en: A quiet walk
+
+# ---------- Prostranství ----------
+
+green
+  cs: Zeleň
+  en: Greenery
+
+green.blurb
+  cs: Stromy a cestičky
+  en: Trees and little paths
+
+garden_park
+  cs: Sady
+  en: Gardens
+
+garden_park.blurb
+  cs: Záhony a stánek
+  en: Flower beds and a kiosk
+
+pavilion_park
+  cs: Park s altánem
+  en: Park with a pavilion
+
+pavilion_park.blurb
+  cs: Hudební altán nebo pavilon
+  en: A bandstand or a pavilion
+
+meadow
+  cs: Louka
+  en: Meadow
+
+meadow.blurb
+  cs: Tráva, háj a hřiště
+  en: Grass, a grove and a sports ground
+
+pond_park
+  cs: Park u rybníka
+  en: Park by the pond
+
+pond_park.blurb
+  cs: Procházky kolem rybníka
+  en: Walks round a pond
+
+city_park
+  cs: Městský park
+  en: Town park
+
+city_park.blurb
+  cs: Aleje, lázně nebo letní kino
+  en: Avenues, a spa or a summer cinema
+
+plaza
+  cs: Plácek
+  en: Little square
+
+plaza.blurb
+  cs: Vydlážděný plácek
+  en: A paved little square
+
+fountain_square
+  cs: Náměstí s kašnou
+  en: Square with a fountain
+
+fountain_square.blurb
+  cs: Lavičky kolem kašny
+  en: Benches round a fountain
+
+shopping_precinct
+  cs: Pěší zóna
+  en: Pedestrian zone
+
+shopping_precinct.blurb
+  cs: Truhlíky, stánky a plastika
+  en: Planters, kiosks and a sculpture
+
+monument_square
+  cs: Náměstí s pomníkem
+  en: Square with a monument
+
+monument_square.blurb
+  cs: Socha mezi lípami
+  en: A statue among lindens
+
+market_square
+  cs: Tržiště
+  en: Marketplace
+
+market_square.blurb
+  cs: Stánky pod stromy
+  en: Stalls under the trees
+
+bus_station
+  cs: Autobusové nádraží ČSAD
+  en: ČSAD bus station
+
+bus_station.blurb
+  cs: Nástupiště pod obloukovými stříškami
+  en: Platforms under arched shelters
+
+grand_square
+  cs: Hlavní náměstí
+  en: Main square
+
+grand_square.blurb
+  cs: Obelisk nebo socha uprostřed
+  en: An obelisk or a statue in the middle
+
+parade_square
+  cs: Náměstí s tribunou
+  en: Square with a tribune
+
+parade_square.blurb
+  cs: Tribuna pro prvomájový průvod
+  en: A tribune for the May Day parade
+
+# ---------- Památky ----------
+
+chapel
+  cs: Kaple
+  en: Chapel
+
+chapel.blurb
+  cs: Kaplička u cesty
+  en: A little chapel by the road
+
+church
+  cs: Kostel
+  en: Church
+
+church.blurb
+  cs: Vesnický kostel
+  en: The village church
+
+town_hall
+  cs: Radnice
+  en: Town hall
+
+town_hall.blurb
+  cs: Stará radnice
+  en: The old town hall
+
+memorial
+  cs: Pomník padlým
+  en: Memorial to the fallen
+
+memorial.blurb
+  cs: Kamenný pomník
+  en: A stone monument
+
+castle
+  cs: Hrad
+  en: Castle
+
+castle.blurb
+  cs: Zřícenina, hrad nebo zámek
+  en: A ruin, a castle or a chateau
+
+tower
+  cs: Televizní vysílač
+  en: TV transmitter
+
+tower.blurb
+  cs: Na vrcholu kopce
+  en: On a hilltop
+
+stadium
+  cs: Stadion
+  en: Stadium
+
+stadium.blurb
+  cs: Sportovní areál
+  en: Sports grounds

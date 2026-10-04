@@ -47,7 +47,10 @@ import { THEME } from '../theme.js';
 import { STYLE } from './style.js';
 import { Painter, LOOK, wobble } from './painter.js';
 import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex } from './vehicles.js';
-import { PEOPLE, bodyFor, walkerSVG, cyclistSVG } from './people.js';
+import { PEOPLE, bodyFor, walkerSVG, cyclistSVG, canoeSVG, canoeMarkSVG } from './people.js';
+import { DEER, deerSVG, deerMark } from './deer.js';
+import { LIVESTOCK, livestockSVG, livestockMark } from './livestock.js';
+import { fenceGates } from '../sim/pastures.js';
 import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './draw.js';
 import { chainEdges, edgeCurve, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
@@ -57,7 +60,7 @@ import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
 import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
 import { YARDS } from '../../structures/yards.js';
-import { drawPlot } from '../../structures/plots.js';
+import { drawPlot, boundaryChance } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
 import { pointInPolygon } from '../core/geom2d.js';
 import { fitYard, fitSite, freeTest, pathIndex, railIndex } from './lots.js';
@@ -83,7 +86,7 @@ import { SUN, sunFor, shadowSVG, tierAt, groundSpacing, wallSpacing } from './sh
 export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
-const LAYERS = ['terrain', 'meadow', 'grid', 'subgrid', 'lots', 'paths', 'rails', 'roads', 'shadows', 'parked', 'trains', 'agents', 'objects', 'overlay'];
+const LAYERS = ['terrain', 'meadow', 'grid', 'subgrid', 'lots', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'objects', 'overlay'];
 const TOP = ['objects', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -91,6 +94,10 @@ const SVGNS = 'http://www.w3.org/2000/svg';
 const VIEW_SETTLE = 150;
 const OVERSCAN = 0.25;
 const r2 = (n) => Math.round(n * 100) / 100;
+
+// Trees swaying in the wind (Renderer.swayTrees): at most `most` on screen
+// at once, only at zoom `minZoom` or closer, updated `fps` times a second.
+export const TREE_SWAY = { most: 60, minZoom: 1.2, fps: 30 };
 
 // Lakes (Renderer.renderWater): the furthest the shore reaches from a water
 // dot (under 1, so dry dots stay dry) and how softly neighbouring dots'
@@ -108,7 +115,7 @@ const PATH_OPENING = 0.012;
 const FEATURE_PAD = 0.4; // forest trees stand in clumps around their dot
 
 export class Renderer {
-  constructor(svg, ground, { world, camera, agents, trains, parking, config }) {
+  constructor(svg, ground, { world, camera, agents, trains, boats, deer, livestock, parking, config }) {
     this.svg = svg;
     this.ground = ground;
     // Buildings, trees and the overlay sit in their own <svg> on top, in
@@ -129,6 +136,12 @@ export class Renderer {
     this.agentsShown = false;     // the first agents drawn are already there
     this.trains = trains;
     this.trainEls = new Map();
+    this.boats = boats;
+    this.boatBorn = new Map(); // canoe id -> when it appeared (ms; -Infinity: was there already)
+    this.deer = deer;
+    this.livestock = livestock;
+    this.deerEls = new Map();  // deer, cow, sheep id -> { born, shapes, sx, sy, mirror } as last drawn
+    this.deerGone = new Set(); // …and those shrinking away, with when they went
     this.lastOverlay = null;
     this.objs = new Map();       // key ('s12' / 'f7') -> { g, lg, bounds }
     this.objsDirty = new Set();  // keys to redraw
@@ -164,6 +177,7 @@ export class Renderer {
       roads: new InkLayer(this.layers.roads, ['driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
       paths: new InkLayer(this.layers.paths, ['footpath', 'bridge', 'bridge-post']),
       rails: new InkLayer(this.layers.rails, ['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'bridge', 'bridge-post']),
+      fences: new InkLayer(this.layers.fences, ['fence-post', 'fence-pillar', 'fence']),
     };
     this.buildOrder = new Map(); // network layer -> Map dot -> its place in the last build, for the pen
 
@@ -196,6 +210,11 @@ export class Renderer {
       world.events.on(`${kind}:removed`, (o) => this.dying.add(`${k}${o.id}`));
     }
     on('roads:changed', 'roads');
+    // fences: gaps where roads and railways cross them
+    on('fences:changed', 'fences');
+    on('paths:changed', 'fences'); // (gates)
+    on('roads:changed', 'fences');
+    on('rails:changed', 'fences');
     // street lamps: new streets get theirs drawn in, gone ones erased
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) world.events.on(type, () => this.touchStreets());
     on('paths:changed', 'paths');
@@ -209,7 +228,7 @@ export class Renderer {
         if (this.bridgeKey !== this.waterBridges) this.dirty.add('terrain');
       });
     }
-    for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
+    for (const type of ['roads:changed', 'paths:changed', 'rails:changed', 'fences:changed']) {
       world.events.on(type, (e) => {
         if (e?.nodes && e.layer) this.buildOrder.set(e.layer, new Map(e.nodes.map((n, i) => [n, i])));
         if (e?.nodes) {
@@ -224,7 +243,7 @@ export class Renderer {
     }
     // a car parking redraws only its own lot (renderParked)
     world.events.on('parking:changed', (s) => this.parkedDirty.add(s.id));
-    on('terrain:changed', 'terrain', 'meadow', 'grid', 'subgrid', 'paths', 'rails', 'roads');
+    on('terrain:changed', 'terrain', 'meadow', 'grid', 'subgrid', 'paths', 'rails', 'roads', 'fences');
     world.events.on('terrain:changed', () => {
       this.objsAll = this.worldAll = true; // (not just the view: draw them all now)
       this.roadLines = null;
@@ -303,6 +322,8 @@ export class Renderer {
     if (this.showAgents) {
       this.pen.begin(this.camera);
       this.penTop.begin(this.camera);
+      this.renderBoats();  // on the water, under everything else that moves
+      this.renderAnimals();
       this.renderTrains(); // under the people and cars (or over everything)
       this.renderAgents();
     } else {
@@ -312,6 +333,8 @@ export class Renderer {
       this.agentGhosts.clear();
       this.agentEls.clear();
       this.trainEls.clear();
+      this.deerEls.clear();
+      this.deerGone.clear();
     }
     this.markErasing();
     if (overlaySVG !== this.lastOverlay) {
@@ -497,8 +520,11 @@ export class Renderer {
       this.brows.views.set(camera.rotation, view);
     }
     const paths = (lines, cls) => chunked(lines, CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
+    // (the brows are already on the picture, in tiles)
+    const t = camera.tile;
+    const flat = (lines, cls) => chunked(lines, CONTOUR_CHUNK / 2).map((ls) => `<path class="${cls}" d="${ls.map((pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x * t)} ${r2(y * t)}`).join('')).join('')}"/>`).join('');
     const { tiers, lips, faces } = view;
-    return paths(tiers[0], 'brow light') + paths(tiers[1], 'brow') + paths(tiers[2], 'brow outline') + paths(faces, 'rock-face') + paths(lips, 'rock-lip');
+    return flat(tiers[0], 'brow light') + flat(tiers[1], 'brow') + flat(tiers[2], 'brow outline') + paths(faces, 'rock-face') + paths(lips, 'rock-lip');
   }
 
   // Faint lines on the slopes too steep to build on (steep.js), traced once
@@ -813,6 +839,78 @@ export class Renderer {
     const key = `${networks.road.version}|${networks.path.version}|${this.world.lanes.size}`;
     if (this.joins?.key !== key) this.joins = { key, map: pathJoins(this.world, this.config.road, this.config.lane, this.config.path) };
     return this.joins.map;
+  }
+
+  renderFences() {
+    this.ink.fences.update(this.fenceItems(), { rankOf: this.rankOf(this.world.networks.fence) });
+  }
+
+  // The fences' ink items, as the garden fences are drawn (kit.js
+  // fenceAlong): a rail along the top, short posts close together.
+  // Where a road or railway crosses there's a gap (the pasture is open);
+  // where a footpath does, a gate (sim/pastures.js fenceGates): a pillar
+  // on each side of the path, right at its edges (as the signs at a level
+  // crossing, crossings.js), and the gate shut between them in line with
+  // the fence – a frame with a brace across – so the pasture stays closed.
+  fenceItems() {
+    const { world } = this, layer = world.networks.fence, { post, rails, spacing, gate: G } = this.config.fence;
+    const { items, add } = this.inkItems(true);
+    const gap = (f) => world.roadAtFine(f) || world.rails.hasNode(f);
+    const gates = fenceGates(world);
+    const lo = post * 0.25, hi = rails.at(-1), tall = post * 1.4;
+    const leaf = (key, p, q, a, b) => {
+      add(`${key}f`, 'fence', [[...p, lo], [...q, lo], [...q, hi], [...p, hi], [...p, lo]], a, b);
+      add(`${key}b`, 'fence', [[...p, lo], [...q, hi]], a, b);
+    };
+    const gatePost = (key, [x, y], a, b) => add(key, 'fence-pillar', [[x, y, 0], [x, y, tall]], a, b);
+    for (const n of layer.graph.nodes()) {
+      if (gap(n) || gates.at.has(n)) continue;
+      const [x, y] = layer.pos(n);
+      add(`p${n}`, 'fence-post', [[x, y, 0], [x, y, post]], n, n);
+    }
+    const sides = new Map(); // gate dot -> where the fence pieces at it stop
+    for (const [a, b] of layer.graph.edges()) {
+      if (gap(a) || gap(b)) continue;
+      const pa = layer.pos(a), pb = layer.pos(b), key = edgeKey(a, b);
+      const len = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]), g = Math.min(0.45, G / len);
+      const along = (t) => [pa[0] + (pb[0] - pa[0]) * t, pa[1] + (pb[1] - pa[1]) * t];
+      // the stretches of rail, between the gates' openings
+      const open = [];
+      if (gates.at.has(a)) open.push([0, g]);
+      if (gates.across.has(key)) open.push([0.5 - g, 0.5 + g]);
+      if (gates.at.has(b)) open.push([1 - g, 1]);
+      let t0 = 0;
+      const runs = [];
+      for (const [s0, s1] of open) {
+        if (s0 > t0) runs.push([t0, s0]);
+        t0 = s1;
+      }
+      if (t0 < 1) runs.push([t0, 1]);
+      runs.forEach(([s0, s1], k) => {
+        const run = k ? `.${k}` : '';
+        rails.forEach((z, i) => add(`r${key}.${i}${run}`, 'fence', [[...along(s0), z], [...along(s1), z]], a, b));
+        // posts between its ends, evenly (the ends: a dot's post or a gate's pillar)
+        const steps = Math.max(1, Math.round(((s1 - s0) * len) / spacing));
+        for (let i = 1; i < steps; i++) {
+          const [x, y] = along(s0 + ((s1 - s0) * i) / steps);
+          add(`q${key}${run}.${i}`, 'fence-post', [[x, y, 0], [x, y, post]], a, b);
+        }
+      });
+      for (const [n, t] of [[a, g], [b, 1 - g]]) {
+        if (!gates.at.has(n)) continue;
+        if (!sides.has(n)) sides.set(n, []);
+        sides.get(n).push(along(t));
+        gatePost(`gp${n}.${key}`, along(t), a, b);
+      }
+      if (gates.across.has(key)) {
+        const p = along(0.5 - g), q = along(0.5 + g);
+        gatePost(`gp${key}a`, p, a, b);
+        gatePost(`gp${key}b`, q, a, b);
+        leaf(`g${key}`, p, q, a, b);
+      }
+    }
+    for (const [n, ends] of sides) if (ends.length >= 2) leaf(`g${n}`, ends[0], ends[1], n, n);
+    return items;
   }
 
   renderRails() {
@@ -1303,6 +1401,7 @@ export class Renderer {
     const row = joinedRow(world, s).map((o) => world.centerOf(o));
     const rigid = [row.reduce((a, p) => a + p[0], 0) / row.length, row.reduce((a, p) => a + p[1], 0) / row.length];
     painter.rigid = rigid;
+    painter.sways = live;
     const points = world.nodesOf(s).map((n) => world.grid.xy(n));
     if (def.site) {
       painter.follow = true; // parks and squares lie on the ground like yards
@@ -1320,13 +1419,14 @@ export class Renderer {
 
     // Front yard between the building and its road.
     const frame = this.yardFrame(s);
-    const yard = frame && fitYard(world, this.config, frame);
+    const yard = frame && { ...fitYard(world, this.config, frame), alone: this.isAlone(s) };
     let yardWorld = null;
     if (yard) {
       const [dx, dy] = yard.origin;
       const yp = this.attachFree(new Painter(camera, { x: dx, y: dy, z: world.terrain.heightAt(dx, dy) }, yard.rotation, drawSeed(s) ^ 0x5bd1e995));
       yp.setTilt(yard.tilt);
       yp.rigid = rigid;
+      yp.sways = live;
       yp.follow = true;
       yp.lod = 1;
       YARDS[yard.style].draw(yp, yard, s);
@@ -1345,6 +1445,7 @@ export class Renderer {
       const pp = this.attachFree(new Painter(camera, { x, y, z }, 0, drawSeed(s) ^ 0x2c1b3c6d));
       pp.setTilt(this.roadTurn(s)); // a plot turned with its building to a diagonal road
       pp.rigid = rigid;
+      pp.sways = live;
       pp.follow = true;
       pp.lod = 1;
       drawPlot(pp, this.plotFor(s, plotDef, painter, core, yardWorld));
@@ -1358,6 +1459,25 @@ export class Renderer {
   // and plot turn with it. 0 for the rest.
   roadTurn(s) {
     return this.world.nodesOf(s).length === 1 ? roadFront(this.world, s).tilt : 0;
+  }
+
+  // No other building on any dot around a structure (diagonals too; parks
+  // and squares don't count): standing alone, most go unfenced
+  // (boundaryChance in structures/plots.js, the garden yard).
+  // (touchAround redraws it when a neighbour comes or goes.)
+  isAlone(s) {
+    const { world } = this;
+    for (const n of world.nodesOf(s)) {
+      const [px, py] = world.grid.xy(n);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const m = world.grid.nodeAt(px + dx, py + dy);
+          const o = m >= 0 ? world.structureAt(m) : null;
+          if (o && o.id !== s.id && !STRUCTURE_TYPES[o.type]?.site) return false;
+        }
+      }
+    }
+    return true;
   }
 
   // The plot around a structure, in world axes relative to its anchor dot –
@@ -1414,7 +1534,7 @@ export class Renderer {
 
     return {
       style: plotDef.props,
-      boundary: plotDef.boundary,
+      boundary: boundaryChance(plotDef, this.isAlone(s)),
       kinds: plotDef.kinds,
       density: plotDef.density,
       cell,
@@ -1550,6 +1670,64 @@ export class Renderer {
   // shape's line width is kept constant on screen, so every shown one has
   // to be laid out and painted again at each new zoom) and when the detail
   // level changes. All of them, or just `entries`.
+  // The trees lean in the wind: each forest clump (feature) as a whole, and
+  // each garden tree in a building's drawing (Painter.swayFrom) – sheared
+  // about its foot, so the foot stays put and the top swings – by a few
+  // sines over each other, their phase running across the map so gusts
+  // roll through. `time` simulated seconds, `strength` how far a top leans
+  // per height (config.weather.wind).
+  //
+  // Every lean repaints the map's whole object layer, so it is kept in
+  // budget (TREE_SWAY): only trees on screen, at most `most` of them – a
+  // share of those in view, picked by a hash of where each stands so the
+  // same ones keep swaying as the view moves – only this close or closer,
+  // and `fps` times a second.
+  swayTrees(time, strength) {
+    const S = TREE_SWAY;
+    const on = strength > 0 && this.drawn.zoom >= S.minZoom;
+    if (!on && this.swayIdle) return;
+    if (on && time >= this.swayTime && time - this.swayTime < 1 / S.fps) return;
+    this.swayTime = time;
+    const units = [];
+    for (const e of this.objs.values()) {
+      if (!e.shown) continue;
+      if (e.swayAt !== e.at) this.swayUnits(e);
+      for (const u of e.sway) units.push(u);
+    }
+    const share = on ? Math.min(1, S.most / Math.max(1, units.length)) : 0;
+    for (const u of units) {
+      let k = 0;
+      if (u.h < share) {
+        const lean = strength * (0.6 * Math.sin(time * 1.3 - u.ph) + 0.3 * Math.sin(time * 2.9 - u.ph * 1.7 + 1.1) + 0.25);
+        k = Math.round(lean * 400) / 400;
+      }
+      if (k === u.lean) continue;
+      u.lean = k;
+      if (k) u.el.setAttribute('transform', `matrix(1 0 ${k} 1 ${r2(-k * u.foot[1])} 0)`);
+      else u.el.removeAttribute('transform');
+    }
+    this.swayIdle = !on;
+  }
+
+  // What leans in an object's drawing: a forest clump whole, or the garden
+  // trees in a building's ({ el, foot, h: hash in [0, 1), ph: phase }).
+  swayUnits(e) {
+    e.swayAt = e.at;
+    e.sway = [];
+    const unit = (el, foot) => {
+      const h = Math.abs(Math.sin(foot[0] * 12.9898 + foot[1] * 78.233) * 43758.5453) % 1;
+      e.sway.push({ el, foot, h, ph: foot[0] * 0.03 + foot[1] * 0.05, lean: 0 });
+    };
+    if (e.key[0] === 'f') {
+      const f = this.world.features.get(Number(e.key.slice(1)));
+      if (!f) return;
+      const [nx, ny] = this.world.grid.xy(f.node);
+      unit(e.g, this.project(nx + f.ox, ny + f.oy));
+    } else if (e.key[0] === 's') {
+      for (const el of e.g.querySelectorAll('g.sway')) unit(el, el.dataset.foot.split(' ').map(Number));
+    }
+  }
+
   cull(entries = [...this.objs.values(), ...this.ghosts.values()]) {
     if (!this.viewBox) return;
     for (const e of entries) {
@@ -1597,6 +1775,73 @@ export class Renderer {
       this.placeTrain(el, t.points.map((p, i) => ({ i, p })).filter(({ p }) => onMap(p)));
     }
     for (const id of this.trainEls.keys()) if (!seen.has(id)) this.trainEls.delete(id);
+  }
+
+  // Canoes (sim/boats.js): close up the boat and its crew (people.js),
+  // further out its outline inked in. Under a bridge they're out of sight.
+  // One put in by a house grows there, as people do out of a building.
+  renderBoats() {
+    if (!this.boats) return;
+    const cam = this.camera, close = cam.zoom >= VEHICLES.minZoom;
+    const { deck } = this.bridgeState();
+    const now = performance.now(), pop = drawEnabled() && this.agentsShown;
+    const seen = new Set();
+    for (const b of this.boats.visible()) {
+      seen.add(b.id);
+      if (!this.boatBorn.has(b.id)) this.boatBorn.set(b.id, b.home && pop ? now : -Infinity);
+      if (deck(b.x, b.y) > 0) continue;
+      const [sx, sy] = this.project(b.x, b.y);
+      if (!this.pen.onScreen(sx, sy)) continue;
+      const heading = headingIndex(b.angle);
+      const svg = close ? canoeSVG(cam, heading, b.crew.map((v) => v % PEOPLE.bodies), b.stroke) : canoeMarkSVG(cam, heading);
+      this.pen.draw(shapesOf(svg), sx, sy, growScale(now - this.boatBorn.get(b.id)));
+    }
+    for (const id of this.boatBorn.keys()) if (!seen.has(id)) this.boatBorn.delete(id);
+  }
+
+  // Deer (sim/deer.js), cows and sheep (sim/livestock.js): close up the
+  // pen figures (deer.js, livestock.js), mirrored to face the way they last
+  // went, stepping as they walk; further out a low mark. They grow in where
+  // they appear (deer among the trees they come out of) and shrink away
+  // where they go.
+  renderAnimals() {
+    const cam = this.camera, close = cam.zoom >= VEHICLES.minZoom;
+    const now = performance.now(), pop = drawEnabled() && this.agentsShown;
+    const seen = new Set();
+    const all = function* (systems) { for (const s of systems) if (s) yield* s.visible(); };
+    for (const d of all([this.deer, this.livestock])) {
+      seen.add(d.id);
+      const farm = d.kind === 'cow' || d.kind === 'sheep';
+      let el = this.deerEls.get(d.id);
+      if (!el) this.deerEls.set(d.id, el = { born: pop ? now : -Infinity });
+      const [sx, sy] = this.project(d.x, d.y);
+      const stride = farm ? LIVESTOCK.stride : DEER.stride;
+      const pose = d.pose !== 'walk' ? d.pose : Math.floor(d.walked / stride) % 2 ? 'step' : 'stand';
+      const key = close ? `${d.kind}|${pose}|${d.variant}` : `m${d.kind}`;
+      if (el.key !== key) {
+        el.key = key;
+        el.shapes = close ? shapesOf(farm ? livestockSVG(d.kind, pose, d.variant) : deerSVG(d.kind, pose, d.variant))
+          : [shape('walker', farm ? livestockMark(d.kind) : deerMark(d.kind))];
+      }
+      const [fx] = this.project(d.x + Math.cos(d.facing) * 0.1, d.y + Math.sin(d.facing) * 0.1);
+      if (Math.abs(fx - sx) > 1e-4) el.mirror = close && fx < sx;
+      el.sx = sx;
+      el.sy = sy;
+      // bobbing as it walks, as the walkers do (placePerson): squashed
+      // towards its feet a little at every step
+      el.squash = d.pose === 'walk' && cam.zoom >= PEOPLE.bobZoom ? 1 - PEOPLE.bob * Math.abs(Math.sin((d.walked / stride) * Math.PI)) : 1;
+      this.pen.draw(el.shapes, sx, sy, growScale(now - el.born), el.mirror, 0, el.squash);
+    }
+    for (const [id, el] of this.deerEls) {
+      if (seen.has(id)) continue;
+      this.deerEls.delete(id);
+      if (pop) this.deerGone.add(Object.assign(el, { gone: now }));
+    }
+    for (const el of this.deerGone) {
+      const k = shrinkScale(now - el.gone);
+      if (k > 0) this.pen.draw(el.shapes, el.sx, el.sy, k, el.mirror, 0, el.squash);
+      else this.deerGone.delete(el);
+    }
   }
 
   // People and vehicles grow out of the building they leave and shrink back
@@ -1815,11 +2060,14 @@ export class Renderer {
       : 1;
     const close = cam.zoom >= VEHICLES.minZoom;
     const heading = el.heading ?? 0;
-    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.rotation}` : `w${body}`;
+    // in the rain most walkers (config.weather.people) put up an umbrella
+    const share = this.config.weather?.people?.[this.world.weather?.kind]?.umbrellas ?? 0;
+    const brolly = kind === 'walker' && share > 0 && ((bodyFor(`${a.id}u`) + 0.5) / PEOPLE.bodies) <= share;
+    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.rotation}` : `w${body}${brolly ? 'u' : ''}`;
     if (el.key !== key) {
       el.key = key;
       el.shapes = !close ? [shape(kind, personMark(kind, a.id))]
-        : shapesOf(kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body));
+        : shapesOf(kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body, brolly));
     }
     // cyclists' wheels already follow the way they ride
     return close && kind === 'walker' && !!el.left;

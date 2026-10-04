@@ -13,6 +13,7 @@
 
 import { CONFIG } from '../config.js';
 import { World } from '../core/world.js';
+import { t } from '../core/text.js';
 
 const FORMAT = 'urbanismus-city';
 
@@ -54,17 +55,17 @@ function readCity(text) {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error('This file is not an Urbanismus city.');
+    throw new Error(t('import.not-city'));
   }
   if (data?.format === FORMAT) data = data.world;
   if (!Number.isInteger(data?.width) || !Array.isArray(data.structures) || !data.terrain) {
-    throw new Error('This file is not an Urbanismus city.');
+    throw new Error(t('import.not-city'));
   }
   try {
     return World.fromJSON(data);
   } catch (err) {
     throw new Error(/newer version/.test(err.message)
-      ? 'This city was saved by a newer version of the game.'
-      : 'This city file is damaged and could not be loaded.');
+      ? t('import.newer')
+      : t('import.damaged'));
   }
 }

@@ -118,7 +118,8 @@ function spanProblem(layer, nodes, i, j) {
 
 // `steep`: the blocked dots that are only blocked for climbing too steeply
 // (shown by a sign rather than a cross, render/overlay.js steepAt).
-export function validateRoute(layer, nodes) {
+// `opts.lane`: roads built as lanes, which may climb steeper.
+export function validateRoute(layer, nodes, opts = {}) {
   const blocked = [];
   const steep = new Set(), other = new Set();
   const block = (set, ...ns) => { blocked.push(...ns); for (const n of ns) set.add(n); };
@@ -137,7 +138,7 @@ export function validateRoute(layer, nodes) {
     } else if (layer.conflicts(nodes[i], nodes[i + 1])) {
       reason = 'Runs along another line';
       block(other, nodes[i], nodes[i + 1]);
-    } else if (!(spans.clear.has(nodes[i]) && spans.clear.has(nodes[i + 1])) && layer.steep(nodes[i], nodes[i + 1])) {
+    } else if (!(spans.clear.has(nodes[i]) && spans.clear.has(nodes[i + 1])) && layer.steep(nodes[i], nodes[i + 1], opts)) {
       reason = 'Too steep';
       block(steep, nodes[i], nodes[i + 1]);
     }

@@ -5,7 +5,7 @@
 import { Camera } from '../render/camera.js';
 import { Painter } from '../render/painter.js';
 import { vehicleSVG } from '../render/vehicles.js';
-import { drawSeed } from '../../structures/index.js';
+import { drawSeed, footprintOffsets } from '../../structures/index.js';
 import { sampleSitePaths } from '../roads/siteWalks.js';
 
 const ICON_SEED = 12345;
@@ -34,11 +34,14 @@ const ways = (seed) => (seed === ICON_SEED ? 2 : [2, 1, 3, 4, 0][seed % 5]);
 function paint(def, seed, camera) {
   try {
     camera.cx = camera.cy = 0;
-    const instance = { id: -1, type: def.id, node: 0, rotation: 0, seed, data: {} };
-    const g = new Painter(camera, { x: 0, y: 0, z: 0 }, 0, drawSeed(instance));
+    // facing the viewer, as they come when picked up (tools/build.js)
+    const rotation = camera.facingViewer();
+    const instance = { id: -1, type: def.id, node: 0, rotation, seed, data: {} };
+    const g = new Painter(camera, { x: 0, y: 0, z: 0 }, rotation, drawSeed(instance));
     if (def.site) {
       // a lot just around the footprint, no roads
-      const xs = def.footprint.map((p) => p[0]), ys = def.footprint.map((p) => p[1]);
+      const offs = footprintOffsets(def, rotation);
+      const xs = offs.map((p) => p[0]), ys = offs.map((p) => p[1]);
       const [x0, y0, x1, y1] = [Math.min(...xs) - 0.45, Math.min(...ys) - 0.45, Math.max(...xs) + 0.45, Math.max(...ys) + 0.45];
       g.setSite([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
       g.setSitePaths(sampleSitePaths([x0, y0, x1, y1], ways(seed), { bend: seed !== ICON_SEED && seed % 2 === 1 }));
@@ -105,6 +108,7 @@ const LINES = {
   path: '<path class="i-path" d="M4 22 L16 15 L28 22"/>',
   // the map symbol: a solid line with dashes of the background inside
   rail: '<path class="i-rail" d="M4 22 L16 15 L28 22"/><path class="i-rail-dash" d="M4 22 L16 15 L28 22"/>',
+  fence: '<path class="i-fence" d="M4 17 L16 10 L28 17 M4 17 V23 M7 15.2 V21.2 M10 13.5 V19.5 M13 11.8 V17.8 M16 10 V16 M19 11.8 V17.8 M22 13.5 V19.5 M25 15.2 V21.2 M28 17 V23"/>',
   // an eraser, tilted, with its rubber tip and the smudge it leaves
   bulldoze: '<path class="i-eraser" d="M6 22 L20.1 7.9 L26.5 14.3 L12.4 28.4 Z M10.9 17.1 L17.3 23.5"/><path class="i-smudge" d="M16 29 H28"/>',
 };
@@ -130,6 +134,11 @@ const STATS = {
   area: '<circle cx="8" cy="8" r="1.2"/><path d="M8 2.5 A5.5 5.5 0 0 1 8 13.5 A5.5 5.5 0 0 1 8 2.5" stroke-dasharray="1.6 1.9"/>',
   book: '<path d="M8 4.2 C6.2 3 4 2.8 1.8 3.2 V12.8 C4 12.4 6.2 12.6 8 13.8 C9.8 12.6 12 12.4 14.2 12.8 V3.2 C12 2.8 9.8 3 8 4.2 Z M8 4.2 V13.8 M3.6 6 C4.8 5.8 5.8 6 6.6 6.4 M3.6 8.4 C4.8 8.2 5.8 8.4 6.6 8.8"/>',
   pen: '<path d="M3 13 L3.6 10.4 L10.8 3.2 L12.8 5.2 L5.6 12.4 Z M9.6 4.4 L11.6 6.4"/>',
+  fair: '<circle cx="8" cy="8" r="2.6"/><path d="M8 2 V3.6 M8 12.4 V14 M2 8 H3.6 M12.4 8 H14 M3.8 3.8 L4.9 4.9 M11.1 11.1 L12.2 12.2 M12.2 3.8 L11.1 4.9 M4.9 11.1 L3.8 12.2"/>',
+  cloudy: '<circle cx="5.2" cy="5.2" r="1.8"/><path d="M5.2 1.4 V2.4 M1.4 5.2 H2.4 M2.5 2.5 L3.2 3.2 M7.9 2.5 L7.2 3.2 M5 13.5 H12 A2.4 2.4 0 0 0 12 8.7 A3.4 3.4 0 0 0 6 9.6 A2 2 0 0 0 5 13.5 Z"/>',
+  overcast: '<path d="M4 12 H12 A2.6 2.6 0 0 0 12 6.8 A3.8 3.8 0 0 0 4.9 7.8 A2.1 2.1 0 0 0 4 12 Z"/>',
+  rain: '<path d="M4 9.5 H12 A2.4 2.4 0 0 0 12 4.8 A3.6 3.6 0 0 0 5.2 5.7 A1.9 1.9 0 0 0 4 9.5 Z M5.5 11.5 L4.7 13.8 M8.5 11.5 L7.7 13.8 M11.5 11.5 L10.7 13.8"/>',
+  storm: '<path d="M4 9.5 H12 A2.4 2.4 0 0 0 12 4.8 A3.6 3.6 0 0 0 5.2 5.7 A1.9 1.9 0 0 0 4 9.5 Z M8.6 9.5 L7 12 H9 L7.6 14.6 M4.9 11.2 L4.1 13.6 M12 11.2 L11.2 13.6"/>',
 };
 
 export function statIcon(id) {
@@ -153,6 +162,8 @@ const CONTROLS = {
   // button shows one or the other (styles.css)
   fullscreen: '<path class="fs-enter" d="M2.5 6 V2.5 H6 M10 2.5 H13.5 V6 M13.5 10 V13.5 H10 M6 13.5 H2.5 V10"/><path class="fs-exit" d="M6 2.5 V6 H2.5 M13.5 6 H10 V2.5 M10 13.5 V10 H13.5 M2.5 10 H6 V13.5"/>',
   // a folded map, and a plus: a new one
+  // a speech bubble: the language
+  language: '<path d="M2.5 3 H13.5 V10.5 H7.2 L4.4 13.2 V10.5 H2.5 Z M5 6.8 H11"/>',
   newMap: '<path d="M1.5 4 L5 2.5 L8.5 4 L12 2.5 V8 M1.5 4 V12.5 L5 11 L8.5 12.5 M5 2.5 V11 M8.5 4 V12.5 M12.5 10 V15 M10 12.5 H15"/>',
 };
 

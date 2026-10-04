@@ -7,13 +7,16 @@
 
 import { planRoute, validateRoute, BEND } from '../roads/routing.js';
 import { isTouch } from '../ui/device.js';
+import { t, reasonText } from '../core/text.js';
 
-// options: { kind, id (default: kind), lane (roads: build lanes), label, group (Build menu group), blurb, fineGrid, curve (config key), hoverRadius }
+// options: { kind, id (default: kind), lane (roads: build lanes), group (Build menu group), fineGrid, curve (config key), hoverRadius }
+// Its words are tool.<id>, tool.<id>.blurb and network.*.<id> (text/ui.txt).
 export function createNetworkTool({ world, config }, options) {
-  const { kind, label, lane = false, fineGrid = false, hoverRadius = 0.32 } = options;
+  const { kind, lane = false, fineGrid = false, hoverRadius = 0.32 } = options;
+  const id = options.id ?? kind;
   const layer = world.networks[kind];
   const curve = config[options.curve ?? kind];
-  const noun = label.toLowerCase();
+  const bendName = (b) => t(b === BEND.DIAGONAL_FIRST ? 'bend.diagonal' : 'bend.straight');
 
   let start = -1;
   let hover = -1;
@@ -36,30 +39,29 @@ export function createNetworkTool({ world, config }, options) {
   const sidewalkNote = (plan) => {
     if (kind !== 'path' || !plan?.check.ok) return '';
     const along = plan.nodes.map((n, i) => i > 0 && streetBeside(plan.nodes[i - 1], n));
-    if (along.includes('road')) return 'Along the road it becomes sidewalks · ';
-    if (along.includes('lane')) return 'Along the lane it becomes a sidewalk on this side · ';
-    return along.includes('on-lane') ? 'On the lane it becomes a sidewalk on its right · ' : '';
+    const which = ['road', 'lane', 'on-lane'].find((w) => along.includes(w));
+    return which ? `${t(`network.sidewalks.${which}`)} · ` : '';
   };
   // Roads and lanes drawn over each other: what changes.
   const convertNote = (plan) => {
     if (kind !== 'road' || !plan?.check.ok) return '';
     const over = plan.nodes.some((n, i) => i > 0 && world.roads.hasEdge(plan.nodes[i - 1], n) && world.isLane(plan.nodes[i - 1], n) !== lane);
     if (!over) return '';
-    return lane ? 'Narrows the road to a lane · ' : 'Widens the lane to a road · ';
+    return `${t(lane ? 'network.narrows' : 'network.widens')} · `;
   };
   const note = (plan) => sidewalkNote(plan) || convertNote(plan);
 
   const currentPlan = () => {
     if (start < 0 || hover < 0 || hover === start) return null;
     const nodes = planRoute(layer.grid, start, hover, bend);
-    return { nodes, check: validateRoute(layer, nodes) };
+    return { nodes, check: validateRoute(layer, nodes, { lane }) };
   };
 
   return {
-    id: options.id ?? kind,
+    id,
     group: options.group,
-    blurb: options.blurb ?? '',
-    label,
+    blurb: t(`tool.${id}.blurb`),
+    label: t(`tool.${id}`),
     fineGrid,
     // the start dot is set with one tap; the end dot needs a confirming tap
     touchConfirm: () => start >= 0,
@@ -106,26 +108,25 @@ export function createNetworkTool({ world, config }, options) {
       return false;
     },
 
-    actions: () => [{ label: `Bend: ${bend}`, key: 'Tab', run: flip }],
-    cancelLabel: () => (start >= 0 ? `Stop ${noun}` : 'Done'),
+    actions: () => [{
+      label: `${t('bend')}: ${bendName(bend)}`, icon: bend === BEND.DIAGONAL_FIRST ? 'bend-diagonal' : 'bend-straight', key: 'Tab', run: flip,
+    }],
+    cancelLabel: () => t(start >= 0 ? `network.stop.${id}` : 'done'),
 
     hint() {
       if (isTouch()) {
-        if (start < 0) return `Tap a dot to start a ${noun}${kind === 'path' ? ' · draw along a road to give it sidewalks' : lane ? ' · draw over a road or footpath to make it a lane' : ''}`;
+        if (start < 0) return t(`network.tap.${id}`);
         const plan = currentPlan();
-        if (!plan) return 'Tap where it should end';
-        return plan.check.ok ? `${note(plan)}Tap again to build` : plan.check.reason;
+        if (!plan) return t('network.tap.end');
+        return plan.check.ok ? `${note(plan)}${t('network.tap.build')}` : reasonText(plan.check.reason);
       }
       if (start < 0) {
         const nearRoad = kind === 'path' && hover >= 0 && nearAnyRoad(hover);
-        if (nearRoad) return 'Draw along a road to give it sidewalks · beside a lane, a sidewalk on that side';
-        if (kind === 'rail') return 'Click a dot to start a railway · run it off the map edge for trains';
-        if (lane) return 'Click a dot to start a lane · draw over a road or footpath to make it a lane';
-        return `Click a dot to start a ${noun}`;
+        return t(nearRoad ? 'network.start.path.road' : `network.start.${id}`);
       }
       const plan = currentPlan();
-      const status = plan && !plan.check.ok ? `${plan.check.reason} · ` : note(plan);
-      return `${status}Click to end · Tab: ${bend} · right-click to stop`;
+      const status = plan && !plan.check.ok ? `${reasonText(plan.check.reason)} · ` : note(plan);
+      return status + t('network.end', { bend: bendName(bend) });
     },
 
     overlay(kit) {

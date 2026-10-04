@@ -17,7 +17,7 @@ export class NetworkLayer {
     this.scale = scale;
     this.isBlocked = isBlocked;   // (node) -> bool
     this.conflicts = conflicts;   // (a, b) -> bool: this segment may not be built (e.g. taken by another network)
-    this.steep = steep;           // (a, b) -> bool: this segment climbs too steeply to be built
+    this.steep = steep;           // (a, b, { lane }) -> bool: this segment climbs too steeply to be built (as a lane)
     this.maxTurn = maxTurn;       // sharpest bend allowed at a dot, in radians (null = any)
     this.coarseOf = coarseOf;     // (node) -> main-grid node on the same spot, or -1
     this.bridge = bridge;

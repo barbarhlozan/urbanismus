@@ -57,9 +57,12 @@ html, body {
    <canvas> with the moving people, vehicles and trains, #view-top (the
    buildings, trees and tool previews), then #trains-top: train carriages
    with nothing nearer in front of them, so they pass in front of stations
-   and buildings behind the track. The two .view wrappers are larger
-   than the window and moved on the GPU while the camera moves (position
-   and size set by Renderer.placeView); the canvas is redrawn every frame.
+   and buildings behind the track, and the weather
+   over all of it: #cloud-shadows (cloudShadows.js), #gloom (a grey sky's
+   shade, config.weather.gloom), #rain (rain.js).
+   The two .view wrappers are larger than the window and moved on the GPU
+   while the camera moves (position and size set by Renderer.placeView);
+   the canvases are redrawn every frame.
    #input, a bare box over all of it, takes the pointer: hit testing it is
    free, where finding the element under the pointer in the SVGs means
    walking tens of thousands of shapes on every move. */
@@ -74,7 +77,9 @@ html, body {
   display: block;
   user-select: none;
 }
-#agents, #trains-top { position: fixed; left: 0; top: 0; pointer-events: none; }
+#agents, #trains-top, #cloud-shadows, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
+/* a grey sky's shade over the whole map (config.weather.gloom) */
+#gloom { position: fixed; inset: 0; pointer-events: none; background: var(--detail); opacity: 0; transition: opacity 4s; }
 #input {
   position: fixed;
   inset: 0;
@@ -160,6 +165,10 @@ html, body {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* fences round pastures: a rail along the top, short posts close together */
+.fence, .fence-post { fill: none; stroke: var(--detail); stroke-width: 1; stroke-linecap: round; } /* as the garden fences (.layer-objects .ln) */
+/* a gate's pillars, either side of a footpath through the fence */
+.fence-pillar { fill: none; stroke: var(--detail); stroke-width: 1.8; stroke-linecap: butt; }
 /* railways: the map symbol – a solid line with dashes of background
    colour inside it; faded dashes past the map edge, a bar at dead ends */
 .rail { fill: none; stroke: var(--fg); stroke-width: 3.6; stroke-linejoin: round; }
@@ -220,8 +229,12 @@ html, body {
 .shadow { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; }
 /* SUN.ground / SUN.walls 'tone': flat shade instead of strokes */
 .shadow.tone { fill: color-mix(in srgb, var(--detail) 16%, var(--bg)); stroke: none; }
-.layer-objects .filled.shade-1 { fill: color-mix(in srgb, var(--detail) 9%, var(--bg)); }
-.layer-objects .filled.shade-2 { fill: color-mix(in srgb, var(--detail) 18%, var(--bg)); }
+/* --sun: how much the sun shades them, from the weather (config.weather.sun,
+   set on #objects by main.js and on a photo by photo.js); eased as it turns */
+@property --sun { syntax: '<number>'; inherits: true; initial-value: 1; }
+#objects { transition: --sun 4s; }
+.layer-objects .filled.shade-1 { fill: color-mix(in srgb, var(--detail) calc(9% * var(--sun)), var(--bg)); }
+.layer-objects .filled.shade-2 { fill: color-mix(in srgb, var(--detail) calc(18% * var(--sun)), var(--bg)); }
 .layer-objects .wall-shade { stroke: var(--detail); stroke-width: 0.6; }
 /* screen-facing line drawings (trees, see features/trees.js) */
 .glyph { fill: none; stroke: var(--detail); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round; }
@@ -345,6 +358,20 @@ html, body {
 
 /* ---------- UI ---------- */
 
+/* Under a grey sky (#gloom over the map) the UI's paper takes some of the
+   same shade, so the boxes don't glow over the dimmed map, and its detail
+   colour darkens a little to stay readable on it. main.js sets --gloom on
+   #ui (0%–100%, the sky's shade); it changes as slowly as the sky does.
+   (The colours are worked out on #ui from the page's own and handed to
+   everything in it, so the map's SVGs never restyle.) */
+@property --gloom { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
+#ui {
+  transition: --gloom 4s;
+  --ui-paper: color-mix(in srgb, var(--detail) calc(var(--gloom) * 0.75), var(--bg));
+  --ui-detail: color-mix(in srgb, var(--main) calc(var(--gloom) * 0.6), var(--detail));
+}
+#ui > * { --bg: var(--ui-paper); --detail: var(--ui-detail); }
+
 #ui {
   font-size: 12px;
   letter-spacing: 0.01em;
@@ -425,6 +452,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .icon.stat-icon circle { stroke-width: 1.1 !important; }
 .hud .traffic { font-size: 12px; gap: 12px; }
 .hud .traffic .stat-icon { width: 14px; height: 14px; flex-basis: 14px; }
+.hud .traffic .weather { margin-left: auto; }
 
 /* app name, version and author: quietly in the bottom-left corner */
 .credit {
@@ -792,6 +820,16 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 @keyframes intro-pen { from { transform: translateX(-100%); } to { transform: none; } }
 @keyframes intro-pen-back { from { transform: translateX(100%); } to { transform: none; } }
 .intro.opening .intro-card { opacity: 0; transform: translateY(-6px); }
+/* a first visit: the languages under the name (ui/languages.js), each in
+   its own name, the browser's guess in ink; the cover takes clicks then */
+.intro.asking { pointer-events: auto; }
+.intro-langs { display: flex; gap: 10px; margin-top: 22px; animation: intro-langs 400ms ease-out both; }
+.intro-langs .lang { font: 17px var(--ui-font); color: var(--detail); background: none; border: none; padding: 10px 12px; min-height: 44px; cursor: pointer; border-radius: var(--radius); transition: color 150ms, opacity 250ms; }
+.intro-langs .lang:hover, .intro-langs .lang:focus-visible, .intro-langs .lang[aria-pressed="true"] { color: var(--main); }
+.intro-langs .lang:focus-visible { outline: var(--line) dashed var(--main); outline-offset: 2px; }
+.intro-langs.picked { pointer-events: none; }
+.intro-langs.picked .lang:not([aria-pressed="true"]) { opacity: 0; }
+@keyframes intro-langs { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .intro.opening { --hole: calc(150vmax + 120px); transition: --hole 1300ms cubic-bezier(0.45, 0, 0.2, 1) 180ms; }
 /* the panels wait behind the cover, then come in (main.js) */
 body.loading #ui { visibility: hidden; }
@@ -799,11 +837,12 @@ body.loading #ui { visibility: hidden; }
   .intro-pen-reveal, .intro-pen svg { transform: none; }
   .intro-card.shown .intro-pen-reveal, .intro-card.shown .intro-pen svg { animation: none; }
   .intro.opening { --hole: 0px; opacity: 0; transition: opacity 300ms; }
+  .intro-langs { animation: none; }
 }
 /* not unlocked yet (src/story/unlocks.js): left out of the Build menu */
 #ui .bm-tool.locked, #ui .bm-tab.locked, #ui .controls button.locked, #ui .hud .chron.locked { display: none !important; }
 
-/* ---------- Build menu (bottom-right) ---------- */
+/* ---------- Build menu (bottom centre; a rail on the right on wide screens, below) ---------- */
 
 .build-menu {
   position: fixed;
@@ -871,12 +910,19 @@ body.loading #ui { visibility: hidden; }
 .bm-tool .bm-icon { width: calc(var(--tile) - 34px); height: calc(var(--tile) - 34px); flex: 0 0 auto; display: flex; }
 .bm-tool .bm-name { font-size: 10px; line-height: 1.1; max-width: 100%; overflow-wrap: anywhere; }
 .bm-tool .key { position: absolute; top: 3px; right: 5px; font-size: 9px; color: var(--detail); white-space: nowrap; }
-/* Erase: along the bottom, one bar high, a drawing and its name side by side */
-.bm-loose { border-top: var(--line) solid var(--fg); }
-#ui .bm-loose .bm-tool { flex-direction: row; justify-content: flex-start; gap: 8px; height: var(--bar-h); padding: 0 12px; width: 100%; border-radius: 0; }
-.bm-loose .bm-tool .bm-icon { width: calc(var(--bar-h) - 14px); height: calc(var(--bar-h) - 14px); }
-.bm-loose .bm-tool .bm-name { font-size: 11px; }
-.bm-loose .bm-tool .key { position: static; margin-left: auto; }
+/* Erase, Photo and Terrain: along the bottom, one bar high, a third each,
+   a drawing and its name side by side */
+.bm-loose { display: flex; border-top: var(--line) solid var(--fg); }
+#ui .bm-loose > button { flex: 1 1 0; min-width: 0; position: relative; display: flex; align-items: center; flex-direction: row; justify-content: flex-start; gap: 8px; height: var(--bar-h); padding: 0 10px; border-radius: 0; }
+#ui .bm-loose > button + button { border-left: var(--line) solid var(--fg); }
+#ui .bm-loose > button:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
+#ui .bm-loose > button.on { background: var(--fg); color: var(--bg); }
+.bm-loose .bm-icon { width: calc(var(--bar-h) - 14px); height: calc(var(--bar-h) - 14px); flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+.bm-loose .bm-icon .ctl-icon { width: 16px; height: 16px; }
+.bm-loose .bm-icon .ctl-icon path, .bm-loose .bm-icon .ctl-icon circle { stroke-width: 1.1 !important; fill: none !important; }
+.bm-loose .bm-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bm-loose .key { position: static; margin-left: auto; font-size: 9px; color: var(--detail); }
+#ui .bm-loose button.locked { display: none; }
 
 /* folded: the dock – "+ Build", or the tool in hand with its options and an
    × – as high as the top bar, its buttons a cell wide like the bar's */
@@ -922,6 +968,78 @@ body.loading #ui { visibility: hidden; }
 #ui .bm-opts button:hover .key, #ui .bm-drop:hover .key { color: inherit; opacity: 0.7; }
 body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 
+/* the rail's title and pin (below), not used over the dock */
+.bm-rail, .bm-title { display: none; }
+#ui .build-menu:not(.rail) .bm-pin { display: none; }
+
+/* ---------- Build menu on a wide screen: a rail along the right edge ---------- */
+
+/* buildMenu.js moves the tabs, and Erase, Photo and Terrain, into the two
+   boxes of .bm-rail, columns of cells under the top bar, a gap between; the panel is a drawer of tiles to its left, four
+   across, as tall as its group; the dock keeps the bottom edge, there
+   only while a tool is in hand */
+.build-menu.rail {
+  left: auto;
+  right: calc(20px + var(--safe-r));
+  top: calc(16px + var(--safe-t) + var(--bar-h) + 2 * var(--line) + 12px);
+  bottom: auto;
+  transform: none; /* (it would also hold the dock, position: fixed, to it) */
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none; /* the map, under the rail beside a taller drawer */
+}
+.build-menu.rail > * { pointer-events: auto; }
+.build-menu.rail .bm-rail { display: flex; flex-direction: column; gap: 8px; }
+.build-menu.rail .bm-rail-box {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: var(--line) solid var(--fg);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.build-menu.rail .bm-tabs { flex-direction: column; }
+#ui .build-menu.rail .bm-tab { flex: none; width: var(--bar-h); height: var(--bar-h); border-right: none; }
+#ui .build-menu.rail .bm-tab + .bm-tab { border-top: var(--line) solid var(--fg); }
+.build-menu.rail .bm-loose { flex-direction: column; border-top: none; }
+#ui .build-menu.rail .bm-loose > button { flex: none; width: var(--bar-h); padding: 0; justify-content: center; }
+#ui .build-menu.rail .bm-loose > button + button { border-left: none; border-top: var(--line) solid var(--fg); }
+.build-menu.rail .bm-loose .bm-name,
+.build-menu.rail .bm-loose .key { display: none; }
+
+.build-menu.rail .bm-panel {
+  width: calc(4 * var(--tile) + 3 * 2px + 12px + 2 * var(--line));
+  /* down to just above the dock */
+  max-height: calc(100vh - 16px - var(--bar-h) - 12px - 20px - var(--bar-h) - 20px - 4 * var(--line) - var(--safe-t) - var(--safe-b));
+  max-height: calc(100dvh - 16px - var(--bar-h) - 12px - 20px - var(--bar-h) - 20px - 4 * var(--line) - var(--safe-t) - var(--safe-b));
+  transform-origin: top right;
+}
+.build-menu.rail .bm-caption { display: none; }
+.build-menu.rail .bm-body { padding-top: 6px; }
+.build-menu.rail .bm-tools { justify-content: start; }
+.build-menu.rail .bm-title { display: block; flex: 1; min-width: 0; align-self: center; padding: 0 12px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bm-pin .opt-icon { width: 15px; height: 15px; }
+.bm-pin .opt-icon path { stroke-width: 1.1 !important; fill: none !important; }
+#ui .bm-pin[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+
+/* the dock: alone at the bottom, and only with a tool in hand (centred
+   without a transform, which the fade-in animates) */
+.build-menu.rail .bm-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: max-content;
+  margin-inline: auto;
+  bottom: calc(20px + var(--safe-b));
+}
+#ui .build-menu.rail > .bm-dock { display: none; }
+/* the panels hanging from the top bar open beside the rail, not over it
+   (the drawer folds for them: BuildMenu.makeRoom) */
+#ui:has(.build-menu.rail) .color-panel,
+#ui:has(.build-menu.rail) .debug-panel { right: calc(20px + var(--safe-r) + var(--bar-h) + 2 * var(--line) + 8px); }
+#ui .build-menu.rail.has-tool > .bm-dock { display: flex; }
+
 
 /* icons: the map's line style at a small size */
 .icon { width: 100%; height: 100%; overflow: visible; }
@@ -935,6 +1053,7 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 .icon .i-road { stroke-width: 2.4; }
 .icon .i-lane { stroke-width: 1.5; }
 .icon .i-path { stroke-width: 1.2; stroke-dasharray: 3 2.5; stroke-linecap: butt; }
+.icon .i-fence { stroke-width: 1.1; stroke-linecap: round; }
 .icon .i-rail { stroke-width: 3.6; stroke-linecap: butt; stroke-linejoin: round; }
 /* dashes in the colour behind the icon, as .rail-dash on the map */
 .icon .i-rail-dash { stroke: var(--bg); stroke-width: 1.4; stroke-dasharray: 3.5 3.5; stroke-linecap: butt; stroke-linejoin: round; }
@@ -998,6 +1117,14 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 }
 #ui .color-panel .scheme:hover, #ui .color-panel .scheme.on { background: var(--fg); color: var(--bg); }
 #ui .color-panel .scheme.on::after { content: "✓"; margin-left: auto; }
+/* the Language menu (ui/languages.js): the Colours panel's box, narrow, no
+   heading, just each language in its own name, the one in use ticked;
+   placed by the script under its button */
+.lang-panel { width: auto; }
+#ui .lang-panel .lang { display: flex; align-items: center; gap: 14px; width: 100%; padding: 7px 12px; text-align: left; white-space: nowrap; }
+#ui .lang-panel .lang:hover, #ui .lang-panel .lang[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+#ui .lang-panel .lang[aria-pressed="true"]::after { content: "✓"; margin-left: auto; }
+body.touch #ui .lang-panel .lang { min-height: 40px; }
 .color-panel .custom-fields { padding: 4px 10px 8px 10px; border-top: var(--line) dashed var(--detail); }
 .color-panel .custom-fields label { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
 .color-panel .field-name { flex: 1; color: var(--detail); }
@@ -1051,7 +1178,7 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
   position: fixed;
   inset: 0;
   margin: auto;
-  width: min(340px, calc(100vw - 24px));
+  width: min(440px, calc(100vw - 24px));
   height: fit-content;
   box-sizing: border-box;
   z-index: 31;
@@ -1098,7 +1225,64 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 .newmap-panel .newmap-row .ctl-icon path { stroke-width: 1.1; fill: none; }
 .newmap-panel .slot { flex: 1; min-width: 0; }
 .newmap-panel .value { flex: 0 0 44px; text-align: right; font-weight: 700; transform-origin: right center; }
-.newmap-panel .newmap-note { margin: 10px 0 4px; color: var(--detail); font-style: italic; font-size: 11px; }
+/* hills, lakes and forests: a picture (landscapePreview.js) over their
+   sliders, each with just its drawing (the words in its tooltip) */
+.newmap-panel .newmap-row.pictured .field-name { flex: 0 0 auto; }
+.newmap-panel .newmap-row.pictured { gap: 12px; }
+.newmap-scene { margin: 2px 0 8px; }
+.newmap-scene svg { display: block; width: 100%; height: auto; overflow: visible; }
+.newmap-scene .lp-fill { fill: var(--bg); stroke: none; }
+.newmap-scene .lp-back { fill: none; stroke: var(--detail); stroke-width: 1.1; stroke-linejoin: round; }
+.newmap-scene .lp-near { fill: none; stroke: var(--fg); stroke-width: 1.2; stroke-linejoin: round; }
+.newmap-scene .lp-hatch { fill: none; stroke: var(--detail); stroke-width: 0.7; stroke-linecap: round; }
+.newmap-scene .lp-lake { fill: color-mix(in srgb, var(--detail) 12%, var(--bg)); stroke: var(--fg); stroke-width: 1; }
+.newmap-scene .lp-ripple { fill: none; stroke: var(--detail); stroke-width: 0.8; stroke-linecap: round; }
+.newmap-scene .lp-tree { fill: var(--bg); stroke: var(--fg); stroke-width: 0.9; stroke-linejoin: round; stroke-linecap: round; }
+/* trees and lakes grow from where they stand, and shrink away */
+.newmap-scene .lp-grow {
+  transform: scale(0);
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  opacity: 0;
+  transition: transform 260ms cubic-bezier(0.4, 0, 1, 1), opacity 200ms;
+}
+.newmap-scene .lp-lakes .lp-grow { transform-origin: 50% 50%; }
+.newmap-scene .lp-flow { stroke: none; }
+.newmap-scene .lp-bank { fill: none; stroke: var(--fg); stroke-width: 0.8; stroke-linecap: round; }
+/* the water runs out of the hills towards you */
+.newmap-scene .lp-water .lp-grow { transform: scale(1, 0); transform-origin: 50% 0; }
+.newmap-scene .lp-water .on > .lp-grow { transform: none; }
+.newmap-scene .on > .lp-grow { transform: none; opacity: 1; transition: transform 420ms cubic-bezier(0.34, 1.5, 0.64, 1), opacity 160ms; }
+/* the parts other than the slider pointed at */
+.newmap-scene .faint { opacity: 0.25; }
+.newmap-scene g { transition: opacity 200ms; }
+@media (prefers-reduced-motion: reduce) {
+  .newmap-scene .lp-grow, .newmap-scene .on > .lp-grow, .newmap-scene g { transition: none; }
+}
+/* before the town goes (newMapMenu.js ask): a small box over the dialog,
+   which waits faded behind it; the choices one under another, export
+   first */
+.newmap-panel > * { transition: opacity 200ms; }
+.newmap-panel.waiting { pointer-events: none; }
+.newmap-panel.waiting > :not(.sk-frame) { opacity: 0.3; }
+.newmap-confirm {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(290px, calc(100vw - 48px));
+  height: fit-content;
+  box-sizing: border-box;
+  z-index: 32;
+  background: var(--bg);
+  border: var(--line) solid var(--fg);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+.newmap-confirm p { margin: 0; padding: 14px 14px 12px; }
+#ui .newmap-confirm button { display: block; width: 100%; padding: 10px 14px; text-align: left; border-top: var(--line) solid var(--fg); }
+#ui .newmap-confirm .export-go { font-weight: 700; }
+#ui .newmap-confirm button:hover, #ui .newmap-confirm button:focus-visible { background: var(--fg); color: var(--bg); outline: none; }
+body.touch #ui .newmap-confirm button { min-height: 44px; }
 .newmap-panel .newmap-foot { display: flex; border-top: var(--line) solid var(--fg); }
 #ui .newmap-panel .newmap-foot button { flex: 1; padding: 9px 0; }
 #ui .newmap-panel .newmap-foot .create { font-weight: 700; border-left: var(--line) solid var(--fg); }
@@ -1127,7 +1311,7 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 
 /* the border keeps its room but the pen-drawn frame replaces it */
 #ui .sketched { border-color: transparent !important; border-radius: 0; }
-.bm-panel, .bm-dock, .actions { position: relative; }
+.bm-panel, .bm-dock, .bm-rail-box, .actions { position: relative; }
 .sk-frame {
   position: absolute;
   top: calc(-1 * var(--line));
@@ -1183,7 +1367,7 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
   #ui .controls.folded .menu-toggle { width: auto; padding: 0 10px; justify-content: center; }
   .controls .menu-icon { width: 16px; height: 16px; }
   .controls button[data-act="colors"] { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
-  .controls button[data-act="colors"]::after { content: "Colors"; }
+  .controls button[data-act="colors"]::after { content: attr(data-label); }
   .controls button[data-act] { justify-content: flex-start; }
 
   /* stats: beside the menu button, smaller; tap to fold */
@@ -1208,6 +1392,10 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
   .bottom { bottom: calc(10px + var(--bar-h) + 2 * var(--line) + 10px + var(--safe-b)); }
   .build-menu { bottom: calc(10px + var(--safe-b)); }
   .bm-panel { width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); }
+  /* Erase, Photo, Terrain: a third of a phone each – room for the names
+     (the keys go: a phone has none) */
+  .bm-loose .key { display: none; }
+  #ui .bm-loose > button { padding: 0 4px; gap: 4px; justify-content: center; }
   .actions button { flex: 1 1 auto; }
 
   .dialogue {
@@ -1344,6 +1532,12 @@ body.scaling-strokes .scene * { vector-effect: none; }
 svg.photo .photo-sky { fill: var(--bg); }
 svg.photo .photo-ground { fill: var(--bg); stroke: none; }
 svg.photo .photo-horizon { fill: none; stroke: var(--detail); stroke-width: 0.8; }
+svg.photo .photo-cloud { fill: var(--bg); stroke: var(--detail); stroke-width: 0.8; stroke-linejoin: round; }
+svg.photo .photo-cloud-fill { fill: var(--bg); stroke: none; }
+svg.photo .photo-cloud-edge { fill: none; stroke: var(--detail); stroke-width: 0.8; stroke-linecap: round; }
+svg.photo .photo-cloud-under { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; opacity: 0.7; }
+svg.photo .photo-rain { fill: none; stroke: var(--detail); stroke-width: 0.6; stroke-linecap: round; opacity: 0.6; }
+svg.photo .photo-figure * { vector-effect: non-scaling-stroke; } /* deer, cows, sheep: the map's line widths */
 svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: 0.6; stroke-linejoin: round; }
 svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: 0.8; stroke-linejoin: round; }
 svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }

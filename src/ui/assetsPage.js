@@ -9,6 +9,8 @@ import { structureDrawing, vehicleDrawing } from './icons.js';
 import { VEHICLES } from '../render/vehicles.js';
 import { CONFIG } from '../config.js';
 import { sketchFrame, sketchFrames } from './sketchFrame.js';
+import { t } from '../core/text.js';
+import { nameOf, blurbOf, sizeOf } from './names.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -23,10 +25,10 @@ function footprintSize(def) {
 function structureRow(def) {
   const tiles = Array.from({ length: VARIANTS }, (_, k) => `
     <figure class="asset-tile">${structureDrawing(def, { seed: seedOf(k) })}<figcaption>#${k}</figcaption></figure>`).join('');
-  const title = def.size ? `${def.name} · ${def.size}` : def.name;
+  const title = def.size ? `${nameOf(def)} · ${sizeOf(def)}` : nameOf(def);
   return `
     <div class="asset-row">
-      <h3>${esc(title)} <span>${[def.blurb, footprintSize(def)].filter(Boolean).map(esc).join(' · ')}</span></h3>
+      <h3>${esc(title)} <span>${[blurbOf(def), footprintSize(def)].filter(Boolean).map(esc).join(' · ')}</span></h3>
       <div class="asset-tiles">${tiles}</div>
     </div>`;
 }
@@ -43,16 +45,18 @@ const coupled = (...names) => (heading, hand) => {
     return { name, heading, hand: (hand + i) % VEHICLES.hands, at: [-Math.cos(a) * back, -Math.sin(a) * back] };
   });
 };
+// [id, parts]: its words are vehicle.<id> and vehicle.<id>.blurb
 const VEHICLE_ROWS = [
-  ['Saloon car', 'Škoda 120-like', coupled('saloon')],
-  ['Hatchback', 'Favorit / Trabant-ish', coupled('hatch')],
-  ['Van', 'Avia / Barkas box', coupled('van')],
-  ['Truck', 'Cab and box trailer', coupled('cab', 'trailer')],
-  ['Bus', 'Karosa town bus', coupled('bus')],
-  ['Train', 'Locomotive and coaches', coupled(`loco:${COACH}`, `coach:${COACH}`, `coach:${COACH}`)],
+  ['saloon', coupled('saloon')],
+  ['hatchback', coupled('hatch')],
+  ['van', coupled('van')],
+  ['truck', coupled('cab', 'trailer')],
+  ['bus', coupled('bus')],
+  ['train', coupled(`loco:${COACH}`, `coach:${COACH}`, `coach:${COACH}`)],
 ];
 
-function vehicleRow([name, blurb, parts]) {
+function vehicleRow([id, parts]) {
+  const [name, blurb] = [t(`vehicle.${id}`), t(`vehicle.${id}.blurb`)];
   const tiles = Array.from({ length: VARIANTS }, (_, k) => {
     const heading = Math.round((k * VEHICLES.headings) / VARIANTS);
     return `<figure class="asset-tile">${vehicleDrawing(parts(heading, k))}<figcaption>#${k}</figcaption></figure>`;
@@ -69,7 +73,7 @@ export class AssetsPage {
     this.el = document.createElement('div');
     this.el.className = 'assets-page hidden';
     this.el.innerHTML = `
-      <div class="assets-head"><span>Assets</span><button class="close" aria-label="Close">×</button></div>
+      <div class="assets-head"><span>${t('control.assets')}</span><button class="close" aria-label="${t('close')}">×</button></div>
       <div class="assets-body"></div>`;
     root.appendChild(this.el);
     sketchFrame(this.el);
@@ -88,12 +92,12 @@ export class AssetsPage {
       .filter((g) => g.defs.length)
       .map((g) => `
         <section>
-          <h2>${esc(g.label)}</h2>
+          <h2>${esc(t(`group.${g.id}`))}</h2>
           ${g.defs.map(structureRow).join('')}
         </section>`)
       .join('') + `
       <section>
-        <h2>Vehicles</h2>
+        <h2>${t('assets.vehicles')}</h2>
         ${VEHICLE_ROWS.map(vehicleRow).join('')}
       </section>`;
     sketchFrames(body, '.asset-tile');

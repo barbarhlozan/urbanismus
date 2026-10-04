@@ -20,6 +20,8 @@
 //
 // New tool: write a factory in src/tools/, register it in main.js.
 
+import { t } from '../core/text.js';
+
 export class ToolManager {
   constructor(grid, defaultId = 'inspect') {
     this.grid = grid;
@@ -89,10 +91,10 @@ export class ToolManager {
   // On-screen buttons for the active tool, ending with a way out
   // (the touch equivalent of Esc / right-click).
   actions() {
-    const t = this.active;
-    if (!t || t.id === this.defaultId) return [];
-    const list = [...(t.actions?.() ?? [])];
-    list.push({ label: t.cancelLabel?.() ?? 'Done', key: 'Esc', run: () => this.cancel() });
+    const tool = this.active;
+    if (!tool || tool.id === this.defaultId) return [];
+    const list = [...(tool.actions?.() ?? [])];
+    list.push({ label: tool.cancelLabel?.() ?? t('done'), key: 'Esc', run: () => this.cancel() });
     return list;
   }
 

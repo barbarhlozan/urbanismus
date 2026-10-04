@@ -3,14 +3,16 @@
 //
 // Everything draws through a PerspectiveCamera (perspective.js): the
 // structures, trees and street lamps with their own draw code (the
-// renderer's paint* functions), the roads, footpaths and railways with the
-// renderer's ink items.
+// renderer's paint* functions), the roads, footpaths, fences and railways with the
+// renderer's ink items; deer, cows and sheep as the map's figures.
 //
 // The ground is solid: it is cut into bands across the view, each a little
 // further than the last, filled with paper and carrying its own marks
 // (pencil strokes, ripples, meadow tufts, lot drawing, roads). Bands and
 // solids are drawn together far to near, so a hill hides what is behind it.
-// Past the last band a skyline of the terrain closes the picture.
+// Past the last band a skyline of the terrain closes the picture. Lakes
+// are flat: the ground under a lake's water level is drawn at that level
+// (lakeSurface).
 
 import { PerspectiveCamera } from './perspective.js';
 import { meadowGround, plant } from './meadow.js';
@@ -20,6 +22,9 @@ import { BRIDGE } from './bridges.js';
 import { VEHICLES, vehicleSVGIn, modelFor, truckFor } from './vehicles.js';
 import { signsAt, signSVGIn, flashSVGIn, litLight } from './crossings.js';
 import { wobble } from './painter.js';
+import { cloudsSVG } from './clouds.js';
+import { DEER, deerSVG } from './deer.js';
+import { LIVESTOCK, livestockSVG } from './livestock.js';
 
 export const PHOTO = {
   width: 480,
@@ -43,7 +48,7 @@ export const PHOTO = {
 const r2 = (n) => Math.round(n * 100) / 100;
 const pt = (p) => `${r2(p[0])} ${r2(p[1])}`;
 // how ink items are layered, back to front (as on the map)
-const NET_ORDER = ['footpath', 'rail', 'rail-dash', 'rail-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
+const NET_ORDER = ['footpath', 'fence-post', 'fence-pillar', 'fence', 'rail', 'rail-dash', 'rail-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
 
 // shot: { x, y, yaw (radians), fov (degrees), eye? }
 export function takePhoto(renderer, shot) {
@@ -53,12 +58,14 @@ export function takePhoto(renderer, shot) {
   const { width, height, range } = PHOTO;
   const { x, y, yaw, fov } = shot;
   const lift = base.lift;
-  const groundAt = (px, py) => terrain.heightAt(px, py) + (lift ? lift(px, py) : 0);
+  const raise = lakeSurface(renderer, lift);
+  // height of the ground (or a lake's surface) above the drawing's zero,
+  // and a point of it on the picture
+  const groundAt = (px, py) => terrain.heightAt(px, py) + (lift ? lift(px, py) : 0) + raise(px, py);
   const cam = new PerspectiveCamera({
     x, y, z: groundAt(x, y) + (shot.eye ?? PHOTO.eye), yaw, fov, width, height, lift,
   });
-  // a point on the ground, on the picture
-  const onGround = (px, py) => cam.project(px, py, terrain.heightAt(px, py));
+  const onGround = (px, py) => cam.project(px, py, terrain.heightAt(px, py) + raise(px, py));
 
   // what could be in the picture: ahead, within the (slightly widened) view
   const spread = Math.tan(Math.min(89, fov / 2 + 8) * Math.PI / 180);
@@ -108,7 +115,7 @@ export function takePhoto(renderer, shot) {
   let items;
   renderer.camera = deep;
   try {
-    items = [...renderer.pathItems(), ...renderer.railItems(), ...renderer.roadItems(false)];
+    items = [...renderer.pathItems(), ...renderer.fenceItems(), ...renderer.railItems(), ...renderer.roadItems(false)];
   } finally {
     renderer.camera = base;
   }
@@ -137,7 +144,7 @@ export function takePhoto(renderer, shot) {
     if (band >= 0) bands.line(band, cls, run);
   }
 
-  groundMarks(world, renderer.config, cam, bands, seen);
+  groundMarks(world, renderer.config, cam, bands, seen, onGround);
 
   // ----- together, far to near -----
 
@@ -146,11 +153,12 @@ export function takePhoto(renderer, shot) {
   const layers = solids
     .filter((so) => !so.at || Math.hypot(so.at[0] - x, so.at[1] - y) > PHOTO.clear)
     .map((so) => ({ depth: so.depth, svg: so.parts.join('') }));
-  layers.push(...bands.layers(), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen));
+  layers.push(...bands.layers(), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen));
   layers.sort((a, b) => a.depth - b.depth);
 
-  return `<svg class="photo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">`
+  return `<svg class="photo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="--sun: ${renderer.config.weather.sun[world.weather.kind] ?? 1}">`
     + `<rect class="photo-sky" x="0" y="0" width="${width}" height="${height}"/>`
+    + cloudsSVG(mulberry32(Math.imul(Math.round(x * 100), 83492791) ^ Math.imul(Math.round(y * 100), 2654435761) ^ world.seed), width, height, world.weather.kind)
     + skyline(cam, groundAt, range)
     + `<g class="layer-objects">${layers.map((l) => l.svg).join('')}</g>`
     + '</svg>';
@@ -230,11 +238,10 @@ function makeBands(cam, onGround) {
 //   ripples  longer ones on lakes and rivers
 //   meadow   the map's own tufts and flowers (meadow.js), near the camera
 // Seeded by the spot, so the same photo comes out the same.
-function groundMarks(world, config, cam, bands, seen) {
+function groundMarks(world, config, cam, bands, seen, onGround) {
   const { terrain, grid } = world;
   const offRoad = freeTest(world, config);
   const rnd = mulberry32(Math.imul(Math.round(cam.ex * 100), 73856093) ^ Math.imul(Math.round(cam.ey * 100), 19349663) ^ world.seed);
-  const onGround = (px, py) => cam.project(px, py, terrain.heightAt(px, py));
   const { gap, len } = PHOTO.hatch;
   const spread = (cam.width / 2 / cam.focal) * 1.1;
 
@@ -351,6 +358,35 @@ function vehicles(renderer, cam, seen) {
   return out;
 }
 
+// Deer, cows and sheep as they are at the moment of the photo: the map's
+// figures (deer.js, livestock.js) stood up on the ground, as large as they
+// are on the map against the land round them (scaled by how far they are),
+// turned the way they face across the picture.
+function animals(renderer, cam, seen) {
+  const { terrain } = renderer.world;
+  const base = renderer.camera;
+  const px = 1 / (base.zScale * base.tile); // map height of one of the figures' units
+  const out = [];
+  for (const system of [renderer.deer, renderer.livestock]) {
+    for (const d of system?.visible() ?? []) {
+      if (!seen(d.x, d.y, 0.3) || cam.ahead(d.x, d.y) < 0.2) continue;
+      const farm = d.kind === 'cow' || d.kind === 'sheep';
+      const stride = farm ? LIVESTOCK.stride : DEER.stride;
+      const pose = d.pose !== 'walk' ? d.pose : Math.floor(d.walked / stride) % 2 ? 'step' : 'stand';
+      const z = terrain.heightAt(d.x, d.y);
+      const [sx, sy] = cam.project(d.x, d.y, z);
+      const k = Math.abs(cam.project(d.x, d.y, z + px)[1] - sy);
+      const [fx] = cam.project(d.x + Math.cos(d.facing) * 0.1, d.y + Math.sin(d.facing) * 0.1, z);
+      const svg = farm ? livestockSVG(d.kind, pose, d.variant) : deerSVG(d.kind, pose, d.variant);
+      out.push({
+        depth: -cam.ahead(d.x, d.y),
+        svg: `<g class="photo-figure" transform="translate(${r2(sx)} ${r2(sy)}) scale(${fx < sx ? -r2(k) : r2(k)} ${r2(k)})">${svg}</g>`,
+      });
+    }
+  }
+  return out;
+}
+
 // The bridges' decks as solid slabs – top and sides, in short pieces along
 // the span so each sorts by its own distance – under the linework the map
 // draws for them (railings, the road on the deck), which comes up on top.
@@ -388,6 +424,45 @@ function bridgeDecks(renderer, cam, seen) {
     }
   }
   return out;
+}
+
+// Lakes as flat water: (x, y) -> how far to raise the ground there to the
+// surface of the lake it lies in (0 elsewhere). Each lake's level is found
+// as on the map (Renderer.waterLevel: halfway from its highest dot up to the
+// lowest dry ground next to it), but in the relief's own height, so the
+// surface meets the drawn shore. Points within REACH of a lake dot belong to
+// it; the ground is only ever raised, so the banks above the level stay.
+// Rivers keep following their valley.
+function lakeSurface(renderer, lift) {
+  if (!lift) return () => 0;
+  const { grid, terrain } = renderer.world;
+  const REACH = 0.9;
+  const level = new Float32Array(grid.size).fill(NaN);
+  for (const cells of renderer.waterBodies()) {
+    if (terrain.isRiver(grid.nodeAt(...cells[0]))) continue;
+    let top = -Infinity, rim = Infinity;
+    for (const [cx, cy] of cells) {
+      top = Math.max(top, lift(cx, cy));
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const n = grid.nodeAt(cx + dx, cy + dy);
+        if (n >= 0 && !terrain.isWater(n)) rim = Math.min(rim, lift(cx + dx, cy + dy));
+      }
+    }
+    const l = rim > top && rim < Infinity ? (top + rim) / 2 : top;
+    for (const [cx, cy] of cells) level[grid.nodeAt(cx, cy)] = l;
+  }
+  return (x, y) => {
+    let best = -Infinity;
+    const rx = Math.round(x), ry = Math.round(y);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const n = grid.nodeAt(rx + dx, ry + dy);
+        if (n < 0 || Number.isNaN(level[n]) || Math.hypot(rx + dx - x, ry + dy - y) > REACH) continue;
+        best = Math.max(best, level[n]);
+      }
+    }
+    return best === -Infinity ? 0 : Math.max(0, best - lift(x, y));
+  };
 }
 
 // The far edge of the ground: for each column of the picture, the highest

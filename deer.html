@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Urbanismus – deer sketches</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--main); font: 12px system-ui; margin: 16px; }
+    h2 { font-weight: 500; margin: 28px 0 2px; }
+    p { margin: 0 0 8px; color: var(--detail); max-width: 70ch; }
+    svg { display: block; position: static; border: 1px solid #8884; }
+    .labels { display: flex; color: var(--detail); }
+    .labels span { text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: deer sketches, drawn the way people.js draws walkers – pen
+    // parts (fig-body, fig-ink, fig-line, fig-head) in scene px around the
+    // ground point, a walker beside them for scale. Side view facing right;
+    // the renderer would mirror them like the walkers.
+    //   deer.html?scheme=1&zoom=16&small=4&seed=3
+    import { applyTheme } from './src/theme.js';
+    import { mulberry32 } from './src/core/random.js';
+    import { walkerSVG } from './src/render/people.js';
+    const q = new URLSearchParams(location.search);
+    applyTheme(q.has('scheme') ? +q.get('scheme') : undefined);
+    const Z = +(q.get('zoom') ?? 34), SMALL = +(q.get('small') ?? 6), SEED = +(q.get('seed') ?? 1);
+
+    const r2 = (n) => Math.round(n * 100) / 100;
+    const P = ([x, y]) => `${r2(x)} ${r2(y)}`;
+    const poly = (pts, close = true) => `M${pts.map(P).join('L')}${close ? 'Z' : ''}`;
+    const ball = ([cx, cy], r) => `M${r2(cx - r)} ${r2(cy)}a${r2(r)} ${r2(r)} 0 1 0 ${r2(2 * r)} 0a${r2(r)} ${r2(r)} 0 1 0 ${r2(-2 * r)} 0`;
+    // a closed shape with its corners rounded off by `k` (0–0.5 of each side)
+    const rounded = (pts, k) => {
+      const n = pts.length, mid = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      let d = `M${P(mid(pts[0], pts[1], k))}`;
+      for (let i = 1; i <= n; i++) {
+        const a = pts[(i - 1) % n], b = pts[i % n], c = pts[(i + 1) % n];
+        d += `L${P(mid(a, b, 1 - k))}Q${P(b)} ${P(mid(b, c, k))}`;
+      }
+      return `${d}Z`;
+    };
+
+    // The kinds: overall size, and antlers.
+    const KINDS = {
+      stag:  { label: 'stag (jelen)', s: 1.2, antlers: 'stag' },
+      buck:  { label: 'roe buck (srnec)', s: 0.95, antlers: 'roe' },
+      doe:   { label: 'doe (srna)', s: 0.95, antlers: null },
+      fawn:  { label: 'fawn (kolouch)', s: 0.62, antlers: null, fawn: true },
+    };
+
+    // One deer as [class, d] parts: `style` the drawing manner, `kind` a KINDS
+    // key, `grazing` with its head down to the grass, `variant` the wobble.
+    function deer(style, kind, grazing, variant) {
+      const K = KINDS[kind], s = K.s;
+      const rnd = mulberry32(variant * 2654435761 + 7);
+      const j = () => (rnd() - 0.5) * 0.05;               // a hand's wobble
+      const fawn = !!K.fawn;
+      // proportions (scale 1, y up is negative): fawns are leggier, shorter
+      const legH = fawn ? 0.66 : 0.55, depth = fawn ? 0.36 : 0.44;
+      const rear = -0.6, chest = fawn ? 0.5 : 0.6;
+      const bot = -legH, top = bot - depth;
+      // the head-and-neck, pivoting at the withers when grazing
+      const pivot = [chest - 0.12, top + 0.1];
+      let neck = [[chest - 0.22, top + 0.04], [chest + 0.02, top + depth * 0.55], [0.86, -1.44], [0.72, -1.52]];
+      let head = [[0.68, -1.64], [0.96, -1.62], [1.13, -1.44], [1.1, -1.37], [0.84, -1.38]];
+      let ears = [[[0.72, -1.6], [0.6, -1.8]], [[0.78, -1.62], [0.73, -1.84]]];
+      let antlers = [];
+      if (K.antlers === 'stag') {
+        // one beam with two tines forward
+        antlers = [[[0.74, -1.62], [0.66, -1.95], [0.56, -2.26]], [[0.68, -1.86], [0.84, -1.94]], [[0.6, -2.12], [0.75, -2.24]]];
+      } else if (K.antlers === 'roe') {
+        antlers = [[[0.78, -1.62], [0.77, -1.96]], [[0.775, -1.8], [0.86, -1.86]]]; // a short spike with one tine
+      }
+      const eye = [0.88, -1.54], nose = [1.12, -1.405], ball0 = [0.82, -1.52]; // ball0: a round head's centre
+      // grazing: the neck swung down about the withers, then the head turned
+      // about the top of the neck until the muzzle is in the grass
+      if (grazing) {
+        const turn = (o, a) => ([x, y]) => {
+          const dx = x - o[0], dy = y - o[1], c = Math.cos(a), si = Math.sin(a);
+          return [o[0] + dx * c - dy * si, o[1] + dx * si + dy * c];
+        };
+        const solve = (f, goal) => { let lo = 0, hi = 2.5; for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (f(m) < goal) lo = m; else hi = m; } return lo; };
+        const nt = [(neck[2][0] + neck[3][0]) / 2, (neck[2][1] + neck[3][1]) / 2];
+        const tilt = -0.85;                             // the head held up against the neck's swing
+        const both = (a) => (p) => { const t = turn(pivot, a); return turn(t(nt), tilt)(t(p)); };
+        const a = solve((m) => both(m)(nose)[1], -0.03);
+        const t1 = turn(pivot, a), t2 = both(a);
+        neck = neck.map(t1); head = head.map(t2); ears = ears.map((l) => l.map(t2)); antlers = antlers.map((l) => l.map(t2));
+        eye.splice(0, 2, ...t2(eye)); ball0.splice(0, 2, ...t2(ball0));
+      }
+      const S = (p) => [p[0] * s + j() * 0.3, p[1] * s];  // scaled, a little wobbly
+      const sp = (pts) => pts.map(S);
+      const parts = [];
+      const body = sp([[rear, top + 0.06], [chest - 0.1, top - 0.02], [chest, bot + 0.04], [rear + 0.04, bot]]);
+      const legsAt = (pairs) => {
+        let d = '';
+        for (const x of pairs) {
+          const hind = x < 0;
+          const pts = hind ? [[x, bot + 0.02], [x - 0.07, bot * 0.45], [x - 0.02, 0]] : [[x, bot + 0.02], [x + 0.01, bot * 0.5], [x, 0]];
+          d += poly(sp(pts), false);
+        }
+        return d;
+      };
+      const lines = (ls) => ls.map((l) => poly(sp(l), false)).join('');
+      const tail = sp([[rear + 0.02, top + 0.08], [rear - 0.1, top + 0.18], [rear, top + 0.24]]);
+
+      if (style === 'box') {
+        // after the walkers: a box of a body on four stub legs, a slanted box
+        // of a neck, a box of a head with a snout; ears and antlers in pen
+        parts.push(['fig-line', legsAt([rear + 0.06, rear + 0.18, chest - 0.2, chest - 0.08])]);
+        parts.push(['fig-body', poly(sp(neck))]);
+        parts.push(['fig-body', poly(body)]);
+        parts.push(['fig-body', poly(sp(head))]);
+        parts.push(['fig-ink', poly(tail)]);
+        parts.push(['fig-line', lines([...ears, ...antlers])]);
+        if (fawn) parts.push(['fig-ink', [[-0.35, -0.9], [-0.1, -0.93], [0.15, -0.9], [-0.22, -0.82], [0.03, -0.83]].map((p) => ball(S(p), 0.035 * s)).join('')]);
+      } else if (style === 'inkhead') {
+        // a box body, but the head and neck inked in as one – like the
+        // walkers' inked heads; a pale rump patch
+        parts.push(['fig-line', legsAt([rear + 0.12, chest - 0.14])]);
+        parts.push(['fig-body', poly(body)]);
+        parts.push(['fig-ink', poly(sp([...neck.slice(0, 2), neck[2], head[2], head[3], head[1], head[0], neck[3]]))]);
+        parts.push(['fig-line', lines([...ears, ...antlers]) + poly(sp([[rear + 0.08, top + 0.1], [rear + 0.16, top + 0.22], [rear + 0.08, top + 0.34]]), false)]);
+        if (fawn) parts.push(['fig-ink', [[-0.3, -0.9], [-0.05, -0.92], [0.18, -0.88]].map((p) => ball(S(p), 0.04 * s)).join('')]);
+      } else if (style === 'bean') {
+        // a toy: rounded body, a single neck stroke, a round head (open or inked)
+        const n0 = S([chest - 0.1, top + 0.1]);
+        const hc = S(ball0);
+        parts.push(['fig-line', legsAt([rear + 0.1, rear + 0.2, chest - 0.22, chest - 0.12])]);
+        parts.push(['fig-body', rounded(body, 0.3)]);
+        parts.push(['fig-line', `M${P(n0)}L${P(hc)}` + lines([...ears, ...antlers])]);
+        parts.push([rnd() < 0.5 ? 'fig-ink' : 'fig-head', ball(hc, 0.13 * s)]);
+        const [tx, ty] = S([rear - 0.02, top + 0.12]), th = 0.05 * s; // a square bob of a tail
+        parts.push(['fig-ink', poly([[tx - th, ty - th], [tx + th, ty - th], [tx + th, ty + th], [tx - th, ty + th]])]);
+      } else if (style === 'ink') {
+        // a silhouette: everything inked in – reads furthest out
+        parts.push(['fig-line', legsAt([rear + 0.08, rear + 0.18, chest - 0.2, chest - 0.1])]);
+        parts.push(['fig-ink', poly(body) + poly(sp(neck)) + poly(sp(head)) + poly(tail)]);
+        parts.push(['fig-line', lines([...ears, ...antlers])]);
+      } else if (style === 'stub') {
+        // closest to the walker: a box on two stub legs, a round head on a
+        // stroke of a neck; antlers are the only flourish
+        const n0 = S([chest - 0.12, top + 0.04]);
+        const hc = S(ball0);
+        parts.push(['fig-line', legsAt([rear + 0.14, chest - 0.16])]);
+        parts.push(['fig-body', poly(sp([[rear, top + 0.06], [chest, top], [chest, bot], [rear, bot]]))]);
+        parts.push(['fig-line', `M${P(n0)}L${P(hc)}` + lines([...ears, ...antlers])]);
+        parts.push(['fig-ink', ball(hc, 0.12 * s)]);
+      }
+      return parts;
+    }
+
+    const STYLES = [
+      ['A · box', 'box', 'After the walkers: a box body on four stub legs, a slanted box neck, a box head with a snout. Fawn gets spots.'],
+      ['B · inked head', 'inkhead', 'A box body, the head and neck inked in as one piece (like the walkers\' inked heads), two legs, a line for the white rump.'],
+      ['C · bean', 'bean', 'Toy-like: a rounded body, a single stroke of a neck, a round head – open or inked – and a square bob of a tail.'],
+      ['D · silhouette', 'ink', 'All inked in, as a hunter\'s-sign silhouette. Reads furthest out, but is heavier than the walkers.'],
+      ['E · stub', 'stub', 'Closest to a walker turned sideways: a plain box on two stub legs, an inked ball of a head on a stroke of a neck.'],
+    ];
+    const ROW = [['stag', false], ['buck', false], ['doe', false], ['fawn', false], ['doe', true], ['stag', true], ['fawn', true]];
+    const svgOf = (parts) => parts.map(([cls, d]) => `<path class="${cls}" d="${d}"/>`).join('');
+
+    const out = document.getElementById('out');
+    out.insertAdjacentHTML('beforeend', '<h1 style="font-weight:500">Deer sketches</h1><p>Each row: a walker for scale, then stag, roe buck, doe, fawn standing, then doe, stag and fawn grazing. Drawn at the map\'s scale (a walker is 2.5 scene px tall) and shown large, then at a size nearer the map\'s.</p>');
+    const CELL = 3.4, H = 3.2;
+    for (const [title, style, note] of STYLES) {
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2><p>${note}</p>`);
+      const items = [walkerSVG(SEED % 12), ...ROW.map(([k, g], i) => svgOf(deer(style, k, g, SEED * 31 + i)))];
+      for (const z of [Z, SMALL]) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const w = items.length * CELL;
+        svg.setAttribute('viewBox', `-1 ${-H} ${w} ${H + 0.4}`);
+        svg.style.cssText = `width:${w * z}px;height:${(H + 0.4) * z}px;margin-bottom:6px`;
+        svg.innerHTML = `<g class="scene"><path class="fig-line" d="M-1 0H${w}" style="opacity:.3"/>${items.map((html, i) => `<g transform="translate(${i * CELL + (i ? 0.2 : 0.4)} 0)">${html}</g>`).join('')}</g>`;
+        out.appendChild(svg);
+      }
+    }
+  </script>
+</body>
+</html>

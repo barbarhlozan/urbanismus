@@ -1,6 +1,8 @@
 // Screen furniture: the town's name and numbers (top-left), controls
 // (top-right), Build menu (bottom centre, see buildMenu.js) with photo
 // mode's options just above it, app name and version (bottom-left).
+// Photo and Terrain sit in the Build menu, under Erase; the controls keep
+// what's set now and then (colours, files, language…).
 // The name can be edited in place; the arrow beside it folds the numbers away.
 // The controls fold into their menu button: on phones they start folded and
 // open as a list, folding again once a button is used or on a tap elsewhere;
@@ -15,6 +17,7 @@ import { statIcon, controlIcon } from './icons.js';
 import { resize, shrink, bump } from './motion.js';
 import { CONFIG } from '../config.js';
 import { isNarrow } from './device.js';
+import { t, language, LANGUAGES } from '../core/text.js';
 
 const MENU_KEY = 'urbanismus.controlsFolded';
 const MENU_ICON = `<svg class="icon menu-icon" viewBox="0 0 16 16" aria-hidden="true">
@@ -34,6 +37,11 @@ const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 // one number with its drawing; the label shows on hover
 const stat = (icon, label, v, cls = '') => `<span class="stat ${cls}" title="${label}">${statIcon(icon)}<b>${v}</b></span>`;
 
+// a button in the controls: its drawing and its name (control.<act>), also
+// on hover for when the name is hidden (narrow screens)
+const control = (act, title = t(`control.${act}`), label = title) =>
+  `<button data-act="${act}" title="${title}">${controlIcon(act)}<span class="label">${label}</span></button>`;
+
 export class Hud {
   constructor(root, { world, tools, agents, trains, chronicle, actions }) {
     this.world = world;
@@ -44,21 +52,20 @@ export class Hud {
 
     root.insertAdjacentHTML('beforeend', `
       <div class="hud">
-        <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="Town name"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close chron" title="The town's chronicle">${statIcon('book')}</button><button class="close fold" title="Fold away the numbers" aria-expanded="true">–</button></div>
+        <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="${t('town.name')}"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close chron" title="${t('hud.chronicle')}">${statIcon('book')}</button><button class="close fold" title="${t('hud.fold')}" aria-expanded="true">–</button></div>
         <div class="stats row"></div>
         <div class="traffic row"></div>
       </div>
       <div class="credit">${CONFIG.app.name} <span>v${CONFIG.app.version}</span> · ${CONFIG.app.author}</div>
       <div class="controls">
-        <button data-act="photo" title="Photo: stand somewhere on the map and take a picture (P)">${controlIcon('photo')}<span class="label">Photo</span></button>
-        <button data-act="terrain" title="Terrain contour lines">${controlIcon('terrain')}<span class="label">Terrain</span></button>
-        <button data-act="colors" title="Colors"></button>
-        <button data-act="assets" title="All the buildings and structures in the game">${controlIcon('assets')}<span class="label">Assets</span></button>
-        <button data-act="debug" title="Debug panel: drawing switches and frame rate">${controlIcon('debug')}<span class="label">Debug</span></button>
-        <button data-act="export" title="Download this city as a file, to open on another computer">${controlIcon('export')}<span class="label">Export</span></button>
-        <button data-act="import" title="Open a city from a file (replaces this one)">${controlIcon('import')}<span class="label">Import</span></button>
-        <button data-act="newMap" title="Discard this city and generate a new map">${controlIcon('newMap')}<span class="label">New map</span></button>
-        <button data-act="fullscreen" title="Full screen">${controlIcon('fullscreen')}<span class="label">Full screen</span></button>
+        <button data-act="colors" title="${t('control.colors')}" data-label="${t('control.colors')}"></button>
+        ${control('assets')}
+        ${control('debug')}
+        ${control('export')}
+        ${control('import')}
+        ${control('newMap')}
+        ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
+        ${control('language', `${t('control.language')}: ${LANGUAGES[language()]}`, LANGUAGES[language()])}
         <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
       </div>
       <div class="bottom">
@@ -78,7 +85,7 @@ export class Hud {
       let folded;
       resize(hudEl, () => { folded = hudEl.classList.toggle('folded'); });
       foldBtn.setAttribute('aria-expanded', String(!folded));
-      foldBtn.title = folded ? 'Show the numbers' : 'Fold away the numbers';
+      foldBtn.title = t(folded ? 'hud.unfold' : 'hud.fold');
       foldBtn.textContent = folded ? '+' : '–';
     });
 
@@ -131,7 +138,7 @@ export class Hud {
       else if (folded) shrink(controlsEl, apply);
       else resize(controlsEl, apply);
       menuBtn.setAttribute('aria-expanded', String(!folded));
-      menuBtn.title = folded ? 'Show the menu' : 'Fold the menu away';
+      menuBtn.title = t(folded ? 'controls.unfold' : 'controls.fold');
       if (remember) {
         try { localStorage.setItem(MENU_KEY, folded ? '1' : '0'); } catch { /* storage unavailable */ }
       }
@@ -153,7 +160,7 @@ export class Hud {
       if (isNarrow() && !controlsEl.contains(e.target)) fold(true);
     }, true);
 
-    this.buildMenu = new BuildMenu(root, tools);
+    this.buildMenu = new BuildMenu(root, tools, actions);
 
     // (cars parking change nothing here, and happen all the time)
     world.events.on('*', (type) => { if (type !== 'parking:changed') this.statsDirty = true; });
@@ -192,9 +199,10 @@ export class Hud {
         else if (a.truck) trucks++;
         else count[a.trip.mode === 'drive' || a.trip.mode === 'cycle' ? a.trip.mode : 'walk']++;
       }
-      const html = stat('walk', 'On foot', count.walk) + stat('cycle', 'Cycling', count.cycle)
-        + stat('drive', 'Driving', count.drive) + (trucks ? stat('truck', 'Trucks', trucks) : '')
-        + (buses ? stat('bus', 'Buses', buses) : '');
+      const html = stat('walk', t('stat.walk'), count.walk) + stat('cycle', t('stat.cycle'), count.cycle)
+        + stat('drive', t('stat.drive'), count.drive) + (trucks ? stat('truck', t('stat.trucks'), trucks) : '')
+        + (buses ? stat('bus', t('stat.buses'), buses) : '')
+        + `<span class="stat weather" title="${t(`weather.${this.world.weather.kind}`)}">${statIcon(this.world.weather.kind)}</span>`;
       if (html !== this.trafficHTML) {
         this.trafficEl.innerHTML = this.trafficHTML = html;
         hop(this.trafficEl, this.trafficSeen ??= new Map());
@@ -214,10 +222,10 @@ export class Hud {
       }
       for (const [k, v] of Object.entries(STRUCTURE_TYPES[s.type].stats ?? {})) totals[k] = (totals[k] ?? 0) + v;
     }
-    const html = stat('residents', 'Residents', totals.residents ?? 0)
-      + stat('jobs', 'Jobs', totals.jobs ?? 0)
-      + stat('buildings', 'Buildings', world.structures.size)
-      + (unconnected ? stat('cutoff', `${unconnected} cut off from the roads`, unconnected, 'warn') : '');
+    const html = stat('residents', t('stat.residents'), totals.residents ?? 0)
+      + stat('jobs', t('stat.jobs'), totals.jobs ?? 0)
+      + stat('buildings', t('stat.buildings'), world.structures.size)
+      + (unconnected ? stat('cutoff', t('stat.cutoff', { n: unconnected }), unconnected, 'warn') : '');
     if (html !== this.statsHTML) {
       this.statsEl.innerHTML = this.statsHTML = html;
       hop(this.statsEl, this.statsSeen ??= new Map());

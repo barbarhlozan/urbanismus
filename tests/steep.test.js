@@ -34,6 +34,16 @@ test('a road may cross a steep slope but not climb it', () => {
   assert.ok(across === true || across?.ok !== false, 'along the slope');
 });
 
+test('a lane may climb steeper than a road, but not be widened there', () => {
+  const world = ramp((CONFIG.steep.road + CONFIG.steep.lane) / 2);
+  const up = run(world, [5, 5], [9, 5]);
+  assert.equal(world.buildNetwork('road', up)?.reason, 'Too steep');
+  const lane = world.buildNetwork('road', up, { lane: true });
+  assert.ok(lane === true || lane?.ok !== false, 'a lane goes up');
+  assert.equal(world.buildNetwork('road', up)?.reason, 'Too steep', 'widening it to a road');
+  assert.equal(ramp(CONFIG.steep.lane + 1).buildNetwork('road', up, { lane: true })?.reason, 'Too steep');
+});
+
 test('railways need gentler ground than roads, footpaths none', () => {
   const world = ramp(CONFIG.steep.rail + 1);
   const rail = world.buildNetwork('rail', fineRun(world, [5, 5], [9, 5]));

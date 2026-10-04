@@ -8,10 +8,10 @@
 // Mistakes in the file are listed in the dialogue window when it loads (and
 // in the console), with their line.
 //
-// From the console (window.urbanismus.story):
-//   story.play('IntroDialogue')   tell a branch now
-//   story.reset()                 forget what was told, start over
-//   story.reload()                read the file again (after editing it)
+// From the console (see src/dev/commands.js):
+//   cmd.story.play('IntroDialogue')   tell a branch now
+//   cmd.story.reset()                 forget what was told, start over
+//   cmd.story.reload()                read the file again (after editing it)
 
 import { parseStory, evaluate, fillIn, namesIn, normalName } from './script.js';
 import { townVariables } from './variables.js';

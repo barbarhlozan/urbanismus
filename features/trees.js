@@ -26,6 +26,7 @@ export const LEAFY = true;
 
 export function drawTree(g, x, y, kind, height, simple = false) {
   g.solid(x, y, 0);
+  g.swayFrom?.(x, y); // (a garden tree leans in the wind on its own, Painter.swayFrom)
   if (kind === 'spruce') return drawSpruce(g, x, y, height, simple);
   if (LEAFY) return drawLeafy(g, x, y, kind, height, simple);
   for (const [lines, opts] of bareParts(g, kind, height, simple)) g.strokes(x, y, 0, lines, opts);
