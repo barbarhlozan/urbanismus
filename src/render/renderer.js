@@ -81,12 +81,13 @@ import { STEEP_LINES, steepLines } from './steep.js';
 import { carMark, personMark } from './marks.js';
 import { mergeRuns, placeInOrder, isoSort } from './order.js';
 import { SUN, sunFor, shadowSVG, tierAt, groundSpacing, wallSpacing } from './shadows.js';
+import { findForests, forestSVG } from './forest.js';
 
 // (gallery.html and others import these from here)
 export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
-const LAYERS = ['terrain', 'meadow', 'grid', 'subgrid', 'lots', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'objects', 'overlay'];
+const LAYERS = ['terrain', 'meadow', 'grid', 'subgrid', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'objects', 'overlay'];
 const TOP = ['objects', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -208,6 +209,8 @@ export class Renderer {
     for (const type of ['feature:added', 'feature:removed']) {
       world.events.on(type, (f) => {
         this.objsDirty.add(`f${f.id}`);
+        this.forests = null; // found again (forestState)
+        this.dirty.add('forest');
         this.touchMeadow([world.grid.xy(f.node)]);
       });
     }
@@ -1117,6 +1120,13 @@ export class Renderer {
       this.carsClose = close;
       this.dirty.add('parked');
     }
+    // far out the woods are one shape each (forest.js), their trees not drawn
+    const woods = z < this.config.render.forest.zoom;
+    if (woods !== this.woodsOn) {
+      this.woodsOn = woods;
+      this.dirty.add('forest');
+      this.cull();
+    }
     // forest trees: plainer crowns further out, redrawn when that changes
     const { trees } = this.config.render;
     const detail = z >= trees.medium ? 0 : z >= trees.far ? 1 : 2;
@@ -1806,7 +1816,7 @@ export class Renderer {
   cull(entries = [...this.objs.values(), ...this.ghosts.values()]) {
     if (!this.viewBox) return;
     for (const e of entries) {
-      const show = !this.hiddenKinds.has(e.key?.[0]) && (!e.box || !this.cullOn || this.inView(e.box));
+      const show = !this.hiddenKinds.has(e.key?.[0]) && !this.inWoods(e) && (!e.box || !this.cullOn || this.inView(e.box));
       if (show === e.shown) continue;
       e.shown = show;
       if (show && e.stale) this.objsDirty.add(e.key); // drawn for an old view: redraw (renderObjects)
@@ -1822,6 +1832,25 @@ export class Renderer {
         e.sg.remove();
       }
     }
+  }
+
+  // Is it a tree in a wood, while the woods are drawn as one shape each?
+  inWoods(e) {
+    return this.woodsOn && e.key?.[0] === 'f' && this.forestState().trees.has(Number(e.key.slice(1)));
+  }
+
+  // The woods (forest.js), found again after trees come or go.
+  forestState() {
+    if (!this.forests) {
+      this.forests = findForests(this.world, this.config.render.forest);
+      if (this.woodsOn) queueMicrotask(() => this.cull()); // trees that joined or left a wood
+    }
+    return this.forests;
+  }
+
+  renderForest() {
+    const svg = this.woodsOn ? forestSVG(this.forestState(), (x, y) => this.project(x, y), this.config.render.forest) : '';
+    if (svg !== this.forestDrawn) this.layers.forest.innerHTML = this.forestDrawn = svg;
   }
 
   // Put the drawings of the objects in sight back in the objects layer, in

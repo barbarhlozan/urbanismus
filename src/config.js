@@ -33,6 +33,12 @@ export const CONFIG = {
     // with it (Renderer.atDetail), from the middle of the window out, for at
     // most about this many ms each frame.
     rebuildBudget: 6,
+    // Further out than `zoom` a wood is drawn as one shape (render/forest.js):
+    // trees within `link` of one another, at least `minTrees` of them. Its
+    // outline runs about reach / 2 out from the outer trees, in samples
+    // `step` apart, and bulges every `bump` by bulge × bump; `hatch`: the
+    // spacing of the hatching inside, in scene px.
+    forest: { zoom: 0.9, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, bump: 0.45, bulge: 0.35, hatch: 5 },
   },
 
   road: {
