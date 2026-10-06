@@ -980,7 +980,7 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 /* ---------- Build menu on a wide screen: a rail along the right edge ---------- */
 
 /* buildMenu.js moves the tabs, and Erase, Photo and Terrain, into the two
-   boxes of .bm-rail, columns of cells under the top bar, a gap between; the panel is a drawer of tiles to its left, four
+   boxes of .bm-rail, columns of cells under the top bar, a gap between; the panel is a drawer of tiles to its left, three
    across, as tall as its group; the dock keeps the bottom edge, there
    only while a tool is in hand */
 .build-menu.rail {
@@ -1014,7 +1014,7 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 .build-menu.rail .bm-loose .key { display: none; }
 
 .build-menu.rail .bm-panel {
-  width: calc(4 * var(--tile) + 3 * 2px + 12px + 2 * var(--line));
+  width: calc(3 * var(--tile) + 2 * 2px + 12px + 2 * var(--line));
   /* down to just above the dock */
   max-height: calc(100vh - 16px - var(--bar-h) - 12px - 20px - var(--bar-h) - 20px - 4 * var(--line) - var(--safe-t) - var(--safe-b));
   max-height: calc(100dvh - 16px - var(--bar-h) - 12px - 20px - var(--bar-h) - 20px - 4 * var(--line) - var(--safe-t) - var(--safe-b));
