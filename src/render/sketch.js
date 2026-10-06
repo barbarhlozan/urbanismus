@@ -52,6 +52,43 @@ export function sketchRect(x, y, w, h, seed, { k = 1, over = 3, bow = 1.2 } = {}
   return [0, 1, 2, 3].map((i) => stroke(c[i], c[(i + 1) % 4], rnd, k, over, bow)).join('');
 }
 
+// A box drawn freehand, for the UI's frames: like sketchRect, but each side
+// wavers along its length (a cubic, pulled a little either way at its
+// thirds), runs on further past the corners, starts and ends a little off
+// the line, and a long side may be drawn in two goes – the pen lifted and
+// set down again, the strokes overlapping a little.
+export function sketchBox(x, y, w, h, seed, { over = 7, waver = 2.2, slip = 1.6 } = {}) {
+  const rnd = mulberry32(seed);
+  const c = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+  const side = ([ax, ay], [bx, by], from, to) => {
+    const len = Math.hypot(bx - ax, by - ay) || 1;
+    const ux = (bx - ax) / len, uy = (by - ay) / len;
+    const at = (t, off) => [ax + (bx - ax) * t - uy * off, ay + (by - ay) * t + ux * off];
+    const span = (to - from) * len;
+    const amp = Math.min(waver, span * 0.03);
+    const [x0, y0] = at(from, (rnd() - 0.5) * 2 * slip);
+    const [x1, y1] = at(from + (to - from) / 3, (rnd() - 0.5) * 2 * amp);
+    const [x2, y2] = at(from + (to - from) * 2 / 3, (rnd() - 0.5) * 2 * amp);
+    const [x3, y3] = at(to, (rnd() - 0.5) * 2 * slip);
+    return `M${r2(x0)} ${r2(y0)}C${r2(x1)} ${r2(y1)} ${r2(x2)} ${r2(y2)} ${r2(x3)} ${r2(y3)}`;
+  };
+  let d = '';
+  for (let i = 0; i < 4; i++) {
+    const a = c[i], b = c[(i + 1) % 4];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    // past the corners: each end its own way, at least a bit
+    const from = -(over * (0.35 + 0.65 * rnd())) / len;
+    const to = 1 + (over * (0.35 + 0.65 * rnd())) / len;
+    if (len > 150 && rnd() < 0.55) {
+      const cut = 0.35 + rnd() * 0.3, lap = (2 + rnd() * 5) / len;
+      d += side(a, b, from, cut + lap) + side(a, b, cut - lap, to);
+    } else {
+      d += side(a, b, from, to);
+    }
+  }
+  return d;
+}
+
 // An ellipse drawn in one go the way a pen circles a spot: a bit more than
 // one turn, slightly lumpy, the end missing the start.
 export function sketchEllipse(cx, cy, rx, ry, seed, { k = 1, turns = 1.12, lump = 0.06 } = {}) {

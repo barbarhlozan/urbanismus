@@ -27,7 +27,7 @@
      building's menu) as wide as the town panel, four tiles across */
   --cell: calc(var(--bar-h) - 2px);
   --tile: calc(2 * var(--cell));
-  --bm-w: var(--panel-w);
+  --bm-w: var(--panel-w/2);
   --ui-font: "Basteleur", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* notches and home indicators on phones */
   --safe-t: env(safe-area-inset-top, 0px);
@@ -1316,6 +1316,9 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 
 /* the border keeps its room but the pen-drawn frame replaces it */
 #ui .sketched { border-color: transparent !important; border-radius: 0; }
+/* (no clipping to the box: the strokes run out past its edge; the motion
+   helpers clip for themselves while a box folds) */
+#ui .sketched { overflow: visible; }
 .bm-panel, .bm-dock, .bm-rail-box, .actions { position: relative; }
 .sk-frame {
   position: absolute;

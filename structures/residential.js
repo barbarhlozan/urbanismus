@@ -218,8 +218,8 @@ export const block = {
     const fh = 0.1, skip = shared(g);
     const machineRoom = (x, y, z) => g.box(x - 0.07, y - 0.05, z, 0.14, 0.1, 0.07);
     if (kind === 'slab') {
-      const [x0, x1] = frontage(g, 0.66);
-      const w = x1 - x0, d = 0.3, y = -d / 2 + (joined ? g.pick([-0.04, 0, 0.04]) : 0);
+      const [x0, x1] = frontage(g, 0.92);
+      const w = x1 - x0, d = 0.46, y = -d / 2 + (joined ? g.pick([-0.04, 0, 0.04]) : 0);
       const h = fh * (joined ? g.pick([8, 8, 12]) : g.int(8, 12));
       g.box(x0, y, 0, w, d, h);
       g.windows(x0, y, w, d, 0, h, fh, 0.105, { skip, w: 0.5, from: 1 });
@@ -230,13 +230,13 @@ export const block = {
       aerials(g, x0 + 0.08, x1 - 0.08, y + d * 0.6, h, 3);
       g.box((x0 + x1) / 2 - 0.08, y - 0.06, 0.08, 0.16, 0.06, 0.015); // entrance canopy
     } else {
-      const s = g.range(0.2, 0.24), h = fh * g.int(12, 14);
-      g.box(-s, -s, 0, 2 * s, 2 * s, h);
-      g.windows(-s, -s, 2 * s, 2 * s, 0, h, fh, 0.1, { w: 0.5, from: 1 });
-      g.floors(-s, -s, 2 * s, 2 * s, 0, h, fh, { inset: 0 });
+      const sx = g.range(0.4, 0.44), sy = g.range(0.24, 0.28), h = fh * g.int(12, 14);
+      g.box(-sx, -sy, 0, 2 * sx, 2 * sy, h);
+      g.windows(-sx, -sy, 2 * sx, 2 * sy, 0, h, fh, 0.1, { w: 0.5, from: 1 });
+      g.floors(-sx, -sy, 2 * sx, 2 * sy, 0, h, fh, { inset: 0 });
       machineRoom(0, 0, h);
-      aerials(g, -s + 0.05, s - 0.05, s * 0.5, h, 2);
-      g.box(-0.08, -s - 0.06, 0.08, 0.16, 0.06, 0.015);
+      aerials(g, -sx + 0.05, sx - 0.05, sy * 0.5, h, 2);
+      g.box(-0.08, -sy - 0.06, 0.08, 0.16, 0.06, 0.015);
     }
   },
 };
@@ -384,10 +384,10 @@ export const blockWide = {
   agents: 5,
   yards: ['plaza', 'trees', 'parking', 'garages'],
   draw(g) {
-    const fh = 0.1, d = 0.3;
+    const fh = 0.1, d = 0.46;
     const floors = g.pick([[8, 8], [8, 8], [12, 12], [8, 12], [12, 8]]);
     const step = g.pick([0, 0.04, -0.04]);
-    [[-0.34, 0.5, 0], [0.5, 1.34, step]].forEach(([a, b, dy], i) => {
+    [[-0.46, 0.5, 0], [0.5, 1.46, step]].forEach(([a, b, dy], i) => {
       const w = b - a, y = -d / 2 + dy, h = fh * floors[i];
       const skip = [i === 1 && !dy && floors[0] >= floors[1] ? 'left' : null, i === 0 && !step && floors[1] >= floors[0] ? 'right' : null].filter(Boolean);
       g.box(a, y, 0, w, d, h);

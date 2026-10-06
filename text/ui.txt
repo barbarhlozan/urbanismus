@@ -197,8 +197,8 @@ import.storage
   en: The browser would not store the town.
 
 import.not-city
-  cs: Tenhle soubor není obec z Urbanismu.
-  en: This file is not a town from Urbanismus.
+  cs: Tenhle soubor není obec ze hry Dědina.
+  en: This file is not a town from Dědina.
 
 import.newer
   cs: Obec uložila novější verze hry.

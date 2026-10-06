@@ -1,15 +1,18 @@
 // Pen-drawn frames for the UI boxes, to match the sketched map: each box
-// gets an <svg> over its border with a rectangle of four crossing strokes
-// (render/sketch.js), redrawn when the box changes size. The CSS border
-// stays for spacing but turns transparent (.sketched in styles.css).
+// gets an <svg> over its border with a box drawn freehand – four wavering
+// strokes that run on past the corners, long sides sometimes in two goes
+// (render/sketch.js sketchBox) – redrawn when the box changes size. The CSS
+// border stays for spacing but turns transparent, and the box no longer
+// clips what's in it, so the strokes can run out past its edge (.sketched
+// in styles.css).
 //
-// The frame is drawn a few pixels inside the box, so the overshooting
-// strokes are never clipped by overflow: hidden and inner dividers that run
-// to the edge poke out past it like overshoots too.
+// The frame is drawn a couple of pixels inside the box, so inner dividers
+// that run to the edge poke out past it like overshoots too.
 
-import { sketchRect, seedOf } from '../render/sketch.js';
+import { sketchBox, seedOf } from '../render/sketch.js';
 
-const INSET = 3;
+const INSET = 2;
+const OVER = 8; // px the strokes run on past the corners, at most
 const NS = 'http://www.w3.org/2000/svg';
 
 let count = 0;
@@ -30,7 +33,9 @@ export function sketchFrame(el) {
     const width = el.offsetWidth, height = el.offsetHeight;
     if (!width || !height) return;
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    path.setAttribute('d', sketchRect(INSET, INSET, width - INSET * 2, height - INSET * 2, seed, { over: INSET }));
+    // (small boxes – a button, the dock – overshoot less)
+    const over = Math.min(OVER, 3 + Math.min(width, height) * 0.1);
+    path.setAttribute('d', sketchBox(INSET, INSET, width - INSET * 2, height - INSET * 2, seed, { over }));
   };
   // boxes that rebuild their content (innerHTML) drop the frame: put it back
   const attach = () => {

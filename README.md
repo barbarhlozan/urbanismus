@@ -1,4 +1,4 @@
-# Urbanismus
+# Dědina
 
 A little black-and-white isometric city builder. Plain JS, no build step.
 

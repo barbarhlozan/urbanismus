@@ -2,9 +2,9 @@
 
 export const CONFIG = {
   // shown in the corner of the screen
-  app: { name: 'Urbanismus', version: '0.2', author: 'mlozanek' },
+  app: { name: 'Dědina', version: '0.2', author: 'mlozanek' },
 
-  grid: { width: 70, height: 70 },
+  grid: { width: 50, height: 50 },
 
   // null = random seed for each new map
   seed: null,

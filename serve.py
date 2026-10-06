@@ -26,5 +26,5 @@ class Server(http.server.ThreadingHTTPServer):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", 8173))
-    print(f"Urbanismus running at http://localhost:{port}")
+    print(f"Dědina running at http://localhost:{port}")
     Server(("", port), NoCacheHandler).serve_forever()
