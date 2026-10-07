@@ -230,6 +230,13 @@ export class Renderer {
     on('paths:changed', 'paths');
     on('rails:changed', 'rails');
     for (const type of ['roads:changed', 'paths:changed']) world.events.on(type, () => (this.roadLines = null));
+    // the woods stop at roads and railways (forest.js)
+    for (const type of ['roads:changed', 'rails:changed']) {
+      world.events.on(type, () => {
+        this.forests = null;
+        this.dirty.add('forest');
+      });
+    }
     // bridges come and go with the networks; the water breaks under them
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
       world.events.on(type, () => {
@@ -1842,7 +1849,9 @@ export class Renderer {
   // The woods (forest.js), found again after trees come or go.
   forestState() {
     if (!this.forests) {
-      this.forests = findForests(this.world, this.config.render.forest);
+      const { world, config } = this;
+      const ways = new SegmentIndex([...networkPolylines(world.networks.road, config.road), ...networkPolylines(world.networks.rail, config.rail)]);
+      this.forests = findForests(world, config.render.forest, ways);
       if (this.woodsOn) queueMicrotask(() => this.cull()); // trees that joined or left a wood
     }
     return this.forests;
