@@ -22,16 +22,17 @@ test('a block of trees is one wood, a lone tree stays a tree', () => {
   assert.equal(loops.length, 1);
 });
 
-test('a wood is outlined along the grid, a few corners rather than a round blob', () => {
+test('a wood is outlined in a few straight sides, not a bumpy blob', () => {
   const world = flatWorld(30, 30);
   plant(world, 4, 4, 9, 9);
   const [loop] = findForests(world, cfg).loops;
-  // almost all of its length along x or y (the corners are cut a little)
-  const sides = loop.slice(1).map((p, i) => [p[0] - loop[i][0], p[1] - loop[i][1]]);
-  const len = (list) => list.reduce((s, [dx, dy]) => s + Math.hypot(dx, dy), 0);
-  const straight = sides.filter(([dx, dy]) => Math.abs(dx) < 1e-6 || Math.abs(dy) < 1e-6);
-  assert.ok(loop.length <= 13, `${loop.length} points`);
-  assert.ok(len(straight) > 0.9 * len(sides));
+  assert.ok(loop.length <= 12, `${loop.length} points`);
+  // it still goes round all the trees
+  const inside = ([x, y]) => loop.slice(1).reduce((n, b, i) => {
+    const a = loop[i];
+    return (a[1] > y) !== (b[1] > y) && x < a[0] + ((y - a[1]) * (b[0] - a[0])) / (b[1] - a[1]) ? !n : n;
+  }, false);
+  for (const [x, y] of [[4, 4], [9, 4], [4, 9], [9, 9], [6, 6]]) assert.ok(inside([x, y]), `${x},${y} in the wood`);
 });
 
 test('a road through a wood is kept clear of it', () => {
