@@ -35,10 +35,13 @@ export const CONFIG = {
     rebuildBudget: 6,
     // Further out than `zoom` a wood is drawn as one shape (render/forest.js):
     // trees within `link` of one another, at least `minTrees` of them. Its
-    // outline runs about reach / 2 out from the outer trees, in samples
-    // `step` apart, and bulges every `bump` by bulge × bump; `hatch`: the
-    // spacing of the hatching inside, in scene px.
-    forest: { zoom: 0.9, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, bump: 0.45, bulge: 0.35, hatch: 5 },
+    // outline follows the grid in cells of `cell` dots: it runs reach / 2
+    // out from the middle of each cell with a tree in it (more than cell / 2
+    // joins neighbouring cells), found in samples `step` apart. Its sides
+    // bulge in bumps about `bump` long by bulge × bump. It stays `clear`
+    // from the middle of roads and railways; `hatch`: the spacing of the
+    // hatching inside, in scene px.
+    forest: { zoom: 0.9, link: 1.6, minTrees: 10, cell: 2, reach: 2.4, step: 0.25, bump: 0.6, bulge: 0.15, clear: 0.3, hatch: 5 },
   },
 
   road: {

@@ -3,21 +3,27 @@
 // outline with a bumpy canopy edge and hatched inside, the way a hand-drawn
 // map shows a forest. Lone trees and small groups stay trees.
 //
-//   findForests(world, cfg)          { trees: Set of feature ids in woods, loops }
+//   findForests(world, cfg, ways)    { trees: Set of feature ids in woods, loops }
 //   forestSVG(forests, project, cfg) the layer's SVG (Renderer.renderForest)
 //
-// The outline is the line where the woods' cover (each tree's crown,
-// fading out over `reach`) is half full: the contours of that field.
+// The outline is the line where the woods' cover is half full: the
+// contours of that field. Each tree covers a square around the middle of
+// its cell, a square of `cell` dots on the map grid (fading out over
+// `reach`), so a wood is outlined like a plot – in long straight runs along
+// the grid with corners – not as a round blob. Roads and railways are cut
+// out of it (`ways`), so a wood stops at their edge.
 
 import { contours } from '../terrain/elevation.js';
 
 // Trees in woods and the woods' outlines (world units, closed loops).
-export function findForests(world, cfg) {
+// `ways`: a SegmentIndex (core/geom2d.js) of the roads' and railways' centre
+// lines, kept `cfg.clear` clear of the woods.
+export function findForests(world, cfg, ways = null) {
   const trees = [];
   for (const f of world.features.values()) {
     if (f.type !== 'tree') continue;
     const [x, y] = world.grid.xy(f.node);
-    trees.push({ id: f.id, x: x + (f.ox ?? 0), y: y + (f.oy ?? 0) });
+    trees.push({ id: f.id, x, y }); // on its dot: the outline follows the grid
   }
   const cells = buckets(trees, cfg.link);
 
@@ -32,30 +38,35 @@ export function findForests(world, cfg) {
   const wood = trees.filter((_, i) => size.get(root(i)) >= cfg.minTrees);
   if (!wood.length) return { trees: new Set(), loops: [], cover: () => 0 };
 
-  // the cover: 1 at a tree, 0 from `reach` away; the outline at 0.5
-  const woodCells = buckets(wood, cfg.reach);
+  // the cover: 1 in the middle of a cell with a tree, 0 `reach` away along
+  // either axis (a square); the outline at 0.5
+  const mid = (v) => (Math.floor(v / cfg.cell) + 0.5) * cfg.cell;
+  const spots = [...new Map(wood.map((t) => [`${mid(t.x)},${mid(t.y)}`, { x: mid(t.x), y: mid(t.y) }])).values()];
+  const spotCells = buckets(spots, cfg.reach);
   const cover = (x, y) => {
     let c = 0;
-    near(woodCells, cfg.reach, x, y, (i) => { c = Math.max(c, 1 - Math.hypot(wood[i].x - x, wood[i].y - y) / cfg.reach); });
+    near(spotCells, cfg.reach, x, y, (i) => { c = Math.max(c, 1 - Math.max(Math.abs(spots[i].x - x), Math.abs(spots[i].y - y)) / cfg.reach); });
+    // half full right at the clearance off a road, nothing nearer it
+    if (c > 0 && ways) c = Math.min(c, 0.5 + Math.min(1, ways.distance([x, y], cfg.clear + 1) - cfg.clear));
     return c;
   };
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const t of wood) {
     x0 = Math.min(x0, t.x); y0 = Math.min(y0, t.y); x1 = Math.max(x1, t.x); y1 = Math.max(y1, t.y);
   }
-  const pad = cfg.reach + cfg.step;
+  const pad = cfg.reach + cfg.cell + cfg.step;
   const lines = contours(cover, [x0 - pad, y0 - pad, x1 + pad, y1 + pad], { step: cfg.step, interval: 0.5, index: 1, only: 0.5 });
-  return { trees: new Set(wood.map((t) => t.id)), loops: lines.map((l) => l.points).filter((p) => p.length > 3), cover };
+  return { trees: new Set(wood.map((t) => t.id)), loops: lines.map((l) => corners(l.points)).filter((p) => p.length > 3), cover };
 }
 
-// Each wood: its outline (bulging out in a bump every cfg.bump along it)
-// filled with the paper colour, and the same shape hatched. `project(x, y)`
-// gives the scene point of a world point.
+// Each wood: its outline (each side bulging out in bumps about cfg.bump
+// long, the corners kept) filled with the paper colour, and the same shape
+// hatched. `project(x, y)` gives the scene point of a world point.
 export function forestSVG({ loops, cover }, project, cfg) {
   if (!loops.length) return '';
   let d = '';
   for (const loop of loops) {
-    const pts = resample(loop, cfg.bump);
+    const pts = bumps(loop, cfg.bump);
     if (pts.length < 3) continue;
     for (let i = 0; i < pts.length; i++) {
       const a = pts[i], b = pts[(i + 1) % pts.length];
@@ -76,19 +87,26 @@ export function forestSVG({ loops, cover }, project, cfg) {
     + `<path class="forest" d="${d}"/><path class="forest-fill" d="${d}"/>`;
 }
 
-// Points along a closed loop about `step` apart.
-function resample(loop, step) {
+// A closed loop (first point repeated last) with only its corners: the
+// points where it turns, the straight runs between them as single sides.
+function corners(loop) {
+  const pts = loop.slice(0, -1), out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[(i + pts.length - 1) % pts.length], b = pts[i], c = pts[(i + 1) % pts.length];
+    const cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    if (Math.abs(cross) > 1e-6) out.push(b);
+  }
+  return [...out, out[0]];
+}
+
+// The points of a closed loop with each side split into equal pieces about
+// `step` long (at least one): every corner stays a point.
+function bumps(loop, step) {
   const out = [];
-  let carry = 0;
   for (let i = 0; i < loop.length - 1; i++) {
     const [ax, ay] = loop[i], [bx, by] = loop[i + 1];
-    const len = Math.hypot(bx - ax, by - ay);
-    let t = carry;
-    while (t < len) {
-      out.push([ax + ((bx - ax) * t) / len, ay + ((by - ay) * t) / len]);
-      t += step;
-    }
-    carry = t - len;
+    const n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / step));
+    for (let k = 0; k < n; k++) out.push([ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n]);
   }
   return out;
 }
