@@ -121,6 +121,15 @@ export function pointAt(poly, s) {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 }
 
+// The part of a measured polyline (measurePolyline) between arc lengths s0
+// and s1.
+export function subPolyline(poly, s0, s1) {
+  const out = [pointAt(poly, s0)];
+  for (let i = 1; i < poly.points.length - 1; i++) if (poly.cum[i] > s0 && poly.cum[i] < s1) out.push(poly.points[i]);
+  out.push(pointAt(poly, s1));
+  return out;
+}
+
 // The drawn centre line of one segment a -> b of a network (the same curves
 // as networkPolylines: half of the corner fillet at each end that bends).
 export function edgeCurve(layer, { cornerRadius, curveSamples }, a, b) {

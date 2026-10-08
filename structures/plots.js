@@ -96,7 +96,7 @@ const BOUNDARY = {
 //   cell   [x0, y0, x1, y1]         the plot rectangle
 //   inside(x, y, r)                 true if a prop of radius r fits there
 //                                   (in the cell, off the building and front yard)
-//   sides  [[a, b], …]              boundary lines this plot draws
+//   sides  [[a, b, …], …]           boundary lines (polylines) this plot draws
 //   onLine(x, y)                    true if a boundary point may be drawn there
 //   density                         0–1, how full to make it
 //   densityAt(x, y)                 optional: that, varying over the plot
@@ -108,17 +108,21 @@ export function drawPlot(g, plot) {
   // Boundary lines, with gaps wherever something is in the way.
   if (plot.sides.length && g.chance(plot.boundary ?? 0)) {
     const kind = BOUNDARY[g.pick(plot.kinds ?? ['fence'])] ?? BOUNDARY.fence;
-    for (const [a, b] of plot.sides) {
+    for (const side of plot.sides) {
+      // (a side is a polyline: straight [a, b], or a rounded run of them)
       const pts = [];
-      const n = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.05));
       let run = [];
-      for (let i = 0; i <= n; i++) {
-        const p = [a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n];
+      const take = (p) => {
         if (plot.onLine(p[0], p[1])) run.push(p);
         else {
           if (run.length > 3) pts.push(run);
           run = [];
         }
+      };
+      for (let k = 1; k < side.length; k++) {
+        const a = side[k - 1], b = side[k];
+        const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.05));
+        for (let i = k === 1 ? 0 : 1; i <= n; i++) take([a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n]);
       }
       if (run.length > 3) pts.push(run);
       for (const r of pts) kind(g, r);

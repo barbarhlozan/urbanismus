@@ -52,7 +52,7 @@ import { DEER, deerSVG, deerMark } from './deer.js';
 import { LIVESTOCK, livestockSVG, livestockMark } from './livestock.js';
 import { fenceGates } from '../sim/pastures.js';
 import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './draw.js';
-import { chainEdges, edgeCurve, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns } from '../roads/geometry.js';
+import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
 import { AgentCanvas, AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
@@ -63,7 +63,7 @@ import { YARDS } from '../../structures/yards.js';
 import { drawPlot, boundaryChance, SPREAD, SPREAD_DENSITY } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
 import { pointInPolygon } from '../core/geom2d.js';
-import { fitYard, fitSite, freeTest, pathIndex, railIndex, plotClaim } from './lots.js';
+import { fitYard, fitSite, freeTest, pathIndex, railIndex, plotClaim, roundSides } from './lots.js';
 import { zebraCrossings, streetLamp, FURNITURE } from '../roads/furniture.js';
 import { lamp } from '../../structures/kit.js';
 import { networkPolylines } from '../roads/geometry.js';
@@ -901,7 +901,7 @@ export class Renderer {
   // crossing, crossings.js), and the gate shut between them in line with
   // the fence – a frame with a brace across – so the pasture stays closed.
   fenceItems() {
-    const { world } = this, layer = world.networks.fence, { post, rails, spacing, gate: G } = this.config.fence;
+    const { world } = this, layer = world.networks.fence, { post, rails, spacing, gate: G, cornerRadius, curveSamples } = this.config.fence;
     const { items, add } = this.inkItems(true);
     const gap = (f) => world.roadAtFine(f) || world.rails.hasNode(f);
     const gates = fenceGates(world);
@@ -911,17 +911,25 @@ export class Renderer {
       add(`${key}b`, 'fence', [[...p, lo], [...q, hi]], a, b);
     };
     const gatePost = (key, [x, y], a, b) => add(key, 'fence-pillar', [[x, y, 0], [x, y, tall]], a, b);
+    // (a post at a dot: where the fence runs through it – at a rounded corner
+    // the middle of the curve, not the dot itself)
+    const postAt = (n) => {
+      const nb = [...layer.graph.neighbors(n)];
+      if (nb.length !== 2) return layer.pos(n);
+      return fillet(layer.pos(nb[0]), layer.pos(n), layer.pos(nb[1]), cornerRadius, curveSamples)[curveSamples / 2];
+    };
     for (const n of layer.graph.nodes()) {
       if (gap(n) || gates.at.has(n)) continue;
-      const [x, y] = layer.pos(n);
+      const [x, y] = postAt(n);
       add(`p${n}`, 'fence-post', [[x, y, 0], [x, y, post]], n, n);
     }
     const sides = new Map(); // gate dot -> where the fence pieces at it stop
     for (const [a, b] of layer.graph.edges()) {
       if (gap(a) || gap(b)) continue;
-      const pa = layer.pos(a), pb = layer.pos(b), key = edgeKey(a, b);
-      const len = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]), g = Math.min(0.45, G / len);
-      const along = (t) => [pa[0] + (pb[0] - pa[0]) * t, pa[1] + (pb[1] - pa[1]) * t];
+      const key = edgeKey(a, b);
+      const curve = measurePolyline(edgeCurve(layer, this.config.fence, a, b));
+      const len = curve.total, g = Math.min(0.45, G / len);
+      const along = (t) => pointAt(curve, t * len);
       // the stretches of rail, between the gates' openings
       const open = [];
       if (gates.at.has(a)) open.push([0, g]);
@@ -936,7 +944,8 @@ export class Renderer {
       if (t0 < 1) runs.push([t0, 1]);
       runs.forEach(([s0, s1], k) => {
         const run = k ? `.${k}` : '';
-        rails.forEach((z, i) => add(`r${key}.${i}${run}`, 'fence', [[...along(s0), z], [...along(s1), z]], a, b));
+        const line = subPolyline(curve, s0 * len, s1 * len);
+        rails.forEach((z, i) => add(`r${key}.${i}${run}`, 'fence', line.map(([x, y]) => [x, y, z]), a, b));
         // posts between its ends, evenly (the ends: a dot's post or a gate's pillar)
         const steps = Math.max(1, Math.round(((s1 - s0) * len) / spacing));
         for (let i = 1; i < steps; i++) {
@@ -1678,7 +1687,7 @@ export class Renderer {
         spread: true,
         densityAt: (x, y) => (home(x, y) ? density : density * SPREAD_DENSITY),
         cell,
-        sides,
+        sides: roundSides(sides), // corners rounded
         inside: (x, y, r) =>
           own(x - r, y - r) && own(x + r, y - r) && own(x - r, y + r) && own(x + r, y + r) &&
           reached(x, y) && !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y),

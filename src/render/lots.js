@@ -11,7 +11,7 @@
 
 import { rotateQuarter } from '../core/grid.js';
 import { SegmentIndex } from '../core/geom2d.js';
-import { networkPolylines, streetKerbs } from '../roads/geometry.js';
+import { networkPolylines, streetKerbs, fillet } from '../roads/geometry.js';
 
 const ROAD_GAP = 0.11;  // clearance from the road centre line
 const STEP = 0.05;      // sampling along plot edges
@@ -273,4 +273,77 @@ export function plotClaim(world, config, me, others, reach) {
     return !block(roads, ROAD_GAP) && !block(rails, ROAD_GAP);
   };
   return { owner, seen };
+}
+
+// Straight boundary sides [[a, b], …] joined up where exactly two of them
+// meet at a corner, and each such corner rounded (a quadratic fillet that
+// eats at most CORNER of the shorter side, never more than CORNER_MAX of
+// ground): a garden outlined by rounded fences rather than a box. Sides
+// that meet a third (a neighbour's), or at a straight join, end there.
+// Returns polylines. A ring is opened mid-side, so the seam stays straight.
+const CORNER = 0.5;
+const CORNER_MAX = 0.55;
+export function roundSides(sides) {
+  const key = ([x, y]) => `${Math.round(x * 1000)},${Math.round(y * 1000)}`;
+  const at = new Map(); // vertex -> [side index…]
+  sides.forEach((side, i) => side.forEach((p) => {
+    const k = key(p);
+    if (!at.has(k)) at.set(k, []);
+    at.get(k).push(i);
+  }));
+  const dir = ([a, b]) => [b[0] - a[0], b[1] - a[1]];
+  const square = (i, j) => {
+    const [ux, uy] = dir(sides[i]), [vx, vy] = dir(sides[j]);
+    return Math.abs(ux * vx + uy * vy) < 1e-6 * (Math.hypot(ux, uy) * Math.hypot(vx, vy) || 1);
+  };
+  const used = new Set();
+  // the side that carries on from side i at its vertex p, if that is a plain corner
+  const partner = (i, p) => {
+    const here = at.get(key(p));
+    if (here.length !== 2) return -1;
+    const j = here[0] === i ? here[1] : here[0];
+    return j !== i && !used.has(j) && square(i, j) ? j : -1;
+  };
+  const far = (j, p) => (key(sides[j][0]) === key(p) ? sides[j][1] : sides[j][0]);
+
+  const chains = [];
+  for (let i = 0; i < sides.length; i++) {
+    if (used.has(i)) continue;
+    used.add(i);
+    let pts = [sides[i][0], sides[i][1]];
+    let ring = false;
+    for (let cur = i; ;) { // forwards from the end
+      const j = partner(cur, pts[pts.length - 1]);
+      if (j < 0) break;
+      used.add(j);
+      const q = far(j, pts[pts.length - 1]);
+      if (key(q) === key(pts[0])) { ring = true; break; }
+      pts.push(q);
+      cur = j;
+    }
+    if (!ring) {
+      for (let cur = i; ;) { // and backwards from the start
+        const j = partner(cur, pts[0]);
+        if (j < 0) break;
+        used.add(j);
+        pts.unshift(far(j, pts[0]));
+        cur = j;
+      }
+    } else {
+      const m = [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2];
+      pts = [m, ...pts.slice(1), pts[0], m];
+    }
+    chains.push(pts);
+  }
+  return chains.map((pts) => {
+    if (pts.length < 3) return pts;
+    const line = [pts[0]];
+    for (let k = 1; k < pts.length - 1; k++) {
+      const la = Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+      const lb = Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
+      line.push(...fillet(pts[k - 1], pts[k], pts[k + 1], Math.min(CORNER, CORNER_MAX / Math.min(la, lb)), 6));
+    }
+    line.push(pts[pts.length - 1]);
+    return line;
+  });
 }
