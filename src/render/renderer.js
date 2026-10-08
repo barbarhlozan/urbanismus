@@ -1995,7 +1995,7 @@ export class Renderer {
   }
 
   renderForest() {
-    const svg = this.woodsOn ? forestSVG(this.forestState(), (x, y) => this.project(x, y), this.config.render.forest) : '';
+    const svg = this.woodsOn ? forestSVG(this.forestState(), (x, y) => this.project(x, y), this.config.render.forest, this.camera) : '';
     if (svg !== this.forestDrawn) this.layers.forest.innerHTML = this.forestDrawn = svg;
   }
 

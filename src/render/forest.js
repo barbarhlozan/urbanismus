@@ -2,12 +2,13 @@
 // together in a wood aren't drawn one by one: each wood is one shape,
 // hatched inside, its outline straight sides with sharp corners, the way a
 // map draws the edge of a forest – drawn by hand, each side its own stroke
-// running on a little past the corners – with a small tree drawn here and
-// there inside, the map's sign for a wood. Lone trees and small groups stay
+// running on a little past the corners – with a tree drawn here and there
+// inside (the game's own trees, features/trees.js, at their plainest), the
+// map's sign for a wood. Lone trees and small groups stay
 // trees.
 //
 //   findForests(world, cfg, ways)    { trees: Set of feature ids in woods, loops }
-//   forestSVG(forests, project, cfg) the layer's SVG (Renderer.renderForest)
+//   forestSVG(forests, project, cfg, camera) the layer's SVG (Renderer.renderForest)
 //
 // The outline is the line where the woods' cover (each tree's crown,
 // fading out over `reach`) is half full: the contours of that field, then
@@ -17,8 +18,11 @@
 // their edge.
 
 import { contours } from '../terrain/elevation.js';
-import { sketchLine, sketchEllipse, seedOf } from './sketch.js';
+import { sketchLine, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
+import { Painter } from './painter.js';
+import { mergeRuns } from './order.js';
+import { drawTree } from '../../features/trees.js';
 
 // Trees in woods and the woods' outlines (world units, closed loops).
 // `ways`: a SegmentIndex (core/geom2d.js) of the roads' and railways' centre
@@ -63,8 +67,8 @@ export function findForests(world, cfg, ways = null) {
 
 // Each wood: its shape filled with the paper colour and hatched, its
 // outline drawn by hand, and its tree signs (signs()). `project(x, y)`
-// gives the scene point of a world point.
-export function forestSVG({ loops, cover }, project, cfg) {
+// gives the scene point of a world point; `camera` draws the signs' trees.
+export function forestSVG({ loops, cover }, project, cfg, camera) {
   if (!loops.length) return '';
   let fill = '', edge = '';
   for (const loop of loops) {
@@ -77,40 +81,53 @@ export function forestSVG({ loops, cover }, project, cfg) {
   return `<defs><pattern id="forest-hatch" patternUnits="userSpaceOnUse" width="${s}" height="${s}" patternTransform="rotate(-35)">`
     + `<line class="forest-hatch" x1="0" y1="${s / 2}" x2="${s}" y2="${s / 2}"/></pattern></defs>`
     + `<path class="forest" d="${fill}"/><path class="forest-fill" d="${fill}"/><path class="forest-edge" d="${edge}"/>`
-    + signs(loops, cover, project, cfg);
+    + signs(loops, cover, project, cfg, camera);
 }
 
-// Small trees standing in the woods, as a map marks a forest: one about
-// every `cfg.signs` grid steps (a jittered grid), well inside a wood
-// (where its cover is full) – a round crown on a stem, or now and then a
-// spruce. Each crown is filled, so the hatching doesn't show through it.
-function signs(loops, cover, project, cfg) {
-  const g = cfg.signs, r = cfg.signSize;
+// Trees standing in the woods, as a map marks a forest: one about every
+// `cfg.signs` grid steps (a jittered grid), well inside a wood (where its
+// cover is at least `cfg.signCover`). They're the game's own trees
+// (features/trees.js) at their plainest – a few drawn once (SIGN_KINDS),
+// then copied into place (not <use>: the copies would miss the map's styles,
+// which go by the layer they're in) – `cfg.signSize` grid steps tall,
+// `cfg.spruces` of them spruces.
+function signs(loops, cover, project, cfg, camera) {
+  const g = cfg.signs;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const loop of loops) for (const [x, y] of loop) {
     x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
   }
-  let crowns = '', stems = '';
+  const placed = [];
   for (let gy = Math.floor(y0 / g); gy <= y1 / g; gy++) {
     for (let gx = Math.floor(x0 / g); gx <= x1 / g; gx++) {
       // stagger every other row, and jitter each a little
       const rnd = mulberry32(seedOf(gx, gy, 7));
       const x = (gx + 0.5 + (gy % 2) * 0.5 + (rnd() - 0.5) * 0.5) * g, y = (gy + 0.5 + (rnd() - 0.5) * 0.5) * g;
       if (cover(x, y) < cfg.signCover || !loops.some((l) => inside(l, x, y))) continue;
-      const [sx, sy] = project(x, y);
-      const seed = seedOf(x, y);
-      if (rnd() < cfg.spruces) {
-        const h = r * 2.6, w = r * 1.1; // a spruce: a narrow tooth on a stub
-        crowns += `M${r2(sx)} ${r2(sy - h)}L${r2(sx + w)} ${r2(sy - r * 0.5)}L${r2(sx - w)} ${r2(sy - r * 0.5)}Z`;
-        stems += sketchLine([sx, sy - r * 0.5], [sx, sy], seed, { bow: 0.3 });
-      } else {
-        crowns += sketchEllipse(sx, sy - r * 1.6, r, r, seed, { lump: 0.1 }) + 'Z';
-        stems += sketchLine([sx, sy - r * 0.6], [sx, sy], seed, { bow: 0.3 });
-      }
+      const spruce = rnd() < cfg.spruces;
+      const kinds = SIGN_KINDS.map((k, i) => [k, i]).filter(([k]) => (k === 'spruce') === spruce);
+      const [, i] = kinds[Math.floor(rnd() * kinds.length)];
+      placed.push([i, ...project(x, y)]);
     }
   }
-  return crowns ? `<path class="forest-sign" d="${crowns}"/><path class="forest-stem" d="${stems}"/>` : '';
+  if (!placed.length) return '';
+  // each tree drawn at the map's origin, moved so its foot is at 0, 0
+  const [ax, ay] = camera.project(0, 0, 0);
+  const art = SIGN_KINDS.map((kind, i) => {
+    const painter = new Painter(camera, { x: 0, y: 0, z: 0 }, 0, 9173 + i * 7919);
+    painter.rigid = [0, 0];
+    painter.detail = 2;
+    drawTree(painter, 0, 0, kind, cfg.signSize * (kind === 'spruce' ? 1.2 : 1), true);
+    return mergeRuns(painter.toSVG());
+  });
+  // back to front, so nearer trees overlap those behind
+  placed.sort((a, b) => a[2] - b[2]);
+  return placed.map(([i, sx, sy]) => `<g transform="translate(${r2(sx - ax)} ${r2(sy - ay)})">${art[i]}</g>`).join('');
 }
+
+// The trees the signs are drawn from (features/trees.js kinds), two of each
+// look so neighbours differ.
+const SIGN_KINDS = ['spruce', 'spruce', 'spreading', 'spreading', 'sapling'];
 
 // Is world point (x, y) inside the closed loop (even–odd)?
 function inside(loop, x, y) {

@@ -45,11 +45,11 @@ export const CONFIG = {
     // of the hatching inside, in scene px. Its sides are drawn by hand,
     // running `over` scene px past the corners and bowing up to `bow`. A
     // small tree sign stands about every `signs` grid steps where the cover
-    // is at least `signCover` (deep enough inside), `signSize` scene px
-    // across its crown; `spruces`: the share drawn as spruces.
+    // is at least `signCover` (deep enough inside), one of the game's trees
+    // `signSize` grid steps tall; `spruces`: the share of them spruces.
     forest: {
       zoom: 0.9, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, straighten: 0.35, clear: 0.3, hatch: 5,
-      over: 4, bow: 1.5, signs: 2, signCover: 0.6, signSize: 5, spruces: 0.35,
+      over: 4, bow: 1.5, signs: 2, signCover: 0.6, signSize: 0.6, spruces: 0.4,
     },
   },
 
