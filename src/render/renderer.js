@@ -63,7 +63,7 @@ import { YARDS } from '../../structures/yards.js';
 import { drawPlot, boundaryChance, wander, SPREAD, SPREAD_DENSITY } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
 import { pointInPolygon } from '../core/geom2d.js';
-import { fitYard, fitSite, freeTest, pathIndex, railIndex, plotClaim, roundSides } from './lots.js';
+import { fitYard, fitSite, freeTest, pathIndex, railIndex, plotClaim } from './lots.js';
 import { zebraCrossings, streetLamp, FURNITURE } from '../roads/furniture.js';
 import { lamp } from '../../structures/kit.js';
 import { networkPolylines } from '../roads/geometry.js';
@@ -1696,7 +1696,7 @@ export class Renderer {
         spread: true,
         densityAt: (x, y) => (home(x, y) ? density : density * SPREAD_DENSITY),
         cell,
-        sides: roundSides(sides), // corners rounded
+        sides,
         inside: (x, y, r) =>
           own(x - r, y - r) && own(x + r, y - r) && own(x - r, y + r) && own(x + r, y + r) &&
           reached(x, y) && !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y),
