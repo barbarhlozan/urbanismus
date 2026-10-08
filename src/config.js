@@ -29,6 +29,9 @@ export const CONFIG = {
     // they grow and shrink with the map, at most by its square root (±12 %).
     // Each rescale restyles the whole map, so not on every zoom.
     strokeStep: 1.25,
+    // All the map's lines a little heavier (or lighter) than their widths
+    // in styles.css: 1 draws them as written.
+    lineWeight: 1.2,
     // When the level of detail changes the objects in sight are redrawn
     // with it (Renderer.atDetail), from the middle of the window out, for at
     // most about this many ms each frame.

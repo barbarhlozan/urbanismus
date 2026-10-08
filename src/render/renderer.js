@@ -1104,8 +1104,8 @@ export class Renderer {
   // the map had before: a 1.2 line is 1.2 pixels of a sharp screen, not 1.2
   // CSS px (twice as thick there).
   updateStroke(z) {
-    const step = this.config.render.strokeStep;
-    const k = this.constantStrokes ? step ** -Math.round(Math.log(z) / Math.log(step)) / (devicePixelRatio || 1) : 1;
+    const { strokeStep: step, lineWeight } = this.config.render;
+    const k = this.constantStrokes ? (lineWeight * step ** -Math.round(Math.log(z) / Math.log(step))) / (devicePixelRatio || 1) : 1;
     if (k === this.strokeK) return;
     this.strokeK = k;
     for (const s of [this.svg, this.ground, this.top]) s.style.setProperty('--stroke', k);
