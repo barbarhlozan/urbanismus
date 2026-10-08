@@ -153,8 +153,9 @@ export const CONFIG = {
   // fences are (structures/kit.js fenceAlong): a rail along the top, short
   // posts close together; heights as the map's (a walker is about 0.08)
   fence: {
-    cornerRadius: 0.5,   // corners rounded, as footpaths' are (roads/geometry.js)
-    curveSamples: 6,
+    cornerRadius: 0,     // (straight runs, sharp corners)
+    curveSamples: 1,
+    wander: 0.05,        // how far the runs drift off true (render/renderer.js fenceItems): hand-set, not ruled
     post: 0.06,          // as high as a garden fence
     rails: [0.06],       // heights of the rails: one, along the top
     spacing: 0.1,        // grid steps between posts, about

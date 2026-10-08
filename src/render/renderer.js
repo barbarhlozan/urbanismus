@@ -60,7 +60,7 @@ import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
 import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
 import { YARDS } from '../../structures/yards.js';
-import { drawPlot, boundaryChance, SPREAD, SPREAD_DENSITY } from '../../structures/plots.js';
+import { drawPlot, boundaryChance, wander, SPREAD, SPREAD_DENSITY } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
 import { pointInPolygon } from '../core/geom2d.js';
 import { fitYard, fitSite, freeTest, pathIndex, railIndex, plotClaim, roundSides } from './lots.js';
@@ -901,7 +901,8 @@ export class Renderer {
   // crossing, crossings.js), and the gate shut between them in line with
   // the fence – a frame with a brace across – so the pasture stays closed.
   fenceItems() {
-    const { world } = this, layer = world.networks.fence, { post, rails, spacing, gate: G, cornerRadius, curveSamples } = this.config.fence;
+    const { world } = this, layer = world.networks.fence, { post, rails, spacing, gate: G, cornerRadius, curveSamples, wander: amp } = this.config.fence;
+    const drift = (p) => (amp ? wander(p, amp) : p);
     const { items, add } = this.inkItems(true);
     const gap = (f) => world.roadAtFine(f) || world.rails.hasNode(f);
     const gates = fenceGates(world);
@@ -915,8 +916,8 @@ export class Renderer {
     // the middle of the curve, not the dot itself)
     const postAt = (n) => {
       const nb = [...layer.graph.neighbors(n)];
-      if (nb.length !== 2) return layer.pos(n);
-      return fillet(layer.pos(nb[0]), layer.pos(n), layer.pos(nb[1]), cornerRadius, curveSamples)[curveSamples / 2];
+      if (nb.length !== 2 || !cornerRadius) return drift(layer.pos(n));
+      return drift(fillet(layer.pos(nb[0]), layer.pos(n), layer.pos(nb[1]), cornerRadius, curveSamples)[curveSamples / 2]);
     };
     for (const n of layer.graph.nodes()) {
       if (gap(n) || gates.at.has(n)) continue;
@@ -929,7 +930,7 @@ export class Renderer {
       const key = edgeKey(a, b);
       const curve = measurePolyline(edgeCurve(layer, this.config.fence, a, b));
       const len = curve.total, g = Math.min(0.45, G / len);
-      const along = (t) => pointAt(curve, t * len);
+      const along = (t) => drift(pointAt(curve, t * len));
       // the stretches of rail, between the gates' openings
       const open = [];
       if (gates.at.has(a)) open.push([0, g]);
@@ -944,8 +945,16 @@ export class Renderer {
       if (t0 < 1) runs.push([t0, 1]);
       runs.forEach(([s0, s1], k) => {
         const run = k ? `.${k}` : '';
-        const line = subPolyline(curve, s0 * len, s1 * len);
-        rails.forEach((z, i) => add(`r${key}.${i}${run}`, 'fence', line.map(([x, y]) => [x, y, z]), a, b));
+        // (cut up every little way, so it can drift along its length)
+        const part = subPolyline(curve, s0 * len, s1 * len);
+        const line = [part[0]];
+        for (let k = 1; k < part.length; k++) {
+          const [p, q] = [part[k - 1], part[k]];
+          const n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / 0.12));
+          for (let i = 1; i <= n; i++) line.push([p[0] + ((q[0] - p[0]) * i) / n, p[1] + ((q[1] - p[1]) * i) / n]);
+        }
+        const wandered = line.map(drift);
+        rails.forEach((z, i) => add(`r${key}.${i}${run}`, 'fence', wandered.map(([x, y]) => [x, y, z]), a, b));
         // posts between its ends, evenly (the ends: a dot's post or a gate's pillar)
         const steps = Math.max(1, Math.round(((s1 - s0) * len) / spacing));
         for (let i = 1; i < steps; i++) {

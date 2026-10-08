@@ -28,6 +28,21 @@ export const GARDEN_TREES = 0.8;
 export const SPREAD = { garden: 1 };
 export const SPREAD_DENSITY = 0.25;
 
+// A point moved a little by a smooth field over the plane: along a line
+// run through it, the line drifts and bows instead of staying ruled. The
+// same point always moves the same way, so lines that meet still meet.
+// `amp` is the greatest drift (grid steps), `phase` makes another field.
+export function wander([x, y], amp, phase = 0) {
+  return [
+    x + amp * (Math.sin(x * 2.3 + y * 1.7 + phase) + 0.5 * Math.sin(x * 5.1 - y * 3.9 + phase * 1.7)),
+    y + amp * (Math.sin(y * 2.1 - x * 1.3 + phase * 0.6) + 0.5 * Math.sin(y * 4.7 + x * 3.3 + phase * 2.3)),
+  ];
+}
+
+// Plot styles whose boundary lines drift off the property line by up to
+// this much (wander): a garden's fence is where its owner put it.
+const FENCE_WANDER = { garden: 0.05 };
+
 // Share of a style's density kept (gardens are the most common plot, and
 // every prop is SVG: fewer of them draw faster and look calmer).
 const STYLE_DENSITY = { garden: 0.8 };
@@ -108,6 +123,8 @@ export function drawPlot(g, plot) {
   // Boundary lines, with gaps wherever something is in the way.
   if (plot.sides.length && g.chance(plot.boundary ?? 0)) {
     const kind = BOUNDARY[g.pick(plot.kinds ?? ['fence'])] ?? BOUNDARY.fence;
+    const drift = plot.kinds?.includes('tall') ? 0 : FENCE_WANDER[plot.style] ?? 0; // (security fences stay ruled)
+    const phase = g.range(0, 6.28);
     for (const side of plot.sides) {
       // (a side is a polyline: straight [a, b], or a rounded run of them)
       const pts = [];
@@ -125,7 +142,7 @@ export function drawPlot(g, plot) {
         for (let i = k === 1 ? 0 : 1; i <= n; i++) take([a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n]);
       }
       if (run.length > 3) pts.push(run);
-      for (const r of pts) kind(g, r);
+      for (const r of pts) kind(g, drift ? r.map((p) => wander(p, drift, phase)) : r);
     }
   }
 
