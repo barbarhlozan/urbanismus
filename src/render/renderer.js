@@ -60,10 +60,10 @@ import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
 import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
 import { YARDS } from '../../structures/yards.js';
-import { drawPlot, boundaryChance } from '../../structures/plots.js';
+import { drawPlot, boundaryChance, SPREAD, SPREAD_DENSITY } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
 import { pointInPolygon } from '../core/geom2d.js';
-import { fitYard, fitSite, freeTest, pathIndex, railIndex } from './lots.js';
+import { fitYard, fitSite, freeTest, pathIndex, railIndex, plotClaim } from './lots.js';
 import { zebraCrossings, streetLamp, FURNITURE } from '../roads/furniture.js';
 import { lamp } from '../../structures/kit.js';
 import { networkPolylines } from '../roads/geometry.js';
@@ -195,7 +195,11 @@ export class Renderer {
     this.invalidate();
 
     const on = (type, ...layers) => world.events.on(type, () => layers.forEach((l) => this.dirty.add(l)));
-    const near = (s) => this.touchAround(world.nodesOf(s).map((n) => world.grid.xy(n)));
+    const near = (s) => {
+      const points = world.nodesOf(s).map((n) => world.grid.xy(n));
+      this.touchAround(points);
+      this.touchAround(points, 3, true); // gardens spreading round it (plotFor)
+    };
     // (the dots know what's on them: renderGrid)
     for (const type of ['structure:added', 'structure:removed', 'roads:changed', 'rails:changed']) on(type, 'grid');
     for (const type of ['structure:added', 'structure:removed', 'structure:changed']) {
@@ -209,6 +213,7 @@ export class Renderer {
     for (const type of ['feature:added', 'feature:removed']) {
       world.events.on(type, (f) => {
         this.objsDirty.add(`f${f.id}`);
+        this.touchAround([world.grid.xy(f.node)], 2, true); // gardens spreading round it
         this.forests = null; // found again (forestState)
         this.dirty.add('forest');
         this.touchMeadow([world.grid.xy(f.node)]);
@@ -280,17 +285,18 @@ export class Renderer {
     for (const ink of Object.values(this.ink ?? {})) ink.clearErasing(); // drawn for the old view
   }
 
-  // Mark structures within `r` dots of any of the world points for redraw.
-  // Plots, sites and yards only look at directly neighbouring dots, so 1 is
-  // enough for structure changes.
-  touchAround(points, r = 1) {
+  // Mark structures within `r` dots of any of the world points for redraw
+  // (`spreading`: only those whose gardens spread, plotFor). Plots, sites
+  // and yards only look at directly neighbouring dots, so 1 is enough for
+  // structure changes – but a spreading garden looks further.
+  touchAround(points, r = 1, spreading = false) {
     const { world } = this;
     for (const [px, py] of points) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           const n = world.grid.nodeAt(px + dx, py + dy);
           const s = n >= 0 ? world.structureAt(n) : null;
-          if (s) this.objsDirty.add(`s${s.id}`);
+          if (s && (!spreading || SPREAD[STRUCTURE_TYPES[s.type]?.plot?.props])) this.objsDirty.add(`s${s.id}`);
         }
       }
     }
@@ -1540,8 +1546,10 @@ export class Renderer {
       pp.sways = live;
       pp.follow = true;
       pp.lod = 1;
-      drawPlot(pp, this.plotFor(s, plotDef, painter, core, yardWorld));
+      const plot = this.plotFor(s, plotDef, painter, core, yardWorld);
+      drawPlot(pp, plot);
       painter.merge(pp);
+      if (plot.spread) points.push([x + plot.cell[0], y + plot.cell[1]], [x + plot.cell[2], y + plot.cell[3]]);
     }
     return { painter, points };
   }
@@ -1574,7 +1582,8 @@ export class Renderer {
 
   // The plot around a structure, in world axes relative to its anchor dot –
   // or, for one turned to its road (roadTurn), in axes turned with it: the
-  // largest such square inside its dot, all four sides its own.
+  // largest such square inside its dot, all four sides its own. A garden
+  // (SPREAD) not turned also takes the empty ground round it (claimFor).
   plotFor(s, plotDef, painter, core, yardWorld) {
     const { world } = this;
     const [ax, ay] = world.grid.xy(s.node);
@@ -1583,7 +1592,7 @@ export class Renderer {
     const tilt = this.roadTurn(s);
     const [tc, ts] = [Math.cos(tilt), Math.sin(tilt)];
     const half = tilt ? 0.5 / (Math.abs(tc) + Math.abs(ts)) : 0.5;
-    const cell = [Math.min(...xs) - half, Math.min(...ys) - half, Math.max(...xs) + half, Math.max(...ys) + half];
+    let cell = [Math.min(...xs) - half, Math.min(...ys) - half, Math.max(...xs) + half, Math.max(...ys) + half];
     // the plot's axes -> anchor-relative world axes (as Painter._turn)
     const toAnchor = tilt ? (x, y) => [x * tc - y * ts, x * ts + y * tc] : (x, y) => [x, y];
 
@@ -1610,6 +1619,72 @@ export class Renderer {
       const [wx, wy] = toAnchor(x, y);
       return !this.free || this.free(ax + wx, ay + wy, 0.02);
     };
+    const common = {
+      style: plotDef.props,
+      boundary: boundaryChance(plotDef, this.isAlone(s)),
+      kinds: plotDef.kinds,
+      density: plotDef.density,
+    };
+
+    // A garden spreading over the ground round it: the half-dot squares it
+    // claims, its boundary where they meet anyone else's – or nobody's.
+    const reach = !tilt && SPREAD[plotDef.props];
+    if (reach) {
+      const { owner, seen, draws } = this.claimFor(s, reach);
+      const own = (x, y) => owner(Math.floor(2 * (ax + x)), Math.floor(2 * (ay + y))) === s.id;
+      const quarters = [];
+      for (const [px, py] of pts) {
+        for (let j = 2 * (py - reach) - 1; j < 2 * (py + reach) + 1; j++) {
+          for (let i = 2 * (px - reach) - 1; i < 2 * (px + reach) + 1; i++) {
+            if (owner(i, j) === s.id && !quarters.some(([a, b]) => a === i && b === j)) quarters.push([i, j]);
+          }
+        }
+      }
+      cell = [
+        Math.min(...quarters.map((q) => q[0])) / 2 - ax, Math.min(...quarters.map((q) => q[1])) / 2 - ay,
+        Math.max(...quarters.map((q) => q[0])) / 2 + 0.5 - ax, Math.max(...quarters.map((q) => q[1])) / 2 + 0.5 - ay,
+      ];
+      // Boundary: each edge of a claimed square with someone else's (or
+      // nobody's) beyond – but on the -x / -y sides not where a neighbour
+      // draws it (it draws its +x / +y ones); runs along a line joined up.
+      const runs = new Map(); // 'h|v line' -> [from…]
+      for (const [i, j] of quarters) {
+        for (const [di, dj] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+          const o = owner(i + di, j + dj);
+          if (o === s.id) continue;
+          if ((di < 0 || dj < 0) && o !== null && draws(o, i + di, j + dj)) continue;
+          const key = di ? `v${i + (di > 0 ? 1 : 0)}` : `h${j + (dj > 0 ? 1 : 0)}`;
+          if (!runs.has(key)) runs.set(key, []);
+          runs.get(key).push(di ? j : i);
+        }
+      }
+      const sides = [];
+      for (const [key, from] of runs) {
+        const at = Number(key.slice(1)) / 2;
+        from.sort((a, b) => a - b);
+        for (let k = 0; k < from.length;) {
+          let e = k;
+          while (e + 1 < from.length && from[e + 1] === from[e] + 1) e++;
+          const a = from[k] / 2, b = from[e] / 2 + 0.5;
+          sides.push(key[0] === 'v' ? [[at - ax, a - ay], [at - ax, b - ay]] : [[a - ax, at - ay], [b - ax, at - ay]]);
+          k = e + 1;
+        }
+      }
+      const reached = (x, y) => seen(ax + x, ay + y);
+      const home = (x, y) => pts.some(([px, py]) => Math.abs(ax + x - px) <= 0.5 && Math.abs(ay + y - py) <= 0.5);
+      const density = plotDef.density ?? 0.35;
+      return {
+        ...common,
+        spread: true,
+        densityAt: (x, y) => (home(x, y) ? density : density * SPREAD_DENSITY),
+        cell,
+        sides,
+        inside: (x, y, r) =>
+          own(x - r, y - r) && own(x + r, y - r) && own(x - r, y + r) && own(x + r, y + r) &&
+          reached(x, y) && !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y),
+        onLine: (x, y) => !onBuilding(x, y, 0.02) && !inYard(x, y) && !water(x, y) && clear(x, y) && reached(x, y),
+      };
+    }
 
     // Boundary sides: this plot draws its +x and +y sides, and the -x / -y
     // sides only where a square plot is next door (it draws those); a turned
@@ -1625,10 +1700,7 @@ export class Renderer {
     if (tilt || !neighbourAt(0, -1)) sides.push([[x0, y0], [x1, y0]]);
 
     return {
-      style: plotDef.props,
-      boundary: boundaryChance(plotDef, this.isAlone(s)),
-      kinds: plotDef.kinds,
-      density: plotDef.density,
+      ...common,
       cell,
       sides,
       inside: (x, y, r) =>
@@ -1636,6 +1708,53 @@ export class Renderer {
         !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y),
       onLine: (x, y) => !onBuilding(x, y, 0.02) && !inYard(x, y) && !water(x, y) && clear(x, y),
     };
+  }
+
+  // Who has which half-dot square round a spreading plot (lots.js
+  // plotClaim), from the structures that could want them; and
+  // draws(id, i, j): does that structure's plot draw the boundary of its
+  // square (i, j) – a square plot on its own dot, or a garden spreading.
+  claimFor(s, reach) {
+    const { world } = this;
+    const far = 2 * reach + 1;
+    const near = new Map();
+    for (const n of world.nodesOf(s)) {
+      const [px, py] = world.grid.xy(n);
+      for (let dy = -far; dy <= far; dy++) {
+        for (let dx = -far; dx <= far; dx++) {
+          const m = world.grid.nodeAt(px + dx, py + dy);
+          const o = m >= 0 ? world.structureAt(m) : null;
+          if (o) near.set(o.id, o);
+        }
+      }
+    }
+    const claimant = (o) => {
+      const nodes = world.nodesOf(o);
+      const own = new Set(nodes);
+      const front = new Set();
+      const def = STRUCTURE_TYPES[o.type];
+      const f = this.yardFrame(o) && (world.frontFor(nodes) ?? this.placedFront(o, nodes));
+      if (f) {
+        for (const n of nodes) {
+          const m = world.grid.offset(n, f.dir[0], f.dir[1]);
+          if (m >= 0 && !own.has(m)) front.add(m);
+        }
+      }
+      const turned = this.roadTurn(o) !== 0;
+      return { id: o.id, dots: nodes.map((n) => world.grid.xy(n)), spreads: !turned && !def?.site && !!SPREAD[def?.plot?.props], turned, front };
+    };
+    const all = [...near.values()].map(claimant);
+    const me = all.find((c) => c.id === s.id);
+    const claim = plotClaim(world, this.config, me, all.filter((c) => c !== me), reach);
+    const byId = new Map(all.map((c) => [c.id, c]));
+    const draws = (id, i, j) => {
+      const c = byId.get(id);
+      if (!c || c.turned) return false;
+      if (c.spreads) return true;
+      const cx = i / 2 + 0.25, cy = j / 2 + 0.25;
+      return c.dots.some(([x, y]) => Math.round(cx) === x && Math.round(cy) === y);
+    };
+    return { ...claim, draws };
   }
 
   // Parked cars, a group per lot. `ids`: only these lots (a car came or

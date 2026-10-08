@@ -20,12 +20,20 @@ import { tree, bush, shed, bench, bins, crates, pallets, bricks, cableDrum, conc
 // The garden front yard (yards.js) uses it too.
 export const GARDEN_TREES = 0.8;
 
-// Weighted props per style: [weight, radius, draw(g, x, y)]
+// Plot styles that spread over the empty ground round them (up to this many
+// dots out, render/lots.js plotClaim) rather than keep to their own square:
+// a garden with nobody next door, or in a road's bend, runs up to the road.
+// Past its own square it is kept sparser (SPREAD_DENSITY of the plot's
+// density): more open lawn, the odd fruit tree.
+export const SPREAD = { garden: 1 };
+export const SPREAD_DENSITY = 0.4;
+
+// Weighted props per style: [weight, radius, draw(g, x, y), most per plot]
 export const PLOT_STYLES = {
   garden: [
     [5, 0.07, (g, x, y) => g.chance(GARDEN_TREES) && tree(g, x, y, g.range(0.75, 1.05))],
     [4, 0.045, (g, x, y) => bush(g, x, y, g.range(0.03, 0.045))],
-    [1, 0.09, (g, x, y) => shed(g, x, y)],
+    [1, 0.09, (g, x, y) => shed(g, x, y), 1],
   ],
   green: [
     [5, 0.07, (g, x, y) => tree(g, x, y, g.range(0.85, 1.1))],
@@ -87,6 +95,7 @@ const BOUNDARY = {
 //   sides  [[a, b], …]              boundary lines this plot draws
 //   onLine(x, y)                    true if a boundary point may be drawn there
 //   density                         0–1, how full to make it
+//   densityAt(x, y)                 optional: that, varying over the plot
 // }
 export function drawPlot(g, plot) {
   const style = PLOT_STYLES[plot.style];
@@ -127,13 +136,17 @@ export function drawPlot(g, plot) {
   const total = style.reduce((s, [w]) => s + w, 0);
   const placed = [];
   const density = plot.density ?? 0.35;
+  const used = new Map(); // prop -> how many
   for (const [x, y] of spots) {
-    if (!g.chance(density)) continue;
+    if (!g.chance(plot.densityAt?.(x, y) ?? density)) continue;
     let pick = g.random() * total;
-    const [, r, draw] = style.find(([w]) => (pick -= w) < 0) ?? style[0];
+    const prop = style.find(([w]) => (pick -= w) < 0) ?? style[0];
+    const [, r, draw, most = Infinity] = prop;
+    if ((used.get(prop) ?? 0) >= most) continue;
     if (!plot.inside(x, y, r) || !g.isFree(x, y, r)) continue;
     if (placed.some(([px, py, pr]) => Math.hypot(px - x, py - y) < pr + r + 0.02)) continue;
     draw(g, x, y);
+    used.set(prop, (used.get(prop) ?? 0) + 1);
     placed.push([x, y, r]);
   }
 }

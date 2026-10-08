@@ -207,3 +207,70 @@ export function fitSite(world, config, site) {
   ];
   return sides.flatMap((side) => simplify(side.map(fit)).slice(0, -1));
 }
+
+// The ground a plot claims, in half-dot squares ("quarters": [i/2, i/2 + .5]
+// × [j/2, j/2 + .5], world coordinates). Its own dots are its own; a plot
+// that spreads (gardens, SPREAD in structures/plots.js) also takes the empty
+// dots round it – no building, forest, water or railway on them – up to
+// `reach` dots out, so a house with nobody around, or in a road's bend
+// where nothing else could stand, has its garden right up to the road.
+// Every quarter goes to the nearest structure that may have it, so two
+// gardens split an empty dot between them; the dots a front yard looks
+// over go only to that structure (they're its yard's, not a neighbour's).
+// Quarters across a road or railway from the plot are cut off by `seen`.
+//
+//   others   [{ id, dots: [[x, y]…], spreads, front: Set(node) }]  structures round about
+//   me       the same for this one
+// Returns { owner(i, j) -> id | null, seen(x, y) -> bool }.
+export function plotClaim(world, config, me, others, reach) {
+  const all = [me, ...others];
+  const byNode = new Map();
+  for (const o of all) for (const [x, y] of o.dots) byNode.set(world.grid.nodeAt(x, y), o.id);
+  const cache = new Map();
+  const owner = (i, j) => {
+    const key = `${i},${j}`;
+    if (cache.has(key)) return cache.get(key);
+    const cx = i / 2 + 0.25, cy = j / 2 + 0.25;
+    const n = world.grid.nodeAt(cx, cy);
+    let id = null;
+    if (n >= 0) {
+      if (byNode.has(n)) id = byNode.get(n);
+      else if (!world.structureAt(n) && !world.featureAt(n) && !world.terrain.isWater(n) && !world.railNear(n)) {
+        // (nearest by dots – a square's worth – then straight-line, so
+        // two gardens split an empty dot along a straight line)
+        const fronts = all.some((o) => o.front.has(n));
+        let best = [Infinity, Infinity];
+        for (const o of all) {
+          const d = [Infinity, Infinity];
+          for (const [x, y] of o.dots) {
+            const dx = Math.abs(cx - x), dy = Math.abs(cy - y);
+            const c = Math.max(dx, dy), e = Math.hypot(dx, dy);
+            if (c < d[0] || (c === d[0] && e < d[1])) [d[0], d[1]] = [c, e];
+          }
+          if (fronts ? !o.front.has(n) : !(o.spreads && d[0] <= reach + 0.25)) continue;
+          if (d[0] < best[0] || (d[0] === best[0] && (d[1] < best[1] - 1e-9 || (Math.abs(d[1] - best[1]) < 1e-9 && o.id < id)))) [best, id] = [d, o.id];
+        }
+      }
+    }
+    cache.set(key, id);
+    return id;
+  };
+  const roads = roadIndex(world, config);
+  const rails = railIndex(world, config);
+  // in sight of the nearest own dot – no road or railway in between
+  const seen = (x, y) => {
+    let o = me.dots[0], od = Infinity;
+    for (const p of me.dots) {
+      const d = Math.hypot(x - p[0], y - p[1]);
+      if (d < od) [o, od] = [p, d];
+    }
+    if (od < 1e-6) return true;
+    const dir = [(x - o[0]) / od, (y - o[1]) / od];
+    const block = (index, gap) => {
+      const t = index.cast(o, dir, od + gap);
+      return t !== null && t <= od + gap;
+    };
+    return !block(roads, ROAD_GAP) && !block(rails, ROAD_GAP);
+  };
+  return { owner, seen };
+}
