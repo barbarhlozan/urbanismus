@@ -26,7 +26,11 @@ export const GARDEN_TREES = 0.8;
 // Past its own square it is kept sparser (SPREAD_DENSITY of the plot's
 // density): more open lawn, the odd fruit tree.
 export const SPREAD = { garden: 1 };
-export const SPREAD_DENSITY = 0.4;
+export const SPREAD_DENSITY = 0.25;
+
+// Share of a style's density kept (gardens are the most common plot, and
+// every prop is SVG: fewer of them draw faster and look calmer).
+const STYLE_DENSITY = { garden: 0.8 };
 
 // Weighted props per style: [weight, radius, draw(g, x, y), most per plot]
 export const PLOT_STYLES = {
@@ -135,10 +139,11 @@ export function drawPlot(g, plot) {
 
   const total = style.reduce((s, [w]) => s + w, 0);
   const placed = [];
-  const density = plot.density ?? 0.35;
+  const thin = STYLE_DENSITY[plot.style] ?? 1;
+  const density = (plot.density ?? 0.35) * thin;
   const used = new Map(); // prop -> how many
   for (const [x, y] of spots) {
-    if (!g.chance(plot.densityAt?.(x, y) ?? density)) continue;
+    if (!g.chance(plot.densityAt ? plot.densityAt(x, y) * thin : density)) continue;
     let pick = g.random() * total;
     const prop = style.find(([w]) => (pick -= w) < 0) ?? style[0];
     const [, r, draw, most = Infinity] = prop;
