@@ -243,7 +243,10 @@ html, body {
 .layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); }
 /* screen-facing line drawings (trees, see features/trees.js) */
 /* woods far out, one shape each (render/forest.js): as a tree's crown */
-.layer-forest .forest { fill: var(--bg); stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); stroke-linejoin: miter; stroke-miterlimit: 8; fill-rule: evenodd; }
+.layer-forest .forest { fill: var(--bg); stroke: none; fill-rule: evenodd; }
+.layer-forest .forest-edge { fill: none; stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; }
+.layer-forest .forest-sign { fill: var(--bg); stroke: var(--detail); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
+.layer-forest .forest-stem { fill: none; stroke: var(--detail); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linecap: round; }
 .layer-forest .forest-fill { fill: url(#forest-hatch); stroke: none; fill-rule: evenodd; }
 .layer-forest .forest-hatch { stroke: var(--detail); stroke-width: calc(0.7px * var(--stroke, 1)); }
 .glyph { fill: none; stroke: var(--detail); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }

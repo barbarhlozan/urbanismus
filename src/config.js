@@ -42,8 +42,15 @@ export const CONFIG = {
     // samples `step` apart, and is straightened into sides with sharp
     // corners, wandering at most `straighten` from that line. It stays
     // `clear` from the middle of roads and railways; `hatch`: the spacing
-    // of the hatching inside, in scene px.
-    forest: { zoom: 0.9, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, straighten: 0.35, clear: 0.3, hatch: 5 },
+    // of the hatching inside, in scene px. Its sides are drawn by hand,
+    // running `over` scene px past the corners and bowing up to `bow`. A
+    // small tree sign stands about every `signs` grid steps where the cover
+    // is at least `signCover` (deep enough inside), `signSize` scene px
+    // across its crown; `spruces`: the share drawn as spruces.
+    forest: {
+      zoom: 0.9, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, straighten: 0.35, clear: 0.3, hatch: 5,
+      over: 4, bow: 1.5, signs: 2, signCover: 0.6, signSize: 5, spruces: 0.35,
+    },
   },
 
   road: {
@@ -146,8 +153,8 @@ export const CONFIG = {
   // fences are (structures/kit.js fenceAlong): a rail along the top, short
   // posts close together; heights as the map's (a walker is about 0.08)
   fence: {
-    cornerRadius: 0,     // (straight runs, sharp corners)
-    curveSamples: 1,
+    cornerRadius: 0.5,   // corners rounded, as footpaths' are (roads/geometry.js)
+    curveSamples: 6,
     post: 0.06,          // as high as a garden fence
     rails: [0.06],       // heights of the rails: one, along the top
     spacing: 0.1,        // grid steps between posts, about
