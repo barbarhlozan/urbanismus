@@ -7,10 +7,10 @@
 // The name can be edited in place; the arrow beside it folds the numbers away.
 // The controls fold into their menu button: they start folded and open,
 // on a wide screen, as a line of words along the top edge, left of the
-// button, with a pen line under it (clear of the Build menu's rail below);
-// narrower, as a list of named rows down from it, a pen stroke down its
-// left side and along its foot, like the corner of a sheet laid on the
-// map. They fold again once one is used or on a click elsewhere.
+// button (clear of the Build menu's rail below); narrower, as a list of
+// named rows down from it – either way in a pen-drawn frame like the other
+// boxes (main.js sketchFrames), only while open. They fold again once one
+// is used or on a click elsewhere.
 // The numbers change only every few seconds, so they don't flicker.
 
 const REFRESH_MS = 5000;
@@ -86,7 +86,6 @@ export class Hud {
         ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
         ${control('language', `${t('control.language')}: ${LANGUAGES[language()]}`, LANGUAGES[language()])}
         <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
-        <svg class="ctl-pen" aria-hidden="true"><path/></svg>
       </div>
       <div class="bottom">
         <div class="actions hidden"></div>
@@ -150,18 +149,6 @@ export class Hud {
 
     const controlsEl = root.querySelector('.controls');
     const menuBtn = controlsEl.querySelector('.menu-toggle');
-    // the pen under the line of words, or down the list's side and foot
-    const pen = controlsEl.querySelector('.ctl-pen');
-    const drawPen = () => {
-      const w = controlsEl.offsetWidth, h = controlsEl.offsetHeight;
-      if (!w || !h || controlsEl.classList.contains('folded')) return;
-      pen.setAttribute('viewBox', `0 0 ${w} ${h}`);
-      const row = getComputedStyle(controlsEl).flexDirection === 'row';
-      pen.firstChild.setAttribute('d', row
-        ? sketchLine([4, h - 1], [w - 2, h - 2], 71, { over: 5, bow: 1.6 })
-        : sketchLine([1, 4], [2, h - 1], 72, { over: 5, bow: 1.6 }) + sketchLine([-2, h - 1], [w - 4, h - 2], 73, { over: 5, bow: 1.6 }));
-    };
-    new ResizeObserver(drawPen).observe(controlsEl);
     const fold = (folded, animate = true) => {
       const apply = () => controlsEl.classList.toggle('folded', folded);
       // folding: the buttons fade while the bar shrinks to its menu button;

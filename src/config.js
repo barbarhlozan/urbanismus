@@ -13,7 +13,7 @@ export const CONFIG = {
     tile: 34,        // scene px per grid step
     zScale: 0.9,     // vertical exaggeration of heights
     zoom: 2.2,       // starting zoom: close enough for the drawings to read
-    minZoom: 0.6,    // further out the linework turns to mush
+    minZoom: 0.55,    // further out the linework turns to mush
     maxZoom: 4,
   },
 

@@ -351,6 +351,10 @@ html, body {
 .overlay .preview.invalid { stroke-width: calc(1px * var(--stroke, 1)); stroke-dasharray: calc(6px * var(--stroke, 1)) calc(4px * var(--stroke, 1)); }
 .overlay .cross { fill: none; stroke: var(--fg); stroke-width: calc(1.6px * var(--stroke, 1)); stroke-linecap: round; }
 .overlay .cross-halo { fill: none; stroke: var(--bg); stroke-width: calc(5px * var(--stroke, 1)); stroke-linecap: round; }
+/* something built here: the no-entry road sign on its post (OverlayKit.noEntryAt) */
+.overlay .noentry-post { fill: none; stroke: var(--fg); stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; }
+.overlay .noentry-disc { fill: var(--fg); stroke: var(--fg); stroke-width: calc(1.2px * var(--stroke, 1)); stroke-linejoin: round; }
+.overlay .noentry-bar { fill: var(--bg); stroke: none; }
 /* too steep: a warning sign with the slope in it (OverlayKit.steepAt) */
 .overlay .steep-sign { fill: none; stroke: var(--fg); stroke-width: calc(1.5px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 /* Erase: what would go turns to the secondary colour (Renderer.markErasing:
@@ -520,12 +524,17 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   white-space: nowrap;
   font-size: 12px;
   border: none !important;
-  background: none !important;
-  color: var(--fg) !important;
+  background: none;
+  color: var(--fg);
 }
-#ui .controls button:hover .label, #ui .controls button:hover::after,
-#ui .controls button.on .label { text-decoration: underline; text-underline-offset: 3px; }
+/* pointed at, and open (Colours, Language): as the Build menu's tiles –
+   a light wash of ink, then filled */
+#ui .controls button:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
+#ui .controls button.on { background: var(--fg); color: var(--bg); }
 .controls .ctl-icon { color: var(--detail); }
+.controls button.on .ctl-icon { color: inherit; }
+/* the list: each row the list's full width, so the wash fills it */
+#ui .controls button:not(.menu-toggle) { align-self: stretch; justify-content: flex-end; }
 
 /* (#ui: over the .close look) the mark stays put as the list opens */
 #ui .controls .menu-toggle { order: -1; align-self: flex-end; min-height: var(--bar-h); width: var(--bar-h); padding: 0; justify-content: center; }
@@ -537,10 +546,13 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .controls.folded:not(.folding) button:not(.menu-toggle) { display: none; }
 /* folding away (motion.js shrink): the buttons stay until the bar has shrunk, fading */
 .controls.folding button:not(.menu-toggle) { opacity: 0; transition: opacity 100ms; }
-/* the pen (hud.js): under the line of words, or the list's side and foot */
-.controls .ctl-pen { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.controls .ctl-pen path { fill: none; stroke: var(--main); stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; }
-.controls.folded .ctl-pen, .controls.folding .ctl-pen { display: none; }
+/* the pen frame (main.js sketchFrames) only round the open menu, not the
+   mark alone */
+.controls.folded .sk-frame, .controls.folding .sk-frame { display: none; }
+/* the list: its words clear of the frame on both sides (the mark stays put) */
+@media (max-width: 1024px) {
+  #ui .controls button:not(.menu-toggle) { padding-left: 12px; padding-right: 12px; }
+}
 /* a wide screen: the words in a line along the top edge, left of the menu
    mark, kept above the Build menu's rail; the names alone, no drawings */
 @media (min-width: 1025px) {
@@ -1377,7 +1389,7 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 body.touch .bm-tool:hover:not(.active),
 body.touch .bm-tab:hover:not(.on),
 body.touch .bm-toggle:hover { background: var(--bg) !important; color: var(--fg) !important; }
-body.touch .controls button:hover:not(.on),
+body.touch .controls button:hover:not(.on) { background: none !important; color: var(--fg) !important; }
 body.touch .actions button:hover { background: var(--bg) !important; color: var(--fg) !important; }
 
 /* ---------- Narrow screens (phones) ---------- */

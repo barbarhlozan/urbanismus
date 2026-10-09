@@ -371,7 +371,7 @@ followUnlocks();
 // pen-drawn frames on every UI box, to match the sketched map
 // (the corner menu has none: words on the paper)
 sketchFrames(uiRoot, '.hud', HANDS.steady);
-sketchFrames(uiRoot, '.actions, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
+sketchFrames(uiRoot, '.controls, .actions, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
 sketchFrames(uiRoot, '.popup', HANDS.loose);
 
 // Terrain contour lines: off unless switched on (remembered in this browser).

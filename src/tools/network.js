@@ -36,6 +36,7 @@ export function createNetworkTool({ world, config }, options) {
     return world.sideOf(f, g, road) ? 'lane' : 'on-lane';
   };
   const nearAnyRoad = (f) => layer.grid.neighbors(f).some((g) => streetBeside(f, g));
+  const overWater = (n) => world.terrain.isWater(world.grid.nodeAt(...layer.dot(n)));
   const sidewalkNote = (plan) => {
     if (kind !== 'path' || !plan?.check.ok) return '';
     const along = plan.nodes.map((n, i) => i > 0 && streetBeside(plan.nodes[i - 1], n));
@@ -131,16 +132,23 @@ export function createNetworkTool({ world, config }, options) {
 
     overlay(kit) {
       let out = '';
-      if (hover >= 0) out += kit.ringAt(...layer.dot(hover), hoverRadius * layer.scale);
+      // the ring where it can start or end; where something's built, a
+      // no-entry sign instead (on water, nothing: a bridge may cross it)
+      if (hover >= 0 && !layer.isBlocked(hover)) out += kit.ringAt(...layer.dot(hover), hoverRadius * layer.scale);
+      else if (hover >= 0 && !overWater(hover)) out += kit.noEntryAt(...layer.dot(hover), 0.2 * Math.sqrt(layer.scale));
       if (start >= 0) out += kit.ringAt(...layer.dot(start), 0.22 * layer.scale, 'anchor');
       const plan = currentPlan();
       if (!plan) return out;
       const points = plan.nodes.map((n) => layer.pos(n));
       out += kit.path(points, `preview ${kind}${lane ? ' lane' : ''}${plan.check.ok ? '' : ' invalid'}`, curve);
-      // a steep-hill sign where it climbs too steeply, a cross for anything else
+      // a steep-hill sign where it climbs too steeply, the no-entry sign
+      // where something's built, a cross for anything else
       const steep = new Set(plan.check.steep ?? []);
       for (const n of new Set(plan.check.blocked)) {
-        out += (steep.has(n) ? kit.steepAt : kit.crossAt).call(kit, ...layer.pos(n), 0.16 * Math.sqrt(layer.scale));
+        const size = 0.16 * Math.sqrt(layer.scale);
+        if (steep.has(n)) out += kit.steepAt(...layer.pos(n), size);
+        else if (layer.isBlocked(n) && !overWater(n)) out += kit.noEntryAt(...layer.pos(n), 0.2 * Math.sqrt(layer.scale));
+        else out += kit.crossAt(...layer.pos(n), size);
       }
       return out;
     },

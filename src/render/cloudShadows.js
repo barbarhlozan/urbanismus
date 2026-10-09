@@ -10,6 +10,12 @@
 // laid over each other – so the middle builds up, the edge stays ragged and
 // soft, and where lumps overlap it pools darker, as wet paint does. A few
 // faint strokes along the outline darken the rim the way a drying wash does.
+// With `look: 'pen'` the same outline is hatched with thin pen lines
+// instead (hatch()), like the strokes down a rock face: side by side
+// across it, all one way, broken now and then where the pen was lifted, so
+// the cloud's edge is where the lines happen to stop. The lines are kept
+// as a path in scene units and stroked every frame at one width on the
+// screen, so they stay sharp at any zoom.
 //
 // The clouds live in scene units (the map's own px at zoom 1), so they stay
 // put on the map as it is panned or zoomed; each is squashed onto the
@@ -20,6 +26,7 @@
 // the walls lose their shading instead (config.weather.sun).
 
 import { THEME } from '../theme.js';
+import { CONFIG } from '../config.js';
 
 export const CLOUD_SHADOWS = {
   // grid units² of map per cloud, by weather (none: no clouds)
@@ -28,7 +35,8 @@ export const CLOUD_SHADOWS = {
   lumps: [2, 4],      // blobs of wash in one cloud
   squash: 0.58,       // on the ground: height per width (isometric)
   wind: 0.22,         // grid units per simulated second
-  tone: 0.2,          // how strong the wash is put down
+  look: 'pen',        // 'pen' (hatched lines) or 'wash' (watercolour)
+  tone: 0.001,          // how strong the wash is put down
   // the wash: layers laid over each other, each this opaque; how many
   // times the outline's edges are split, and how far a split may wander
   // (share of the edge's length); how sharp a cloud's canvas is (px per
@@ -39,6 +47,16 @@ export const CLOUD_SHADOWS = {
   wander: 0.7,
   res: 0.6,
   rim: { strokes: 3, alpha: 0.05, width: 2.2 },
+  // the lines (look 'pen'): how far apart (grid units), how wide on the
+  // screen (device px, times config.render.lineWeight), how strong; their
+  // slant on screen (radians, up to the right) and how much it varies from
+  // cloud to cloud; how much a line bows and how far its ends may fall
+  // short or run over (share of the gap); how long one goes before the
+  // pen is lifted (grid units), and the share of lines left out
+  pen: {
+    gap: 0.1, width: 0.6, tone: 0.55, slant: -0.62, tilt: 0.08,
+    bow: 0.03, ends: 1.2, long: [0.5, 1.3], skip: 0.1,
+  },
   fade: 3,            // seconds to fade in or out
   most: 80,           // clouds kept at most (far zoomed out)
 };
@@ -146,7 +164,7 @@ export class CloudShadows {
       const ru = w * (0.25 + rnd() * 0.12) * (1 - Math.abs(u) / w), rv = ru * (0.55 + rnd() * 0.3);
       lumps.push({ u, v, ru, rv });
     }
-    return { x, y, w, lumps, a, sprite: null };
+    return { x, y, w, tile, lumps, a, sprite: null };
   }
 
   // Paint a cloud's wash into its own canvas, centred on it.
@@ -173,6 +191,7 @@ export class CloudShadows {
       }
       return rough(rnd, pts, 2, C.wander);
     });
+    if (C.look === 'pen') return this.hatch(c, ctx, base.map((pts) => pts.map(at)), color, half);
     ctx.fillStyle = color;
     ctx.globalAlpha = C.layer;
     for (let l = 0; l < C.layers; l++) {
@@ -203,6 +222,67 @@ export class CloudShadows {
     c.sprite = { canvas, color, half };
   }
 
+  // Hatch the cloud's outlines (`shapes`, in its canvas) with pen lines,
+  // kept as a path in scene units around the cloud's middle.
+  hatch(c, ctx, shapes, color, half) {
+    const C = CLOUD_SHADOWS, P = C.pen;
+    const rnd = Math.random;
+    const { width: cw, height: ch } = ctx.canvas;
+    // where the cloud is: its outlines filled once, read back as a mask
+    ctx.fillStyle = '#000';
+    for (const p of shapes) {
+      ctx.beginPath();
+      ctx.moveTo(...p[0]);
+      for (let i = 1; i < p.length; i++) ctx.lineTo(...p[i]);
+      ctx.closePath();
+      ctx.fill();
+    }
+    const mask = ctx.getImageData(0, 0, cw, ch).data;
+    const inside = (x, y) => {
+      const i = Math.round(x), j = Math.round(y);
+      return i >= 0 && j >= 0 && i < cw && j < ch && mask[(j * cw + i) * 4 + 3] > 0;
+    };
+
+    // in scene units from here on: the mask's px / res, about the middle
+    const res = C.res, unit = c.tile;
+    const gap = P.gap * unit;
+    const ang = P.slant + nudge(rnd) * P.tilt;
+    const dx = Math.cos(ang), dy = Math.sin(ang); // along the lines
+    const nx = -dy, ny = dx;                      // across them
+    const R = Math.hypot(half, half * C.squash);
+    const step = unit * 0.08;
+    const on = (x, y) => inside((x + half) * res, (y + half * C.squash) * res);
+    const path = new Path2D();
+    const line = (a, b, off) => {
+      const len = b - a, bow = nudge(rnd) * P.bow * len;
+      const x0 = nx * off, y0 = ny * off;
+      path.moveTo(x0 + dx * a, y0 + dy * a);
+      path.quadraticCurveTo(x0 + dx * (a + len / 2) + nx * bow, y0 + dy * (a + len / 2) + ny * bow, x0 + dx * b, y0 + dy * b);
+    };
+    // one row of lines after another across the cloud; on each, every
+    // stretch that lies in the cloud is drawn, its ends left loose
+    for (let s = -R + gap * rnd(); s < R; s += gap * (0.8 + rnd() * 0.4)) {
+      let start = null;
+      for (let t = -R; t <= R + step; t += step) {
+        const isOn = t <= R && on(nx * s + dx * t, ny * s + dy * t);
+        if (isOn && start === null) start = t;
+        if (!isOn && start !== null) {
+          const end = t + nudge(rnd) * P.ends * gap;
+          let a = start + nudge(rnd) * P.ends * gap;
+          // a long stretch is a few lines, the pen lifted in between
+          while (a < end - gap * 0.5) {
+            const b = Math.min(end, a + between(rnd, P.long) * unit);
+            if (rnd() > P.skip) line(a, b, s + nudge(rnd) * gap * 0.12);
+            a = b + gap * (0.1 + rnd() * 0.4);
+          }
+          start = null;
+        }
+      }
+    }
+    ctx.clearRect(0, 0, cw, ch);
+    c.sprite = { path, color, half };
+  }
+
   draw(camera, W, H) {
     const { canvas, ctx } = this;
     const dpr = devicePixelRatio || 1;
@@ -217,12 +297,22 @@ export class CloudShadows {
     const z = dpr * camera.zoom;
     ctx.setTransform(z, 0, 0, z, dpr * camera.panX, dpr * camera.panY);
     const color = THEME.palette.detail;
-    const { squash, tone, res } = CLOUD_SHADOWS;
+    const { squash, res, look, pen } = CLOUD_SHADOWS;
+    const tone = look === 'pen' ? pen.tone : CLOUD_SHADOWS.tone;
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = (pen.width * (CONFIG.render.lineWeight ?? 1)) / z;
     for (const c of this.clouds) {
       if (c.sprite?.color !== color) this.wash(c, color);
-      const { canvas: sp, half } = c.sprite;
+      const { canvas: sp, path, half } = c.sprite;
       ctx.globalAlpha = tone * Math.max(0, Math.min(1, c.a));
-      ctx.drawImage(sp, c.x - half, c.y - half * squash, sp.width / res, sp.height / res);
+      if (path) {
+        ctx.setTransform(z, 0, 0, z, dpr * camera.panX + z * c.x, dpr * camera.panY + z * c.y);
+        ctx.stroke(path);
+      } else {
+        ctx.setTransform(z, 0, 0, z, dpr * camera.panX, dpr * camera.panY);
+        ctx.drawImage(sp, c.x - half, c.y - half * squash, sp.width / res, sp.height / res);
+      }
     }
     ctx.globalAlpha = 1;
     this.empty = false;

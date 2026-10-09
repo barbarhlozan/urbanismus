@@ -23,9 +23,12 @@
 // Drawn by the same pen as the buildings: a crown's outline goes round in
 // one or two strokes that don't quite close (penOutline) over a plain
 // paper fill, a few big uneven lobes rather than many even scallops, the
-// hatching only on the side away from the light (shaded(), the light the
-// buildings' shadows come from), and a short stroke on the ground at the
-// foot (footStroke), as each building stands on one.
+// hatching only on the side away from the light (the light the buildings'
+// shadows come from) – on a broadleaf crown with a curved edge, as on a lit
+// ball (roundShade()), on a spruce cut straight (shaded()) – and a short
+// stroke on the ground at the foot (footStroke), as each building stands on
+// one. Broadleaf crowns are the loosest: lobes of uneven size, an outline
+// that wanders off the fill, and hatching as quick pencil marks (scribble()).
 
 import { SUN } from '../src/render/shadows.js';
 
@@ -107,14 +110,20 @@ function bareParts(g, kind, height, simple) {
 }
 
 // A shrub: a few thin stems fanning out from the ground, each forking once
-// near the top, as one path – or with LEAFY a small hatched clump. `height`
-// in grid units.
+// near the top, as one path – or with LEAFY a small clump drawn as a
+// broadleaf crown is: a pen outline, shaded underneath as a lit ball, in
+// loose strokes. `height` in grid units.
 export function drawShrub(g, x, y, height) {
   g.solid(x, y, 0);
   if (LEAFY) {
-    const { outline, clip } = blob(g, 0, height * 0.45, height * g.range(0.55, 0.7), height * 0.45, g.int(4, 6));
-    g.shape(x, y, 0, outline, { smooth: true, cls: 'tree' });
-    g.strokes(x, y, 0, hatchIn(g, clip, height * 0.22), { cls: 'leaf' });
+    const rx = height * g.range(0.55, 0.7), ry = height * 0.45, cy = ry;
+    const { outline, clip } = blob(g, 0, cy, rx, ry, g.int(3, 5));
+    g.shape(x, y, 0, outline, { smooth: true, cls: 'tree crown' });
+    g.strokes(x, y, 0, penOutline(g, outline, [0, cy], { drift: 0.09 }), { cls: 'crown-line' });
+    const step = height * 0.2;
+    const lines = hatchIn(g, flip(clip), step).map(flip);
+    const shade = roundShade(lines, [0, cy], rx, ry, g.range(0.25, 0.45), g.range(0.15, 0.3), step * 0.5);
+    g.strokes(x, y, 0, scribble(g, shade, step), { cls: 'leaf' });
     g.castShape(x, y, 0, outline);
     return;
   }
@@ -222,20 +231,18 @@ function drawLeafy(g, x, y, kind, H, simple) {
   const rx = Math.min(H * g.range(...p.width), ry * 1.4);
   const { outline, clip } = blob(g, lean, cy, rx, ry, g.int(...p.lumps));
   footStroke(g, x, y, H);
-  // the trunk runs up into the crown (its fill hides the top); close up,
-  // a fork shows through it, as in an ink drawing
+  // the trunk runs up into the crown (its fill hides the top)
   g.strokes(x, y, 0, [[[0, 0], [lean * 0.5, T], [lean, cy]]], { cls: kind === 'spreading' ? 'trunk thick' : 'trunk' });
   const crown = plain(g, outline, H, PLAIN.leafy);
   g.shape(x, y, 0, crown, { smooth: true, cls: 'tree crown' });
-  g.strokes(x, y, 0, penOutline(g, crown, [lean, cy]), { cls: 'crown-line' });
-  const shade = shaded(clip, [lean, cy], Math.max(rx, ry), g.range(0, 0.25));
-  g.strokes(x, y, 0, hatchIn(g, shade, H * (simple ? 0.08 : 0.06)), { cls: 'leaf', lod: 1 });
+  g.strokes(x, y, 0, penOutline(g, crown, [lean, cy], { drift: 0.09 }), { cls: 'crown-line' });
+  const bulge = g.range(0.25, 0.45), shift = g.range(0.15, 0.3);
+  const step = H * (simple ? 0.08 : 0.06);
+  // hatched the other way (\), along the edge of the shade rather than across it
+  const lines = hatchIn(g, flip(clip), step).map(flip);
+  const shade = roundShade(lines, [lean, cy], rx, ry, bulge, shift, step * 0.5);
+  g.strokes(x, y, 0, scribble(g, shade, step), { cls: 'leaf', lod: 1 });
   castTree(g, x, y, outline);
-  if (!simple) {
-    const fork = [[lean * 0.6, T * 0.9], [lean - rx * 0.35, cy + ry * 0.1]];
-    const fork2 = [[lean * 0.6, T * 0.9], [lean + rx * 0.3, cy + ry * 0.25]];
-    g.strokes(x, y, 0, [[[lean * 0.5, T * 0.8], [lean * 0.6, T * 1.1]], fork, fork2], { cls: 'limb', lod: 2 });
-  }
 }
 
 // A lumpy closed outline around (cx, cy) with half axes rx, ry: points
@@ -246,7 +253,8 @@ function blob(g, cx, cy, rx, ry, lumps) {
   const outline = [];
   const phase = g.range(0, Math.PI);
   for (let i = 0; i < lumps * 2; i++) {
-    const a = phase + (i / (lumps * 2)) * Math.PI * 2;
+    // lobes of uneven size: each point a little off its even spacing
+    const a = phase + ((i + g.range(-0.3, 0.3)) / (lumps * 2)) * Math.PI * 2;
     const r = i % 2 ? g.range(0.72, 0.86) : g.range(0.94, 1.14);
     const flat = Math.cos(a) < -0.4 ? 0.88 : 1; // a flatter underside
     outline.push([cx + Math.sin(a) * rx * r, cy + Math.cos(a) * ry * r * flat]);
@@ -263,6 +271,14 @@ function blob(g, cx, cy, rx, ry, lumps) {
 const LIGHT = (() => {
   const a = (SUN.fall * Math.PI) / 180;
   return [-Math.cos(a), Math.sin(a)];
+})();
+
+// The light on a round crown: LIGHT tipped up, as the sun stands high – so
+// a crown is lit on top as well as on the sunny side, and its underside is
+// in shade.
+const BALL_LIGHT = (() => {
+  const [u, v] = [LIGHT[0], LIGHT[1] + 0.9], n = Math.hypot(u, v);
+  return [u / n, v / n];
 })();
 
 // The closed smooth curve Painter.shape draws through `pts` (quadratics
@@ -324,12 +340,78 @@ function shaded(poly, [cx, cy], r, shift) {
   return out.length >= 3 ? out : [];
 }
 
+// The hatch strokes that fall in the shade of a crown lit as a ball: the
+// crown is an ellipse around (cx, cy) with half axes rx, ry, and the edge of
+// its shade is a half ellipse across the light, moved `shift` of the way
+// towards it (so a little more than half the crown is shaded) and bulging
+// `bulge` of the way out into the shaded side, as on a lit sphere – not a
+// straight cut, which reads as a flat disc. Each stroke is cut to its
+// shaded pieces; pieces shorter than `min` go.
+function roundShade(lines, [cx, cy], rx, ry, bulge, shift, min) {
+  const [lx, ly] = BALL_LIGHT;
+  // in the crown's own units the ellipse is a unit circle: q = ((u - cx) / rx, (v - cy) / ry)
+  const q = ([u, v]) => [(u - cx) / rx, (v - cy) / ry];
+  const out = [];
+  for (const [p0, p1] of lines) {
+    const a = q(p0), b = q(p1), d = [b[0] - a[0], b[1] - a[1]];
+    // along the light (s) and across it (w), linear in t
+    const s0 = a[0] * lx + a[1] * ly - shift, ds = d[0] * lx + d[1] * ly;
+    const w0 = a[0] * ly - a[1] * lx, dw = d[0] * ly - d[1] * lx;
+    // the shaded side: s < 0
+    let t0 = 0, t1 = 1;
+    if (Math.abs(ds) < 1e-9) { if (s0 >= 0) continue; }
+    else if (ds > 0) t1 = Math.min(t1, -s0 / ds);
+    else t0 = Math.max(t0, -s0 / ds);
+    if (t1 - t0 <= 0) continue;
+    // minus the lit bulge: (s / bulge)² + w² < 1
+    const A = (ds / bulge) ** 2 + dw ** 2, B = 2 * (s0 * ds / bulge ** 2 + w0 * dw), C = (s0 / bulge) ** 2 + w0 ** 2 - 1;
+    const disc = B * B - 4 * A * C;
+    const parts = [];
+    if (disc <= 0 || A < 1e-12) parts.push([t0, t1]);
+    else {
+      const r = Math.sqrt(disc), e0 = (-B - r) / (2 * A), e1 = (-B + r) / (2 * A);
+      if (e0 > t0) parts.push([t0, Math.min(t1, e0)]);
+      if (e1 < t1) parts.push([Math.max(t0, e1), t1]);
+    }
+    const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+    const at = (t) => [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t];
+    for (const [f, e] of parts) if ((e - f) * len >= min) out.push([at(f), at(e)]);
+  }
+  return out;
+}
+
+// Hatch strokes loosened into quick pencil marks: each turned a little off
+// the others, bent slightly through its middle, its ends run on or stopped
+// short by up to about a `step` (so now and then one runs past the
+// outline, as the buildings' edges overshoot), and here and there one left
+// out.
+function scribble(g, lines, step) {
+  const out = [];
+  for (const [[u0, v0], [u1, v1]] of lines) {
+    if (g.chance(0.08)) continue;
+    const len = Math.hypot(u1 - u0, v1 - v0), du = (u1 - u0) / len, dv = (v1 - v0) / len;
+    const turn = g.range(-0.12, 0.12); // radians
+    const [eu, ev] = [du * Math.cos(turn) - dv * Math.sin(turn), du * Math.sin(turn) + dv * Math.cos(turn)];
+    const [mu, mv] = [(u0 + u1) / 2, (v0 + v1) / 2];
+    const a = len / 2 + step * g.range(-0.4, 0.5), b = len / 2 + step * g.range(-0.4, 0.5);
+    if (a + b < step * 0.4) continue;
+    const bow = (a + b) * g.range(-0.06, 0.06);
+    const mid = (b - a) / 2;
+    out.push([[mu - eu * a, mv - ev * a], [mu + eu * mid - ev * bow, mv + ev * mid + eu * bow], [mu + eu * b, mv + ev * b]]);
+  }
+  return out;
+}
+
 // A short stroke on the ground at a tree's foot, a little aslant, as each
 // building stands on one (LOOK.ground in painter.js); far out it goes.
 function footStroke(g, x, y, H) {
   const w = H * g.range(0.1, 0.15);
   g.strokes(x, y, 0, [[[-w * g.range(0.6, 1), H * 0.006], [w, -H * 0.008]]], { cls: 'tree-foot', lod: 1 });
 }
+
+// A glyph mirrored left to right: hatchIn's "/" strokes in a flipped shape,
+// flipped back, run "\".
+const flip = (pts) => pts.map(([u, v]) => [-u, v]);
 
 function midpoints(pts) {
   return pts.map((p, i) => {

@@ -79,6 +79,23 @@ export class OverlayKit {
     return `<path class="cross-halo" d="${sign}"/><path class="steep-sign" d="${sign}"/><path class="steep-wedge" d="${wedge}"/>`;
   }
 
+  // Something's built here: the "Zákaz vjezdu" road sign (no entry: an ink
+  // disc with a paper bar across it) on a short post planted at the dot,
+  // where the road tools would otherwise put their ring. Pen-drawn and
+  // haloed like the steep-hill sign.
+  noEntryAt(x, y, size = 0.16) {
+    const [cx, cy] = this.project(x, y);
+    const s = size * this.camera.tile;
+    const k = 1 / this.camera.zoom, seed = seedOf(x, y, 13);
+    const sy = cy - s * 2.1; // the sign's middle, up its post
+    const post = sketchLine([cx, cy], [cx, sy + s * 0.9], seed, { k, over: 0.5 });
+    const disc = sketchEllipse(cx, sy, s, s, seed + 1, { k, turns: 1.08 });
+    const bw = s * 0.62, bh = s * 0.2;
+    const bar = `M${r2(cx - bw)} ${r2(sy - bh)}L${r2(cx + bw)} ${r2(sy - bh)}L${r2(cx + bw)} ${r2(sy + bh)}L${r2(cx - bw)} ${r2(sy + bh)}Z`;
+    return `<path class="cross-halo" d="${post}${disc}"/><path class="noentry-post" d="${post}"/>`
+      + `<path class="noentry-disc" d="${disc}"/><path class="noentry-bar" d="${bar}"/>`;
+  }
+
   // While building, the dots within reach of the pointer, fading out with
   // distance, instead of a sheet of them over the whole map; `fine`: the
   // half steps footpaths, railways and fences take too. With a building in

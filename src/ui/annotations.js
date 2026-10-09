@@ -1,5 +1,5 @@
 // Annotations (switchable in render/style.js):
-//   hover tags  the name of the building under the pointer set over it
+//   hover tags  the name of the building under the pointer set on it
 //               like a label on a map, underlined by pen ("Pekárna");
 //               with the Terrain lines on, a hill's top mark tells its
 //               name and height ("Holý vrch · 570 m", terrain/hills.js)
@@ -72,18 +72,21 @@ export class Annotations {
     return null;
   }
 
-  // The name centred over the point – over the top of the building's
-  // drawing, where that's known, so it doesn't sit on the roof – and
-  // underlined by pen; a halo of the background colour keeps the letters
-  // clear of the drawing behind (.tag in styles.css). All in screen pixels,
-  // divided by the zoom.
+  // The name centred on the point – for a building, on the middle of the
+  // dots it stands on, halfway up its drawing (`top`: the scene y of its
+  // roof, where that's known) – and underlined by pen; a halo of the
+  // background colour keeps the letters clear of the drawing behind (.tag
+  // in styles.css). All in screen pixels, divided by the zoom.
   tag({ pos: [x, y], height, name, top = null }) {
     const z = this.camera.zoom;
     const size = 14;
-    const [sx, low] = this.camera.project(x, y, height);
-    const sy = top == null ? low : Math.min(low, top + 2 / z);
+    let [sx, sy] = this.camera.project(x, y, height);
+    if (top != null) {
+      const [, ground] = this.camera.project(x, y, this.world.terrain.heightAt(x, y));
+      sy = (ground + top) / 2;
+    }
     const w = textWidth(name, size);
-    const lineY = sy - 8 / z, nameY = lineY - 4 / z;
+    const nameY = sy + (size * 0.3) / z, lineY = nameY + 4 / z;
     const seed = seedOf(x, y, name.length);
     const half = (w / 2 + 3) / z;
     // data-anim: it waits a moment (styles.css) and isn't held back again by

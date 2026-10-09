@@ -16,9 +16,11 @@
 import { tree, bush, shed, bench, bins, crates, pallets, bricks, cableDrum, concreteRings, woodpile, trailer, fenceAlong, hedgeAlong, carpetRack, dryingFrame, sandpit, climbingFrame, barrels, timber, heap, tank, transformer } from './kit.js';
 
 // Share of the trees a garden would have that it gets (the rest of their
-// spots stay open lawn): fewer, so a street of gardens isn't too busy.
-// The garden front yard (yards.js) uses it too.
-export const GARDEN_TREES = 0.8;
+// spots stay open lawn): about a third, so a house has a tree or two, not
+// an orchard. The garden front yard (yards.js) uses it too.
+export const GARDEN_TREES = 0.35;
+// The same for bushes: a few by the house, not a scatter across the lawn.
+export const GARDEN_BUSHES = 0.35;
 
 // Plot styles that spread over the empty ground round them (up to this many
 // dots out, render/lots.js plotClaim) rather than keep to their own square:
@@ -51,7 +53,7 @@ const STYLE_DENSITY = { garden: 0.8 };
 export const PLOT_STYLES = {
   garden: [
     [5, 0.07, (g, x, y) => g.chance(GARDEN_TREES) && tree(g, x, y, g.range(0.75, 1.05))],
-    [4, 0.045, (g, x, y) => bush(g, x, y, g.range(0.03, 0.045))],
+    [4, 0.045, (g, x, y) => g.chance(GARDEN_BUSHES) && bush(g, x, y, g.range(0.03, 0.045))],
     [1, 0.09, (g, x, y) => shed(g, x, y), 1],
   ],
   green: [
@@ -70,7 +72,7 @@ export const PLOT_STYLES = {
   ],
   service: [
     [3, 0.05, (g, x, y) => bins(g, x, y)],
-    [3, 0.07, (g, x, y) => tree(g, x, y, 0.9)],
+    [1, 0.07, (g, x, y) => tree(g, x, y, 0.9)],
     [2, 0.045, (g, x, y) => bush(g, x, y, 0.04)],
   ],
   works: [
