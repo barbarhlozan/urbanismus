@@ -18,7 +18,7 @@
 //   obcanska_vybavenost, prostranstvi, pamatky  its name or its id (transport,
 //                                              housing, work, amenities,
 //                                              spaces, heritage); zones is
-//                                              housing and work, public is
+//                                              housing, work and farming, public is
 //                                              amenities and spaces
 //   house, block, fire_station, narodni_vybor…  a thing in all its sizes, by
 //                                              its name in the Build menu
@@ -83,7 +83,7 @@ const VEHICLES = {
 };
 // More names for the Build menu groups (each is also called by its id and
 // its label, see CATEGORIES).
-const GROUP_NAMES = { transport: ['transport'], housing: ['zones'], work: ['zones'], amenities: ['public'], spaces: ['public'], heritage: ['landmarks'] };
+const GROUP_NAMES = { transport: ['transport'], housing: ['zones'], work: ['zones'], farming: ['zones'], amenities: ['public'], spaces: ['public'], heritage: ['landmarks'] };
 
 // The names that mean a type: its group's, its tags, its name (which its
 // sizes share) and its id.

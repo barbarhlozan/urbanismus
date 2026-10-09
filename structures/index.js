@@ -57,14 +57,16 @@ import pool from './pool.js';
 
 // Build menu groups, in order, named as the planners of the time did:
 // housing, civic amenities (občanská vybavenost – shops, pubs, schools,
-// clinics and culture alike, all of it public), production, open spaces
-// and landmarks. The network tools (road, footpath, railway) join 'transport'
-// too, the fence 'work' (src/main.js).
+// clinics and culture alike, all of it public), production, farming (and
+// the works that served the farms), open spaces and landmarks. The network
+// tools (road, footpath, railway) join 'transport' too, the fence
+// 'farming' (src/main.js).
 export const CATEGORIES = [
   { id: 'transport', label: 'Doprava' },
   { id: 'housing', label: 'Bydlení' },
   { id: 'amenities', label: 'Občanská vybavenost' },
   { id: 'work', label: 'Výroba' },
+  { id: 'farming', label: 'Zemědělství' },
   { id: 'spaces', label: 'Prostranství' },
   { id: 'heritage', label: 'Památky' },
 ];
@@ -74,21 +76,28 @@ export const CATEGORIES = [
 // registry is these, in this order.
 export const BUILD_FAMILIES = [
   // Doprava
-  [station.station, station.main, station.stop], [busStop],
+  [station.station, station.main, station.stop], [busStop], [industry.benzina],
   // Bydlení
   [housing.house, housing.houseWide], [housing.apartments, housing.apartmentsWide], [housing.block, housing.blockWide],
   // Občanská vybavenost
   [business.jednota, business.jednotaWide], [business.hospoda, business.hospodaWide], [business.store, business.storeWide],
-  [business.tuzex], [business.office, business.officeWide, business.officeTower, business.officeTowerWide],
+  [business.office, business.officeWide, business.officeTower, business.officeTowerWide],
   [business.postOffice], [business.hotel, business.hotelWide],
   [services.fireHouse, services.fireStation, services.fireStationLarge], [services.police],
-  [services.healthCentre], [services.clinic], [services.hospital], [services.serviceCentre], [services.school],
+  [services.healthCentre], [services.clinic], [services.hospital], [services.school],
   [landmarks.cultureHouse], [pool], [grounds.cemetery],
   // Výroba
-  [industry.workshop, industry.workshopMedium, industry.workshopLarge], [industry.works, industry.worksMedium],
-  [industry.factory], [industry.plantSmall, industry.plantMedium, industry.plant],
+  [industry.autoopravna, industry.autoopravnaMedium], [industry.kovarna, industry.kovarnaMedium],
+  [industry.truhlarna, industry.truhlarnaMedium], [industry.komunalniPodnik],
+  [industry.pekarna, industry.pekarnaMedium], [industry.pivovar, industry.pivovarMedium],
+  [industry.vytopna, industry.vytopnaMedium, industry.vytopnaLarge], [industry.vodarna], [industry.rozvodna],
+  [industry.pila], [industry.sklarna], [industry.textilka, industry.textilkaMedium], [industry.strojirna],
+  [industry.panelarna], [industry.vapenka], [industry.elektrarna],
   [mine.pit], [mine.colliery], [mine.deepMine],
+  // Zemědělství
   [farm.smallholding], [farm.farmstead], [farm.jzd], [farm.stateFarm],
+  [industry.mlekarna, industry.mlekarnaMedium], [industry.zzn, industry.zznLarge], [industry.sts, industry.stsLarge],
+  [industry.cukrovar],
   // Prostranství
   [park.green], [park.gardenPark], [park.pavilionPark], [park.meadow], [park.pondPark], [park.cityPark],
   [square.plaza], [square.fountainSquare, square.fountainSquareLarge], [square.precinct, square.precinctLarge],
@@ -133,6 +142,17 @@ export function newSeed() {
 // buildings keep the look they had.)
 export function drawSeed(s) {
   return (s.seed ^ 0x9e3779b1) >>> 0;
+}
+
+// A structure's kinds in the order Space steps through them (def.kinds
+// without repeats; none: []), and the kind an instance is drawn as: its
+// chosen one, else the one its seed picks (see kindOf in kit.js).
+export const kindsOf = (def) => [...new Set(def.kinds ?? [])];
+
+export function kindShown(def, s) {
+  if (!def.kinds) return null;
+  if (def.kinds.includes(s.data?.kind)) return s.data.kind;
+  return def.kinds[Math.floor(mulberry32(drawSeed(s))() * def.kinds.length)];
 }
 
 // Surroundings style for an instance: the player's choice (s.data.yard),

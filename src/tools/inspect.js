@@ -1,7 +1,7 @@
 // Default tool: click a building, road or feature to get a menu of what can
 // be done with it. Building new things is done from the Build menu.
 
-import { STRUCTURES, STRUCTURE_TYPES, categoryOf, yardOf } from '../../structures/index.js';
+import { STRUCTURES, STRUCTURE_TYPES, categoryOf, yardOf, kindsOf, kindShown } from '../../structures/index.js';
 import { YARDS, YARD_STYLES } from '../../structures/yards.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { isTouch } from '../ui/device.js';
@@ -41,20 +41,9 @@ export function createInspectTool(ctx) {
       ctx.popup.hide();
     },
 
-    // A ring only over a building (around its whole footprint), the same
-    // things that get a hover tag (ui/annotations.js); roads, railways,
-    // footpaths and trees still click, they just aren't ringed.
-    cursor(kit, node) {
-      if (node < 0) return '';
-      const { world } = ctx;
-      const s = world.structureAt(node);
-      if (s) {
-        const pts = world.nodesOf(s).map((n) => world.grid.xy(n));
-        const span = (i) => Math.max(...pts.map((p) => p[i])) - Math.min(...pts.map((p) => p[i])) + 1;
-        return kit.ringAt(...world.centerOf(s), Math.max(span(0), span(1)) / 2 + 0.15);
-      }
-      return '';
-    },
+    // No mark of its own under the pointer: a building's name over it is
+    // enough (the hover label, ui/annotations.js).
+    cursor: () => '',
   };
 }
 
@@ -80,11 +69,11 @@ function screenBox({ world, camera }, node) {
   return { left, top, right, bottom };
 }
 
-// The building at a glance: what it is and its numbers with their little
-// drawings (as in the HUD), and a warning when nothing reaches it.
+// The building at a glance: what it is and its numbers in words, as in the
+// town's panel ("8 jobs"), and a warning when nothing reaches it.
 function summary(def, served) {
   const stats = Object.entries(def.stats ?? {}).map(([k, v]) =>
-    `<span class="stat" title="${t(`stat.${k}`)}">${statIcon(k)}<b>${v}</b></span>`);
+    `<span class="stat words">${esc(t(`stat.${k}.n`, { n: v })).replace(String(v), `<b>${v}</b>`)}</span>`);
   let html = `<div class="bi-row"><span class="bi-kind">${esc(blurbOf(def) || nameOf(def))}</span>${stats.join('')}</div>`;
   if (!served) {
     html += `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${t(def.access === 'any' ? 'inspect.needs.any' : 'inspect.needs.road')}</span></div>`;
@@ -118,9 +107,11 @@ function structureMenu({ world }, s, nav) {
   // what it is: to look at, not to click
   const items = [{ block: summary(def, world.isServed(s)) }];
 
-  // changing how it looks, or into what
-  items.push({ section: t('inspect.change') });
-  items.push({ label: t('inspect.change-look'), keepOpen: true, action: () => world.restyleStructure(s.id) });
+  // changing how it looks – its next kind, in the order Space goes through
+  // them while building (tools/build.js) – or into what
+  const kinds = kindsOf(def);
+  const nextKind = () => kinds[(kinds.indexOf(kindShown(def, s)) + 1) % kinds.length];
+  items.push({ label: t('inspect.change-look'), keepOpen: true, action: () => world.restyleStructure(s.id, kinds.length > 1 ? nextKind() : null) });
 
   // Surroundings: cycles automatic -> each style -> none -> automatic.
   if (def.yards?.length) {
@@ -128,14 +119,15 @@ function structureMenu({ world }, s, nav) {
     const cars = world.accessInfo(s) !== null; // no car park without a road
     const current = yardOf(def, s, { cars });
     const none = t('inspect.yard.none');
-    const note = choice === 'auto' ? `${t('inspect.yard.auto')} · ${current ? yardName(current) : none.toLowerCase()}` : choice === 'none' ? none : yardName(choice);
+    // (left to itself, it just says what it has)
+    const note = choice === 'auto' ? (current ? yardName(current) : none) : choice === 'none' ? none : yardName(choice);
     const order = ['auto', ...YARD_STYLES.filter((y) => cars || !YARDS[y].cars || y === choice), 'none'];
     const next = order[(order.indexOf(choice) + 1) % order.length];
     items.push({ label: t('inspect.yard'), note, keepOpen: true, action: () => world.setYard(s.id, next === 'auto' ? null : next) });
   }
   if (converts.length) items.push({ label: `${t('inspect.turn-into')}…`, note: '›', keepOpen: true, action: () => { nav.page = 'convert'; } });
 
-  items.push({ section: '' }, { label: t('tool.erase'), action: () => world.removeStructure(s.id) });
+  items.push({ section: '' }, { label: t('inspect.demolish'), action: () => world.removeStructure(s.id) });
 
   return { title: nameOf(def), items };
 }

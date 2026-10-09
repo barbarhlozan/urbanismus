@@ -7,7 +7,7 @@
 //
 // 2×2 ones: local area covers x, y from about -0.4 to 1.4, front on -y.
 
-import { door, panel, paving, star, flagpole, flowerBed, tree, fountain, heap, roundWindows, FRAME, outward, statue, figure } from './kit.js';
+import { door, panel, paving, star, flagpole, flowerBed, tree, fountain, heap, roundWindows, FRAME, outward, statue, figure, kindOf } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -105,8 +105,9 @@ export const church = {
   stats: { jobs: 2 },
   agents: 1,
   yards: ['trees', 'plaza'],
-  draw(g) {
-    const kind = g.pick(['onion', 'onion', 'twin', 'gothic']);
+  kinds: ['onion', 'onion', 'twin', 'gothic'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     const nx = 0.18, nw = 0.64, ny = 0.06, nd = 1.08, nh = 0.46, nr = 0.36;
     // nave, ridge running away from the street
     g.roofed(nx, ny, 0, nw, nd, nh, { h: nr, ridge: 'y' });
@@ -236,8 +237,9 @@ export const townHall = {
   stats: { jobs: 8 },
   agents: 2,
   yards: ['plaza'],
-  draw(g) {
-    const kind = g.pick(['centre', 'corner', 'attic']);
+  kinds: ['centre', 'corner', 'attic'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     const fh = 0.15, d = 0.5, y0 = -0.32;
     if (kind === 'attic') {
       // renaissance hall: an arcade, sgraffito storeys, the attic on top
@@ -323,8 +325,9 @@ export const memorial = {
   stats: {},
   agents: 0,
   yards: ['plaza', 'trees'],
-  draw(g) {
-    const kind = g.pick(['soldier', 'tank', 'pylon', 'group', 'equestrian', 'partisan']);
+  kinds: ['soldier', 'tank', 'pylon', 'group', 'equestrian', 'partisan'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'group' || kind === 'equestrian' || kind === 'partisan') {
       // a statue on a big stepped pedestal in a paved square: a worker
       // and farm woman raising hammer and sheaf, a rider (a Hussite
@@ -538,8 +541,9 @@ export const castle = {
   stats: { jobs: 3 },
   agents: 1,
   yards: ['trees'],
-  draw(g) {
-    const kind = g.pick(['ruin', 'castle', 'chateau']);
+  kinds: ['ruin', 'castle', 'chateau'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'chateau') {
       // baroque chateau: a main wing and two side wings round a court
       // of honour, a clock turret, a gate and a fountain in the court

@@ -9,6 +9,7 @@ import { fitSite } from './lots.js';
 import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
 import { controlArt } from '../ui/icons.js';
+import { THEME } from '../theme.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -78,6 +79,41 @@ export class OverlayKit {
     return `<path class="cross-halo" d="${sign}"/><path class="steep-sign" d="${sign}"/><path class="steep-wedge" d="${wedge}"/>`;
   }
 
+  // While building, the dots within reach of the pointer, fading out with
+  // distance, instead of a sheet of them over the whole map; `fine`: the
+  // half steps footpaths, railways and fences take too. With a building in
+  // hand (`building`) none where something stands or runs, and where it
+  // can't stand for the slope a small warning sign in place of the dot;
+  // with a road (`roads`) none under buildings.
+  nearDots(point, { fine = false, building = false, roads = false } = {}) {
+    if (!point) return '';
+    const { world } = this;
+    const { grid, terrain } = world;
+    const REACH = 4.5, step = fine ? 0.5 : 1;
+    const [px, py] = point;
+    let dots = '', signs = '';
+    for (let y = Math.ceil((py - REACH) / step) * step; y <= py + REACH; y += step) {
+      for (let x = Math.ceil((px - REACH) / step) * step; x <= px + REACH; x += step) {
+        const d = Math.hypot(x - px, y - py);
+        const i = grid.nodeAt(x, y);
+        if (d > REACH || i < 0 || terrain.isWater(i)) continue;
+        const main = Number.isInteger(x) && Number.isInteger(y);
+        const fade = r2(1 - (d / REACH) ** 2);
+        if (main && building) {
+          if (world.tooSteepToBuild(i)) {
+            signs += `<g class="near-steep" opacity="${fade}">${this.steepAt(x, y, 0.06)}</g>`;
+            continue;
+          }
+          if (world.structureAt(i) || world.hasRoad(i) || world.hasRail(i)) continue;
+        }
+        if (main && roads && world.structureAt(i)) continue;
+        const [sx, sy] = this.project(x, y);
+        dots += `<circle class="${main ? 'grid-dot' : 'fine-dot'}" cx="${r2(sx)}" cy="${r2(sy)}" r="${main ? THEME.gridDotRadius : THEME.fineDotRadius}" opacity="${fade}"/>`;
+      }
+    }
+    return dots + signs;
+  }
+
   // Erase mode, over what would go: the eraser from the Erase icon
   // (icons.js, without its smudge), tilted, pen-drawn, filled with the
   // paper so it reads over anything.
@@ -120,9 +156,9 @@ export class OverlayKit {
   // footprint's middle, so the animated one scales about the building's
   // base; data-anim keeps the animation going across overlay redraws
   // (Renderer.keepAnimating) and plays the exit (Renderer.letGo).
-  ghost(def, node, rotation = 0, seed = 1, { blocked = false } = {}) {
+  ghost(def, node, rotation = 0, seed = 1, { blocked = false, data = {} } = {}) {
     const [x, y] = this.world.grid.xy(node);
-    const instance = { type: def.id, node, rotation, seed, data: {} };
+    const instance = { type: def.id, node, rotation, seed, data };
     const painter = new Painter(this.camera, { x, y, z: this.world.terrain.heightAt(x, y) }, rotation, drawSeed(instance));
     // stays square, like the built one (Renderer.buildStructure)
     const nodes = this.world.footprintNodes(def.id, node, rotation).filter((n) => n >= 0).map((n) => this.world.grid.xy(n));
@@ -136,7 +172,7 @@ export class OverlayKit {
     painter.roadGap = (def.footprint ?? [[0, 0]]).length === 1 ? roadFront(this.world, instance).gap : 1;
     def.draw(painter, instance);
     const [sx, sy] = this.camera.project(...painter.rigid, this.world.terrain.heightAt(...painter.rigid)).map(r2);
-    const key = `ghost:${def.id}:${node}:${rotation}:${seed}:${blocked ? 1 : 0}`;
+    const key = `ghost:${def.id}:${node}:${rotation}:${seed}:${data.kind ?? ''}:${blocked ? 1 : 0}`;
     return `<g transform="translate(${sx} ${sy})"><g class="ghost-anim" data-anim="${key}">`
       + `<g class="ghost${blocked ? ' blocked' : ''}" transform="translate(${-sx} ${-sy})">${painter.toGroundSVG()}${painter.toSVG()}</g></g></g>`;
   }

@@ -1,12 +1,12 @@
 // Shops, pubs and offices of a Central European town from the 50s to the
 // 80s – none of it private: the Jednota co-op shop, the hospoda, the
-// department store, Tuzex, the národní výbor (the town's administration),
-// the post office and the hotel. Each is its own thing to build, with a
+// department store, the národní výbor (the town's administration), the
+// post office and the hotel. Each is its own thing to build, with a
 // wide (two-plot) size where there is one. All are tagged 'business': where
 // people work and shop (src/sim/agents.js).
 // Front (shop window, entrance) is the -y side.
 
-import { door, panel, chimney, frontage, shared, hips, aerials, flagpole, star, crates, barrels, bikeRack, bench, streetClock, tree } from './kit.js';
+import { door, panel, chimney, frontage, shared, hips, aerials, flagpole, star, crates, barrels, bikeRack, bench, streetClock, tree, kindOf } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -155,32 +155,6 @@ export const hospoda = {
   },
 };
 
-// Tuzex, the hard-currency shop, 70s: a glazed ground floor under a
-// cantilevered canopy, a closed upper floor clad in panels, and a blade
-// sign on the corner.
-export const tuzex = {
-  ...COMMON,
-  id: 'tuzex',
-  name: 'Tuzex',
-  blurb: 'Western goods for vouchers',
-  tags: ['business', 'shop'],
-  code: 'TX',
-  footprint: [[0, 0]],
-  stats: { jobs: 3 },
-  agents: 1,
-  yards: ['parking', 'plaza', 'trees'],
-  draw(g) {
-    const w = g.range(0.5, 0.56), d = 0.38, x = -w / 2, y = -d / 2, h0 = 0.16, h = h0 + 0.14;
-    g.box(x, y, 0, w, d, h);
-    g.windows(x, y, w, d, 0, h0, h0, 0.1, { ribbon: true, h: 0.7, skip: ['back'] });
-    g.mullions(x, y, w, d, h0, h, 0.07, { skip: ['back'] });
-    g.box(x - 0.02, y - 0.08, h0, w + 0.04, 0.08, 0.015);            // canopy
-    g.box(x + w - 0.01, y - 0.06, h0 + 0.02, 0.01, 0.05, 0.18);      // blade sign
-    door(g, 0, y, 0.08, 0.12);
-    g.box(x + 0.06, y + 0.08, h, w - 0.12, d - 0.16, 0.03);          // roof plant
-  },
-};
-
 // Obchodní dům, the department store: a big block of blank panels over a
 // glass ground floor, the sign on the roof.
 export const store = {
@@ -276,8 +250,9 @@ export const officeTower = {
   stats: { jobs: 24 },
   agents: 3,
   yards: ['plaza', 'trees'],
-  draw(g) {
-    const kind = g.pick(['spire', 'crown']);
+  kinds: ['spire', 'crown'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     const fh = 0.11;
     if (kind === 'spire') {
       // socialist-realist tower: stepped, with a spire and a star
@@ -306,28 +281,50 @@ export const officeTower = {
   },
 };
 
-// Hotel: a slab with fins on a low wide podium, flags out front.
+// Hotel: the one a town of this size had, on the square, often with the
+// restaurant (restaurace) downstairs. Either the old hotel, three storeys
+// under a mansard roof (the Slavie, the Grand, the Zlatá hvězda), tall
+// restaurant windows either side of the door, a balcony over it and the
+// name board under the eaves; or the 30s functionalist one (the Bat'a
+// hotels, Avion in Brno): flat roof, white, bands of windows, a glazed
+// ground floor under a canopy and a blade sign down the corner. Both join
+// the houses either side on a street front.
 export const hotel = {
   ...COMMON,
   id: 'hotel',
   name: 'Hotel',
-  blurb: 'Rooms for visitors',
+  blurb: 'The hotel on the square',
   tags: ['business', 'hotel'],
   code: 'H',
   footprint: [[0, 0]],
-  stats: { jobs: 24 },
-  agents: 3,
+  stats: { jobs: 8 },
+  agents: 2,
   yards: ['plaza', 'trees'],
-  draw(g) {
-    const fh = 0.11;
-    const w = 0.64, d = 0.24, hp = fh * 1.3, h = hp + fh * g.int(8, 10);
-    g.box(-0.32, -0.32, 0, 0.64, 0.64, hp);
-    g.windows(-0.32, -0.32, 0.64, 0.64, 0, hp, hp, 0.1, { ribbon: true, h: 0.55 });
-    g.box(-w / 2, -d / 2 + 0.06, hp, w, d, h - hp);
-    g.mullions(-w / 2, -d / 2 + 0.06, w, d, hp, h, 0.045);
-    g.floors(-w / 2, -d / 2 + 0.06, w, d, hp, h, fh, { inset: 0 });
-    flagpole(g, -0.28, -0.38, 0.4);
-    aerials(g, -0.2, 0.2, 0.06, h, 2);
+  join: { group: 'street', chance: 0.6 },
+  kinds: ['old', 'old', 'functionalist'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    if (kind === 'old') {
+      const [x0, x1] = frontage(g, g.range(0.6, 0.66));
+      const w = x1 - x0, d = 0.44, y = -d / 2, fh = 0.15, h = fh * 3, cx = (x0 + x1) / 2;
+      g.roofed(x0, y, 0, w, d, h, { h: 0.05, hip: hips(g, 0.1), mansard: { h: 0.11, inset: 0.05 } });
+      g.windows(x0, y, w, d, 0, h, fh, 0.09, { skip: shared(g), from: 1 });
+      for (const k of [-1, 1]) frontWindow(g, cx + k * w * 0.3, y, fh * 0.2, w * 0.22, fh * 0.65);
+      door(g, cx, y, 0.08, fh * 0.8);
+      g.box(cx - 0.08, y - 0.06, fh, 0.16, 0.06, 0.012);                  // balcony
+      g.box(cx - w * 0.28, y - 0.012, h - 0.04, w * 0.56, 0.012, 0.03);    // name board
+      if (!g.join.left && !g.join.right) flagpole(g, x0 + 0.04, y - 0.08, 0.36);
+      return;
+    }
+    const [x0, x1] = frontage(g, g.range(0.58, 0.64));
+    const w = x1 - x0, d = 0.42, y = -d / 2, fh = 0.14, h = fh * 4, cx = (x0 + x1) / 2;
+    g.box(x0, y, 0, w, d, h);
+    g.windows(x0, y, w, d, 0, fh, fh, 0.1, { ribbon: true, h: 0.7, skip: ['back', ...shared(g)] });
+    g.windows(x0, y, w, d, fh, h, fh, 0.09, { ribbon: true, h: 0.45, skip: shared(g) });
+    g.box(cx - 0.13, y - 0.07, fh * 0.85, 0.26, 0.07, 0.012);              // canopy
+    door(g, cx, y, 0.08, fh * 0.75);
+    g.box(x0 + 0.06, y + 0.12, h, w * 0.4, d - 0.2, 0.07);                 // roof room
+    if (!g.join.right) g.box(x1 - 0.01, y - 0.06, fh * 1.2, 0.01, 0.05, fh * 2.4); // blade sign
   },
 };
 
@@ -350,8 +347,9 @@ export const jednotaWide = {
   stats: { jobs: 6 },
   agents: 2,
   yards: ['parking', 'plaza', 'trees'],
-  draw(g) {
-    const kind = g.pick(['centre', 'centre', 'townhouses']);
+  kinds: ['centre', 'centre', 'townhouses'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'centre') {
       const d = g.range(0.36, 0.4), y = -d / 2, h = 0.17, split = g.range(0.4, 0.6);
       for (const [a, b] of [[-0.32, split - 0.04], [split + 0.04, 1.32]]) {
@@ -449,8 +447,9 @@ export const officeWide = {
   stats: { jobs: 16 },
   agents: 3,
   yards: ['plaza', 'parking'],
-  draw(g) {
-    const kind = g.pick(['ribbon', 'district']);
+  kinds: ['ribbon', 'district'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'ribbon') {
       const x0 = -0.3, x1 = 1.2, d = g.range(0.34, 0.38), y = -d / 2, fh = 0.12, h = fh * g.int(4, 5);
       g.box(x0, y, 0, x1 - x0, d, h);

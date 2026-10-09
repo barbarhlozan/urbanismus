@@ -1,8 +1,8 @@
 // Annotations (switchable in render/style.js):
-//   hover tags  a leader line and a boxed label naming the building under
-//               the pointer, e.g. "Clinic"; with the Terrain
-//               lines on, a hill's top mark tells its name and height
-//               ("Holý vrch · 570 m", terrain/hills.js)
+//   hover tags  the name of the building under the pointer set over it
+//               like a label on a map, underlined by pen ("Pekárna");
+//               with the Terrain lines on, a hill's top mark tells its
+//               name and height ("Holý vrch · 570 m", terrain/hills.js)
 //
 // Systems also report what happens with annotations.log(text, [x, y])
 // (visitors, residents leaving, buildings growing…). The player doesn't
@@ -15,7 +15,7 @@ import { ELEVATION } from '../terrain/elevation.js';
 import { HILLS } from '../terrain/hills.js';
 import { STYLE } from '../render/style.js';
 import { nameOf } from './names.js';
-import { sketchRect, sketchPolyline, seedOf } from '../render/sketch.js';
+import { sketchLine, seedOf } from '../render/sketch.js';
 
 const LOG_LINES = 200;
 
@@ -31,9 +31,11 @@ function textWidth(text, size) {
 }
 
 export class Annotations {
-  // heights(): whether open ground tells its height (the Terrain lines are on)
-  constructor({ world, camera, clock, heights = () => false }) {
+  // heights(): whether open ground tells its height (the Terrain lines are on);
+  // topOf(s): the scene y of the top of a structure's drawing, if it's drawn
+  constructor({ world, camera, clock, heights = () => false, topOf = () => null }) {
     this.heights = heights;
+    this.topOf = topOf;
     this.world = world;
     this.camera = camera;
     this.clock = clock;
@@ -50,7 +52,7 @@ export class Annotations {
     let out = '';
     if (STYLE.hoverTags && toolId === 'inspect' && point) {
       const info = this.describe(point);
-      if (info) out += this.tag(kit, info.pos, info.lines, info.height);
+      if (info) out += this.tag(info);
     }
     return out;
   }
@@ -62,39 +64,34 @@ export class Annotations {
     // a hill's top mark (with the Terrain lines showing): its name and height
     if (this.heights()) {
       const hill = world.hills.find((hl) => Math.hypot(hl.x - x, hl.y - y) <= HILLS.hover);
-      if (hill) return { pos: [hill.x, hill.y], height: 0.15, lines: [`${hill.name} · ${Math.round(ELEVATION.base + hill.height)} m`] };
+      if (hill) return { pos: [hill.x, hill.y], height: 0.15, name: `${hill.name} · ${Math.round(ELEVATION.base + hill.height)} m` };
     }
     // only buildings get a tag – roads, rails, paths and trees don't
     const s = world.structureAt(node);
-    if (s) return { pos: world.centerOf(s), height: 0.5, lines: [nameOf(STRUCTURE_TYPES[s.type])] };
+    if (s) return { pos: world.centerOf(s), height: 0.5, name: nameOf(STRUCTURE_TYPES[s.type]), top: this.topOf(s) };
     return null;
   }
 
-  // Leader line from a point up and to the right, then a label in a box,
-  // both drawn by pen (sketch.js; all in screen pixels, divided by the zoom).
-  tag(kit, [x, y], lines, height) {
+  // The name centred over the point – over the top of the building's
+  // drawing, where that's known, so it doesn't sit on the roof – and
+  // underlined by pen; a halo of the background colour keeps the letters
+  // clear of the drawing behind (.tag in styles.css). All in screen pixels,
+  // divided by the zoom.
+  tag({ pos: [x, y], height, name, top = null }) {
     const z = this.camera.zoom;
-    const size = 11, lead = 14, padX = 6, padY = 4;
-    const [sx, sy] = this.camera.project(x, y, height);
-    const [ex, ey] = [sx + 18 / z, sy - 26 / z];
-    const texts = lines;
-    const widths = texts.map((t) => textWidth(t, size));
-    const w = Math.max(...widths) + padX * 2;
-    const h = lead * texts.length + padY * 2 - (lead - size);
-    const bx = ex + 4 / z, by = ey - h / z / 2;
-    const text = texts
-      // textLength: scaled text can lay out a little wider than measured
-      .map((t, i) => `<text class="tag" x="${r2(bx + padX / z)}" y="${r2(by + (padY + size * 0.82 + i * lead) / z)}" font-size="${r2(size / z)}" textLength="${r2(widths[i] / z)}" lengthAdjust="spacingAndGlyphs">${esc(t)}</text>`)
-      .join('');
-    const seed = seedOf(x, y, lines.length);
-    const k = 1 / z;
-    // data-anim: it waits as long as the hover ring (styles.css) and isn't
-    // held back again by every redraw of a pan (Renderer.keepAnimating)
-    return `<g class="tag-group" data-anim="tag-${seed}-${esc(lines.join('|'))}">` +
-      `<path class="tag-line" d="${sketchPolyline([[sx, sy], [ex, ey], [bx, ey]], seed, { k })}"/>` +
-      `<circle class="tag-dot" cx="${r2(sx)}" cy="${r2(sy)}" r="${r2(2 / z)}"/>` +
-      `<rect class="tag-fill" x="${r2(bx)}" y="${r2(by)}" width="${r2(w / z)}" height="${r2(h / z)}"/>` +
-      `<path class="tag-box" d="${sketchRect(bx, by, w / z, h / z, seed + 7, { k, over: 3 })}"/>${text}</g>`;
+    const size = 14;
+    const [sx, low] = this.camera.project(x, y, height);
+    const sy = top == null ? low : Math.min(low, top + 2 / z);
+    const w = textWidth(name, size);
+    const lineY = sy - 8 / z, nameY = lineY - 4 / z;
+    const seed = seedOf(x, y, name.length);
+    const half = (w / 2 + 3) / z;
+    // data-anim: it waits a moment (styles.css) and isn't held back again by
+    // every redraw of a pan (Renderer.keepAnimating); textLength: scaled text
+    // can lay out a little wider than measured
+    return `<g class="tag-group" data-anim="tag-${seed}-${esc(name)}">` +
+      `<text class="tag" x="${r2(sx)}" y="${r2(nameY)}" font-size="${r2(size / z)}" text-anchor="middle" textLength="${r2(w / z)}" lengthAdjust="spacingAndGlyphs">${esc(name)}</text>` +
+      `<path class="tag-line" d="${sketchLine([sx - half, lineY], [sx + half, lineY], seed, { k: 1 / z, bow: 2 })}"/></g>`;
   }
 }
 

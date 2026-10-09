@@ -8,6 +8,18 @@ import { clipSegment, splitRuns } from '../src/core/geom2d.js';
 import { drawTree, drawShrub, pickKind } from '../features/trees.js';
 import { LOOK } from '../src/render/painter.js';
 
+// A structure that comes in kinds lists them as def.kinds, a pick list (a
+// kind in it twice comes twice as often), and starts its draw(g, s) with
+// kindOf(g, s, this.kinds): the kind the player stepped to with Space
+// (s.data.kind, tools/build.js), else the one its seed picks. The pick is
+// made either way, so the rest of the drawing keeps its look, and as the
+// draw's first random number, so kindShown() (structures/index.js) can
+// tell which kind a seed gives without drawing.
+export function kindOf(g, s, kinds) {
+  const k = g.pick(kinds);
+  return kinds.includes(s?.data?.kind) ? s.data.kind : k;
+}
+
 // A tree (features/trees.js), about half a grid step tall at size 1: any of
 // the three kinds, or one given as `kind`.
 export function tree(g, x, y, size = 1, kind = null) {

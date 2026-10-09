@@ -28,7 +28,7 @@
 import { CATEGORIES } from '../../structures/index.js';
 import { toolIcon, controlIcon } from './icons.js';
 import { isNarrow, isWide } from './device.js';
-import { keyLabel, GROUP_KEYS, SLOT_KEYS } from './keys.js';
+import { keyLabel, GROUP_KEYS, slotKey } from './keys.js';
 import { corner, drawer, fadeIn, cascade } from './motion.js';
 import { t } from '../core/text.js';
 
@@ -40,7 +40,7 @@ const GROUP_KEY = 'urbanismus.buildMenuGroup';
 const PIN_KEY = 'urbanismus.buildMenuPinned';
 
 // the tool whose drawing stands for each group on its tab
-const TAB_ICON = { transport: 'road', housing: 'build:house', work: 'build:factory', amenities: 'build:jednota', spaces: 'build:green', heritage: 'build:chapel' };
+const TAB_ICON = { transport: 'road', housing: 'build:house', work: 'build:textilka', farming: 'build:jzd', amenities: 'build:jednota', spaces: 'build:green', heritage: 'build:chapel' };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -119,6 +119,7 @@ export class BuildMenu {
     this.optsEl = this.el.querySelector('.bm-opts');
     this.captionEl = this.el.querySelector('.bm-caption');
     this.titleEl = this.el.querySelector('.bm-title');
+    this.bodyEl = this.el.querySelector('.bm-body');
     this.railEl = this.el.querySelector('.bm-rail');
     this.headEl = this.el.querySelector('.bm-head');
     this.tabsEl = this.el.querySelector('.bm-tabs');
@@ -127,7 +128,9 @@ export class BuildMenu {
     try { this.pinned = localStorage.getItem(PIN_KEY) === '1'; } catch { this.pinned = false; }
     this.pin(this.pinned);
     this.layout();
-    addEventListener('resize', () => this.layout());
+    addEventListener('resize', () => { this.layout(); this.place(); });
+    // (the rail grows or shrinks as groups unlock)
+    new ResizeObserver(() => this.place()).observe(this.railEl);
 
     this.el.addEventListener('click', (e) => {
       const btn = e.target.closest('button');
@@ -200,8 +203,11 @@ export class BuildMenu {
   }
 
   // Keys for what's shown: a number for each open group's tab, and in each
-  // group a letter for each tool, in reading order.
+  // group a letter for each tool, by where its tile sits (slotKey) in the
+  // drawer's three columns or the panel's four (styles.css).
   giveKeys(open) {
+    this.keyedGroups = open;
+    const cols = this.rail ? 3 : 4;
     this.groupKeys = new Map(open.map((g, i) => [GROUP_KEYS[i], g.id]));
     this.slotKeys = new Map(); // group id -> Map(key -> tool id)
     for (const tab of this.el.querySelectorAll('.bm-tab')) {
@@ -213,7 +219,7 @@ export class BuildMenu {
       const keys = new Map();
       const tiles = [...this.el.querySelectorAll(`.bm-tools[data-group="${g.id}"] .bm-tool:not(.locked)`)];
       tiles.forEach((b, i) => {
-        const k = SLOT_KEYS[i];
+        const k = slotKey(i, cols);
         if (k) keys.set(k, b.dataset.tool);
         b.querySelector('.key').textContent = k ? keyLabel(k) : '';
         b.title = k ? `${b.dataset.label} (${keyLabel(k)})` : b.dataset.label;
@@ -249,6 +255,7 @@ export class BuildMenu {
     if (rail === this.rail) return;
     this.rail = rail;
     this.el.classList.toggle('rail', rail);
+    if (this.keyedGroups) this.giveKeys(this.keyedGroups); // (the columns changed)
     // (the groups and the rest each in a box of their own, a gap between)
     if (rail) {
       const [groups, rest] = this.railEl.children;
@@ -259,6 +266,29 @@ export class BuildMenu {
       this.headEl.prepend(this.tabsEl);
       this.panelEl.append(this.looseEl);
     }
+    this.place();
+  }
+
+  // The rail halfway down the window (but under the top bar), the drawer
+  // beside it from the rail's top – or starting higher, up to the top bar,
+  // when its group wouldn't fit below that; only then does it scroll.
+  place() {
+    const s = this.el.style, p = this.panelEl.style;
+    if (!this.rail) {
+      s.top = p.marginTop = p.maxHeight = '';
+      return;
+    }
+    const bar = parseFloat(getComputedStyle(this.el).getPropertyValue('--bar-h')) || 38;
+    const highest = 16 + bar + 2 + 12; // under the top bar
+    const room = 20 + bar + 2 + 20;    // the dock's, at the bottom
+    const top = Math.max(highest, Math.round((innerHeight - this.railEl.offsetHeight) / 2));
+    s.top = `${top}px`;
+    if (this.folded && !this.el.classList.contains('folding')) return;
+    const below = innerHeight - top - room;
+    const tall = this.headEl.offsetHeight + this.bodyEl.scrollHeight + 2;
+    const lift = Math.min(top - highest, Math.max(0, tall - below));
+    p.marginTop = `${-lift}px`;
+    p.maxHeight = `${below + lift}px`;
   }
 
   // A panel hanging from the top bar (Colours, Debug) opens beside the
@@ -304,6 +334,7 @@ export class BuildMenu {
     const change = folded !== this.folded;
     const button = this.dockEl.getBoundingClientRect(); // (before it hides)
     this.el.classList.toggle('folded', folded);
+    if (!folded) this.place();
     if (animate && change) this.animateFold(folded, button);
     if (!remember || isNarrow()) return;
     try { localStorage.setItem(FOLD_KEY, folded ? '1' : '0'); } catch { /* storage unavailable */ }
@@ -363,6 +394,7 @@ export class BuildMenu {
       if (g.dataset.group === id) shown = g;
     }
     this.captionEl.textContent = this.titleEl.textContent = (id ? groupName({ id }) : '');
+    this.place();
     // the tiles of the group come in one by one
     if (animate && shown) cascade(shown.querySelectorAll('.bm-tool'));
   }

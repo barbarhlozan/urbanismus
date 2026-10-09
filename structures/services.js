@@ -2,8 +2,7 @@
 // 1×1 and 2×2, each its own thing to build. A village fire house with its
 // siren, a town fire station with a hose-drying tower, a police post, a
 // health centre, a polyclinic with ribbon windows, a hospital of hipped
-// pavilions, a service centre with fire and health under one roof, and a
-// 60s pavilion school with its gym hall and playground.
+// pavilions and a 60s pavilion school with its gym hall and playground.
 
 import { door, panel, pitch, tree, bench, bikeRack, FRAME } from './kit.js';
 
@@ -222,30 +221,6 @@ export const fireStationLarge = {
     firePond(g, 0.55, 0.75, 1.3, 1.3);
     g.box(-0.05, 1.05, 0, 0.35, 0.05, 0.3);
     g.windows(-0.05, 1.05, 0.35, 0.05, 0.05, 0.3, 0.1, 0.1, { skip: ['left', 'right'], h: 0.6 });
-  },
-};
-
-// Fire brigade and health under one roof: a flat-roofed block at the back,
-// the engine hall in front with the cross on it, the hose tower.
-export const serviceCentre = {
-  ...common,
-  id: 'service-centre',
-  name: 'Service centre',
-  blurb: 'Fire brigade and doctors',
-  tags: ['services', 'health'],
-  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
-  stats: { jobs: 30 },
-  agents: 3,
-  yards: ['parking', 'plaza'],
-  draw(g) {
-    g.box(-0.3, 0.32, 0, 1.6, 1.0, 0.6);
-    g.windows(-0.3, 0.32, 1.6, 1.0, 0, 0.6, 0.15, 0.1, { ribbon: true });
-    g.box(-0.32, 0.3, 0.6, 1.64, 1.04, 0.02);
-    g.box(-0.3, -0.32, 0, 1.15, 0.58, 0.28);
-    g.windows(-0.3, -0.32, 1.15, 0.58, 0, 0.28, 0.28, 0.12, { skip: ['front'], h: 0.4 });
-    for (const x of [-0.22, 0.12]) garageDoor(g, x, -0.32, 0.22, 0.2);
-    cross(g, 0.62, -0.32, 0.14, 0.06);
-    hoseTower(g, 1.0, -0.3, 0.16, 0.9);
   },
 };
 

@@ -1,10 +1,11 @@
 // One build tool per structure family (BUILD_FAMILIES, created in main.js):
 // the sizes of the same thing (park / large park…) share a tool, S switches
 // between them. The pointer grabs the middle of the footprint; Tab rotates,
-// C tries another look. The preview shows exactly the variant that will be
-// built.
+// Space goes to the next kind of it (def.kinds, in their order; a
+// structure of one kind just gets another look). The preview shows exactly
+// the variant that will be built.
 
-import { footprintCenter, newSeed, categoryOf } from '../../structures/index.js';
+import { footprintCenter, newSeed, categoryOf, kindsOf, kindShown } from '../../structures/index.js';
 import { isTouch } from '../ui/device.js';
 import { keyOf } from '../ui/keys.js';
 import { UNLOCKS } from '../story/unlocks.js';
@@ -19,6 +20,9 @@ export function createBuildTool({ world, camera }, defs) {
   let rotation = 0;
   const placed = () => (rotation + camera.facingViewer()) % 4;
   let seed = newSeed();
+  // the kind stepped to with Space (null: the seed picks, so buildings
+  // placed one after another differ until the player chooses)
+  let kind = null;
   const def = () => defs[variant];
   // single-dot buildings turn relative to their road (s.data.turn), except
   // those that always face it (def.facesRoad: no turning at all)
@@ -26,13 +30,21 @@ export function createBuildTool({ world, camera }, defs) {
   const turnable = () => !def().facesRoad;
   const turn = () => (single() && turnable() ? rotation : 0);
   const rotate = () => { if (turnable()) rotation = (rotation + 1) % 4; };
-  const reroll = () => { seed = newSeed(); };
+  const data = () => ({ ...(turn() ? { turn: turn() } : {}), ...(kind ? { kind } : {}) });
+  const reroll = () => {
+    const kinds = kindsOf(def());
+    if (kinds.length > 1) {
+      const now = kindShown(def(), { seed, data: data() });
+      kind = kinds[(kinds.indexOf(now) + 1) % kinds.length];
+    }
+    seed = newSeed();
+  };
   // sizes that may be built (src/story/unlocks.js); the Size button skips the rest
   const open = () => defs.filter((d) => UNLOCKS.allows(d.id));
   const resize = () => {
     for (let k = 1; k <= defs.length; k++) {
       const i = (variant + k) % defs.length;
-      if (UNLOCKS.allows(defs[i].id)) return void (variant = i);
+      if (UNLOCKS.allows(defs[i].id)) { variant = i; kind = null; return; }
     }
   };
 
@@ -52,6 +64,7 @@ export function createBuildTool({ world, camera }, defs) {
       else if (!UNLOCKS.allows(def().id)) resize();
       if (params.rotation != null) rotation = (params.rotation - camera.facingViewer() + 4) % 4;
       if (params.turn != null && single()) rotation = params.turn;
+      kind = kindsOf(def()).includes(params.kind) ? params.kind : null;
     },
 
     snap(x, y) {
@@ -74,8 +87,7 @@ export function createBuildTool({ world, camera }, defs) {
     click(node) {
       if (!UNLOCKS.allows(def().id)) return;
       const at = world.placementFor(def().id, node, placed());
-      const data = turn() ? { turn: turn() } : {};
-      if (world.placeStructure(def().id, at.node, { rotation: at.rotation, seed, data })) seed = newSeed();
+      if (world.placeStructure(def().id, at.node, { rotation: at.rotation, seed, data: data() })) seed = newSeed();
     },
 
     key(e) {
@@ -97,7 +109,7 @@ export function createBuildTool({ world, camera }, defs) {
       const d = def();
       const at = world.placementFor(d.id, hover, placed());
       if (at.check.ok) {
-        let out = kit.ghost(d, at.node, world.facingRotation(d.id, at.node, at.rotation, turn()), seed);
+        let out = kit.ghost(d, at.node, world.facingRotation(d.id, at.node, at.rotation, turn()), seed, { data: data() });
         // the track a station will lay
         if (at.check.lay) out += kit.path(at.check.lay.map((f) => world.networks.rail.dot(f)), 'preview rail', null);
         return out;
@@ -106,7 +118,7 @@ export function createBuildTool({ world, camera }, defs) {
       // a cross on each of its dots – or, where the ground is too steep to
       // build on, a steep-hill sign
       const nodes = world.footprintNodes(d.id, hover, placed());
-      const ghost = nodes.includes(-1) ? '' : kit.ghost(d, hover, world.facingRotation(d.id, hover, placed(), turn()), seed, { blocked: true });
+      const ghost = nodes.includes(-1) ? '' : kit.ghost(d, hover, world.facingRotation(d.id, hover, placed(), turn()), seed, { blocked: true, data: data() });
       return ghost + nodes.map((n) => (n >= 0 && world.tooSteepToBuild(n, d.id) ? kit.steep(n) : kit.cross(n))).join('');
     },
   };

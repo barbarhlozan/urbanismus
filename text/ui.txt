@@ -30,6 +30,10 @@ right-click.stop
 
 # ---------- The town's numbers (top left) ----------
 
+north
+  cs: S
+  en: N
+
 hud.chronicle
   cs: Kronika
   en: Chronicle
@@ -57,6 +61,23 @@ stat.buildings
 stat.cutoff
   cs: {n} budova odříznutá od cest | {n} budovy odříznuté od cest | {n} budov odříznutých od cest
   en: {n} cut off from the roads | {n} cut off from the roads
+
+# the same, counted in words in the town's panel ("4 obyvatelé")
+stat.residents.n
+  cs: {n} obyvatel | {n} obyvatelé | {n} obyvatel
+  en: {n} resident | {n} residents
+
+stat.jobs.n
+  cs: {n} pracovní místo | {n} pracovní místa | {n} pracovních míst
+  en: {n} job | {n} jobs
+
+stat.buildings.n
+  cs: {n} budova | {n} budovy | {n} budov
+  en: {n} building | {n} buildings
+
+stat.cutoff.n
+  cs: {n} bez cesty | {n} bez cesty | {n} bez cesty
+  en: {n} without a road | {n} without a road
 
 stat.walk
   cs: Pěšky
@@ -383,6 +404,10 @@ group.work
   cs: Výroba
   en: Production
 
+group.farming
+  cs: Zemědělství
+  en: Farming
+
 group.amenities
   cs: Občanská vybavenost
   en: Civic amenities
@@ -645,10 +670,6 @@ inspect.needs.road
   cs: Potřebuje silnici vedle sebe
   en: Needs a road beside it
 
-inspect.change
-  cs: Změnit
-  en: Change
-
 inspect.change-look
   cs: Jiná podoba
   en: Another look
@@ -661,13 +682,13 @@ inspect.yard
   cs: Okolí
   en: Surroundings
 
-inspect.yard.auto
-  cs: Samo
-  en: By itself
-
 inspect.yard.none
   cs: Žádné
   en: None
+
+inspect.demolish
+  cs: Zbourat
+  en: Demolish
 
 inspect.remove.road
   cs: Odstranit silnici

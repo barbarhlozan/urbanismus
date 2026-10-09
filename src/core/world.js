@@ -21,7 +21,7 @@ import { NetworkLayer } from '../roads/layer.js';
 import { validateRoute } from '../roads/routing.js';
 import { STRUCTURE_TYPES, footprintOffsets, newSeed } from '../../structures/index.js';
 import { mulberry32 } from './random.js';
-import { upgrade, upgradeMarks } from './legacy.js';
+import { upgrade, upgradeMarks, unretire } from './legacy.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 
 // grade(): how finely a segment's climb is measured along it (grid units)
@@ -783,10 +783,12 @@ export class World {
   }
 
   // Give a building a new random look.
-  restyleStructure(id) {
+  // Another look: a new seed, and `kind` (one of its def.kinds) if given.
+  restyleStructure(id, kind = null) {
     const s = this.structures.get(id);
     if (!s) return;
     s.seed = newSeed();
+    if (kind) s.data.kind = kind;
     this.events.emit('structure:changed', s);
   }
 
@@ -1109,6 +1111,7 @@ export class World {
       s.seed ??= Math.imul(s.id, 2654435761) >>> 0;
       s.data ??= {};
       if ((data.version ?? 1) < 4) upgrade(s); // buildings with levels: the structure each level is now
+      unretire(s); // buildings taken out of the game: what replaced them
       if (!STRUCTURE_TYPES[s.type]) continue;
       // Stations saved facing away from their track: turn them round.
       const rule = STRUCTURE_TYPES[s.type].canPlace;

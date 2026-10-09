@@ -42,12 +42,12 @@ import { ColorMenu } from './ui/colorMenu.js';
 import { NewMapMenu } from './ui/newMapMenu.js';
 import { askLanguage, LanguageMenu } from './ui/languages.js';
 import { AssetsPage } from './ui/assetsPage.js';
-import { sketchFrames } from './ui/sketchFrame.js';
+import { sketchFrames, HANDS } from './ui/sketchFrame.js';
 import { reveal } from './ui/motion.js';
 import { attachInput } from './ui/input.js';
 import { exportCity, pickCity } from './ui/saveFile.js';
 import { createCommands } from './dev/commands.js';
-import { BUILD_FAMILIES } from '../structures/index.js';
+import { BUILD_FAMILIES, STRUCTURE_TYPES, kindShown } from '../structures/index.js';
 import { keyOf } from './ui/keys.js';
 import { loadText, t, language, saveLanguage, needsLanguage } from './core/text.js';
 
@@ -149,7 +149,29 @@ trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
 const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, boats, deer, livestock, parking, config: CONFIG });
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);
-const annotations = new Annotations({ world, camera, clock, heights: () => renderer.contours });
+// The top of a building's own drawing (its walls and roofs: not the trees
+// and other screen-facing glyphs of its yard, which may stand far taller
+// and further back), in scene units, for its name over it; kept while the
+// same one is pointed at in the same turn of the view.
+let topCache = { key: '', y: null };
+function topOf(s) {
+  const key = `${s.id}:${camera.rotation}`;
+  if (topCache.key === key) return topCache.y;
+  const g = renderer.objs.get(`s${s.id}`)?.g;
+  let top = Infinity;
+  if (g?.isConnected) {
+    for (const el of g.querySelectorAll('polygon, polyline, path')) {
+      if (el.closest('.sway') || el.matches('.glyph, .tree')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.height || r.width) top = Math.min(top, r.top);
+    }
+  }
+  if (top === Infinity) return null; // (not drawn yet: ask again next time)
+  const y = camera.clientToScene(0, top)[1]; // (window coordinates, as the pointer's)
+  topCache = { key, y };
+  return y;
+}
+const annotations = new Annotations({ world, camera, clock, heights: () => renderer.contours, topOf });
 agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos);
 
 // the town's chronicle, and the story told along the way (story/story.txt)
@@ -168,7 +190,7 @@ tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, gr
 tools.register(createNetworkTool(ctx, { kind: 'path', fineGrid: true, group: 'transport' }));
 tools.register(createNetworkTool(ctx, { kind: 'rail', fineGrid: true, group: 'transport' }));
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
-tools.register(createNetworkTool(ctx, { kind: 'fence', fineGrid: true, group: 'work' }));
+tools.register(createNetworkTool(ctx, { kind: 'fence', fineGrid: true, group: 'farming' }));
 tools.register(createBulldozeTool(ctx));
 const photoPrint = new PhotoPrint(uiRoot);
 tools.register(createPhotoTool(ctx, {
@@ -291,7 +313,7 @@ async function importCity() {
   }
 }
 
-const hud = new Hud(uiRoot, { world, tools, agents, trains, chronicle, actions });
+const hud = new Hud(uiRoot, { world, camera, tools, chronicle, actions });
 const chronicleBook = new ChronicleBook(uiRoot, { world, chronicle });
 // something locked or unlocked: the Build menu and the buttons at the top
 // follow, a tool in hand that may no longer be used is put down, and a panel
@@ -340,7 +362,6 @@ story.onScheme = () => colorMenu.refresh();
   document.addEventListener('webkitfullscreenchange', show);
 }
 const debugPanel = new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
-debugPanel.onToggle = (open) => uiRoot.querySelector('[data-act="debug"]').classList.toggle('on', open);
 const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"]'));
 const assetsPage = new AssetsPage(uiRoot);
 const languageMenu = new LanguageMenu(uiRoot, uiRoot.querySelector('[data-act="language"]'), { onPick: switchLanguage });
@@ -348,7 +369,10 @@ const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMa
 UNLOCKS.onChange(followUnlocks); // (once the panels it closes exist)
 followUnlocks();
 // pen-drawn frames on every UI box, to match the sketched map
-sketchFrames(uiRoot, '.hud, .controls, .actions, .popup, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
+// (the corner menu has none: words on the paper)
+sketchFrames(uiRoot, '.hud', HANDS.steady);
+sketchFrames(uiRoot, '.actions, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
+sketchFrames(uiRoot, '.popup', HANDS.loose);
 
 // Terrain contour lines: off unless switched on (remembered in this browser).
 
@@ -369,14 +393,13 @@ try {
   // storage unavailable
 }
 setContours(savedContours === null ? STYLE.contours : savedContours === '1');
+// The dots around the pointer (OverlayKit.nearDots): only while building,
+// Select and Photo show the bare map; only those the tool can use.
+let dots = null;
 tools.onChange((tool) => {
   uiRoot.querySelector('[data-act="photo"]').classList.toggle('on', tool.id === 'photo');
-  // dots only while building; Select and Photo show the bare map
-  svg.classList.toggle('show-grid', tool.id !== 'inspect' && tool.id !== 'photo');
-  svg.classList.toggle('show-fine', !!tool.fineGrid);
-  // only the dots the tool can use (renderGrid marks the others)
-  svg.classList.toggle('grid-building', tool.id.startsWith('build:'));
-  svg.classList.toggle('grid-roads', tool.id === 'road' || tool.id === 'lane');
+  dots = tool.id === 'inspect' || tool.id === 'photo' ? null
+    : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:'), roads: tool.id === 'road' || tool.id === 'lane' };
 });
 tools.use('inspect');
 
@@ -392,7 +415,7 @@ function pickUp() {
   if (!p || node < 0) return;
   const s = world.structureAt(node);
   let tool = null, params = {};
-  if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation, turn: s.data?.turn ?? 0 }];
+  if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation, turn: s.data?.turn ?? 0, kind: kindShown(STRUCTURE_TYPES[s.type], s) }];
   else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
   else if (world.rails.hasNode(world.networks.rail.nodeAt(...p))) tool = tools.registry.get('rail');
   else if (world.fences.hasNode(world.networks.fence.nodeAt(...p))) tool = tools.registry.get('fence');
@@ -445,6 +468,13 @@ window.addEventListener('keydown', (e) => {
   if (k === 'l') return actions.pause();
   if (k === ' ') e.preventDefault(); // (Space: another look, while building; not a page scroll)
   if (k === '`') return actions.speed();
+  // the tools for making the game, not playing it: \ the debug panel,
+  // Shift+\ the page of every drawing (each still unless locked)
+  if (k === '\\') {
+    const id = e.shiftKey ? 'assets' : 'debug';
+    if (UNLOCKS.allowsControl(id)) actions[id]();
+    return;
+  }
   if (k === 'backspace') e.preventDefault(); // (Erase: not the browser's Back)
   const tool = tools.list().find((t) => t.hotkey === k);
   if (tool) {
@@ -564,7 +594,7 @@ function loop(now) {
     deer.update(simDt);
     livestock.update(simDt);
     growth.update(simDt);
-    renderer.frame(tools.overlay(overlayKit) + annotations.overlay(overlayKit, tools.point, tools.active?.id));
+    renderer.frame((dots ? overlayKit.nearDots(tools.point, dots) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open ? null : tools.point, tools.active?.id));
     cloudShadows.frame(simDt, camera, world.weather.kind);
     rain.frame(simDt, camera, CONFIG.weather.rain[world.weather.kind] ?? 0);
     showSun(world.weather.kind);

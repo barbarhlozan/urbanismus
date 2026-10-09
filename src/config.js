@@ -4,7 +4,7 @@ export const CONFIG = {
   // shown in the corner of the screen
   app: { name: 'Dědina', version: '0.2', author: 'mlozanek' },
 
-  grid: { width: 50, height: 50 },
+  grid: { width: 30, height: 30},
 
   // null = random seed for each new map
   seed: null,

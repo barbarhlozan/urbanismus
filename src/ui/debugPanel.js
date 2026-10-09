@@ -47,7 +47,7 @@ export class DebugPanel {
 
     this.el = document.createElement('div');
     this.el.className = 'debug-panel hidden';
-    this.onToggle = null; // (open) => …, set by main to highlight the Debug button
+    this.onToggle = null; // (open) => …, for whoever needs to know
     this.el.innerHTML =
       '<div class="debug-head"><span>Debug</span><span class="fps">–</span><button class="close" aria-label="Close">×</button></div>' +
       '<div class="svg-count">–</div>' +

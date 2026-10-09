@@ -5,7 +5,7 @@
 //
 // 2×2 ones: local area covers x, y from about -0.4 to 1.4, front on -y.
 
-import { door, panel, flagpole, star, sculpture, bench, lamp, floodlight, pitch, planter, tree, transformer, FRAME, roundWindows } from './kit.js';
+import { door, panel, flagpole, star, sculpture, bench, lamp, floodlight, pitch, planter, tree, transformer, FRAME, roundWindows, kindOf } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -44,8 +44,9 @@ export const cultureHouse = {
   stats: { jobs: 10 },
   agents: 2,
   yards: ['plaza', 'forecourt'],
-  draw(g) {
-    const kind = g.pick(['sorela', 'brutalist', 'sixties']);
+  kinds: ['sorela', 'brutalist', 'sixties'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'sorela') {
       // 50s socialist realism: a symmetrical block, a columned portico
       // with a pediment and a star, flags either side of the steps
@@ -150,8 +151,9 @@ export const tvTower = {
   stats: { jobs: 2 },
   agents: 0,
   yards: ['trees', 'garden'],
-  draw(g) {
-    const kind = g.pick(['shaft', 'lattice', 'lookout']);
+  kinds: ['shaft', 'lattice', 'lookout'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'shaft') {
       // concrete TV tower: a tapering shaft, the transmitter cabin with a
       // glazed gallery near the top, an aerial mast, the station house

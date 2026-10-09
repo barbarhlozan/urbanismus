@@ -20,7 +20,7 @@
 import {
   tree, bush, bench, lamp, fountain, gate, tufts, hedgeAlong, statue,
   playground, bandstand, flowerBed, obelisk, sculpture, kiosk, chessTable, colonnade, footbridge,
-  pitch, planter, FRAME,
+  pitch, planter, FRAME, kindOf,
 } from './kit.js';
 import { segmentDistance } from '../src/core/geom2d.js';
 import { offsetPolyline, keepRuns, measurePolyline, pointAt } from '../src/roads/geometry.js';
@@ -305,8 +305,9 @@ export const green = {
   footprint: [[0, 0]],
   stats: {},
   agents: 0,
-  draw(g) {
-    const kind = g.pick(['trees', 'trees', 'playground', 'memorial', 'pitch']);
+  kinds: ['trees', 'trees', 'playground', 'memorial', 'pitch'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'pitch') {
       // a kids' football pitch over the whole green: the walkways
       // only come up to it (people just cross it); a bench and a
@@ -420,8 +421,9 @@ export const meadow = {
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   stats: {},
   agents: 0,
-  draw(g) {
-    const kind = g.pick(['meadow', 'woods', 'playground', 'sports', 'forest']);
+  kinds: ['meadow', 'woods', 'playground', 'sports', 'forest'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'sports') {
       // sports ground: a full football pitch across the park (the
       // walkways come up to it), benches along one touchline, a

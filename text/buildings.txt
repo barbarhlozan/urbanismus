@@ -6,7 +6,7 @@
 # for one size of it. The names are those used in Czechoslovakia between
 # the 1950s and the 1980s; the English follows the Czech as closely as it
 # can, and leaves the names of the time's own institutions as they were
-# (JZD, Jednota, Tuzex, VB, ČSAD).
+# (JZD, Jednota, VB, ČSAD).
 
 # ---------- Sizes (on the Size button: "Velikost: Široká") ----------
 
@@ -88,6 +88,14 @@ bus_stop.blurb
   cs: Přístřešek u silnice
   en: A shelter by the road
 
+benzina
+  cs: Benzina
+  en: Benzina
+
+benzina.blurb
+  cs: Čerpací stanice
+  en: Petrol station
+
 # ---------- Bydlení ----------
 
 house
@@ -128,37 +136,163 @@ block-wide.blurb
 
 # ---------- Výroba ----------
 
-workshop
-  cs: Dílny
-  en: Workshops
+# The trades
 
-workshop.blurb
-  cs: Dílny komunálního podniku a dvůr
-  en: Workshops of the communal enterprise, and a yard
+autoopravna
+  cs: Autoopravna
+  en: Car repairs
 
-works
-  cs: Provozovna
-  en: Works
+autoopravna.blurb
+  cs: Opravy aut
+  en: Car repairs
 
-works.blurb
-  cs: Pekárna, mlékárna, tiskárna
-  en: A bakery, a dairy, a printing house
+autoopravna-medium.blurb
+  cs: Závod ČSAD
+  en: The ČSAD depot
 
-factory
-  cs: Továrna
-  en: Factory
+kovarna
+  cs: Kovárna
+  en: Smithy
 
-factory.blurb
-  cs: Národní podnik: cihlové haly a komín
-  en: A national enterprise: brick halls and a chimney
+kovarna.blurb
+  cs: Kovář a zámečník
+  en: The smith and the locksmith
 
-plant
-  cs: Kombinát
-  en: Combine
+kovarna-medium.blurb
+  cs: Výrobní družstvo Kovo
+  en: The Kovo co-op
 
-plant.blurb
-  cs: Těžký průmysl, elektrárna, chemie
-  en: Heavy industry, a power plant, chemistry
+truhlarna
+  cs: Truhlárna
+  en: Joinery
+
+truhlarna.blurb
+  cs: Okna, dveře, nábytek
+  en: Windows, doors, furniture
+
+komunalni_podnik
+  cs: Komunální podnik
+  en: Communal enterprise
+
+komunalni_podnik.blurb
+  cs: Dvůr obecních zedníků a cestářů
+  en: The yard of the town's builders and road menders
+
+# Food
+
+pekarna
+  cs: Pekárna
+  en: Bakery
+
+pekarna.blurb
+  cs: Chleba pro obec
+  en: Bread for the town
+
+pekarna-medium.blurb
+  cs: Okresní pekárny
+  en: The district bread works
+
+pivovar
+  cs: Pivovar
+  en: Brewery
+
+pivovar.blurb
+  cs: Vlastní pivo
+  en: The town's own beer
+
+# The town's services
+
+vytopna
+  cs: Výtopna
+  en: Heating plant
+
+vytopna.blurb
+  cs: Teplo pro sídliště
+  en: Heat for the housing estate
+
+vytopna-large.blurb
+  cs: Teplárna pro celé město
+  en: Heat for the whole town
+
+vodarna
+  cs: Vodárna
+  en: Waterworks
+
+vodarna.blurb
+  cs: Voda pro obec
+  en: Water for the town
+
+rozvodna
+  cs: Rozvodna
+  en: Substation
+
+rozvodna.blurb
+  cs: Elektřina pro obec
+  en: Electricity for the town
+
+# Industry
+
+pila
+  cs: Pila
+  en: Sawmill
+
+pila.blurb
+  cs: Kmeny z lesa, prkna pro obec
+  en: Logs from the woods, boards for the town
+
+sklarna
+  cs: Sklárna
+  en: Glassworks
+
+sklarna.blurb
+  cs: České sklo
+  en: Bohemian glass
+
+textilka
+  cs: Textilka
+  en: Textile mill
+
+textilka.blurb
+  cs: Přádelna a tkalcovna
+  en: Spinning and weaving
+
+textilka-medium.blurb
+  cs: Tkalcovna
+  en: A weaving shed
+
+strojirna
+  cs: Strojírna
+  en: Machine works
+
+strojirna.blurb
+  cs: Stroje pro celou republiku
+  en: Machines for the whole republic
+
+panelarna
+  cs: Panelárna
+  en: Panel plant
+
+panelarna.blurb
+  cs: Panely pro sídliště
+  en: Panels for the housing estates
+
+vapenka
+  cs: Vápenka
+  en: Lime works
+
+vapenka.blurb
+  cs: Vápno pálené ze skály
+  en: Lime burnt from the rock
+
+elektrarna
+  cs: Elektrárna
+  en: Power station
+
+elektrarna.blurb
+  cs: Proud z uhlí
+  en: Power from the coal
+
+# The mines
 
 pit
   cs: Šachta
@@ -183,6 +317,8 @@ deep_mine
 deep_mine.blurb
   cs: Betonové těžní věže a úpravna uhlí
   en: Concrete headframes and a coal preparation plant
+
+# ---------- Zemědělství ----------
 
 hospodarstvi
   cs: Hospodářství
@@ -216,6 +352,44 @@ statni_statek.blurb
   cs: Sila, sušárna obilí a stroje
   en: Silos, a grain drier and machines
 
+# With the farms
+
+mlekarna
+  cs: Mlékárna
+  en: Dairy
+
+mlekarna.blurb
+  cs: Mléko z družstev
+  en: Milk from the farms
+
+mlekarna-medium.blurb
+  cs: Okresní mlékárna
+  en: The district dairy
+
+zzn
+  cs: ZZN
+  en: ZZN
+
+zzn.blurb
+  cs: Zemědělské zásobování a nákup: sila
+  en: Farm supply and purchase: the grain silos
+
+sts
+  cs: STS
+  en: STS
+
+sts.blurb
+  cs: Strojní a traktorová stanice
+  en: The machine and tractor station
+
+cukrovar
+  cs: Cukrovar
+  en: Sugar factory
+
+cukrovar.blurb
+  cs: Cukr z řepy z družstev
+  en: Sugar from the farms' beet
+
 # ---------- Občanská vybavenost ----------
 
 jednota
@@ -242,14 +416,6 @@ obchodni_dum.blurb
   cs: Prior: zboží všeho druhu
   en: Prior: goods of every kind
 
-tuzex
-  cs: Tuzex
-  en: Tuzex
-
-tuzex.blurb
-  cs: Západní zboží za bony
-  en: Western goods for vouchers
-
 narodni_vybor
   cs: Národní výbor
   en: National Committee
@@ -271,8 +437,12 @@ hotel
   en: Hotel
 
 hotel.blurb
-  cs: Pokoje pro hosty
-  en: Rooms for guests
+  cs: Hotel na náměstí
+  en: The hotel on the square
+
+hotel-wide.blurb
+  cs: Interhotel pro hosty ze světa
+  en: An Interhotel for guests from abroad
 
 fire_station
   cs: Požární stanice
@@ -313,14 +483,6 @@ hospital
 hospital.blurb
   cs: Pavilony kolem hlavní budovy
   en: Pavilions around a main building
-
-service_centre
-  cs: Středisko služeb
-  en: Centre of services
-
-service_centre.blurb
-  cs: Hasiči a lékaři pod jednou střechou
-  en: Firemen and doctors under one roof
 
 school
   cs: Škola

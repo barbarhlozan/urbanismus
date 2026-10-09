@@ -19,6 +19,15 @@
 // trunk (saplings now and then as a tall narrow poplar), and spruces and
 // shrubs get the same hatching. Hatching is hidden when zoomed far out, and
 // crown outlines get plainer with the painter's `detail` (plain()).
+//
+// Drawn by the same pen as the buildings: a crown's outline goes round in
+// one or two strokes that don't quite close (penOutline) over a plain
+// paper fill, a few big uneven lobes rather than many even scallops, the
+// hatching only on the side away from the light (shaded(), the light the
+// buildings' shadows come from), and a short stroke on the ground at the
+// foot (footStroke), as each building stands on one.
+
+import { SUN } from '../src/render/shadows.js';
 
 export const TREE_KINDS = ['spruce', 'sapling', 'spreading'];
 
@@ -58,14 +67,23 @@ export function drawClump(g, x, y, trees) {
 
 function drawSpruce(g, x, y, height, simple) {
   const { outline, trunk, inside, branches } = spruceShape(g, height, simple);
+  if (LEAFY) footStroke(g, x, y, height);
   g.strokes(x, y, 0, trunk, { cls: 'trunk' });
-  g.shape(x, y, 0, plain(g, outline, height, PLAIN.spruce), { smooth: true, cls: 'tree' });
-  castTree(g, x, y, outline);
-  if (LEAFY) {
+  const crown = plain(g, outline, height, PLAIN.spruce);
+  if (!LEAFY) {
+    g.shape(x, y, 0, crown, { smooth: true, cls: 'tree' });
+    castTree(g, x, y, outline);
+  } else {
+    const vs = outline.map((p) => p[1]);
+    const mid = [0, (Math.min(...vs) + Math.max(...vs)) / 2];
+    g.shape(x, y, 0, crown, { smooth: true, cls: 'tree crown' });
+    g.strokes(x, y, 0, penOutline(g, crown, mid, { drift: 0.012, goes: 1 }), { cls: 'crown-line' });
+    castTree(g, x, y, outline);
     // hatch inside the smooth outline: it runs through the points' midpoints,
-    // pulled in a little towards the trunk
+    // pulled in a little towards the trunk; on the shaded side only
     const clip = midpoints(outline).map(([u, v]) => [u * 0.8, v]);
-    g.strokes(x, y, 0, hatchIn(g, clip, height * (simple ? 0.075 : 0.06)), { cls: 'leaf', lod: 1 });
+    const shade = shaded(clip, mid, height * 0.2, g.range(0.1, 0.3));
+    g.strokes(x, y, 0, hatchIn(g, shade, height * (simple ? 0.07 : 0.055)), { cls: 'leaf', lod: 1 });
     return;
   }
   g.strokes(x, y, 0, inside, { cls: 'trunk', lod: 2 });
@@ -191,9 +209,9 @@ function spruceShape(g, H, simple) {
 //   width   crown half width (share of the height)
 //   lumps   bumps around the crown outline
 const LEAF = {
-  sapling: { trunk: [0.3, 0.42], width: [0.2, 0.27], lumps: [6, 8] },
-  poplar: { trunk: [0.1, 0.18], width: [0.1, 0.14], lumps: [7, 9] },
-  spreading: { trunk: [0.22, 0.3], width: [0.34, 0.46], lumps: [8, 11] },
+  sapling: { trunk: [0.3, 0.42], width: [0.2, 0.27], lumps: [4, 5] },
+  poplar: { trunk: [0.1, 0.18], width: [0.1, 0.14], lumps: [4, 6] },
+  spreading: { trunk: [0.22, 0.3], width: [0.34, 0.46], lumps: [5, 7] },
 };
 
 function drawLeafy(g, x, y, kind, H, simple) {
@@ -203,11 +221,15 @@ function drawLeafy(g, x, y, kind, H, simple) {
   const ry = (H - T * 0.8) / 2, cy = T * 0.8 + ry;
   const rx = Math.min(H * g.range(...p.width), ry * 1.4);
   const { outline, clip } = blob(g, lean, cy, rx, ry, g.int(...p.lumps));
+  footStroke(g, x, y, H);
   // the trunk runs up into the crown (its fill hides the top); close up,
   // a fork shows through it, as in an ink drawing
   g.strokes(x, y, 0, [[[0, 0], [lean * 0.5, T], [lean, cy]]], { cls: kind === 'spreading' ? 'trunk thick' : 'trunk' });
-  g.shape(x, y, 0, plain(g, outline, H, PLAIN.leafy), { smooth: true, cls: 'tree' });
-  g.strokes(x, y, 0, hatchIn(g, clip, H * (simple ? 0.09 : 0.07)), { cls: 'leaf', lod: 1 });
+  const crown = plain(g, outline, H, PLAIN.leafy);
+  g.shape(x, y, 0, crown, { smooth: true, cls: 'tree crown' });
+  g.strokes(x, y, 0, penOutline(g, crown, [lean, cy]), { cls: 'crown-line' });
+  const shade = shaded(clip, [lean, cy], Math.max(rx, ry), g.range(0, 0.25));
+  g.strokes(x, y, 0, hatchIn(g, shade, H * (simple ? 0.08 : 0.06)), { cls: 'leaf', lod: 1 });
   castTree(g, x, y, outline);
   if (!simple) {
     const fork = [[lean * 0.6, T * 0.9], [lean - rx * 0.35, cy + ry * 0.1]];
@@ -217,19 +239,96 @@ function drawLeafy(g, x, y, kind, H, simple) {
 }
 
 // A lumpy closed outline around (cx, cy) with half axes rx, ry: points
-// alternately out and in, so drawn smooth (g.shape) they make scallops.
+// alternately out and in, so drawn smooth (g.shape) they make lobes – few
+// and uneven, not a ring of even scallops, which reads as a stamp.
 // `clip` is a polygon a little inside the smooth outline, for hatching.
 function blob(g, cx, cy, rx, ry, lumps) {
   const outline = [];
   const phase = g.range(0, Math.PI);
   for (let i = 0; i < lumps * 2; i++) {
     const a = phase + (i / (lumps * 2)) * Math.PI * 2;
-    const r = i % 2 ? g.range(0.8, 0.9) : g.range(0.97, 1.08);
+    const r = i % 2 ? g.range(0.72, 0.86) : g.range(0.94, 1.14);
     const flat = Math.cos(a) < -0.4 ? 0.88 : 1; // a flatter underside
     outline.push([cx + Math.sin(a) * rx * r, cy + Math.cos(a) * ry * r * flat]);
   }
   const clip = midpoints(outline).map(([u, v]) => [cx + (u - cx) * 0.86, cy + (v - cy) * 0.86]);
   return { outline, clip };
+}
+
+// ----- the pen's work on a crown -----
+
+// Towards the light, in a glyph's own units (u right, v up): opposite to
+// where the buildings' shadows fall (SUN.fall, degrees clockwise from
+// screen right – fixed to the screen, so the same in every view).
+const LIGHT = (() => {
+  const a = (SUN.fall * Math.PI) / 180;
+  return [-Math.cos(a), Math.sin(a)];
+})();
+
+// The closed smooth curve Painter.shape draws through `pts` (quadratics
+// from midpoint to midpoint), as `k` points per input point.
+function smoothLoop(pts, k = 4) {
+  const n = pts.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[(i + n - 1) % n], c = pts[i], q = pts[(i + 1) % n];
+    const a = [(p[0] + c[0]) / 2, (p[1] + c[1]) / 2], b = [(c[0] + q[0]) / 2, (c[1] + q[1]) / 2];
+    for (let j = 0; j < k; j++) {
+      const t = j / k, s = 1 - t;
+      out.push([s * s * a[0] + 2 * s * t * c[0] + t * t * b[0], s * s * a[1] + 2 * s * t * c[1] + t * t * b[1]]);
+    }
+  }
+  return out;
+}
+
+// A crown's outline as pen strokes rather than one closed curve: round in
+// one go or two, each drifting a little off the line (in or out from
+// `mid`, up to `drift` of the way), the last running on past where the
+// first began or stopping just short of it – as the buildings' edges
+// overshoot and don't quite meet. A spiky outline (a spruce) takes one go
+// and little drift, or its tiers read twice.
+function penOutline(g, pts, [cx, cy], { drift = 0.05, goes = 2 } = {}) {
+  const curve = smoothLoop(pts);
+  const n = curve.length;
+  const at = (i, k) => {
+    const [u, v] = curve[((i % n) + n) % n];
+    return [cx + (u - cx) * k, cy + (v - cy) * k];
+  };
+  const run = (from, to, k0, k1) => {
+    const out = [];
+    for (let i = from; i <= to; i++) out.push(at(i, k0 + ((k1 - k0) * (i - from)) / Math.max(1, to - from)));
+    return out;
+  };
+  const k = (a, b) => 1 + drift * g.range(a, b); // a scale about `mid`, -1..1 of the drift
+  const start = g.int(0, n - 1);
+  const end = start + n + Math.round(n * g.range(-0.05, 0.08)); // past the start, or short of it
+  if (goes < 2 || g.chance(0.45)) return [run(start, end, k(-0.8, 0), k(0, 1))];
+  const cut = start + Math.round(n * g.range(0.35, 0.65)), lap = Math.max(1, Math.round(n * g.range(0.02, 0.06)));
+  return [run(start, cut + lap, k(-0.8, 0.2), k(-0.2, 0.4)), run(cut - lap, end, k(0, 1), k(-0.6, 0.4))];
+}
+
+// The part of a polygon away from the light: past a line across it through
+// `mid`, moved `shift` × `r` towards the light, so a little more than half.
+function shaded(poly, [cx, cy], r, shift) {
+  const [lx, ly] = LIGHT;
+  const lit = ([u, v]) => (u - cx) * lx + (v - cy) * ly - shift * r;
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const fa = lit(a), fb = lit(b);
+    if (fa <= 0) out.push(a);
+    if ((fa <= 0) !== (fb <= 0)) {
+      const t = fa / (fa - fb);
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+  }
+  return out.length >= 3 ? out : [];
+}
+
+// A short stroke on the ground at a tree's foot, a little aslant, as each
+// building stands on one (LOOK.ground in painter.js); far out it goes.
+function footStroke(g, x, y, H) {
+  const w = H * g.range(0.1, 0.15);
+  g.strokes(x, y, 0, [[[-w * g.range(0.6, 1), H * 0.006], [w, -H * 0.008]]], { cls: 'tree-foot', lod: 1 });
 }
 
 function midpoints(pts) {

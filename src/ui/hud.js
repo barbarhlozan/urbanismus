@@ -1,12 +1,16 @@
 // Screen furniture: the town's name and numbers (top-left), controls
 // (top-right), Build menu (bottom centre, see buildMenu.js) with photo
-// mode's options just above it, app name and version (bottom-left).
+// mode's options just above it, app name and version (bottom-left) and
+// over them the north arrow, as a map has in its margin.
 // Photo and Terrain sit in the Build menu, under Erase; the controls keep
 // what's set now and then (colours, files, language…).
 // The name can be edited in place; the arrow beside it folds the numbers away.
-// The controls fold into their menu button: on phones they start folded and
-// open as a list, folding again once a button is used or on a tap elsewhere;
-// on wider screens they stay a row and the fold is remembered.
+// The controls fold into their menu button: they start folded and open,
+// on a wide screen, as a line of words along the top edge, left of the
+// button, with a pen line under it (clear of the Build menu's rail below);
+// narrower, as a list of named rows down from it, a pen stroke down its
+// left side and along its foot, like the corner of a sheet laid on the
+// map. They fold again once one is used or on a click elsewhere.
 // The numbers change only every few seconds, so they don't flicker.
 
 const REFRESH_MS = 5000;
@@ -16,10 +20,10 @@ import { BuildMenu } from './buildMenu.js';
 import { statIcon, controlIcon } from './icons.js';
 import { resize, shrink, bump } from './motion.js';
 import { CONFIG } from '../config.js';
-import { isNarrow } from './device.js';
 import { t, language, LANGUAGES } from '../core/text.js';
+import { rotateQuarter } from '../core/grid.js';
+import { sketchLine } from '../render/sketch.js';
 
-const MENU_KEY = 'urbanismus.controlsFolded';
 const MENU_ICON = `<svg class="icon menu-icon" viewBox="0 0 16 16" aria-hidden="true">
   <path class="bars" d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><path class="cross" d="M4 4l8 8M12 4l-8 8"/></svg>`;
 
@@ -34,47 +38,63 @@ function hop(row, seen) {
 }
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
-// one number with its drawing; the label shows on hover
-const stat = (icon, label, v, cls = '') => `<span class="stat ${cls}" title="${label}">${statIcon(icon)}<b>${v}</b></span>`;
+// one number and its word, in the plural the number takes ("4 residents")
+const counted = (key, label, v, cls = '') =>
+  `<span class="stat words ${cls}" title="${label}">${esc(t(key, { n: v })).replace(String(v), `<b>${v}</b>`)}</span>`;
 
 // a button in the controls: its drawing and its name (control.<act>), also
 // on hover for when the name is hidden (narrow screens)
 const control = (act, title = t(`control.${act}`), label = title) =>
   `<button data-act="${act}" title="${title}">${controlIcon(act)}<span class="label">${label}</span></button>`;
 
+// The north arrow, pen-drawn: a needle pointing where the map's north
+// (-y) lies on screen in the view's turn, half its head filled, the letter
+// beyond it. 40px square.
+function northArrow(rotation) {
+  const [vx, vy] = rotateQuarter(0, -1, rotation);
+  let [ux, uy] = [(vx - vy) * Math.cos(Math.PI / 6), (vx + vy) * Math.sin(Math.PI / 6)];
+  const len = Math.hypot(ux, uy);
+  [ux, uy] = [ux / len, uy / len];
+  const at = (k, side = 0) => [20 + ux * k - uy * side, 20 + uy * k + ux * side];
+  const head = at(9), tail = at(-11), barb = at(2, 3.5), back = at(2, -3.5);
+  const p = (pt) => pt.map((n) => Math.round(n * 10) / 10).join(' ');
+  return `<svg class="north" viewBox="0 0 40 40" aria-hidden="true">
+    <path class="needle" d="${sketchLine(tail, head, 7, { over: 1 })}${sketchLine(head, barb, 8)}${sketchLine(head, back, 9)}"/>
+    <path class="half" d="M${p(head)}L${p(barb)}L${p(at(0))}Z"/>
+    <text x="${at(16)[0].toFixed(1)}" y="${(at(16)[1] + 3.5).toFixed(1)}" text-anchor="middle">${t('north')}</text></svg>`;
+}
+
 export class Hud {
-  constructor(root, { world, tools, agents, trains, chronicle, actions }) {
+  constructor(root, { world, camera, tools, chronicle, actions }) {
     this.world = world;
+    this.camera = camera;
     this.chronicle = chronicle;
-    this.trains = trains;
     this.tools = tools;
-    this.agents = agents;
 
     root.insertAdjacentHTML('beforeend', `
       <div class="hud">
         <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="${t('town.name')}"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close chron" title="${t('hud.chronicle')}">${statIcon('book')}</button><button class="close fold" title="${t('hud.fold')}" aria-expanded="true">–</button></div>
-        <div class="stats row"></div>
-        <div class="traffic row"></div>
+        <div class="row"><span class="stats"></span><span class="weather"></span></div>
       </div>
+      <div class="north-box"></div>
       <div class="credit">${CONFIG.app.name} <span>v${CONFIG.app.version}</span> · ${CONFIG.app.author}</div>
       <div class="controls">
         <button data-act="colors" title="${t('control.colors')}" data-label="${t('control.colors')}"></button>
-        ${control('assets')}
-        ${control('debug')}
         ${control('export')}
         ${control('import')}
         ${control('newMap')}
         ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
         ${control('language', `${t('control.language')}: ${LANGUAGES[language()]}`, LANGUAGES[language()])}
         <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
+        <svg class="ctl-pen" aria-hidden="true"><path/></svg>
       </div>
       <div class="bottom">
         <div class="actions hidden"></div>
       </div>`);
 
+    this.northEl = root.querySelector('.north-box');
     this.statsEl = root.querySelector('.hud .stats');
-    this.trafficEl = root.querySelector('.hud .traffic');
-    this.trafficAt = -Infinity; // ms of the last traffic count
+    this.weatherEl = root.querySelector('.hud .weather');
     this.statsAt = -Infinity;   // ms of the last stats count
 
     const hudEl = root.querySelector('.hud');
@@ -130,7 +150,19 @@ export class Hud {
 
     const controlsEl = root.querySelector('.controls');
     const menuBtn = controlsEl.querySelector('.menu-toggle');
-    const fold = (folded, remember = false, animate = true) => {
+    // the pen under the line of words, or down the list's side and foot
+    const pen = controlsEl.querySelector('.ctl-pen');
+    const drawPen = () => {
+      const w = controlsEl.offsetWidth, h = controlsEl.offsetHeight;
+      if (!w || !h || controlsEl.classList.contains('folded')) return;
+      pen.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      const row = getComputedStyle(controlsEl).flexDirection === 'row';
+      pen.firstChild.setAttribute('d', row
+        ? sketchLine([4, h - 1], [w - 2, h - 2], 71, { over: 5, bow: 1.6 })
+        : sketchLine([1, 4], [2, h - 1], 72, { over: 5, bow: 1.6 }) + sketchLine([-2, h - 1], [w - 4, h - 2], 73, { over: 5, bow: 1.6 }));
+    };
+    new ResizeObserver(drawPen).observe(controlsEl);
+    const fold = (folded, animate = true) => {
       const apply = () => controlsEl.classList.toggle('folded', folded);
       // folding: the buttons fade while the bar shrinks to its menu button;
       // unfolding: the bar grows back out of it
@@ -139,25 +171,18 @@ export class Hud {
       else resize(controlsEl, apply);
       menuBtn.setAttribute('aria-expanded', String(!folded));
       menuBtn.title = t(folded ? 'controls.unfold' : 'controls.fold');
-      if (remember) {
-        try { localStorage.setItem(MENU_KEY, folded ? '1' : '0'); } catch { /* storage unavailable */ }
-      }
     };
-    let folded = isNarrow();
-    if (!folded) {
-      try { folded = localStorage.getItem(MENU_KEY) === '1'; } catch { /* storage unavailable */ }
-    }
-    fold(folded, false, false);
+    fold(true, false);
     controlsEl.addEventListener('click', (e) => {
       const btn = e.target.closest('button');
-      if (btn === menuBtn) return fold(!controlsEl.classList.contains('folded'), !isNarrow());
+      if (btn === menuBtn) return fold(!controlsEl.classList.contains('folded'));
       const act = btn?.dataset.act;
       if (!act) return;
-      if (isNarrow()) fold(true); // the list would cover the panel it opens
+      fold(true); // the list would cover the panel it opens
       actions[act]?.();
     });
     document.addEventListener('pointerdown', (e) => {
-      if (isNarrow() && !controlsEl.contains(e.target)) fold(true);
+      if (!controlsEl.contains(e.target)) fold(true);
     }, true);
 
     this.buildMenu = new BuildMenu(root, tools, actions);
@@ -168,6 +193,9 @@ export class Hud {
   }
 
   update() {
+    // the north arrow follows the view as it's turned
+    const turn = this.camera?.rotation ?? 0;
+    if (turn !== this.northTurn) this.northEl.innerHTML = northArrow((this.northTurn = turn));
     // a dot on the book while there's something new in it
     const unread = !!this.chronicle?.unread;
     if (unread !== this.unread) this.chronEl.classList.toggle('new', (this.unread = unread));
@@ -190,24 +218,9 @@ export class Hud {
       this.statsAt = now;
       this.renderStats();
     }
-    if (now - this.trafficAt >= REFRESH_MS) {
-      this.trafficAt = now;
-      const count = { walk: 0, cycle: 0, drive: 0 };
-      let trucks = 0, buses = 0;
-      for (const a of this.agents.visible()) {
-        if (a.bus) buses++;
-        else if (a.truck) trucks++;
-        else count[a.trip.mode === 'drive' || a.trip.mode === 'cycle' ? a.trip.mode : 'walk']++;
-      }
-      const html = stat('walk', t('stat.walk'), count.walk) + stat('cycle', t('stat.cycle'), count.cycle)
-        + stat('drive', t('stat.drive'), count.drive) + (trucks ? stat('truck', t('stat.trucks'), trucks) : '')
-        + (buses ? stat('bus', t('stat.buses'), buses) : '')
-        + `<span class="stat weather" title="${t(`weather.${this.world.weather.kind}`)}">${statIcon(this.world.weather.kind)}</span>`;
-      if (html !== this.trafficHTML) {
-        this.trafficEl.innerHTML = this.trafficHTML = html;
-        hop(this.trafficEl, this.trafficSeen ??= new Map());
-      }
-    }
+    // the weather, in a word at the end of the numbers
+    const sky = this.world.weather.kind;
+    if (sky !== this.sky) this.weatherEl.textContent = t(`weather.${(this.sky = sky)}`);
   }
 
   renderStats() {
@@ -222,10 +235,11 @@ export class Hud {
       }
       for (const [k, v] of Object.entries(STRUCTURE_TYPES[s.type].stats ?? {})) totals[k] = (totals[k] ?? 0) + v;
     }
-    const html = stat('residents', t('stat.residents'), totals.residents ?? 0)
-      + stat('jobs', t('stat.jobs'), totals.jobs ?? 0)
-      + stat('buildings', t('stat.buildings'), world.structures.size)
-      + (unconnected ? stat('cutoff', t('stat.cutoff', { n: unconnected }), unconnected, 'warn') : '');
+    // the town's own numbers as a ledger would have them, in words
+    const html = counted('stat.residents.n', t('stat.residents'), totals.residents ?? 0)
+      + counted('stat.jobs.n', t('stat.jobs'), totals.jobs ?? 0)
+      + counted('stat.buildings.n', t('stat.buildings'), world.structures.size)
+      + (unconnected ? counted('stat.cutoff.n', t('stat.cutoff', { n: unconnected }), unconnected, 'warn') : '');
     if (html !== this.statsHTML) {
       this.statsEl.innerHTML = this.statsHTML = html;
       hop(this.statsEl, this.statsSeen ??= new Map());

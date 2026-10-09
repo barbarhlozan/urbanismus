@@ -16,16 +16,18 @@
 #
 # Build menu groups (by name or id)
 #   doprava, transport                Road, Lane, Footpath, Railway, the stations,
-#                                     Bus stop
+#                                     Bus stop, Benzina
 #   bydleni, housing                  House, Apartments, Block
 #   obcanska_vybavenost, amenities    shops, pubs, offices, services, school,
 #                                     House of culture, Swimming pool, Cemetery
-#   vyroba, work                      Workshop, Works, Factory, Plant, the mines,
-#                                     the farms
+#   vyroba, work                      the trades, food, the town's services,
+#                                     industry, the mines
+#   zemedelstvi, farming              the farms, Mlékárna, ZZN, STS, Cukrovar,
+#                                     the fence
 #   prostranstvi, spaces              parks and squares
 #   pamatky, heritage, landmarks      Chapel, Church, Town hall, Memorial, Castle,
 #                                     Tower, Stadium
-#   zones                             bydleni + vyroba
+#   zones                             bydleni + vyroba + zemedelstvi
 #   public                            obcanska_vybavenost + prostranstvi
 #
 # Network tools
@@ -36,14 +38,15 @@
 #
 # Shared names (tags) – each covers several things at once
 #   residential          every home: house, apartments, block
-#   business             jednota, hospoda, obchodni_dum, tuzex, narodni_vybor,
+#   business             jednota, hospoda, obchodni_dum, narodni_vybor,
 #                        posta, hotel
 #   shop, pub, office, hotel
-#   industrial           workshops, works, factory, plants and the mines
+#   industrial           everything in vyroba but the mines, and Mlékárna, ZZN,
+#                        STS, Cukrovar, Benzina
 #   mine                 pit, colliery, deep_mine
 #   farm                 farmstead, jzd, statni_statek
 #   services             fire_station, police, health_centre, clinic, hospital,
-#                        service_centre, school
+#                        school
 #   fire, police, health, school
 #   park                 every park, and the swimming pool
 #   square               every square
@@ -54,6 +57,7 @@
 #   Doprava
 #     station            station, station_main, stop
 #     bus_stop           bus_stop
+#     benzina            benzina
 #   Bydlení
 #     house              house, house_wide
 #     apartments         apartments, apartments_wide
@@ -62,7 +66,6 @@
 #     jednota            jednota, jednota_wide
 #     hospoda            hospoda, hospoda_wide
 #     obchodni_dum       store, store_wide
-#     tuzex              tuzex
 #     narodni_vybor      office, office_wide, office_tower, office_tower_wide
 #     posta              post_office
 #     hotel              hotel, hotel_wide
@@ -71,22 +74,39 @@
 #     health_centre      health_centre
 #     polyclinic         clinic
 #     hospital           hospital
-#     service_centre     service_centre
 #     school             school
 #     house_of_culture   culture_house
 #     swimming_pool      pool
 #     cemetery           cemetery
 #   Výroba
-#     workshop           workshop, workshop_medium, workshop_large
-#     works              works, works_medium
-#     factory            factory
-#     plant              plant_small, plant_medium, plant
+#     autoopravna        autoopravna, autoopravna_medium
+#     kovarna            kovarna, kovarna_medium
+#     truhlarna          truhlarna, truhlarna_medium
+#     komunalni_podnik   komunalni_podnik
+#     pekarna            pekarna, pekarna_medium
+#     pivovar            pivovar, pivovar_medium
+#     vytopna            vytopna, vytopna_medium, vytopna_large
+#     vodarna            vodarna
+#     rozvodna           rozvodna
+#     pila               pila
+#     sklarna            sklarna
+#     textilka           textilka, textilka_medium
+#     strojirna          strojirna
+#     panelarna          panelarna
+#     vapenka            vapenka
+#     elektrarna         elektrarna
 #     pit                pit
 #     colliery           colliery
 #     deep_mine          deep_mine
+#   Zemědělství
+#     hospodarstvi       smallholding
 #     farmstead          farmstead
 #     jzd                jzd
 #     statni_statek      state_farm
+#     mlekarna           mlekarna, mlekarna_medium
+#     zzn                zzn, zzn_large
+#     sts                sts, sts_large
+#     cukrovar           cukrovar
 #   Prostranství
 #     green              green
 #     garden_park        garden_park
@@ -116,8 +136,8 @@
 #   photo                photo mode (and its key)
 #   terrain              contour lines
 #   colors               the Colors menu
-#   assets
-#   debug
+#   assets               (Shift+\, not a button)
+#   debug                (\, not a button)
 #   export
 #   import
 #   new_map
@@ -158,6 +178,8 @@
 #
 #   lock debug
 #   lock assets
+# the chronicle waits for a part in the game's story; it keeps writing meanwhile
+lock chronicle
 #
 # As it is, everything is open.
 

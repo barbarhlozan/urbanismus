@@ -7,10 +7,8 @@
 //              faint lines on slopes too steep to build on (steep.js;
 //              outside the terrain view) and water hatching; in its own
 //              <svg id="ground"> underneath the map
-//   grid     – the main dots (shown while building, see styles.css)
 //   meadow   – grass and wild flowers on open ground (meadow.js), in
 //              chunks rebuilt near a change and culled with the view
-//   subgrid  – the dense footpath dots (only visible while drawing footpaths)
 //   lots     – flat ground drawing of structures and their surroundings
 //              (lawns, paving, parking lines); built together with objects
 //   paths    – footpaths
@@ -87,7 +85,8 @@ import { findForests, forestSVG } from './forest.js';
 export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
-const LAYERS = ['terrain', 'meadow', 'grid', 'subgrid', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'objects', 'overlay'];
+const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
+const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'objects', 'overlay'];
 const TOP = ['objects', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -200,8 +199,6 @@ export class Renderer {
       this.touchAround(points);
       this.touchAround(points, 3, true); // gardens spreading round it (plotFor)
     };
-    // (the dots know what's on them: renderGrid)
-    for (const type of ['structure:added', 'structure:removed', 'roads:changed', 'rails:changed']) on(type, 'grid');
     for (const type of ['structure:added', 'structure:removed', 'structure:changed']) {
       on(type, 'roads', 'rails'); // stations draw tracks with the rails
       world.events.on(type, (s) => {
@@ -265,7 +262,7 @@ export class Renderer {
     }
     // a car parking redraws only its own lot (renderParked)
     world.events.on('parking:changed', (s) => this.parkedDirty.add(s.id));
-    on('terrain:changed', 'terrain', 'meadow', 'grid', 'subgrid', 'paths', 'rails', 'roads', 'fences');
+    on('terrain:changed', 'terrain', 'meadow', 'paths', 'rails', 'roads', 'fences');
     world.events.on('terrain:changed', () => {
       this.objsAll = this.worldAll = true; // (not just the view: draw them all now)
       this.roadLines = null;
@@ -610,6 +607,19 @@ export class Renderer {
     const { list: bridges, deck } = this.bridgeState();
     this.waterBridges = this.bridgeKey; // drawn broken under these (see the constructor)
     // The lines in world units, traced once per terrain (the costly part)…
+    // …then broken where a bridge deck passes over, and put on screen
+    const { shore, bank, wave } = this.traceWater();
+    const hidden = bridges.length ? hiddenUnder(bridges, deck, this.camera) : null;
+    const open = (lines) => (hidden ? lines.flatMap((pts) => keepRuns(pts, (q) => !hidden(...q), 0.04)) : lines);
+    // a path per chunk of the map (as the contours): a river runs right across it
+    const path = (lines, cls) => chunked(cut(lines, CONTOUR_CHUNK), CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
+    return path(open(shore), 'shore') + path(open(bank), 'bank') + path(wave, 'wave');
+  }
+
+  // The water's lines in world units, { shore, bank, wave }, traced once
+  // per terrain (the costly part of renderWater).
+  traceWater() {
+    const { world } = this;
     if (!this.waterLines) {
       this.waterLines = { shore: [], bank: [], wave: [] };
       const elev = world.elevation, field = world.riverField;
@@ -622,13 +632,15 @@ export class Renderer {
         }
       }
     }
-    // …then broken where a bridge deck passes over, and put on screen
-    const { shore, bank, wave } = this.waterLines;
-    const hidden = bridges.length ? hiddenUnder(bridges, deck, this.camera) : null;
-    const open = (lines) => (hidden ? lines.flatMap((pts) => keepRuns(pts, (q) => !hidden(...q), 0.04)) : lines);
-    // a path per chunk of the map (as the contours): a river runs right across it
-    const path = (lines, cls) => chunked(cut(lines, CONTOUR_CHUNK), CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
-    return path(open(shore), 'shore') + path(open(bank), 'bank') + path(wave, 'wave');
+    return this.waterLines;
+  }
+
+  // The drawn water's edges (lake shores, river banks) as a SegmentIndex:
+  // what plots stop at (plotFor). Rebuilt with the traced lines.
+  shoreIndex() {
+    const lines = this.traceWater();
+    if (this.shores?.lines !== lines) this.shores = { lines, index: new SegmentIndex([...lines.shore, ...lines.bank]) };
+    return this.shores.index;
   }
 
   // Water dots grouped into lakes (touching, diagonals too), as [[x, y]…] each.
@@ -793,34 +805,6 @@ export class Renderer {
   // the tool in hand shows only the dots it can use (styles.css): `steep`
   // too steep for a building, `taken` a building, road or railway on it
   // (`house`: a building – lines can't go through those either).
-  renderGrid() {
-    const world = this.world, { grid, terrain } = world;
-    let out = '';
-    for (let i = 0; i < grid.size; i++) {
-      if (terrain.isWater(i)) continue;
-      const [sx, sy] = this.project(...grid.xy(i));
-      const house = !!world.structureAt(i);
-      const cls = (world.tooSteepToBuild(i) ? ' steep' : '')
-        + (house || world.hasRoad(i) || world.hasRail(i) ? ' taken' : '') + (house ? ' house' : '');
-      out += `<circle class="grid-dot${cls}" cx="${r2(sx)}" cy="${r2(sy)}" r="${THEME.gridDotRadius}"/>`;
-    }
-    this.layers.grid.innerHTML = out;
-  }
-
-  renderSubgrid() {
-    const { world } = this;
-    const { fine, terrain } = world;
-    let out = '';
-    for (let f = 0; f < fine.size; f++) {
-      const [fx, fy] = fine.xy(f);
-      if (fx % 2 === 0 && fy % 2 === 0) continue; // main dots are drawn by the grid layer
-      if (world.coarseAround(f).some((c) => terrain.isWater(c))) continue;
-      const [sx, sy] = this.project(fx / 2, fy / 2);
-      out += `<circle class="fine-dot" cx="${r2(sx)}" cy="${r2(sy)}" r="${THEME.fineDotRadius}"/>`;
-    }
-    this.layers.subgrid.innerHTML = out;
-  }
-
   // Network linework as ink items (see ink.js): `add(key, cls, line, a, b)`
   // for each piece, a / b the dots it runs between, for the pen's order.
   inkItems(sway) {
@@ -1627,10 +1611,21 @@ export class Renderer {
     const onBuildingW = (x, y, r) => x > bx0 - r - 0.03 && x < bx1 + r + 0.03 && y > by0 - r - 0.03 && y < by1 + r + 0.03;
     const onBuilding = (x, y, r) => onBuildingW(...toAnchor(x, y), r);
     const inYard = (x, y) => yardLocal && pointInPolygon(toAnchor(x, y), yardLocal);
-    const water = (x, y) => {
+    // (on a water dot – or across the drawn shore, which curves in over
+    // the land dots round a lake: as seen from the nearest own dot)
+    const shores = this.shoreIndex();
+    const water = (x, y, r = 0) => {
       const [wx, wy] = toAnchor(x, y);
       const n = world.grid.nodeAt(ax + wx, ay + wy);
-      return n < 0 || world.terrain.isWater(n);
+      if (n < 0 || world.terrain.isWater(n)) return true;
+      let o = pts[0], od = Infinity;
+      for (const p of pts) {
+        const d = Math.hypot(ax + wx - p[0], ay + wy - p[1]);
+        if (d < od) [o, od] = [p, d];
+      }
+      if (od < 1e-6) return false;
+      const t = shores.cast(o, [(ax + wx - o[0]) / od, (ay + wy - o[1]) / od], od + SHORE_GAP + r);
+      return t !== null;
     };
     // (a road at a slant can cut across the plot's square: its fences stop short)
     const clear = (x, y) => {
@@ -1699,7 +1694,7 @@ export class Renderer {
         sides,
         inside: (x, y, r) =>
           own(x - r, y - r) && own(x + r, y - r) && own(x - r, y + r) && own(x + r, y + r) &&
-          reached(x, y) && !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y),
+          reached(x, y) && !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y, r),
         onLine: (x, y) => !onBuilding(x, y, 0.02) && !inYard(x, y) && !water(x, y) && clear(x, y) && reached(x, y),
       };
     }
@@ -1723,7 +1718,7 @@ export class Renderer {
       sides,
       inside: (x, y, r) =>
         x - r > x0 && x + r < x1 && y - r > y0 && y + r < y1 &&
-        !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y),
+        !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y, r),
       onLine: (x, y) => !onBuilding(x, y, 0.02) && !inYard(x, y) && !water(x, y) && clear(x, y),
     };
   }

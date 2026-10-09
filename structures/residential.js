@@ -26,7 +26,7 @@
 //               Keep within about ±0.4 of the footprint dots, and keep separate
 //               solids side by side rather than overlapping.
 
-import { door, panel, chimney, aerials, frontage, shared, hips } from './kit.js';
+import { door, panel, chimney, aerials, frontage, shared, hips, kindOf } from './kit.js';
 import { LOOK } from '../src/render/painter.js';
 
 const FRONT = [0, -1, 0];
@@ -97,8 +97,9 @@ export const house = {
   agents: 1,
   yards: ['garden', 'garden', 'trees'],
   tilt: true,
-  draw(g) {
-    const kind = g.pick(['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard', 'farmstead', 'farmstead']);
+  kinds: ['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard', 'farmstead', 'farmstead'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'farmstead') {
       farmstead(g);
     } else if (kind === 'cube') {
@@ -256,9 +257,9 @@ function balconies(g, xs, y, z0, z1, fh) {
   });
 }
 
-// Semi-detached houses (dvojdomek) under one roof, a pair of 70s
-// cubes, a row of 80s terraced houses, and a village house with its
-// eaves to the street and the barn under the same ridge.
+// Semi-detached houses (dvojdomek) under one roof, a row of 80s terraced
+// houses, and a village house with its eaves to the street and the barn
+// under the same ridge.
 export const houseWide = {
   id: 'house-wide',
   name: 'House',
@@ -270,8 +271,10 @@ export const houseWide = {
   stats: { residents: 8 },
   agents: 2,
   yards: ['garden', 'garden', 'trees'],
-  draw(g) {
-    const kind = g.pick(['twin', 'twin', 'cubes', 'row', 'longhouse']);
+  // (the third twin stands where two cube houses were: built ones keep their kind)
+  kinds: ['twin', 'twin', 'twin', 'row', 'longhouse'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     if (kind === 'twin') {
       const w = g.range(0.96, 1.04), d = g.range(0.36, 0.4), h = 0.28, r = g.range(0.1, 0.13);
       const x0 = 0.5 - w / 2, y = -d / 2;
@@ -281,14 +284,6 @@ export const houseWide = {
       for (const x of [x0 + 0.07, x0 + w - 0.07]) door(g, x, y, 0.06, 0.11);
       for (const x of [0.3, 0.7]) chimney(g, x, 0.04, h, r + 0.05);
       if (g.chance(0.5)) g.box(x0 + w, y + 0.12, 0, 0.16, d - 0.12, 0.11); // garage
-    } else if (kind === 'cubes') {
-      for (const cx of [0, 1]) {
-        const s = g.range(0.34, 0.4), h = 0.3, r = g.range(0.07, 0.1);
-        g.roofed(cx - s / 2, -s / 2, 0, s, s, h, { h: r, hip: s / 2 });
-        g.windows(cx - s / 2, -s / 2, s, s, 0, h, h / 2, 0.11, { h: 0.4 });
-        chimney(g, cx + g.range(-0.06, 0.06), 0.04, h, r + 0.06);
-        door(g, cx + g.range(-0.06, 0.06), -s / 2, 0.06, 0.11);
-      }
     } else if (kind === 'row') {
       const n = g.int(3, 4), x0 = -0.3, x1 = 1.3, w = (x1 - x0) / n, d = 0.4;
       const flat = g.chance(0.4);
@@ -330,8 +325,9 @@ export const apartmentsWide = {
   stats: { residents: 24 },
   agents: 3,
   yards: ['garden', 'trees', 'plaza'],
-  draw(g) {
-    const kind = g.pick(['sorela', 'tenements', 'balconies']);
+  kinds: ['sorela', 'tenements', 'balconies'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     const x0 = -0.32, x1 = 1.32, w = x1 - x0;
     if (kind === 'sorela') {
       const fh = 0.14, h = fh * 4, d = g.range(0.4, 0.44), y = -d / 2;

@@ -1,8 +1,9 @@
 // UI motion, all in one place so everything moves alike – a little playful,
 // like paper on a desk. Panels land like a card tossed down: a slight tilt,
-// a small overshoot, then they settle, their rows following one by one and
-// the pen frame drawn round. They go out quicker, lifting a touch before
-// they drop, the frame rubbed out. Folding boxes spring to their new size.
+// a slide that slows to a stop (paper doesn't bounce), their rows following
+// one by one and the pen frame drawn round. They go out quicker, lifting a
+// touch before they drop, the frame rubbed out. Folding boxes slide to
+// their new size.
 //
 // Panels are hidden with the .hidden class (display: none), so an exit
 // has to play before the class goes on: reveal() does both. With the
@@ -14,7 +15,7 @@ export const MOTION = {
   resize: 300, // ms: folding and unfolding
   stagger: 22, // ms between one row and the next
   easeIn: 'cubic-bezier(0.2, 0.7, 0.3, 1)',      // arrives fast, settles
-  spring: 'cubic-bezier(0.34, 1.5, 0.64, 1)',    // arrives, goes a bit past, comes back
+  land: 'cubic-bezier(0.15, 0.8, 0.25, 1)',      // arrives, slows to a stop, never past it
   easeOut: 'cubic-bezier(0.4, -0.45, 0.75, 0.4)', // lifts a little, then goes
 };
 
@@ -60,7 +61,7 @@ export function reveal(el, show, { from = [0, 4], force = false, rows = null, fa
     anims.push(el.animate([
       { opacity: 0, transform: fade ? 'none' : `${off} rotate(${t}deg) scale(0.93)` },
       { opacity: 1, transform: 'none' },
-    ], { duration: MOTION.in, easing: fade ? MOTION.easeIn : MOTION.spring }));
+    ], { duration: MOTION.in, easing: fade ? MOTION.easeIn : MOTION.land }));
     if (rows) anims.push(...follow(el.querySelectorAll(rows)));
     // the frame is drawn a little slower than the contents arrive: a pen going round
     if (frame) anims.push(frame.animate([{ strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }],
@@ -90,7 +91,7 @@ export function cascade(rows) {
 function follow(rows) {
   return [...rows].slice(0, 16).map((row, i) => row.animate(
     [{ opacity: 0, transform: 'translateY(7px)' }, { opacity: 1, transform: 'none' }],
-    { duration: MOTION.in * 0.8, delay: 40 + i * MOTION.stagger, easing: MOTION.spring, fill: 'backwards' },
+    { duration: MOTION.in * 0.8, delay: 40 + i * MOTION.stagger, easing: MOTION.land, fill: 'backwards' },
   ));
 }
 
@@ -118,7 +119,7 @@ export function resize(el, change) {
   const a = el.animate([
     { width: `${before.width}px`, height: `${before.height}px` },
     { width: `${after.width}px`, height: `${after.height}px` },
-  ], { duration: MOTION.resize, easing: MOTION.spring });
+  ], { duration: MOTION.resize, easing: MOTION.land });
   // (not if a newer move has taken over: it clips too)
   const done = () => { if (!running.has(el) || running.get(el)[0] === a) el.style.overflow = ''; };
   a.finished.then(done, done);
@@ -159,7 +160,7 @@ export function drawer(el, show, from = [12, 0]) {
   if (still()) return Promise.resolve(true);
   const frames = [{ opacity: 0, transform: `translate(${from[0]}px, ${from[1]}px) scale(0.96)` }, { opacity: 1, transform: 'none' }];
   const anims = [el.animate(show ? frames : frames.reverse(),
-    { duration: show ? MOTION.in : MOTION.out, easing: show ? MOTION.spring : MOTION.easeOut, fill: show ? 'none' : 'forwards' })];
+    { duration: show ? MOTION.in : MOTION.out, easing: show ? MOTION.land : MOTION.easeOut, fill: show ? 'none' : 'forwards' })];
   if (show) anims.push(...follow(el.querySelectorAll('.bm-head, .bm-tools:not(.hidden) .bm-tool')));
   // the pen frame drawn round as it comes, rubbed out as it goes (as reveal())
   const frame = frameOf(el);
@@ -207,7 +208,7 @@ export function corner(el, show, [w, h], at = 'right') {
 export function fadeIn(el) {
   if (still()) return;
   stop(el);
-  running.set(el, [el.animate([{ opacity: 0, transform: 'scale(0.8)' }, { opacity: 1, transform: 'none' }], { duration: MOTION.in, easing: MOTION.spring })]);
+  running.set(el, [el.animate([{ opacity: 0, transform: 'scale(0.8)' }, { opacity: 1, transform: 'none' }], { duration: MOTION.in, easing: MOTION.land })]);
 }
 
 // Like resize(), for changes that hide contents (folding a menu away):

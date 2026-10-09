@@ -142,7 +142,7 @@ test('no cars: nobody drives, car parks stand empty; no trucks: industry keeps n
   road(w, [1, 5], [28, 5]);
   const home = w.placeStructure('house', w.grid.index(2, 6));
   const shop = w.placeStructure('jednota', w.grid.index(26, 6));
-  const works = w.placeStructure('workshop-large', w.grid.index(12, 6));
+  const works = w.placeStructure('pila', w.grid.index(12, 6));
   assert.ok(home && shop && works);
   for (const s of [home, shop, works]) agents.sync(s);
   parking.spots.set(shop.id, [[26, 6], [26.2, 6]]);

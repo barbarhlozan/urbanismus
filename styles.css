@@ -97,15 +97,8 @@ html, body {
    stroke in the map whenever the view moves. Elsewhere (photos, icons)
    --stroke isn't set and widths are as written. */
 
+/* the dots around the pointer while building (OverlayKit.nearDots) */
 .grid-dot { fill: var(--detail); }
-/* the dots only show while building (any tool but Select, see main.js) */
-.layer-grid { display: none; }
-#world.show-grid .layer-grid { display: inline; }
-/* with a building in hand, no dots where it can't stand; with a road, none
-   under buildings (renderGrid marks them; main.js sets the mode) */
-#world.grid-building .grid-dot.steep,
-#world.grid-building .grid-dot.taken,
-#world.grid-roads .grid-dot.house { display: none; }
 
 .hatch { stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); }
 
@@ -199,8 +192,6 @@ html, body {
 }
 
 .fine-dot { fill: var(--detail); }
-.layer-subgrid { display: none; }
-#world.show-fine .layer-subgrid { display: inline; }
 
 .layer-objects polygon,
 .layer-objects circle,
@@ -257,6 +248,12 @@ html, body {
 .glyph.twig { stroke-width: calc(0.6px * var(--stroke, 1)); }
 /* hatching in leafy crowns (LEAFY in features/trees.js) */
 .glyph.leaf { stroke-width: calc(0.7px * var(--stroke, 1)); }
+/* a crown's outline is drawn by pen (crown-line, features/trees.js) over a
+   plain paper fill: the fill keeps no line of its own, whichever layer or
+   preview it's in (hence !important over the .filled.tree rules) */
+.filled.tree.crown { stroke: none !important; }
+.glyph.crown-line { stroke-width: calc(1px * var(--stroke, 1)); }
+.glyph.tree-foot { stroke-width: calc(0.9px * var(--stroke, 1)); }
 /* spruce outlines are trees too */
 .layer-objects .filled.tree { stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); }
 /* grass and wild flowers on open ground (src/render/meadow.js); tiers
@@ -323,7 +320,8 @@ html, body {
    It waits a moment first, so sweeping the pointer across the map doesn't
    leave a trail of half-drawn circles. */
 .overlay .hover { stroke-dasharray: var(--len) var(--len); animation: pen-circle 0.45s ease-out 0.25s both; }
-/* the name tag shows up with it */
+/* the name over a building shows up after a moment, so sweeping the
+   pointer across the map doesn't flicker labels */
 .overlay .tag-group { animation: tag-in 0.2s ease-out 0.25s both; }
 @keyframes tag-in { from { opacity: 0; } }
 @keyframes pen-circle {
@@ -358,9 +356,9 @@ html, body {
 /* Erase: what would go turns to the secondary colour (Renderer.markErasing:
    its drawing's own colours, so everything in it follows) … */
 .erasing { --main: var(--detail); --fg: var(--detail); }
-/* … and the eraser pops up over it, a little past full size, then settles
+/* … and the eraser comes down over it and stops
    (OverlayKit.eraserAt; shrinking away: Renderer.letGo) */
-.overlay .eraser-mark { transform-box: fill-box; transform-origin: center; animation: eraser-pop 0.32s cubic-bezier(0.34, 1.6, 0.64, 1) both; }
+.overlay .eraser-mark { transform-box: fill-box; transform-origin: center; animation: eraser-pop 0.22s cubic-bezier(0.15, 0.8, 0.25, 1) both; }
 @keyframes eraser-pop { from { transform: scale(0.3); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .overlay .eraser-mark { animation: none; } }
 /* Erase: the eraser over what would go (OverlayKit.eraserAt) */
@@ -368,6 +366,11 @@ html, body {
 .overlay .eraser-tip { fill: color-mix(in srgb, var(--fg) 25%, var(--bg)); stroke: none; }
 .overlay .eraser { fill: none; stroke: var(--fg); stroke-width: calc(1.5px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .overlay .steep-wedge { fill: var(--fg); stroke: var(--fg); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linejoin: round; }
+/* among the dots around the pointer (OverlayKit.nearDots) the signs are as
+   quiet as the dots: their grey, a thinner line, no halo */
+.overlay .near-steep .cross-halo { display: none; }
+.overlay .near-steep .steep-sign { stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); }
+.overlay .near-steep .steep-wedge { fill: var(--detail); stroke: var(--detail); }
 
 /* ---------- UI ---------- */
 
@@ -405,7 +408,7 @@ html, body {
 
 .hud {
   position: fixed;
-  width: var(--panel-w); /* as wide as the top bar across from it */
+  width: var(--panel-w);
   max-width: var(--panel-w);
   box-sizing: border-box;
   top: calc(16px + var(--safe-t));
@@ -463,9 +466,10 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .icon.stat-icon { width: 16px; height: 16px; flex: 0 0 16px; }
 .icon.stat-icon path { stroke-width: 1.1 !important; }
 .icon.stat-icon circle { stroke-width: 1.1 !important; }
-.hud .traffic { font-size: 12px; gap: 12px; }
-.hud .traffic .stat-icon { width: 14px; height: 14px; flex-basis: 14px; }
-.hud .traffic .weather { margin-left: auto; }
+/* (more numbers than fit, a warning among them: they go on to a second line) */
+.hud .stats { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; min-width: 0; }
+/* the weather in a word at the end of the row, quieter */
+.hud .weather { margin-left: auto; align-self: flex-start; color: var(--detail); font-size: 12px; white-space: nowrap; }
 
 /* app name, version and author: quietly in the bottom-left corner */
 .credit {
@@ -477,29 +481,54 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   pointer-events: none;
 }
 .credit span { font-variant-numeric: tabular-nums; }
+/* the north arrow over it, as in a map's margin (ui/hud.js) */
+.north-box {
+  position: fixed;
+  left: calc(14px + var(--safe-l));
+  bottom: calc(30px + var(--safe-b));
+  width: 40px;
+  height: 40px;
+  pointer-events: none;
+}
+.north { display: block; width: 40px; height: 40px; overflow: visible; }
+.north .needle { fill: none; stroke: var(--fg); stroke-width: calc(1px * var(--stroke, 1)); stroke-linecap: round; }
+.north .half { fill: var(--fg); }
+.north text { fill: var(--fg); font-family: var(--ui-font); font-size: 10px; }
 .hud.folded .row { display: none; }
 
+/* controls: a menu mark in the corner opening into a list of what's set
+   now and then, each named (src/ui/hud.js) – no box and no rules, words on
+   the paper, underlined under the pointer */
 .controls {
   position: fixed;
   top: calc(16px + var(--safe-t));
   right: calc(20px + var(--safe-r));
-  width: var(--panel-w);
-  height: calc(var(--bar-h) + 2 * var(--line)); /* the stats' title row plus its borders */
+  width: 170px;
   box-sizing: border-box;
   display: flex;
-  border: var(--line) solid var(--fg);
-  border-radius: var(--radius);
-  overflow: hidden;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-bottom: 6px;
   background: var(--bg);
+  z-index: 22;
 }
-.controls button { flex: 1 1 auto; min-width: 0; padding: 7px 3px; white-space: nowrap; border-left: var(--line) solid var(--fg) !important; }
-.controls button:first-child { border-left: none !important; }
-.controls { font-size: 10.5px; }
-.controls button:hover, .controls button.on { background: var(--fg) !important; color: var(--bg) !important; }
+.controls.folded { background: none; padding-bottom: 0; }
+#ui .controls button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 2px;
+  white-space: nowrap;
+  font-size: 12px;
+  border: none !important;
+  background: none !important;
+  color: var(--fg) !important;
+}
+#ui .controls button:hover .label, #ui .controls button:hover::after,
+#ui .controls button.on .label { text-decoration: underline; text-underline-offset: 3px; }
+.controls .ctl-icon { color: var(--detail); }
 
-/* the menu button folds the rest away (src/ui/hud.js); a .close, like the
-   stats' fold button across from it */
-#ui .controls .menu-toggle { flex: 0 0 auto; width: var(--cell); } /* #ui: over .close's width */
+/* (#ui: over the .close look) the mark stays put as the list opens */
+#ui .controls .menu-toggle { order: -1; align-self: flex-end; min-height: var(--bar-h); width: var(--bar-h); padding: 0; justify-content: center; }
 .controls .menu-icon { width: 14px; height: 14px; }
 .controls .menu-icon path { stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; }
 .controls .menu-icon .bars, .controls.folded .menu-icon .cross { display: none; }
@@ -508,7 +537,18 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .controls.folded:not(.folding) button:not(.menu-toggle) { display: none; }
 /* folding away (motion.js shrink): the buttons stay until the bar has shrunk, fading */
 .controls.folding button:not(.menu-toggle) { opacity: 0; transition: opacity 100ms; }
-.controls.folded .menu-toggle { border-left: none !important; }
+/* the pen (hud.js): under the line of words, or the list's side and foot */
+.controls .ctl-pen { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.controls .ctl-pen path { fill: none; stroke: var(--main); stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; }
+.controls.folded .ctl-pen, .controls.folding .ctl-pen { display: none; }
+/* a wide screen: the words in a line along the top edge, left of the menu
+   mark, kept above the Build menu's rail; the names alone, no drawings */
+@media (min-width: 1025px) {
+  .controls { flex-direction: row; align-items: center; width: auto; padding: 0 0 0 8px; }
+  #ui .controls .menu-toggle { order: 99; align-self: center; }
+  #ui .controls button { padding: 4px 9px; }
+  .controls button .ctl-icon, .controls button[data-act="colors"] .swatches { display: none; }
+}
 
 .bottom {
   position: fixed;
@@ -625,11 +665,9 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 
 /* ---------- Map furniture ---------- */
 
-.tag { fill: var(--fg); font-family: var(--ui-font); stroke: none; }
-.tag-fill { fill: var(--bg); }
-.tag-box { fill: none; stroke: var(--fg); stroke-width: calc(1.2px * var(--stroke, 1)); stroke-linecap: round; }
-.tag-line { fill: none; stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; }
-.tag-dot { fill: var(--fg); }
+/* the hover label (ui/annotations.js): letters with a halo of the paper */
+.tag { fill: var(--fg); font-family: var(--ui-font); stroke: var(--bg); stroke-width: calc(5px * var(--stroke, 1)); stroke-linejoin: round; paint-order: stroke; }
+.tag-line { fill: none; stroke: var(--fg); stroke-width: calc(1px * var(--stroke, 1)); stroke-linecap: round; }
 
 /* ---------- Dialogue (src/ui/dialogue.js) ---------- */
 
@@ -926,7 +964,7 @@ body.loading #ui { visibility: hidden; }
 /* Erase, Photo and Terrain: along the bottom, one bar high, a third each,
    a drawing and its name side by side */
 .bm-loose { display: flex; border-top: var(--line) solid var(--fg); }
-#ui .bm-loose > button { flex: 1 1 0; min-width: 0; position: relative; display: flex; align-items: center; flex-direction: row; justify-content: flex-start; gap: 8px; height: var(--bar-h); padding: 0 10px; border-radius: 0; }
+#ui .bm-loose > button { flex: 1 1 auto; min-width: 0; position: relative; display: flex; align-items: center; flex-direction: row; justify-content: center; gap: 5px; height: var(--bar-h); padding: 0 4px; border-radius: 0; }
 #ui .bm-loose > button + button { border-left: var(--line) solid var(--fg); }
 #ui .bm-loose > button:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
 #ui .bm-loose > button.on { background: var(--fg); color: var(--bg); }
@@ -934,7 +972,7 @@ body.loading #ui { visibility: hidden; }
 .bm-loose .bm-icon .ctl-icon { width: 16px; height: 16px; }
 .bm-loose .bm-icon .ctl-icon path, .bm-loose .bm-icon .ctl-icon circle { stroke-width: 1.1 !important; fill: none !important; }
 .bm-loose .bm-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bm-loose .key { position: static; margin-left: auto; font-size: 9px; color: var(--detail); }
+.bm-loose .key { display: none; } /* (in the tooltip, as on the tiles) */
 #ui .bm-loose button.locked { display: none; }
 
 /* folded: the dock – "+ Build", or the tool in hand with its options and an
@@ -988,9 +1026,10 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 /* ---------- Build menu on a wide screen: a rail along the right edge ---------- */
 
 /* buildMenu.js moves the tabs, and Erase, Photo and Terrain, into the two
-   boxes of .bm-rail, columns of cells under the top bar, a gap between; the panel is a drawer of tiles to its left, three
-   across, as tall as its group; the dock keeps the bottom edge, there
-   only while a tool is in hand */
+   boxes of .bm-rail, columns of cells under the top bar, a gap between;
+   the panel is a drawer of tiles to its left, three across, as tall as
+   its group; the dock keeps the bottom edge, there only while a tool is
+   in hand */
 .build-menu.rail {
   left: auto;
   right: calc(20px + var(--safe-r));
@@ -1031,7 +1070,7 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 .build-menu.rail .bm-caption { display: none; }
 .build-menu.rail .bm-body { padding-top: 6px; }
 .build-menu.rail .bm-tools { justify-content: start; }
-.build-menu.rail .bm-title { display: block; flex: 1; min-width: 0; align-self: center; padding: 0 12px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.build-menu.rail .bm-title { display: block; flex: 1; min-width: 0; align-self: center; padding: 0 3px 0 10px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bm-pin .opt-icon { width: 15px; height: 15px; }
 .bm-pin .opt-icon path { stroke-width: 1.1 !important; fill: none !important; }
 #ui .bm-pin[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
@@ -1080,25 +1119,14 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 /* three dots in a scheme's colors: on the Colors button and each menu row */
 .swatches { display: inline-flex; gap: 3px; vertical-align: middle; }
 .swatches i { width: 8px; height: 8px; border-radius: 50%; border: var(--line) solid currentColor; box-sizing: border-box; }
-.controls button[data-act="colors"] { flex: 0 0 40px; }
-/* on a wide screen the bar is icons only (the names are in the tooltips);
-   the phone list below shows both */
-.controls button { display: flex; align-items: center; justify-content: center; gap: 10px; }
+/* each row: its drawing, then its name */
+.controls button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; }
+.controls button[data-act="colors"]::after { content: attr(data-label); }
 .controls .ctl-icon { flex: 0 0 15px; width: 15px; height: 15px; }
 .controls .ctl-icon path, .controls .ctl-icon circle { stroke-width: 1.1 !important; fill: none !important; }
 .controls [data-act="fullscreen"] .fs-exit, .controls [data-act="fullscreen"].full .fs-enter { display: none; }
 .controls [data-act="fullscreen"].full .fs-exit { display: inline; }
 .controls button[hidden] { display: none !important; }
-@media (min-width: 641px) {
-  /* anchored right like the bar itself: while it grows or shrinks (motion.js)
-     what doesn't fit yet is cut off on the left, never the menu button */
-  .controls { width: auto; justify-content: flex-end; }
-  /* a set width, not just a flex basis: Safari sizes the bar from its
-     buttons' widths and would clip the last ones */
-  .controls button[data-act] { flex: 0 0 var(--cell); width: var(--cell); padding: 8px 0; }
-  .controls button[data-act="colors"] { flex-basis: 44px; width: 44px; }
-  .controls button[data-act] .label { display: none; }
-}
 
 .color-panel {
   position: fixed;
@@ -1176,14 +1204,12 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 
 /* ---------- New map menu (src/ui/newMapMenu.js) ---------- */
 
-/* the game behind the dialog, softly out of focus */
+/* the game behind the dialog, faded under a sheet of the paper */
 .newmap-scrim {
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: color-mix(in srgb, var(--bg) 35%, transparent);
-  -webkit-backdrop-filter: blur(5px);
-  backdrop-filter: blur(5px);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
 }
 /* in the middle of the screen (centred by margins, not a transform: the
    motion helpers animate transform) */
@@ -1265,7 +1291,7 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 /* the water runs out of the hills towards you */
 .newmap-scene .lp-water .lp-grow { transform: scale(1, 0); transform-origin: 50% 0; }
 .newmap-scene .lp-water .on > .lp-grow { transform: none; }
-.newmap-scene .on > .lp-grow { transform: none; opacity: 1; transition: transform 420ms cubic-bezier(0.34, 1.5, 0.64, 1), opacity 160ms; }
+.newmap-scene .on > .lp-grow { transform: none; opacity: 1; transition: transform 420ms cubic-bezier(0.15, 0.8, 0.25, 1), opacity 160ms; }
 /* the parts other than the slider pointed at */
 .newmap-scene .faint { opacity: 0.25; }
 .newmap-scene g { transition: opacity 200ms; }
@@ -1309,14 +1335,14 @@ body.touch #ui .newmap-confirm button { min-height: 44px; }
 .sk-slider svg { display: block; width: 100%; height: 26px; overflow: visible; }
 .sk-slider .sk-track { fill: none; stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; }
 .sk-slider .sk-fill { fill: none; stroke: var(--fg); stroke-width: calc(2.2px * var(--stroke, 1)); stroke-linecap: round; }
-.sk-slider .sk-knob { transition: transform 0.32s cubic-bezier(0.34, 1.6, 0.64, 1); } /* springs onto its stop */
+.sk-slider .sk-knob { transition: transform 0.2s cubic-bezier(0.15, 0.8, 0.25, 1); } /* slides onto its stop */
 .sk-slider.dragging .sk-knob { transition-duration: 0.06s; }
 .sk-slider .sk-knob path { fill: var(--bg); stroke: var(--fg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-linejoin: round; }
 .sk-slider:hover .sk-knob path, .sk-slider:focus-visible .sk-knob path { fill: var(--fg); }
 body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a finger */
 
-/* buttons give a little when pressed, and spring back */
-#ui button { transition: transform 0.25s cubic-bezier(0.34, 1.6, 0.64, 1), opacity 0.1s; } /* (opacity: the controls' fold, above) */
+/* buttons give a little when pressed, and come back */
+#ui button { transition: transform 0.12s ease-out, opacity 0.1s; } /* (opacity: the controls' fold, above) */
 #ui button:active:not(:disabled) { transform: scale(0.93); transition-duration: 0.06s; }
 @media (prefers-reduced-motion: reduce) { #ui button:active { transform: none; } }
 
@@ -1359,32 +1385,11 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 @media (max-width: 640px) {
   #ui { font-size: 11px; }
 
-  /* controls: a menu button in the corner, opening into a list below it */
-  .controls {
-    top: calc(8px + var(--safe-t));
-    right: calc(8px + var(--safe-r));
-    width: 190px;
-    height: auto;
-    flex-direction: column;
-    z-index: 22;
-  }
-  .controls.folded { width: auto; }
-  .controls button {
-    flex: 0 0 auto;
-    min-height: 40px;
-    padding: 8px 14px;
-    text-align: left;
-    font-size: 12px;
-    border-left: none !important;
-    border-top: var(--line) solid var(--fg) !important;
-  }
-  /* (#ui: over the .close look) the icon stays put as the list opens */
-  #ui .controls .menu-toggle { order: -1; width: 100%; min-height: var(--bar-h); justify-content: flex-end; padding: 0 16px; border-top: none !important; }
-  #ui .controls.folded .menu-toggle { width: auto; padding: 0 10px; justify-content: center; }
+  /* controls: closer to the corner, rows a finger tall */
+  .controls { top: calc(8px + var(--safe-t)); right: calc(8px + var(--safe-r)); }
+  .controls button { min-height: 40px; }
+  #ui .controls.folded .menu-toggle { width: auto; padding: 0 10px; }
   .controls .menu-icon { width: 16px; height: 16px; }
-  .controls button[data-act="colors"] { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
-  .controls button[data-act="colors"]::after { content: attr(data-label); }
-  .controls button[data-act] { justify-content: flex-start; }
 
   /* stats: beside the menu button, smaller; tap to fold */
   .hud {
@@ -1395,7 +1400,7 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
   }
   .hud .name { font-size: 16px; }
   .hud .row { gap: 10px; padding: 3px 8px 4px; font-size: 12px; }
-  .hud .traffic { font-size: 11px; }
+  .hud .weather { font-size: 11px; }
   .credit { left: calc(10px + var(--safe-l)); bottom: calc(2px + var(--safe-b)); font-size: 9px; }
 
   .bottom {
@@ -1448,7 +1453,7 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 .debug-panel .debug-head > span { padding: 5px 0; align-self: center; }
 .debug-panel .fps { flex: 1; text-align: right; font-weight: 400; font-variant-numeric: tabular-nums; }
 .debug-panel .svg-count { padding: 2px 0 4px; font-variant-numeric: tabular-nums; }
-.debug-no-trees #objects :is(.tree, .leaf, .trunk, .twig, .limb) { display: none; }
+.debug-no-trees #objects :is(.tree, .leaf, .trunk, .twig, .limb, .crown-line, .tree-foot) { display: none; }
 .debug-panel label { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
 .debug-panel input { accent-color: var(--fg); margin: 0; }
 @media (max-width: 640px) {
@@ -1515,6 +1520,14 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 /* secondary text on highlighted rows / buttons takes the row's text colour */
 #ui .bm-tool.active .key,
 .actions button:hover .key { color: inherit; opacity: 0.7; }
+
+/* the menu's keys stay out of sight until the pointer is on their tile or
+   tab (or it has keyboard focus): the menu reads as a menu, not a keyboard
+   chart, and the title still names the key. The options of the tool in
+   hand (the dock: size, turn, another look, Esc) keep theirs – there the
+   key is what the button is for. */
+#ui .build-menu :is(.bm-tool, .bm-tab, .bm-act) .key { transition: opacity 150ms; }
+#ui .build-menu :is(.bm-tool, .bm-tab, .bm-act):not(:hover):not(:focus-visible) .key { opacity: 0; }
 
 /* ---------- Photo mode (tools/photo.js, render/photo.js) ---------- */
 
