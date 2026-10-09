@@ -188,11 +188,11 @@ function railModel(kind, len) {
   }
   if (kind === 'railcar') {
     // ČSD M 152.0 (ČD 810), the "Orchestrion" of the local lines: one
-    // two-axle railcar, a cab at each end. A box body under a low arched
-    // roof; the ends flat, two windscreens across them; along the side a
-    // cab window, a folding door, a row of windows, a door, a cab window;
-    // the livery's stripe under the windows; a headlamp up on each end; the
-    // fans in the middle of the roof
+    // railcar, a cab at each end, a pair of wheels under each. A box body
+    // under a low arched roof; the ends flat, two windscreens across them;
+    // along the side a cab window, a folding door, a row of windows, a door,
+    // a cab window; the livery's stripe under the windows; a headlamp up on
+    // each end; the fans in the middle of the roof
     const [w0, w1] = [0.04 * k, 0.062 * k]; // window band
     const cab = 0.034 * k, door = 0.026 * k, low = rise * 0.6;
     const pane = (x0, x1) => [[x0, w0], [x1, w0], [x1, w1], [x0, w1]];
@@ -212,7 +212,8 @@ function railModel(kind, len) {
       vault: { x: [-h, h], z: eaves, rise: low },
       top: { w: 0.02 * kw, profile: [[-h * 0.13, eaves + low * 0.6], [h * 0.13, eaves + low * 0.6], [h * 0.11, eaves + low + 0.006 * k], [-h * 0.11, eaves + low + 0.006 * k]] },
       lamps: [-1, 1].map((d) => ({ x: d * (h + 0.001), z: eaves + low * 0.45, r: 0.004 * k })),
-      wheels: { x: [-h * 0.56, h * 0.56], r: 0.012 * k },
+      // a pair of wheels under each end, as on a bogie
+      wheels: { x: [-h + 0.03 * k, -h + 0.056 * k, h - 0.056 * k, h - 0.03 * k], r: 0.011 * k },
       glass: (face) => face.side === 0 && Math.abs(face.n[0]) > 0.9 * Math.hypot(...face.n) && face.z > w0 && face.z < w1,
       splitGlass: true,
       panes,
