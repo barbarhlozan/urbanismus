@@ -14,6 +14,7 @@
 //           slope at the top, glazed if glass
 //   top     plain roof gear (no windows), or a list of parts standing on
 //           the body (drawn back to front), each may have its own vault
+//           and stand off the middle (y, across)
 //   wheels  { x: [positions along], r }, inked discs on the near side
 //   lamps   [{ x, y, z, r }] round lamps on the end face at x (±, facing
 //           out), y across it (0 the middle)
@@ -193,10 +194,10 @@ function railModel(kind, len) {
     // under a low arched roof; the ends flat, two windscreens across them;
     // along the side a cab window, a folding door, a row of windows, a door,
     // a cab window; the livery's stripe under the windows; at each end a
-    // buffer beam, a lamp low on either side and one up top; the fans in
+    // lamp low on either side with a buffer under it, and one lamp up top; the fans in
     // the middle of the roof
     const [w0, w1] = [0.04 * k, 0.062 * k]; // window band
-    const cab = 0.034 * k, door = 0.026 * k, low = rise * 0.6, bump = 0.007 * k;
+    const cab = 0.034 * k, door = 0.026 * k, low = rise * 0.6, bump = 0.007 * k, lampY = 0.026 * kw;
     const pane = (x0, x1) => [[x0, w0], [x1, w0], [x1, w1], [x0, w1]];
     const upright = (x, z0 = base + 0.004 * k) => [[x, z0], [x + 0.0012 * k, z0], [x + 0.0012 * k, eaves - 0.004 * k], [x, eaves - 0.004 * k]];
     const doors = [-1, 1].flatMap((d) => {
@@ -214,16 +215,16 @@ function railModel(kind, len) {
       vault: { x: [-h, h], z: eaves, rise: low },
       top: [
         { w: 0.02 * kw, profile: [[-h * 0.13, eaves + low * 0.6], [h * 0.13, eaves + low * 0.6], [h * 0.11, eaves + low + 0.006 * k], [-h * 0.11, eaves + low + 0.006 * k]] },
-        // the buffer beam across the foot of each end, its top bevelled
-        ...[-1, 1].map((d) => ({ w: 0.042 * kw, end: true, profile: [
-          [h - 0.002, base - 0.004 * k], [h + bump, base - 0.004 * k], [h + bump, base + 0.008 * k], [h + bump * 0.3, base + 0.013 * k], [h - 0.002, base + 0.013 * k],
-        ].map(([x, z]) => [d * x, z]) })),
+        // a buffer under each low lamp, a little block sticking out
+        ...[-1, 1].flatMap((d) => [-1, 1].map((side) => ({ w: 0.005 * k, y: side * lampY, end: true, profile: [
+          [h - 0.002, base + 0.001 * k], [h + bump, base + 0.001 * k], [h + bump, base + 0.011 * k], [h - 0.002, base + 0.011 * k],
+        ].map(([x, z]) => [d * x, z]) }))),
       ],
       // a lamp low on each side of the ends, over the buffer beam, and one
       // up on the roof's end
       lamps: [-1, 1].flatMap((d) => [
         { x: d * (h + 0.001), z: eaves + low * 0.45, r: 0.0035 * k },
-        ...[-1, 1].map((side) => ({ x: d * (h + 0.001), y: side * 0.026 * kw, z: base + 0.019 * k, r: 0.004 * k })),
+        ...[-1, 1].map((side) => ({ x: d * (h + 0.001), y: side * lampY, z: base + 0.019 * k, r: 0.004 * k })),
       ]),
       // a pair of small wheels under each end, as on a bogie, mostly under
       // the body's skirt
@@ -333,15 +334,15 @@ function draw(view, model, angle, hand) {
   // faces around the profile), x (centre along the car) }
   const faces = (part) => {
     const prof = part.profile.map(([x, z]) => [x + j(), z + j()]);
-    const w = part.w;
+    const w = part.w, y = part.y ?? 0;
     const cx = prof.reduce((a, p) => a + p[0], 0) / prof.length, cz = prof.reduce((a, p) => a + p[1], 0) / prof.length;
     const out = [];
-    for (const side of [1, -1]) out.push({ pts: prof.map(([x, z]) => [x, side * w, z]), n: [0, side, 0], side, x: cx, z: cz });
+    for (const side of [1, -1]) out.push({ pts: prof.map(([x, z]) => [x, y + side * w, z]), n: [0, side, 0], side, x: cx, z: cz });
     for (let i = 0; i < prof.length; i++) {
       const [ax, az] = prof[i], [bx, bz] = prof[(i + 1) % prof.length];
       let [nx, nz] = [bz - az, -(bx - ax)];
       if (nx * ((ax + bx) / 2 - cx) + nz * ((az + bz) / 2 - cz) < 0) [nx, nz] = [-nx, -nz];
-      out.push({ pts: [[ax, w, az], [bx, w, bz], [bx, -w, bz], [ax, -w, az]], n: [nx, 0, nz], side: 0, x: (ax + bx) / 2, z: (az + bz) / 2 });
+      out.push({ pts: [[ax, y + w, az], [bx, y + w, bz], [bx, y - w, bz], [ax, y - w, az]], n: [nx, 0, nz], side: 0, x: (ax + bx) / 2, z: (az + bz) / 2 });
     }
     return out.filter((f) => facing(f.n, f.pts[0]));
   };
@@ -377,7 +378,7 @@ function draw(view, model, angle, hand) {
   // parts on top, the one further back first
   const back = (p) => {
     const cx = p.profile.reduce((a, q) => a + q[0], 0) / p.profile.length;
-    return view.depth(toWorld([cx, 0, 0])) - view.depth([0, 0, 0]);
+    return view.depth(toWorld([cx, p.y ?? 0, 0])) - view.depth([0, 0, 0]);
   };
   const tops = [].concat(model.top ?? []).sort((a, b) => back(a) - back(b));
   const partFaces = (p) => [...faces(p), ...(p.vault ? vault(p.vault, p.w) : [])];
