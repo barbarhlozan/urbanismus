@@ -42,7 +42,7 @@ export const THEME = {
   agentRadius: 1.1,    // scene px, cars (moving and parked): half the square's side
   cyclistRadius: 0.75, // cyclists (round dots)
   walkerRadius: 0.63,  // pedestrians (half this wide, twice this tall)
-  carriageRadius: 2,    // train carriages: half the square's side
+  carriageRadius: 2,    // trains far out: half the oblong's width
   truckRadius: 1.2,    // truck cab and trailer: half the square's side
 };
 

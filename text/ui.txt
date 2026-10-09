@@ -884,5 +884,5 @@ vehicle.train
   en: Train
 
 vehicle.train.blurb
-  cs: lokomotiva a vagóny
-  en: a locomotive and coaches
+  cs: lokálka, motorový vůz M 152.0
+  en: a local railcar, the M 152.0

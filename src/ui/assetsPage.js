@@ -33,12 +33,12 @@ function structureRow(def) {
     </div>`;
 }
 
-// Vehicles, each turned a few ways round. Coupled parts (a truck's trailer,
-// a train's coaches) trail behind at the spacing the simulation keeps.
-const COACH = Math.round((CONFIG.trains.carSpacing - 0.02) * 100) / 100;
+// Vehicles, each turned a few ways round. Coupled parts (a truck's trailer)
+// trail behind at the spacing the simulation keeps.
+const RAILCAR = `railcar:${Math.round(CONFIG.trains.length * 100) / 100}`;
 const coupled = (...names) => (heading, hand) => {
   const a = (heading / VEHICLES.headings) * Math.PI * 2;
-  const gaps = { trailer: CONFIG.trucks.trailer, [`coach:${COACH}`]: CONFIG.trains.carSpacing };
+  const gaps = { trailer: CONFIG.trucks.trailer };
   let back = 0;
   return names.map((name, i) => {
     if (i) back += gaps[name];
@@ -52,7 +52,7 @@ const VEHICLE_ROWS = [
   ['van', coupled('van')],
   ['truck', coupled('cab', 'trailer')],
   ['bus', coupled('bus')],
-  ['train', coupled(`loco:${COACH}`, `coach:${COACH}`, `coach:${COACH}`)],
+  ['train', coupled(RAILCAR)],
 ];
 
 function vehicleRow([id, parts]) {

@@ -10,9 +10,9 @@
 //
 // The route is a list of runs (one, or two when it turns round). A run is a
 // smoothed polyline on the right-hand track; `s` is the head's distance
-// along it and carriages follow at s - i * carSpacing. Turning round swaps
-// head and tail: the next run starts from the station the other way, with
-// the head where the tail was.
+// along it. A train is one railcar (a lokálka) `length` long, its middle at
+// s - length / 2. Turning round swaps head and tail: the next run starts
+// from the station the other way, with the head where the tail was.
 //
 // Trains keep their distance from any train ahead (lookAhead) and brake for
 // stops.
@@ -22,7 +22,8 @@
 // frame `closed` holds the ids of the crossings a train is near
 // (config.crossing); AgentSystem makes people wait in front of those.
 //
-// The renderer reads trains.visible() -> { points: [[x, y, dx, dy]…] }, and
+// The renderer reads trains.visible() -> { points: [[x, y, dx, dy]] } (the
+// railcar's middle and heading, a list as there once were carriages), and
 // crossingList() with `closed` for the signs at crossings (render/crossings.js).
 
 // Where segments p–q and r–s cross (endpoints included), or null.
@@ -193,12 +194,6 @@ export class TrainSystem {
     return out;
   }
 
-  pickLength() {
-    const kinds = Object.entries(this.config.lengths);
-    const [kind, cars] = kinds[Math.floor(Math.random() * kinds.length)];
-    return { kind, cars };
-  }
-
   spawn() {
     const { world } = this;
     const layer = world.networks.rail;
@@ -254,20 +249,19 @@ export class TrainSystem {
       return false;
     }
 
-    const { kind, cars } = this.pickLength();
-    const length = (cars - 1) * this.config.carSpacing;
+    const { length } = this.config;
     const runs = legs.map((leg, i) => this.buildRun(leg, stations, length, i > 0));
     // enter with the whole train still off the map
     runs[0].poly = this.extendStart(runs[0].poly, length);
     for (const st of runs[0].stops) st.at += length;
     const id = `t${++this.seq}`;
     const t = {
-      id, code: `T-${String(this.seq).padStart(3, '0')}`, kind, cars, length,
+      id, code: `T-${String(this.seq).padStart(3, '0')}`, length,
       runs, run: 0, stop: 0, s: length, speed: this.config.speed, state: 'run', timer: 0, wait: 0, points: [],
       exit: out.exit,
     };
     this.trains.set(id, t);
-    this.log(`${t.code} ${kind} train arrives · exit ${compass(entry.dir)}`, layer.pos(entry.node));
+    this.log(`${t.code} arrives · exit ${compass(entry.dir)}`, layer.pos(entry.node));
     return true;
   }
 
@@ -370,15 +364,19 @@ export class TrainSystem {
     }
   }
 
-  // Another train's carriage just ahead of the head, going roughly the same
+  // Another train's railcar just ahead of the head, going roughly the same
   // way? (Oncoming trains on the other track, a hand's width away, don't count.)
   blocked(t, run) {
     const [hx, hy] = pointAt(run.poly, t.s + this.config.lookAhead);
     const [dx, dy] = this.heading(run.poly, t.s);
+    const half = this.config.length / 2;
     for (const o of this.trains.values()) {
       if (o === t) continue;
       for (const [x, y, ox, oy] of o.points) {
-        if (Math.hypot(x - hx, y - hy) < 0.09 && dx * ox + dy * oy > -0.5) return true;
+        if (dx * ox + dy * oy <= -0.5) continue;
+        // nearest point of its body, front to back
+        const u = Math.max(-half, Math.min(half, (hx - x) * ox + (hy - y) * oy));
+        if (Math.hypot(x + ox * u - hx, y + oy * u - hy) < 0.09) return true;
       }
     }
     return false;
@@ -390,15 +388,11 @@ export class TrainSystem {
     return [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
   }
 
-  // Carriage positions, each with its heading: [x, y, dx, dy].
+  // The railcar's middle with its heading: [[x, y, dx, dy]].
   placeCars(t) {
     const { poly } = t.runs[t.run];
-    const { carSpacing } = this.config;
-    t.points = [];
-    for (let i = 0; i < t.cars; i++) {
-      const s = t.s - i * carSpacing;
-      t.points.push([...pointAt(poly, s), ...this.heading(poly, s)]);
-    }
+    const s = t.s - t.length / 2;
+    t.points = [[...pointAt(poly, s), ...this.heading(poly, s)]];
   }
 
   // Track removed under a train: it's gone.

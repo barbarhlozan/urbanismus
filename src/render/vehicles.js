@@ -186,6 +186,38 @@ function railModel(kind, len) {
       ],
     };
   }
+  if (kind === 'railcar') {
+    // ČSD M 152.0 (ČD 810), the "Orchestrion" of the local lines: one
+    // two-axle railcar, a cab at each end. A box body under a low arched
+    // roof; the ends flat, two windscreens across them; along the side a
+    // cab window, a folding door, a row of windows, a door, a cab window;
+    // the livery's stripe under the windows; a headlamp up on each end; the
+    // fans in the middle of the roof
+    const [w0, w1] = [0.04 * k, 0.062 * k]; // window band
+    const cab = 0.034 * k, door = 0.026 * k, low = rise * 0.6;
+    const pane = (x0, x1) => [[x0, w0], [x1, w0], [x1, w1], [x0, w1]];
+    const upright = (x, z0 = base + 0.004 * k) => [[x, z0], [x + 0.0012 * k, z0], [x + 0.0012 * k, eaves - 0.004 * k], [x, eaves - 0.004 * k]];
+    const doors = [-1, 1].flatMap((d) => {
+      const [x0, x1] = d > 0 ? [h - cab - door, h - cab] : [-h + cab, -h + cab + door];
+      const mid = (x0 + x1) / 2;
+      return [upright(x0), upright(x1 - 0.0012 * k), pane(x0 + 0.003 * k, mid - 0.001 * k), pane(mid + 0.001 * k, x1 - 0.003 * k)];
+    });
+    const span = h - cab - door, n = Math.max(3, Math.round((2 * span) / (0.034 * k)));
+    const step = (2 * span) / n;
+    const panes = [stripe, ...doors, pane(h - cab + 0.006 * k, h - 0.008 * k), pane(-h + 0.008 * k, -h + cab - 0.006 * k)];
+    for (let i = 0; i < n; i++) panes.push(pane(-span + i * step + step * 0.14, -span + (i + 1) * step - step * 0.14));
+    return {
+      // the end faces split at the window band, for the windscreens
+      body: { w: 0.042 * kw, profile: [[-h, base], [h, base], [h, w0], [h, w1], [h, eaves], [-h, eaves], [-h, w1], [-h, w0]] },
+      vault: { x: [-h, h], z: eaves, rise: low },
+      top: { w: 0.02 * kw, profile: [[-h * 0.13, eaves + low * 0.6], [h * 0.13, eaves + low * 0.6], [h * 0.11, eaves + low + 0.006 * k], [-h * 0.11, eaves + low + 0.006 * k]] },
+      lamps: [-1, 1].map((d) => ({ x: d * (h + 0.001), z: eaves + low * 0.45, r: 0.004 * k })),
+      wheels: { x: [-h * 0.56, h * 0.56], r: 0.012 * k },
+      glass: (face) => face.side === 0 && Math.abs(face.n[0]) > 0.9 * Math.hypot(...face.n) && face.z > w0 && face.z < w1,
+      splitGlass: true,
+      panes,
+    };
+  }
   const end = 0.025 * k; // no windows over the doors at the ends
   const n = Math.max(2, Math.floor((len - 2 * end) / (0.032 * k)));
   const step = (len - 2 * end) / n;
@@ -201,7 +233,8 @@ function railModel(kind, len) {
   };
 }
 
-// A model by name: one of MODELS, or 'coach:<len>' / 'loco:<len>'.
+// A model by name: one of MODELS, or 'coach:<len>' / 'loco:<len>' /
+// 'railcar:<len>'.
 // Every road model by name (railway ones are made on demand, see model()).
 export const MODEL_NAMES = Object.keys(MODELS);
 

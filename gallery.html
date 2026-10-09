@@ -128,7 +128,7 @@
       const z = +(q.get('zoom') ?? 3);
       const mapCam = new Camera({ width: 1, height: 1 }, { tile: 32 });
       mapCam.rotation = cam.rotation;
-      for (const name of [...MODEL_NAMES, 'loco:0.24', 'coach:0.24']) {
+      for (const name of [...MODEL_NAMES, 'railcar:0.4', 'loco:0.24', 'coach:0.24']) {
         out.insertAdjacentHTML('beforeend', `<h2>Vehicle · ${name}</h2>`);
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '-8 -10 128 16');

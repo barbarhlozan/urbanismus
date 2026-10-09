@@ -330,11 +330,10 @@ function vehicles(renderer, cam, seen) {
     const { name, hand } = modelFor(a.id);
     add(a.x + wx, a.y + wy, (heading / VEHICLES.headings) * Math.PI * 2, name, hand);
   }
-  // trains: each carriage [x, y, dx, dy], the first the locomotive (as in
-  // Renderer.placeTrain)
-  const len = Math.round((renderer.config.trains.carSpacing - 0.02) * 100) / 100;
+  // trains: the railcar's middle [x, y, dx, dy] (as in Renderer.placeTrain)
+  const len = Math.round(renderer.config.trains.length * 100) / 100;
   for (const t of trains.visible()) {
-    t.points.forEach(([px, py, dx, dy], i) => add(px, py, Math.atan2(dy, dx), `${i ? 'coach' : 'loco'}:${len}`, i % VEHICLES.hands, '', len / 2));
+    t.points.forEach(([px, py, dx, dy], i) => add(px, py, Math.atan2(dy, dx), `railcar:${len}`, i % VEHICLES.hands, '', len / 2));
   }
   // the signs at level crossings, the lights of closed road crossings
   // flashing as they are on the map (crossings.js)

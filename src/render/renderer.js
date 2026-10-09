@@ -21,7 +21,7 @@
 //              (shadows.js); built together with objects, over the roads
 //              so a shadow runs on across the street
 //   parked   – parked cars (hollow squares) in parking lots
-//   trains   – carriages (squares) coupled by a line
+//   trains   – one railcar each (an oblong)
 //   agents   – moving dots; sit under objects so buildings hide them correctly
 //   objects  – structures, features and street lamps, depth sorted together
 //   overlay  – tool previews, hover
@@ -2027,8 +2027,8 @@ export class Renderer {
     return { minX, maxX, minY, maxY };
   }
 
-  // Trains: close up models, further out a filled square per carriage,
-  // coupled by a line. Carriages beyond where the exits fade out are left
+  // Trains: close up the railcar's model, further out a filled oblong as
+  // long as it. Railcars beyond where the exits fade out are left
   // out. First the signs at level crossings (crossings.js), close up only:
   // under the trains, their flashing lights over everything.
   renderTrains() {
@@ -2213,9 +2213,6 @@ export class Renderer {
     return Math.max(-1, Math.min(1, (ay - by - (a0y - b0y)) / dx));
   }
 
-  // A train: close up a locomotive and coaches (src/render/vehicles.js),
-  // each turned along the track and drawn back to front, further out a line
-  // of square dots. `cars`: [{ i (index in the train), p: [x, y, dx, dy] }].
   // Signs at level crossings, and at closed road crossings their lights
   // flashing in turn.
   renderCrossings() {
@@ -2232,34 +2229,43 @@ export class Renderer {
     }
   }
 
-  // Each carriage goes on the canvas over the buildings (penTop) unless
+  // A train: close up the railcar (src/render/vehicles.js) turned along the
+  // track, further out an oblong. `cars`: [{ i, p: [x, y, dx, dy] }], its
+  // middle. It goes on the canvas over the buildings (penTop) unless
   // something nearer could hide it (screened), else on the one under them.
   placeTrain(el, cars) {
     const cam = this.camera, pen = this.pen;
     if (!cars.length) return;
     const penFor = (x, y) => (this.screened(x, y) ? pen : this.penTop);
+    const len = r2(this.config.trains.length);
     if (cam.zoom < VEHICLES.minZoom) {
       const r = THEME.carriageRadius;
-      const pts = cars.map(({ p: [x, y] }) => this.projectDeck(x, y, 0.04));
-      if (!pts.some(([x, y]) => pen.onScreen(x, y))) return;
-      const under = new Path2D(), over = new Path2D();
-      pts.forEach(([x, y], i) => (i ? under.lineTo(x, y) : under.moveTo(x, y)));
-      cars.forEach(({ p }, i) => {
-        const [x, y] = pts[i];
-        (penFor(p[0], p[1]) === pen ? under : over).rect(x - r, y - r, 2 * r, 2 * r);
-      });
-      pen.drawScene(AGENT_STYLES.train, under);
-      this.penTop.drawScene(AGENT_STYLES.train, over);
+      for (const { p: [x, y, dx, dy] } of cars) {
+        const half = len / 2 - 0.03;
+        const [ax, ay] = this.projectDeck(x - dx * half, y - dy * half, 0.04);
+        const [bx, by] = this.projectDeck(x + dx * half, y + dy * half, 0.04);
+        if (!pen.onScreen(ax, ay) && !pen.onScreen(bx, by)) continue;
+        // a band r either side of the line back to front, square ends
+        const l = Math.hypot(bx - ax, by - ay) || 1;
+        const [ux, uy] = [(bx - ax) / l, (by - ay) / l];
+        const [nx, ny] = [-uy * r, ux * r];
+        const path = new Path2D();
+        path.moveTo(ax - ux * r + nx, ay - uy * r + ny);
+        path.lineTo(bx + ux * r + nx, by + uy * r + ny);
+        path.lineTo(bx + ux * r - nx, by + uy * r - ny);
+        path.lineTo(ax - ux * r - nx, ay - uy * r - ny);
+        path.closePath();
+        penFor(x, y).drawScene(AGENT_STYLES.train, path);
+      }
       return;
     }
-    const len = r2(this.config.trains.carSpacing - 0.02);
     const order = cars
       .map(({ i, p: [x, y, dx, dy] }) => ({ i, x, y, a: Math.atan2(dy, dx), h: headingIndex(Math.atan2(dy, dx)), depth: cam.depth(x, y) }))
       .sort((a, b) => a.depth - b.depth);
     const key = `${cam.rotation}|${order.map((c) => `${c.i}:${c.h}`).join(',')}`;
     if (el.key !== key) {
       el.key = key;
-      el.shapes = order.map((c) => shapesOf(vehicleSVG(cam, `${c.i ? 'coach' : 'loco'}:${len}`, c.h, c.i % VEHICLES.hands)));
+      el.shapes = order.map((c) => shapesOf(vehicleSVG(cam, `railcar:${len}`, c.h, c.i % VEHICLES.hands)));
     }
     const half = len / 2;
     order.forEach((c, k) => {

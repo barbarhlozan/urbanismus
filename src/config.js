@@ -100,9 +100,8 @@ export const CONFIG = {
     accel: 0.15,        // grid steps per second² (braking too)
     dwell: 17,          // seconds stopped at a station
     maxStops: 3,        // stations visited per run
-    carSpacing: 0.46,   // grid steps between carriages (a carriage is drawn a bit shorter)
-    lengths: { short: 2, medium: 4, long: 6 }, // carriages, picked at random
-    lookAhead: 0.6,     // keep this far behind another train
+    length: 0.4,        // grid steps: a train is one railcar (lokálka), M 152.0
+    lookAhead: 0.3,     // keep this far behind another train
   },
 
   // Level crossings: wherever a road, street or footpath crosses a railway.
