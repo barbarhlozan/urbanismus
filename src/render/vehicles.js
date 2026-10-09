@@ -15,7 +15,8 @@
 //   top     plain roof gear (no windows), or a list of parts standing on
 //           the body (drawn back to front), each may have its own vault
 //   wheels  { x: [positions along], r }, inked discs on the near side
-//   lamps   [{ x, z, r }] round lamps on the end face at x (±, facing out)
+//   lamps   [{ x, y, z, r }] round lamps on the end face at x (±, facing
+//           out), y across it (0 the middle)
 //   glass   (face) -> bool: body faces that are windows (when no cabin)
 //   panes   window profiles [[x, z]…] on the near side
 //
@@ -191,10 +192,11 @@ function railModel(kind, len) {
     // railcar, a cab at each end, a pair of wheels under each. A box body
     // under a low arched roof; the ends flat, two windscreens across them;
     // along the side a cab window, a folding door, a row of windows, a door,
-    // a cab window; the livery's stripe under the windows; a headlamp up on
-    // each end; the fans in the middle of the roof
+    // a cab window; the livery's stripe under the windows; at each end a
+    // buffer beam, a lamp low on either side and one up top; the fans in
+    // the middle of the roof
     const [w0, w1] = [0.04 * k, 0.062 * k]; // window band
-    const cab = 0.034 * k, door = 0.026 * k, low = rise * 0.6;
+    const cab = 0.034 * k, door = 0.026 * k, low = rise * 0.6, bump = 0.007 * k;
     const pane = (x0, x1) => [[x0, w0], [x1, w0], [x1, w1], [x0, w1]];
     const upright = (x, z0 = base + 0.004 * k) => [[x, z0], [x + 0.0012 * k, z0], [x + 0.0012 * k, eaves - 0.004 * k], [x, eaves - 0.004 * k]];
     const doors = [-1, 1].flatMap((d) => {
@@ -210,10 +212,22 @@ function railModel(kind, len) {
       // the end faces split at the window band, for the windscreens
       body: { w: 0.042 * kw, profile: [[-h, base], [h, base], [h, w0], [h, w1], [h, eaves], [-h, eaves], [-h, w1], [-h, w0]] },
       vault: { x: [-h, h], z: eaves, rise: low },
-      top: { w: 0.02 * kw, profile: [[-h * 0.13, eaves + low * 0.6], [h * 0.13, eaves + low * 0.6], [h * 0.11, eaves + low + 0.006 * k], [-h * 0.11, eaves + low + 0.006 * k]] },
-      lamps: [-1, 1].map((d) => ({ x: d * (h + 0.001), z: eaves + low * 0.45, r: 0.004 * k })),
-      // a pair of wheels under each end, as on a bogie
-      wheels: { x: [-h + 0.03 * k, -h + 0.056 * k, h - 0.056 * k, h - 0.03 * k], r: 0.011 * k },
+      top: [
+        { w: 0.02 * kw, profile: [[-h * 0.13, eaves + low * 0.6], [h * 0.13, eaves + low * 0.6], [h * 0.11, eaves + low + 0.006 * k], [-h * 0.11, eaves + low + 0.006 * k]] },
+        // the buffer beam across the foot of each end, its top bevelled
+        ...[-1, 1].map((d) => ({ w: 0.042 * kw, end: true, profile: [
+          [h - 0.002, base - 0.004 * k], [h + bump, base - 0.004 * k], [h + bump, base + 0.008 * k], [h + bump * 0.3, base + 0.013 * k], [h - 0.002, base + 0.013 * k],
+        ].map(([x, z]) => [d * x, z]) })),
+      ],
+      // a lamp low on each side of the ends, over the buffer beam, and one
+      // up on the roof's end
+      lamps: [-1, 1].flatMap((d) => [
+        { x: d * (h + 0.001), z: eaves + low * 0.45, r: 0.0035 * k },
+        ...[-1, 1].map((side) => ({ x: d * (h + 0.001), y: side * 0.026 * kw, z: base + 0.019 * k, r: 0.004 * k })),
+      ]),
+      // a pair of small wheels under each end, as on a bogie, mostly under
+      // the body's skirt
+      wheels: { x: [-h + 0.03 * k, -h + 0.05 * k, h - 0.05 * k, h - 0.03 * k], r: 0.0075 * k },
       glass: (face) => face.side === 0 && Math.abs(face.n[0]) > 0.9 * Math.hypot(...face.n) && face.z > w0 && face.z < w1,
       splitGlass: true,
       panes,
@@ -409,9 +423,9 @@ function draw(view, model, angle, hand) {
   }
   for (const pane of model.panes ?? []) windows += poly(pane.map(([x, z]) => [x, near * (model.body.w + 0.001), z]));
   // lamps: round, on the end faces (x) that show
-  for (const { x, z, r: lr } of model.lamps ?? []) {
+  for (const { x, y = 0, z, r: lr } of model.lamps ?? []) {
     if (!facing([Math.sign(x), 0, 0], [x, 0, z])) continue;
-    windows += poly(Array.from({ length: 12 }, (_, i) => [x, Math.cos((i / 12) * Math.PI * 2) * lr, z + Math.sin((i / 12) * Math.PI * 2) * lr]));
+    windows += poly(Array.from({ length: 12 }, (_, i) => [x, y + Math.cos((i / 12) * Math.PI * 2) * lr, z + Math.sin((i / 12) * Math.PI * 2) * lr]));
   }
   const pathOf = (fs) => `<path class="vb" d="${fs.map((f) => poly(f.pts)).join('')}"/>`;
   return behind.map(pathOf).join('')
