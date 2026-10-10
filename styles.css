@@ -1585,6 +1585,7 @@ svg.photo :is(.roof-hatch, .wall-shade, .ink, .bar, .leaf, .twig, .shadow, .laye
 /* a window close up: its frame and glazing bars (Painter._window) */
 svg.photo .pane { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
 svg.photo .pane.bar { fill: none; }
+svg.photo .hedge { fill: var(--bg); } /* kit.js hedgeSide */
 svg.photo .photo-figure * { vector-effect: non-scaling-stroke; } /* deer, cows, sheep: the map's line widths */
 svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linejoin: round; }
 svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }

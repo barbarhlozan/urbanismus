@@ -48,10 +48,29 @@ export function hedgeAlong(g, pts, h = 0.045) {
     const [a, b] = [run[0], run[run.length - 1]];
     g.detailed(2, () => {
       g.solid(mid[0], mid[1], h / 2, { bend: true });
+      if (g.camera.perspective) return hedgeSide(g, run, h);
       g.line([[a[0], a[1], 0], ...run.map(([x, y]) => [x, y, h]), [b[0], b[1], 0]]);
       g.line(run.map(([x, y]) => [x, y, 0]));
     });
   }
+}
+
+// A hedge seen from the street (photos): a band of paper that hides what is
+// behind it, its top a row of leafy bumps, as tree crowns are drawn.
+function hedgeSide(g, run, h) {
+  const top = [];
+  let s = 0;
+  for (let i = 0; i < run.length - 1; i++) {
+    const [ax, ay] = run[i], [bx, by] = run[i + 1];
+    const len = Math.hypot(bx - ax, by - ay);
+    const n = Math.max(1, Math.ceil(len / 0.008));
+    for (let k = i ? 1 : 0; k <= n; k++) {
+      const t = k / n;
+      top.push([ax + (bx - ax) * t, ay + (by - ay) * t, h * (0.8 + 0.3 * Math.abs(Math.sin(((s + len * t) / 0.05) * Math.PI)))]);
+    }
+    s += len;
+  }
+  g.line([...run.map(([x, y]) => [x, y, 0]), ...top.reverse()], { cls: 'hedge' });
 }
 
 // Picket fence from a to b (2D points), posts every ~0.1.
@@ -109,7 +128,7 @@ export function tufts(g, n, x0, y0, x1, y1, skip = () => false) {
       const x = g.range(x0, x1), y = g.range(y0, y1);
       if (skip(x, y) || !g.isFree(x, y, 0.02)) continue;
       g.solid(x, y, 0.01);
-      g.line([[x - 0.014, y, 0.022], [x, y, 0], [x + 0.014, y, 0.022]]);
+      g.line([[x - 0.014, y, 0.022], [x, y, 0], [x + 0.014, y, 0.022]], { cls: 'tuft' });
       i++;
     }
   });

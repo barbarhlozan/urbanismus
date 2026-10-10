@@ -94,8 +94,8 @@ import { SUN, sunFor, tierOf, tierClass, wallHatch, awayFrom, shadeShare } from 
 
 const r2 = (n) => Math.round(n * 100) / 100;
 // Photos (a perspective camera): roof hatching at most this many px apart
-// on the picture, and an ink window at least this many px wide drawn open,
-// as a frame with its glazing bars (Painter._window)
+// on the picture; windows are drawn open, as frames (Painter._window), with
+// their glazing bars from this many px wide
 const PHOTO_HATCH = 5;
 const PHOTO_PANE = 7;
 
@@ -1250,17 +1250,17 @@ export class Painter {
   }
 
   // An ink window (a closed outline of four corners: bottom left, bottom
-  // right, top right, top left) seen close up in a photo: a frame with a
-  // glazing bar down the middle and a transom, instead of a block of ink.
-  // False when it is small enough on the picture to stay ink.
+  // right, top right, top left) in a photo: an open frame instead of a
+  // block of ink, and once it is big enough on the picture a glazing bar
+  // down the middle and a transom.
   _window(points, opts, lod) {
     if (points.length !== 5) return false;
     const [a, b, c, e] = points;
+    this.current.parts.push(this._outline(points, false, { ...opts, cls: 'pane' }, lod));
     const scr = (p) => this._project(...this._world(p[0], p[1], p[2]));
     const [sa, sb] = [scr(a), scr(b)];
-    if (Math.hypot(sb[0] - sa[0], sb[1] - sa[1]) < PHOTO_PANE) return false;
+    if (Math.hypot(sb[0] - sa[0], sb[1] - sa[1]) < PHOTO_PANE) return true;
     const mix = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t);
-    this.current.parts.push(this._outline(points, false, { ...opts, cls: 'pane' }, lod));
     const bars = { ...opts, cls: 'pane bar' };
     this.current.parts.push(this._outline([mix(a, b, 0.5), mix(e, c, 0.5)], false, bars, lod));
     this.current.parts.push(this._outline([mix(a, e, 0.68), mix(b, c, 0.68)], false, bars, lod));

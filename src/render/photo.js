@@ -35,7 +35,8 @@ export const PHOTO = {
   clear: 0.3,    // solids closer than this to the photographer are left out,
   trees: 1.4,    // trees and shrubs closer than this (they would be a blob filling the frame)
   lots: 1,       // lot drawing on the ground (beds, paving, benches' feet) closer than this
-  tuft: 0.8,     // meadow tufts nearer than this are drawn as big as they would be here
+  tuft: 2,       // meadow tufts nearer than this are drawn as big as they would be here,
+                 // and the tufts lots draw (kit.js tufts) left out
   // ground bands: from `near` out to `far`, each `step` times further than
   // the last; a solid standing up to `margin` behind a band's far edge is
   // still drawn over it (it stands on it)
@@ -56,8 +57,10 @@ export const PHOTO = {
 };
 
 const r2 = (n) => Math.round(n * 100) / 100;
-// a tree's or a shrub's drawing (features/trees.js, kit.js)
-const TREE = /class="[^"]*\b(tree|crown-line|leaf)\b/;
+// a tree's, a shrub's or a hedge's drawing (features/trees.js, kit.js),
+// a lot's grass tuft (kit.js)
+const TREE = /class="[^"]*\b(tree|crown-line|leaf|hedge)\b/;
+const TUFT = /class="[^"]*\btuft\b/;
 const pt = (p) => `${r2(p[0])} ${r2(p[1])}`;
 // how ink items are layered, back to front (as on the map)
 const NET_ORDER = ['footpath', 'fence-post', 'fence-pillar', 'fence', 'rail', 'rail-dash', 'rail-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
@@ -169,7 +172,7 @@ export function takePhoto(renderer, shot) {
   for (const so of solids) {
     const svg = so.parts.join('');
     const near = so.at ? Math.hypot(so.at[0] - x, so.at[1] - y) : Infinity;
-    if (near <= PHOTO.clear || (near < PHOTO.trees && TREE.test(svg))) continue;
+    if (near <= PHOTO.clear || (near < PHOTO.trees && TREE.test(svg)) || (near < PHOTO.tuft && TUFT.test(svg))) continue;
     layers.push({ depth: so.depth, svg });
   }
   layers.push(...bands.layers(), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen));
