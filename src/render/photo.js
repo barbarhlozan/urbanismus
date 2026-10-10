@@ -32,12 +32,22 @@ export const PHOTO = {
   eye: 0.12,     // eye height in grid units (a storey is about 0.15):
                  // a little above a person's, for a bit more overview
   range: 28,     // how far anything is drawn, in grid steps
-  clear: 0.3,    // solids closer than this to the photographer are left out
+  clear: 0.3,    // solids closer than this to the photographer are left out,
+  trees: 1.4,    // trees and shrubs closer than this (they would be a blob filling the frame)
+  lots: 1,       // lot drawing on the ground (beds, paving, benches' feet) closer than this
+  tuft: 0.8,     // meadow tufts nearer than this are drawn as big as they would be here
   // ground bands: from `near` out to `far`, each `step` times further than
   // the last; a solid standing up to `margin` behind a band's far edge is
   // still drawn over it (it stands on it)
   bands: { near: 0.1, far: 20, step: 1.09, margin: 0.35 },
   meadow: 12,    // how far the meadow tufts reach
+  // line weight by distance, as in a sketch: heavy in front, hairlines far
+  // off. Lines are drawn with the pens as written (styles.css) `at` steps
+  // away, a pen heavier for every halving of the distance and a pen
+  // lighter for every doubling (the pens go up in √2 steps), from `min` to
+  // `max` times. Texture (hatching, windows, grass: --fine in styles.css)
+  // only ever gets lighter, so up close it stays fine.
+  weight: { at: 2, min: 0.5, max: 2 },
   // the pencil strokes: `gap` px apart along a band, about `len` px long
   hatch: { gap: 30, len: 16 },
   // lenses by focal length, as on a 35 mm camera: the horizontal angle of
@@ -46,6 +56,8 @@ export const PHOTO = {
 };
 
 const r2 = (n) => Math.round(n * 100) / 100;
+// a tree's or a shrub's drawing (features/trees.js, kit.js)
+const TREE = /class="[^"]*\b(tree|crown-line|leaf)\b/;
 const pt = (p) => `${r2(p[0])} ${r2(p[1])}`;
 // how ink items are layered, back to front (as on the map)
 const NET_ORDER = ['footpath', 'fence-post', 'fence-pillar', 'fence', 'rail', 'rail-dash', 'rail-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
@@ -90,7 +102,10 @@ export function takePhoto(renderer, shot) {
     if (!out) return;
     const { painter } = out;
     solids.push(...painter.solids);
-    painter.ground.forEach((svg, i) => bands.add(bandAt(...painter.groundAt[i]), 'lots', svg));
+    painter.ground.forEach((svg, i) => {
+      const [gx, gy] = painter.groundAt[i];
+      if (Math.hypot(gx - x, gy - y) >= PHOTO.lots) bands.add(bandAt(gx, gy), 'lots', svg);
+    });
   };
   for (const s of world.structures.values()) {
     const nodes = world.nodesOf(s);
@@ -144,24 +159,48 @@ export function takePhoto(renderer, shot) {
     if (band >= 0) bands.line(band, cls, run);
   }
 
-  groundMarks(world, renderer.config, cam, bands, seen, onGround);
+  groundMarks(world, renderer.config, cam, bands, seen, onGround, renderer.wetAt());
 
   // ----- together, far to near -----
 
   // nothing the photographer is standing in or right against (a garden
   // tree, a fence) – it would fill the picture
-  const layers = solids
-    .filter((so) => !so.at || Math.hypot(so.at[0] - x, so.at[1] - y) > PHOTO.clear)
-    .map((so) => ({ depth: so.depth, svg: so.parts.join('') }));
+  const layers = [];
+  for (const so of solids) {
+    const svg = so.parts.join('');
+    const near = so.at ? Math.hypot(so.at[0] - x, so.at[1] - y) : Infinity;
+    if (near <= PHOTO.clear || (near < PHOTO.trees && TREE.test(svg))) continue;
+    layers.push({ depth: so.depth, svg });
+  }
   layers.push(...bands.layers(), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen));
   layers.sort((a, b) => a.depth - b.depth);
+  // each in the pen for its distance; neighbours in the same pen share a group
+  let svg = '', open = null;
+  for (const l of layers) {
+    const k = penAt(l.dist ?? -l.depth);
+    if (k !== open) {
+      if (open !== null) svg += '</g>';
+      svg += `<g style="--stroke: ${k}; --fine: ${Math.min(1, k)}">`;
+      open = k;
+    }
+    svg += l.svg;
+  }
+  if (open !== null) svg += '</g>';
 
   return `<svg class="photo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="--sun: ${renderer.config.weather.sun[world.weather.kind] ?? 1}">`
     + `<rect class="photo-sky" x="0" y="0" width="${width}" height="${height}"/>`
     + cloudsSVG(mulberry32(Math.imul(Math.round(x * 100), 83492791) ^ Math.imul(Math.round(y * 100), 2654435761) ^ world.seed), width, height, world.weather.kind)
     + skyline(cam, groundAt, range)
-    + `<g class="layer-objects">${layers.map((l) => l.svg).join('')}</g>`
+    + `<g class="layer-objects">${svg}</g>`
     + '</svg>';
+}
+
+// The pen for something `dist` steps away (PHOTO.weight): a factor on
+// every line width, a whole number of √2 pen steps.
+function penAt(dist) {
+  const { at, min, max } = PHOTO.weight;
+  const steps = Math.round(Math.log(at / Math.max(dist, 0.01)) / Math.log(2));
+  return Math.min(max, Math.max(min, r2(Math.SQRT2 ** steps)));
 }
 
 // The ground bands. Each is sampled along fixed rays across the picture (so
@@ -217,6 +256,7 @@ function makeBands(cam, onGround) {
           .join('');
         out.push({
           depth: -(d[k + 1] + margin),
+          dist: (d[k] + d[k + 1]) / 2,
           svg: `<path class="photo-band" d="${fill}"/>`
             + (m.hatch ? `<path class="photo-hatch" d="${m.hatch}"/>` : '')
             + (m.ripples ? `<path class="photo-ripples" d="${m.ripples}"/>` : '')
@@ -238,8 +278,8 @@ function makeBands(cam, onGround) {
 //   ripples  longer ones on lakes and rivers
 //   meadow   the map's own tufts and flowers (meadow.js), near the camera
 // Seeded by the spot, so the same photo comes out the same.
-function groundMarks(world, config, cam, bands, seen, onGround) {
-  const { terrain, grid } = world;
+function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
+  const { grid } = world;
   const offRoad = freeTest(world, config);
   const rnd = mulberry32(Math.imul(Math.round(cam.ex * 100), 73856093) ^ Math.imul(Math.round(cam.ey * 100), 19349663) ^ world.seed);
   const { gap, len } = PHOTO.hatch;
@@ -252,14 +292,14 @@ function groundMarks(world, config, cam, bands, seen, onGround) {
     for (let w = -half + rnd() * gap / scale; w < half; w += (gap * (0.6 + rnd() * 0.8)) / scale) {
       const dd = bands.d[k] + (bands.d[k + 1] - bands.d[k]) * rnd();
       const px = cam.ex + cam.fx * dd + cam.rx * w, py = cam.ey + cam.fy * dd + cam.ry * w;
-      const node = grid.nodeAt(Math.round(px), Math.round(py));
-      const wet = node >= 0 && terrain.isWater(node);
+      const wet = wetAt(px, py);
       if (rnd() < (wet ? 0.5 : 0.35) || (!wet && !offRoad(px, py))) continue;
       // level on the picture: along the camera's right, a touch askew
       const l = (len * (wet ? 1.6 : 1) * (0.5 + rnd())) / scale / 2;
       const tilt = (rnd() - 0.5) * 0.25;
       const dx = (cam.rx + cam.fx * tilt) * l, dy = (cam.ry + cam.fy * tilt) * l;
       if (!cam.isAhead(px - dx, py - dy) || !cam.isAhead(px + dx, py + dy)) continue;
+      if (wet && !(wetAt(px - dx, py - dy) && wetAt(px + dx, py + dy))) continue; // within the banks
       const seg = `M${pt(onGround(px - dx, py - dy))}L${pt(onGround(px + dx, py + dy))}`;
       if (wet) ripples += seg;
       else hatch += seg;
@@ -279,7 +319,7 @@ function groundMarks(world, config, cam, bands, seen, onGround) {
         const ahead = cam.ahead(x, y);
         if (ahead < cam.near || Math.hypot(x - cam.ex, y - cam.ey) > reach) continue;
         const [sx, sy] = onGround(x, y);
-        const t = cam.scaleAt(x, y);
+        const t = cam.focal / Math.max(ahead, PHOTO.tuft);
         for (const [lines, pen] of parts) {
           if (!lines.length) continue;
           const d = lines.map((pts) => pts.map(([u, v], i) => `${i ? 'L' : 'M'}${r1(sx + u * t)} ${r1(sy - v * t)}`).join('')).join('');

@@ -1578,6 +1578,13 @@ svg.photo .photo-cloud-fill { fill: var(--bg); stroke: none; }
 svg.photo .photo-cloud-edge { fill: none; stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; }
 svg.photo .photo-cloud-under { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
 svg.photo .photo-rain { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.6; }
+/* line weight by distance (PHOTO.weight): each layer sets --stroke for its
+   distance and --fine, never above 1, for texture, so hatching, windows
+   and grass stay fine up close */
+svg.photo :is(.roof-hatch, .wall-shade, .ink, .bar, .leaf, .twig, .shadow, .layer-meadow path, .photo-hatch, .photo-ripples) { --stroke: var(--fine, 1); }
+/* a window close up: its frame and glazing bars (Painter._window) */
+svg.photo .pane { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+svg.photo .pane.bar { fill: none; }
 svg.photo .photo-figure * { vector-effect: non-scaling-stroke; } /* deer, cows, sheep: the map's line widths */
 svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linejoin: round; }
 svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }

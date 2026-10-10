@@ -90,9 +90,14 @@ import { color } from '../theme.js';
 import { mulberry32 } from '../core/random.js';
 import { MinHeap } from '../core/heap.js';
 import { siteWalks } from '../roads/siteWalks.js';
-import { SUN, sunFor, tierClass, wallHatch, awayFrom, shadeShare } from './shadows.js';
+import { SUN, sunFor, tierOf, tierClass, wallHatch, awayFrom, shadeShare } from './shadows.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
+// Photos (a perspective camera): roof hatching at most this many px apart
+// on the picture, and an ink window at least this many px wide drawn open,
+// as a frame with its glazing bars (Painter._window)
+const PHOTO_HATCH = 5;
+const PHOTO_PANE = 7;
 
 // Global look knobs (gallery.html toggles them to compare):
 //   eave    how far pitched roofs overhang the walls (0 = flush)
@@ -399,8 +404,18 @@ export class Painter {
     const back = (u, w) => [o[0] + e[0] * u + sv[0] * w, o[1] + e[1] * u + sv[1] * w, o[2] + e[2] * u + sv[2] * w];
     const us = flat.map((f) => f[0]);
     const [u0, u1] = [Math.min(...us), Math.max(...us)];
-    let d = '';
-    for (let u = u0 + LOOK.hatch / 2; u < u1; u += LOOK.hatch) {
+    // through a perspective camera (photos) no further apart than
+    // PHOTO_HATCH px on the picture: a near roof gets more strokes, not gaps
+    const persp = this.camera.perspective;
+    const gapAt = (u) => {
+      if (!persp) return LOOK.hatch;
+      const w = this._world(...back(u, 0));
+      return Math.min(LOOK.hatch, PHOTO_HATCH / this.camera.scaleAt(w[0], w[1]));
+    };
+    // the strokes go by density tier (tierOf: every 8th in tier 0, …), so
+    // the map can leave out the denser tiers further out (Renderer.atDetail)
+    const d = ['', '', '', ''];
+    for (let u = u0 + gapAt(u0) / 2, k = 0; u < u1; u += gapAt(u), k++) {
       // where the line at u crosses the outline
       const ws = [];
       for (let i = 0; i < flat.length; i++) {
@@ -411,13 +426,15 @@ export class Painter {
       if (ws.length < 2) continue;
       const [w0, w1] = [Math.min(...ws), Math.max(...ws)];
       const len = w1 - w0;
-      if (len < LOOK.hatch * 0.8) continue;
+      if (len < (persp ? gapAt(u) : LOOK.hatch) * 0.8) continue;
       const lo = w0 + len * (0.03 + 0.06 * Math.abs(hash2(u * 97, o[0] + o[1], 6)));
       const hi = w1 - len * (0.05 + 0.12 * Math.abs(hash2(u * 97, o[2], 7)));
       const line = [back(u, hi), back(u, lo)];
-      d += LOOK.sketch ? this._sketch(line, false).d : `M${this._proj(line[0]).replace(',', ' ')}L${this._proj(line[1]).replace(',', ' ')}`;
+      d[tierOf(k)] += LOOK.sketch ? this._sketch(line, false).d : `M${this._proj(line[0]).replace(',', ' ')}L${this._proj(line[1]).replace(',', ' ')}`;
     }
-    if (d) this.current.parts.push(`<path d="${d}"${attrs({}, Math.max(1, this.lod), 'ln roof-hatch')}/>`);
+    d.forEach((path, n) => {
+      if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln roof-hatch${tierClass(n, 'rh')}`)}/>`);
+    });
   }
 
   // A stroke along the foot of each wall of a footprint standing on the
@@ -1227,8 +1244,27 @@ export class Painter {
     this._spread(points);
     if (opts.facing && !this._facing(opts.facing, points[0])) return this;
     const lod = opts.lod ?? (opts.facing ? Math.max(2, this.lod) : this.lod);
+    if (opts.cls === 'ink' && this.camera.perspective && this._window(points, opts, lod)) return this;
     this.current.parts.push(this._outline(points, false, opts, lod));
     return this;
+  }
+
+  // An ink window (a closed outline of four corners: bottom left, bottom
+  // right, top right, top left) seen close up in a photo: a frame with a
+  // glazing bar down the middle and a transom, instead of a block of ink.
+  // False when it is small enough on the picture to stay ink.
+  _window(points, opts, lod) {
+    if (points.length !== 5) return false;
+    const [a, b, c, e] = points;
+    const scr = (p) => this._project(...this._world(p[0], p[1], p[2]));
+    const [sa, sb] = [scr(a), scr(b)];
+    if (Math.hypot(sb[0] - sa[0], sb[1] - sa[1]) < PHOTO_PANE) return false;
+    const mix = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t);
+    this.current.parts.push(this._outline(points, false, { ...opts, cls: 'pane' }, lod));
+    const bars = { ...opts, cls: 'pane bar' };
+    this.current.parts.push(this._outline([mix(a, b, 0.5), mix(e, c, 0.5)], false, bars, lod));
+    this.current.parts.push(this._outline([mix(a, e, 0.68), mix(b, c, 0.68)], false, bars, lod));
+    return true;
   }
 
   disc(x, y, z, r, opts = {}) {
