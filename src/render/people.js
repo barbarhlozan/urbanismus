@@ -21,7 +21,7 @@ export const PEOPLE = {
   height: 2.5,   // a walker's height to the top of the head, scene px
   wheel: 0.065,  // grid units between a bike's wheel centres
   // A walker bobs as it goes: squashed towards its feet a little every step.
-  stride: 0.05,  // grid units walked per step (one dip)
+  stride: 0.02,  // grid units walked per step (one dip)
   bob: 0.2,     // how much shorter at the bottom of a step
   bobZoom: 2,    // only this close or closer
 };

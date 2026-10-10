@@ -981,7 +981,7 @@ export class Painter {
       const n = profile.length - 1;
       // the outline, like a face's edge, drawn with a steadier hand (a
       // long curve with the usual jitter at every point would look wavy)
-      const pen = { stroke: 'main', width: 1.2, wobble: 0.12, ...faceOpts };
+      const pen = { stroke: 'main', width: 1.4, wobble: 0.12, ...faceOpts }; // pen 4, as .foot
       // The outline is worked out exactly rather than from the facets: the
       // view is a linear test on normals (Camera.facing), so on each ring
       // the surface turns away from the viewer at th ± d, where the normal

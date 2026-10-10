@@ -376,8 +376,8 @@ export class Renderer {
     if (this.objsPlace) this.placeObjects();
     if (this.ghosts.size) this.reapGhosts();
     if (this.showAgents) {
-      this.pen.begin(this.camera);
-      this.penTop.begin(this.camera);
+      this.pen.begin(this.camera, this.strokeK);
+      this.penTop.begin(this.camera, this.strokeK);
       this.renderBoats();  // on the water, under everything else that moves
       this.renderAnimals();
       this.renderTrains(); // under the people and cars (or over everything)

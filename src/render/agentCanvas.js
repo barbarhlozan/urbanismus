@@ -5,28 +5,32 @@
 //
 // They are drawn from the same SVG snippets as before (vehicles.js,
 // people.js), parsed once into Path2D shapes, and styled here to match
-// styles.css: the colours from the scheme, line widths in screen px at
-// every zoom (like the map's non-scaling strokes).
+// styles.css: the colours from the scheme, and the line widths times the
+// map's --stroke (Renderer.updateStroke), so a car's outline is as heavy as
+// the road line beside it on any screen and at any zoom.
 
 import { THEME } from '../theme.js';
 
+// The map's pens (--pen-1…5 in styles.css), px of line width.
+export const PEN = [0, 0.5, 0.7, 1, 1.4, 2];
+
 // Per class (the snippets' classes, and the plain marks further out): fill
-// and stroke as palette names, stroke width in screen px. As in styles.css.
+// and stroke as palette names, stroke width as in styles.css (before --stroke).
 const STYLES = {
-  vb: { fill: 'bg', stroke: 'main', width: 0.9 },
-  vi: { fill: 'main', stroke: 'main', width: 0.3 },
-  'fig-body': { fill: 'bg', stroke: 'main', width: 0.9 },
-  'fig-head': { stroke: 'main', width: 0.8 },
-  'fig-wheel': { stroke: 'main', width: 0.8 },
-  'fig-line': { stroke: 'main', width: 0.8 },
-  'fig-ink': { fill: 'main', stroke: 'main', width: 0.5 },
+  vb: { fill: 'bg', stroke: 'main', width: PEN[3] },
+  vi: { fill: 'main', stroke: 'main', width: PEN[1] },
+  'fig-body': { fill: 'bg', stroke: 'main', width: PEN[3] },
+  'fig-head': { stroke: 'main', width: PEN[2] },
+  'fig-wheel': { stroke: 'main', width: PEN[2] },
+  'fig-line': { stroke: 'main', width: PEN[2] },
+  'fig-ink': { fill: 'main', stroke: 'main', width: PEN[1] },
   car: { fill: 'main' },
   walker: { fill: 'main' },
-  cyclist: { fill: 'main', stroke: 'main', width: 0.4 },
-  truck: { fill: 'main', stroke: 'main', width: 0.9 },
-  train: { fill: 'main', stroke: 'main', width: 0.9 },
-  sgl: { stroke: 'main', width: 0.9 },   // a crossing sign's pole (crossings.js)
-  flash: { stroke: 'main', width: 1.1 }, // its lights flashing
+  cyclist: { fill: 'main', stroke: 'main', width: PEN[1] },
+  truck: { fill: 'main', stroke: 'main', width: PEN[3] },
+  train: { fill: 'main', stroke: 'main', width: PEN[3] },
+  sgl: { stroke: 'main', width: PEN[3] },   // a crossing sign's pole (crossings.js)
+  flash: { stroke: 'main', width: PEN[3] }, // its lights flashing
 };
 
 // How far (css px) past the window edge something may stand and still show.
@@ -58,7 +62,8 @@ export class AgentCanvas {
   }
 
   // Start a frame at the camera's current view: clear, size to the window.
-  begin(camera) {
+  // `stroke`: the map's --stroke, scene px per px of line width.
+  begin(camera, stroke) {
     const { canvas, ctx } = this;
     const dpr = devicePixelRatio || 1;
     const W = innerWidth, H = innerHeight;
@@ -76,6 +81,7 @@ export class AgentCanvas {
     ctx.miterLimit = 4;
     ctx.globalAlpha = 1;
     this.dpr = dpr;
+    this.strokeK = stroke ?? 1 / camera.zoom;
     this.zoom = camera.zoom;
     this.panX = camera.panX;
     this.panY = camera.panY;
@@ -110,7 +116,7 @@ export class AgentCanvas {
     const { ctx, dpr, zoom } = this;
     const m = dpr * zoom * k;
     ctx.setTransform(mirror ? -m : m, m * shear, 0, m * squash, dpr * (this.panX + zoom * sx), dpr * (this.panY + zoom * sy));
-    const unit = 1 / (zoom * k); // one screen px in the shapes' units
+    const unit = this.strokeK / k; // one px of line width in the shapes' units
     for (const s of shapes) this.paint(s.style, s.path, unit);
   }
 
@@ -119,7 +125,7 @@ export class AgentCanvas {
     const { ctx, dpr, zoom } = this;
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * this.panX, dpr * this.panY);
     ctx.globalAlpha = alpha;
-    this.paint(style, path, 1 / zoom);
+    this.paint(style, path, this.strokeK);
     ctx.globalAlpha = 1;
   }
 

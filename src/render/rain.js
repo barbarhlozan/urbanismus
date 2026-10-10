@@ -10,6 +10,7 @@
 // the same rain, harder: more drops, falling faster and slanting more.
 
 import { THEME } from '../theme.js';
+import { CONFIG } from '../config.js';
 
 export const RAIN = {
   density: 1 / 2600,  // drops on screen at full rain, per screen px²
@@ -19,7 +20,7 @@ export const RAIN = {
   slant: 0.18,        // sideways per downwards
   storm: { slant: 0.2, speed: 0.35 }, // per level of rain over 1: more slant, faster
   splash: 0.18,       // seconds a splash shows
-  width: 0.7,         // stroke width, px
+  width: 0.8,         // stroke width: device px times config.render.lineWeight, as the map's (pen 1)
   alpha: 0.65,
   ease: 4,            // seconds for the rain to come on or go off
 };
@@ -83,7 +84,7 @@ export class RainCanvas {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     ctx.strokeStyle = THEME.palette.detail;
-    ctx.lineWidth = RAIN.width;
+    ctx.lineWidth = (RAIN.width * (CONFIG.render.lineWeight ?? 1)) / dpr;
     ctx.lineCap = 'round';
     ctx.globalAlpha = RAIN.alpha;
     ctx.beginPath();

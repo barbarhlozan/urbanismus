@@ -18,6 +18,18 @@
   --fg: var(--main);
   --contour: color-mix(in srgb, var(--detail) 30%, var(--bg));
   --contourIndex: color-mix(in srgb, var(--detail) 55%, var(--bg));
+  /* the map's five pens, the ISO / Koh-i-noor Rapidograph √2 series, in
+     device px (times --stroke): texture (grass, shadows, rock faces, rain),
+     detail (hatching, windows, paving, contours), lines (fences, footpaths,
+     kerbs, trees, figures), structure (building outlines, roads, the foot
+     stroke), accents (zebra, thick trunks, buffers). The rail symbol (3.6)
+     is drawn apart on purpose. Canvases use the same: PEN in
+     render/agentCanvas.js. */
+  --pen-1: 0.5px;
+  --pen-2: 0.7px;
+  --pen-3: 1px;
+  --pen-4: 1.4px;
+  --pen-5: 2px;
   --line: 1px; /* UI border width */
   --radius: 6px; /* corners of UI boxes */
   --panel-w: 370px; /* one width for every window: stats, top bar, menus, debug */
@@ -91,7 +103,7 @@ html, body {
 #input.panning { cursor: grabbing; }
 
 /* Line widths stay about the same on screen at any zoom: every stroke
-   width and dash is multiplied by --stroke, which the renderer sets on the
+   width (one of the pens, --pen-1…5) and dash is multiplied by --stroke, which the renderer sets on the
    map's <svg>s to 1 / zoom in steps, in device pixels (Renderer.updateStroke). Not
    vector-effect: non-scaling-stroke: with it the browser recomputes every
    stroke in the map whenever the view moves. Elsewhere (photos, icons)
@@ -100,34 +112,34 @@ html, body {
 /* the dots around the pointer while building (OverlayKit.nearDots) */
 .grid-dot { fill: var(--detail); }
 
-.hatch { stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); }
+.hatch { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 
-.contour { fill: none; stroke: var(--contour); stroke-width: calc(0.7px * var(--stroke, 1)); stroke-linejoin: round; }
-.contour.index { stroke: var(--contourIndex); stroke-width: calc(0.9px * var(--stroke, 1)); }
+.contour { fill: none; stroke: var(--contour); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
+.contour.index { stroke: var(--contourIndex); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* brows: where a hill turns away out of sight (render/brows.js) */
-.brow { fill: none; stroke: color-mix(in srgb, var(--detail) 55%, var(--bg)); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
-.brow.light { stroke: color-mix(in srgb, var(--detail) 32%, var(--bg)); stroke-width: calc(0.7px * var(--stroke, 1)); }
-.brow.outline { stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); }
+.brow { fill: none; stroke: color-mix(in srgb, var(--detail) 55%, var(--bg)); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.brow.light { stroke: color-mix(in srgb, var(--detail) 32%, var(--bg)); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+.brow.outline { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* slopes too steep to build on, outside the terrain view (render/steep.js) */
-.steep { fill: none; stroke: color-mix(in srgb, var(--detail) 28%, var(--bg)); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.steep { fill: none; stroke: color-mix(in srgb, var(--detail) 28%, var(--bg)); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 /* rock faces turned to the viewer: the lip, strokes down the face (render/rocks.js) */
-.rock-lip { fill: none; stroke: color-mix(in srgb, var(--detail) 62%, var(--bg)); stroke-width: calc(0.85px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
-.rock-face { fill: none; stroke: color-mix(in srgb, var(--detail) 45%, var(--bg)); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; }
+.rock-lip { fill: none; stroke: color-mix(in srgb, var(--detail) 62%, var(--bg)); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.rock-face { fill: none; stroke: color-mix(in srgb, var(--detail) 45%, var(--bg)); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
 /* a named hill's top (terrain/hills.js): a little pen triangle; hovering it
    shows the name and height (ui/annotations.js) */
-.summit { fill: none; stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+.summit { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
 /* lakes and rivers (Renderer.renderWater): a lake's shoreline with
    two wave strokes inside, a river's banks thinner and lighter; all in the
    detail pen */
-.shore { fill: none; stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linejoin: round; }
-.bank { fill: none; stroke: color-mix(in srgb, var(--detail) 75%, var(--bg)); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }
-.wave { fill: none; stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; }
+.shore { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
+.bank { fill: none; stroke: color-mix(in srgb, var(--detail) 75%, var(--bg)); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
+.wave { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
 
 /* roads: their two edge lines (roadEdges in src/roads/geometry.js) */
 .road {
   fill: none;
   stroke: var(--fg);
-  stroke-width: calc(1.2px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-4) * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -136,7 +148,7 @@ html, body {
 .kerb {
   fill: none;
   stroke: var(--fg);
-  stroke-width: calc(1px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-3) * var(--stroke, 1));
   stroke-linecap: round;
 }
 
@@ -144,14 +156,14 @@ html, body {
 .zebra {
   fill: none;
   stroke: var(--fg);
-  stroke-width: calc(1.6px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-5) * var(--stroke, 1));
   stroke-linecap: butt;
 }
 
 .road-exit {
   fill: none;
   stroke: var(--fg);
-  stroke-width: calc(1.2px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-4) * var(--stroke, 1));
   stroke-dasharray: calc(3px * var(--stroke, 1)) calc(4px * var(--stroke, 1));
 }
 
@@ -159,34 +171,34 @@ html, body {
 .footpath {
   fill: none;
   stroke: var(--fg);
-  stroke-width: calc(0.9px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-3) * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 /* fences round pastures: a rail along the top, short posts close together */
-.fence, .fence-post { fill: none; stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); stroke-linecap: round; } /* as the garden fences (.layer-objects .ln) */
+.fence, .fence-post { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; } /* as the garden fences (.layer-objects .ln) */
 /* a gate's pillars, either side of a footpath through the fence */
-.fence-pillar { fill: none; stroke: var(--detail); stroke-width: calc(1.8px * var(--stroke, 1)); stroke-linecap: butt; }
+.fence-pillar { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-5) * var(--stroke, 1)); stroke-linecap: butt; }
 /* railways: the map symbol – a solid line with dashes of background
    colour inside it; faded dashes past the map edge, a bar at dead ends */
 .rail { fill: none; stroke: var(--fg); stroke-width: calc(3.6px * var(--stroke, 1)); stroke-linejoin: round; }
-.rail-dash { fill: none; stroke: var(--bg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-dasharray: calc(7px * var(--stroke, 1)) calc(7px * var(--stroke, 1)); stroke-linejoin: round; }
+.rail-dash { fill: none; stroke: var(--bg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-dasharray: calc(7px * var(--stroke, 1)) calc(7px * var(--stroke, 1)); stroke-linejoin: round; }
 .rail-exit { fill: none; stroke: var(--fg); stroke-width: calc(3.6px * var(--stroke, 1)); stroke-dasharray: calc(3px * var(--stroke, 1)) calc(5px * var(--stroke, 1)); }
-.rail-buffer { fill: none; stroke: var(--fg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-linecap: square; }
+.rail-buffer { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-5) * var(--stroke, 1)); stroke-linecap: square; }
 /* bridges (render/bridges.js): railings, the deck's side, piers, a truss;
    thinner posts */
-.bridge { fill: none; stroke: var(--fg); stroke-width: calc(1px * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
-.bridge-post { fill: none; stroke: var(--fg); stroke-width: calc(0.7px * var(--stroke, 1)); stroke-linecap: round; }
+.bridge { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+.bridge-post { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
 
-.driveway { fill: none; stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); }
+.driveway { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* paths drawn inside parks, in the footpath style */
-.gnd.fp { stroke: var(--main); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linecap: round; }
+.gnd.fp { stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
 
 /* flat ground drawing: lawns, paving, parking lines (texture: detail color) */
 .gnd {
   fill: none;
   stroke: var(--detail);
-  stroke-width: calc(0.8px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-2) * var(--stroke, 1));
   stroke-linejoin: round;
   stroke-linecap: round;
 }
@@ -201,7 +213,7 @@ html, body {
 .ghost .filled {
   fill: var(--bg);
   stroke: var(--fg);
-  stroke-width: calc(1.2px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-4) * var(--stroke, 1));
   stroke-linejoin: round;
 }
 /* lines on and around buildings (windows, floors, fences, props): detail */
@@ -211,18 +223,18 @@ html, body {
 .ghost .ln {
   fill: none;
   stroke: var(--detail);
-  stroke-width: calc(1px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-3) * var(--stroke, 1));
   stroke-linecap: round;
 }
 .ghost polygon, .ghost polyline, .ghost .sk { stroke-dasharray: calc(3px * var(--stroke, 1)) calc(3px * var(--stroke, 1)); }
 /* hand-drawn marks (LOOK in src/render/painter.js): the stroke along a
    building's foot in the outline pen, roof hatching and
    ink windows as texture */
-.layer-objects .foot { stroke: var(--main); stroke-width: calc(1.2px * var(--stroke, 1)); }
-.layer-objects .roof-hatch { stroke: var(--main); stroke-width: calc(0.7px * var(--stroke, 1)); }
-.layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }
+.layer-objects .foot { stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
+.layer-objects .roof-hatch { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+.layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
 /* cast shadows: pen hatching on the ground (src/render/shadows.js) */
-.shadow { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; }
+.shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
 /* SUN.ground / SUN.walls 'tone': flat shade instead of strokes */
 .shadow.tone { fill: color-mix(in srgb, var(--detail) 16%, var(--bg)); stroke: none; }
 /* --sun: how much the sun shades them, from the weather (config.weather.sun,
@@ -231,39 +243,39 @@ html, body {
 #objects { transition: --sun 4s; }
 .layer-objects .filled.shade-1 { fill: color-mix(in srgb, var(--detail) calc(9% * var(--sun)), var(--bg)); }
 .layer-objects .filled.shade-2 { fill: color-mix(in srgb, var(--detail) calc(18% * var(--sun)), var(--bg)); }
-.layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); }
+.layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
 /* screen-facing line drawings (trees, see features/trees.js) */
 /* woods far out, one shape each (render/forest.js): as a tree's crown */
 .layer-forest .forest { fill: var(--bg); stroke: none; fill-rule: evenodd; }
-.layer-forest .forest-edge { fill: none; stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; }
+.layer-forest .forest-edge { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
 /* its trees (forest.js signs): drawn as the map's trees in .layer-objects */
 .layer-forest .filled { fill: var(--bg); stroke-linejoin: round; }
-.layer-forest .filled.tree { stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); }
+.layer-forest .filled.tree { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 .layer-forest .forest-fill { fill: url(#forest-hatch); stroke: none; fill-rule: evenodd; }
-.layer-forest .forest-hatch { stroke: var(--detail); stroke-width: calc(0.7px * var(--stroke, 1)); }
-.glyph { fill: none; stroke: var(--detail); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
-.glyph.trunk { stroke-width: calc(1.4px * var(--stroke, 1)); }
-.glyph.trunk.thick { stroke-width: calc(2.4px * var(--stroke, 1)); }
-.glyph.limb { stroke-width: calc(1.15px * var(--stroke, 1)); }
-.glyph.twig { stroke-width: calc(0.6px * var(--stroke, 1)); }
+.layer-forest .forest-hatch { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+.glyph { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.glyph.trunk { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
+.glyph.trunk.thick { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
+.glyph.limb { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+.glyph.twig { stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
 /* hatching in leafy crowns (LEAFY in features/trees.js) */
-.glyph.leaf { stroke-width: calc(0.7px * var(--stroke, 1)); }
+.glyph.leaf { stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 /* a crown's outline is drawn by pen (crown-line, features/trees.js) over a
    plain paper fill: the fill keeps no line of its own, whichever layer or
    preview it's in (hence !important over the .filled.tree rules) */
 .filled.tree.crown { stroke: none !important; }
-.glyph.crown-line { stroke-width: calc(1px * var(--stroke, 1)); }
-.glyph.tree-foot { stroke-width: calc(0.9px * var(--stroke, 1)); }
+.glyph.crown-line { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+.glyph.tree-foot { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* spruce outlines are trees too */
-.layer-objects .filled.tree { stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); }
+.layer-objects .filled.tree { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* grass and wild flowers on open ground (src/render/meadow.js); tiers
    t1 / t2 show from a zoom up (mz0/1/2 set on the layer by the renderer) */
 /* a hair under the crowns' hatching (.glyph.leaf): a tuft's blades double back on themselves, so it reads heavier */
-.layer-meadow path { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
-.layer-meadow .thin { stroke-width: calc(0.5px * var(--stroke, 1)); }
-.layer-meadow .ink { fill: var(--detail); stroke-width: calc(0.4px * var(--stroke, 1)); }
+.layer-meadow path { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.layer-meadow .thin { stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
+.layer-meadow .ink { fill: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
 .mz0 .t1, .mz0 .t2, .mz1 .t2 { display: none; }
-.ghost .gnd { fill: none; stroke-width: calc(0.8px * var(--stroke, 1)); }
+.ghost .gnd { fill: none; stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 /* the build preview: all in the detail pen, solid lines (the dashed .ghost
    look above is for buildings being erased); faded where it can't go */
 .overlay .ghost polygon, .overlay .ghost circle, .overlay .ghost .filled { stroke: var(--detail); }
@@ -272,23 +284,23 @@ html, body {
 .overlay .ghost.blocked { opacity: 0.5; }
 
 .agent { fill: var(--fg); }
-.agent.truck { stroke: var(--fg); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
+.agent.truck { stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
 /* vehicles close up (src/render/vehicles.js): paper bodies in the outline
    pen, inked wheels and windows; parked cars sit back in the detail color */
-.vb { fill: var(--bg); stroke: var(--main); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
-.vi { fill: var(--main); stroke: var(--main); stroke-width: calc(0.3px * var(--stroke, 1)); stroke-linejoin: round; }
+.vb { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
+.vi { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 /* level crossing signs in photos (on the map: agentCanvas.js) */
-.sgl { fill: none; stroke: var(--main); stroke-width: calc(0.9px * var(--stroke, 1)); }
-.flash { fill: none; stroke: var(--main); stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; }
+.sgl { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+.flash { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
 /* people close up (src/render/people.js): paper bodies, open heads, wheel rings */
-.fig-body { fill: var(--bg); stroke: var(--main); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
-.fig-head, .fig-wheel, .fig-line { fill: none; stroke: var(--main); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; }
-.fig-ink { fill: var(--main); stroke: var(--main); stroke-width: calc(0.5px * var(--stroke, 1)); stroke-linejoin: round; }
+.fig-body { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
+.fig-head, .fig-wheel, .fig-line { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
+.fig-ink { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 .parked-car .vb { stroke: var(--detail); }
 .parked-car .vi { fill: var(--detail); stroke: var(--detail); }
-.agent.cyclist { stroke: var(--fg); stroke-width: calc(0.4px * var(--stroke, 1)); stroke-linejoin: round; }
-.train { fill: var(--fg); stroke: var(--fg); stroke-width: calc(0.9px * var(--stroke, 1)); stroke-linejoin: round; }
-.parked { fill: var(--bg); stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke, 1)); }
+.agent.cyclist { stroke: var(--fg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
+.train { fill: var(--fg); stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
+.parked { fill: var(--bg); stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 
 /* Shadow hatching density (src/render/shadows.js): stroke tiers above the
    one the zoom allows hide – on the ground (s, sz) and on walls (w, sw) */
@@ -316,11 +328,11 @@ html, body {
 .overlay .hover, .overlay .anchor {
   fill: none;
   stroke: var(--fg);
-  stroke-width: calc(1.2px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-4) * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.overlay .anchor { stroke-width: calc(1.7px * var(--stroke, 1)); }
+.overlay .anchor { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
 /* the hover ring is circled by pen once, from the start of the stroke to
    its end, then stays (--len: its length on screen, see OverlayKit.ringAt).
    It waits a moment first, so sweeping the pointer across the map doesn't
@@ -346,23 +358,23 @@ html, body {
 .overlay .preview {
   fill: none;
   stroke: var(--fg);
-  stroke-width: calc(2.4px * var(--stroke, 1));
+  stroke-width: calc(var(--pen-5) * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: calc(1px * var(--stroke, 1)) calc(5px * var(--stroke, 1));
 }
-.overlay .preview.path { stroke-width: calc(1.1px * var(--stroke, 1)); }
-.overlay .preview.lane { stroke-width: calc(1.6px * var(--stroke, 1)); }
-.overlay .preview.rail { stroke-width: calc(1.4px * var(--stroke, 1)); stroke-dasharray: calc(1px * var(--stroke, 1)) calc(2.5px * var(--stroke, 1)); }
-.overlay .preview.invalid { stroke-width: calc(1px * var(--stroke, 1)); stroke-dasharray: calc(6px * var(--stroke, 1)) calc(4px * var(--stroke, 1)); }
-.overlay .cross { fill: none; stroke: var(--fg); stroke-width: calc(1.6px * var(--stroke, 1)); stroke-linecap: round; }
+.overlay .preview.path { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+.overlay .preview.lane { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
+.overlay .preview.rail { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-dasharray: calc(1px * var(--stroke, 1)) calc(2.5px * var(--stroke, 1)); }
+.overlay .preview.invalid { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-dasharray: calc(6px * var(--stroke, 1)) calc(4px * var(--stroke, 1)); }
+.overlay .cross { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
 .overlay .cross-halo { fill: none; stroke: var(--bg); stroke-width: calc(5px * var(--stroke, 1)); stroke-linecap: round; }
 /* something built here: the no-entry road sign on its post (OverlayKit.noEntryAt) */
-.overlay .noentry-post { fill: none; stroke: var(--fg); stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; }
-.overlay .noentry-disc { fill: var(--fg); stroke: var(--fg); stroke-width: calc(1.2px * var(--stroke, 1)); stroke-linejoin: round; }
+.overlay .noentry-post { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
+.overlay .noentry-disc { fill: var(--fg); stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linejoin: round; }
 .overlay .noentry-bar { fill: var(--bg); stroke: none; }
 /* too steep: a warning sign with the slope in it (OverlayKit.steepAt) */
-.overlay .steep-sign { fill: none; stroke: var(--fg); stroke-width: calc(1.5px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.overlay .steep-sign { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 /* Erase: what would go turns to the secondary colour (Renderer.markErasing:
    its drawing's own colours, so everything in it follows) … */
 .erasing { --main: var(--detail); --fg: var(--detail); }
@@ -374,12 +386,12 @@ html, body {
 /* Erase: the eraser over what would go (OverlayKit.eraserAt) */
 .overlay .eraser-body { fill: var(--bg); stroke: none; }
 .overlay .eraser-tip { fill: color-mix(in srgb, var(--fg) 25%, var(--bg)); stroke: none; }
-.overlay .eraser { fill: none; stroke: var(--fg); stroke-width: calc(1.5px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
-.overlay .steep-wedge { fill: var(--fg); stroke: var(--fg); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linejoin: round; }
+.overlay .eraser { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.overlay .steep-wedge { fill: var(--fg); stroke: var(--fg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 /* among the dots around the pointer (OverlayKit.nearDots) the signs are as
    quiet as the dots: their grey, a thinner line, no halo */
 .overlay .near-steep .cross-halo { display: none; }
-.overlay .near-steep .steep-sign { stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); }
+.overlay .near-steep .steep-sign { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 .overlay .near-steep .steep-wedge { fill: var(--detail); stroke: var(--detail); }
 
 /* ---------- UI ---------- */
@@ -1549,8 +1561,8 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 
 /* ---------- Photo mode (tools/photo.js, render/photo.js) ---------- */
 
-.overlay .photo-cone-hatch { fill: none; stroke: var(--main); stroke-width: calc(0.75px * var(--stroke, 1)); stroke-linecap: round; }
-.overlay .photo-cam path, .overlay .photo-cam circle { fill: var(--bg); stroke: var(--main); stroke-width: calc(2px / 0.24 * var(--stroke, 1)); /* drawn at scale(0.24), OverlayKit.photoCone */ stroke-linejoin: round; stroke-linecap: round; }
+.overlay .photo-cone-hatch { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
+.overlay .photo-cam path, .overlay .photo-cam circle { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-5) / 0.24 * var(--stroke, 1)); /* drawn at scale(0.24), OverlayKit.photoCone */ stroke-linejoin: round; stroke-linecap: round; }
 
 
 
@@ -1578,12 +1590,12 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 
 svg.photo .photo-sky { fill: var(--bg); }
 svg.photo .photo-ground { fill: var(--bg); stroke: none; }
-svg.photo .photo-horizon { fill: none; stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); }
-svg.photo .photo-cloud { fill: var(--bg); stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }
+svg.photo .photo-horizon { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+svg.photo .photo-cloud { fill: var(--bg); stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
 svg.photo .photo-cloud-fill { fill: var(--bg); stroke: none; }
-svg.photo .photo-cloud-edge { fill: none; stroke: var(--detail); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linecap: round; }
-svg.photo .photo-cloud-under { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
-svg.photo .photo-rain { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.6; }
+svg.photo .photo-cloud-edge { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
+svg.photo .photo-cloud-under { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
+svg.photo .photo-rain { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.6; }
 /* line weight by distance (PHOTO.weight): each layer sets --stroke for its
    distance and --fine, never above 1, for texture, so hatching, windows
    and grass stay fine up close */
@@ -1596,8 +1608,8 @@ svg.photo .hedge { fill: var(--bg); } /* kit.js hedgeSide */
 svg.photo .photo-cobble { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linecap: round; }
 svg.photo .photo-pebble { fill: var(--bg); stroke: var(--detail); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linejoin: round; }
 svg.photo .photo-figure * { vector-effect: non-scaling-stroke; } /* deer, cows, sheep: the map's line widths */
-svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linejoin: round; }
-svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: calc(0.8px * var(--stroke, 1)); stroke-linejoin: round; }
-svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: calc(1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
-svg.photo .photo-hatch { fill: none; stroke: var(--detail); stroke-width: calc(0.6px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
-svg.photo .photo-ripples { fill: none; stroke: var(--main); stroke-width: calc(0.7px * var(--stroke, 1)); stroke-linecap: round; opacity: 0.8; }
+svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
+svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
+svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+svg.photo .photo-hatch { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
+svg.photo .photo-ripples { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.8; }
