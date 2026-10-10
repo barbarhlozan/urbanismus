@@ -25,6 +25,7 @@ import { wobble } from './painter.js';
 import { cloudsSVG } from './clouds.js';
 import { DEER, deerSVG } from './deer.js';
 import { LIVESTOCK, livestockSVG } from './livestock.js';
+import { PEOPLE, bodyFor, walkerSVG, cyclistSVG } from './people.js';
 
 export const PHOTO = {
   width: 480,
@@ -49,8 +50,14 @@ export const PHOTO = {
   // `max` times. Texture (hatching, windows, grass: --fine in styles.css)
   // only ever gets lighter, so up close it stays fine.
   weight: { at: 2, min: 0.5, max: 2 },
-  // the pencil strokes: `gap` px apart along a band, about `len` px long
-  hatch: { gap: 30, len: 16 },
+  // the pencil strokes: `gap` px apart along a band, about `len` px long;
+  // nearer than `blank` steps only one in `sparse` of them, so the
+  // foreground is left mostly bare
+  hatch: { gap: 30, len: 16, blank: 1.2, sparse: 4 },
+  // a little ground right in front, nearer than `reach` steps: patches of
+  // cobbles on roads and paths, a few pebbles on bare ground, and the top
+  // edge of a street's kerb (`kerb` high) with the joints between its stones
+  ground: { reach: 1.6, kerb: 0.006, stone: 0.05 },
   // lenses by focal length, as on a 35 mm camera: the horizontal angle of
   // view across the 36 mm frame
   lenses: [28, 42, 80].map((mm) => ({ label: `${mm}mm`, fov: (2 * Math.atan(18 / mm) * 180) / Math.PI })),
@@ -160,9 +167,10 @@ export function takePhoto(renderer, shot) {
       run.push(pts[i]);
     }
     if (band >= 0) bands.line(band, cls, run);
+    if (cls === 'kerb') kerbTop(cam, bands, pts);
   }
 
-  groundMarks(world, renderer.config, cam, bands, seen, onGround, renderer.wetAt());
+  groundMarks(world, renderer.config, cam, bands, seen, onGround, groundAt, renderer.wetAt());
 
   // ----- together, far to near -----
 
@@ -175,7 +183,7 @@ export function takePhoto(renderer, shot) {
     if (near <= PHOTO.clear || (near < PHOTO.trees && TREE.test(svg)) || (near < PHOTO.tuft && TUFT.test(svg))) continue;
     layers.push({ depth: so.depth, svg });
   }
-  layers.push(...bands.layers(), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen));
+  layers.push(...bands.layers(), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen), ...people(renderer, cam, seen));
   layers.sort((a, b) => a.depth - b.depth);
   // each in the pen for its distance; neighbours in the same pen share a group
   let svg = '', open = null;
@@ -196,6 +204,35 @@ export function takePhoto(renderer, shot) {
     + skyline(cam, groundAt, range)
     + `<g class="layer-objects">${svg}</g>`
     + '</svg>';
+}
+
+// A street's kerb close in front (PHOTO.ground): its top edge, the kerb's
+// height above the line the map draws, and the joints between its stones.
+// `pts`: the kerb on the picture, each [x, y, ahead, raised].
+function kerbTop(cam, bands, pts) {
+  const { reach, kerb, stone } = PHOTO.ground;
+  const up = (p) => [p[0], p[1] - (cam.focal * kerb) / p[2]];
+  let run = [], band = -1, along = stone / 2;
+  const flush = () => {
+    if (run.length > 1) bands.line(band, 'kerb', run.map(up));
+    run = [];
+  };
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (p[3] || p[2] > reach || p[2] < cam.near) { flush(); continue; }
+    const b = bands.of(p[2]);
+    if (b !== band) { if (run.length) run.push(p); flush(); band = b; }
+    run.push(p);
+    if (i === 0) continue;
+    // the way along the kerb in steps, from the picture and the distance
+    const q = pts[i - 1];
+    along += (Math.hypot(p[0] - q[0], p[1] - q[1]) * p[2]) / cam.focal;
+    if (along >= stone) {
+      along %= stone;
+      bands.line(band, 'kerb', [p, up(p)]);
+    }
+  }
+  flush();
 }
 
 // The pen for something `dist` steps away (PHOTO.weight): a factor on
@@ -220,7 +257,7 @@ function makeBands(cam, onGround) {
   const cols = Array.from({ length: COLS + 1 }, (_, i) => -spread + (2 * spread * i) / COLS);
   const edge = (t) => cols.map((u) => onGround(cam.ex + cam.fx * t + cam.rx * u * t, cam.ey + cam.fy * t + cam.ry * u * t));
   const edges = d.map(edge);
-  const marks = Array.from({ length: n }, () => ({ lots: '', meadow: '', hatch: '', ripples: '', net: new Map() }));
+  const marks = Array.from({ length: n }, () => ({ lots: '', meadow: '', hatch: '', ripples: '', near: '', net: new Map() }));
 
   const of = (ahead) => {
     if (ahead < d[0]) return 0;
@@ -263,6 +300,7 @@ function makeBands(cam, onGround) {
           svg: `<path class="photo-band" d="${fill}"/>`
             + (m.hatch ? `<path class="photo-hatch" d="${m.hatch}"/>` : '')
             + (m.ripples ? `<path class="photo-ripples" d="${m.ripples}"/>` : '')
+            + m.near
             + m.lots
             + (m.meadow ? `<g class="layer-meadow">${m.meadow}</g>` : '')
             + net
@@ -281,11 +319,11 @@ function makeBands(cam, onGround) {
 //   ripples  longer ones on lakes and rivers
 //   meadow   the map's own tufts and flowers (meadow.js), near the camera
 // Seeded by the spot, so the same photo comes out the same.
-function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
+function groundMarks(world, config, cam, bands, seen, onGround, groundAt, wetAt) {
   const { grid } = world;
   const offRoad = freeTest(world, config);
   const rnd = mulberry32(Math.imul(Math.round(cam.ex * 100), 73856093) ^ Math.imul(Math.round(cam.ey * 100), 19349663) ^ world.seed);
-  const { gap, len } = PHOTO.hatch;
+  const { gap, len, blank, sparse } = PHOTO.hatch;
   const spread = (cam.width / 2 / cam.focal) * 1.1;
 
   for (let k = 0; k < bands.n; k++) {
@@ -297,6 +335,7 @@ function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
       const px = cam.ex + cam.fx * dd + cam.rx * w, py = cam.ey + cam.fy * dd + cam.ry * w;
       const wet = wetAt(px, py);
       if (rnd() < (wet ? 0.5 : 0.35) || (!wet && !offRoad(px, py))) continue;
+      if (!wet && dd < blank && rnd() * sparse > 1) continue;
       // level on the picture: along the camera's right, a touch askew
       const l = (len * (wet ? 1.6 : 1) * (0.5 + rnd())) / scale / 2;
       const tilt = (rnd() - 0.5) * 0.25;
@@ -310,6 +349,7 @@ function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
     bands.add(k, 'hatch', hatch);
     bands.add(k, 'ripples', ripples);
   }
+  nearGround(cam, bands, onGround, groundAt, offRoad, wetAt, rnd);
 
   // meadow: every dot within reach, each glyph on its own band
   const open = meadowGround(world, config);
@@ -333,6 +373,65 @@ function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
   }
 }
 
+// The ground right in front of the photographer (PHOTO.ground), drawn as
+// a sketcher would put in just enough to say what it is underfoot and
+// leave the rest bare: a patch or two of cobbles – rows of small arcs, the
+// pattern Czech setts are laid in – where it is a road or a path, a few
+// pebbles here and there on the bare ground.
+function nearGround(cam, bands, onGround, groundAt, offRoad, wetAt, rnd) {
+  const { reach } = PHOTO.ground;
+  const spread = cam.width / 2 / cam.focal;
+  const at = (a, r) => [cam.ex + cam.fx * a + cam.rx * r, cam.ey + cam.fy * a + cam.ry * r];
+  const path = (pts) => (pts.every(([x, y]) => cam.isAhead(x, y)) ? `M${pts.map((q) => pt(onGround(...q))).join('L')}` : '');
+  // cobbles: patches round a few spots on the road ahead
+  for (let tries = 0, patches = 0; tries < 12 && patches < 2; tries++) {
+    const a = 0.25 + rnd() ** 2 * (reach - 0.25), r = (rnd() * 2 - 1) * a * spread * 0.8;
+    const [cx, cy] = at(a, r);
+    if (offRoad(cx, cy) || wetAt(cx, cy)) continue;
+    patches++;
+    // setts as far apart on the picture near and far (larger than life, as
+    // a sketch would have them): rows about 3 px apart, arcs about 14 px wide
+    const row = (3 * a * a) / (cam.focal * Math.max(cam.ez - groundAt(cx, cy), 0.02)), arc = (14 * a) / cam.focal;
+    const size = 0.05 + rnd() * 0.04, deep = Math.max(size, row * 2.5);
+    for (let v = -deep; v <= deep; v += row) {
+      const shift = (Math.round(v / row) % 2) * arc / 2;
+      for (let u = -size - shift; u <= size; u += arc) {
+        // thinned out towards the patch's edge, so it fades into the paper
+        if (Math.hypot(u / size, v / deep) > 0.35 + rnd() * 0.65) continue;
+        const ends = [at(a + v, r + u - arc / 2), at(a + v, r + u + arc / 2)];
+        if (ends.some(([ex, ey]) => offRoad(ex, ey))) continue;
+        const pts = [];
+        for (let t = 0; t <= 4; t++) {
+          const s = t / 4 - 0.5; // across the arc, bowed away from the camera
+          pts.push(at(a + v + (0.25 - s * s) * row * 0.9, r + u + s * arc * 0.9));
+        }
+        const d = path(pts);
+        if (d) bands.add(bands.of(a + v), 'near', `<path class="photo-cobble" d="${d}"/>`);
+      }
+    }
+  }
+  // pebbles: a few small clusters on open ground
+  for (let tries = 0, clusters = 0; tries < 14 && clusters < 3; tries++) {
+    const a = 0.25 + rnd() ** 2 * (reach - 0.25), r = (rnd() * 2 - 1) * a * spread * 0.8;
+    const [cx, cy] = at(a, r);
+    if (!offRoad(cx, cy) || wetAt(cx, cy)) continue;
+    clusters++;
+    const n = 1 + Math.floor(rnd() * 4);
+    for (let i = 0; i < n; i++) {
+      const pa = a + (rnd() - 0.5) * 0.06, pr = r + (rnd() - 0.5) * 0.08;
+      const size = 0.004 + rnd() * 0.006, turn = rnd() * Math.PI;
+      const pts = [];
+      for (let t = 0; t <= 10; t++) {
+        const b = (t / 10) * Math.PI * 2;
+        const ru = Math.cos(b) * size * 1.4, rv = Math.sin(b) * size;
+        pts.push(at(pa + ru * Math.sin(turn) + rv * Math.cos(turn), pr + ru * Math.cos(turn) - rv * Math.sin(turn)));
+      }
+      const d = path(pts);
+      if (d) bands.add(bands.of(pa), 'near', `<path class="photo-pebble" d="${d}Z"/>`);
+    }
+  }
+}
+
 // Vehicles as they are at the moment of the photo, the same models as on
 // the map (vehicles.js) drawn through the photo camera: cars driving
 // (turned the way the map last drew them), buses and trucks (between their
@@ -346,7 +445,7 @@ function vehicles(renderer, cam, seen) {
   // `size`: about half the vehicle's length, for what counts as in view
   // `draw(view)` -> SVG of the thing standing at (x, y)
   const place = (x, y, size, cls, draw) => {
-    if (!seen(x, y, size + 0.1) || cam.ahead(x, y) < 0.15 + size) return;
+    if (!seen(x, y, size + 0.1) || cam.ahead(x, y) < 0.45 + size) return; // (not one the photographer is right against)
     const z = terrain.heightAt(x, y) + deck(x, y);
     const view = {
       project: ([ox, oy, oz]) => cam.project(x + ox, y + oy, z + oz, [x, y]),
@@ -425,6 +524,58 @@ function animals(renderer, cam, seen) {
         svg: `<g class="photo-figure" transform="translate(${r2(sx)} ${r2(sy)}) scale(${fx < sx ? -r2(k) : r2(k)} ${r2(k)})">${svg}</g>`,
       });
     }
+  }
+  return out;
+}
+
+// Walkers and cyclists out at the moment of the photo: the map's pen
+// figures (people.js) stood up where they are, as large as on the map
+// against the land round them (as the animals). A walker faces the way it
+// goes across the picture; a cyclist's bike is the one of the map's
+// directions that runs most like its way does on the picture. In the rain
+// the same walkers as on the map are under umbrellas.
+function people(renderer, cam, seen) {
+  const { world, agents, agentEls } = renderer;
+  const { terrain } = world;
+  const deck = renderer.bridgeState().deck;
+  const base = renderer.camera;
+  const px = 1 / (base.zScale * base.tile); // map height of one of the figures' units
+  const umbrellas = renderer.config.weather?.people?.[world.weather?.kind]?.umbrellas ?? 0;
+  const iso = { rotation: 0, tile: 32 }; // the bikes' directions as on an unturned map
+  const out = [];
+  for (const a of agents.visible()) {
+    const mode = a.trip?.mode;
+    if (a.bus || a.truck || mode === 'drive') continue;
+    const [wx, wy] = wobble(a.x, a.y); // on the swaying road, as on the map
+    const x = a.x + wx, y = a.y + wy;
+    if (!seen(x, y, 0.1) || cam.ahead(x, y) < 0.35) continue;
+    const z = terrain.heightAt(x, y) + deck(x, y);
+    const [sx, sy] = cam.project(x, y, z, [x, y]);
+    const k = Math.abs(cam.project(x, y, z + px, [x, y])[1] - sy);
+    // its way across the picture, from the heading the map last drew it with
+    const angle = ((agentEls.get(a.id)?.heading ?? 0) / VEHICLES.headings) * Math.PI * 2;
+    const [fx, fy] = cam.project(x + Math.cos(angle) * 0.05, y + Math.sin(angle) * 0.05, z, [x, y]);
+    const body = bodyFor(a.id);
+    let svg, flip = false;
+    if (mode === 'cycle') {
+      const len = Math.hypot(fx - sx, fy - sy) || 1;
+      let best = 0, score = -Infinity;
+      for (let h = 0; h < VEHICLES.headings; h++) {
+        const b = (h / VEHICLES.headings) * Math.PI * 2, c = Math.cos(b), d = Math.sin(b);
+        const ix = (c - d) * Math.cos(Math.PI / 6), iy = (c + d) * 0.5;
+        const sc = ((fx - sx) * ix + (fy - sy) * iy) / len / (Math.hypot(ix, iy) || 1);
+        if (sc > score) [best, score] = [h, sc];
+      }
+      svg = cyclistSVG(iso, best, body);
+    } else {
+      const brolly = umbrellas > 0 && (bodyFor(`${a.id}u`) + 0.5) / PEOPLE.bodies <= umbrellas;
+      svg = walkerSVG(body, brolly);
+      flip = fx < sx;
+    }
+    out.push({
+      depth: -cam.ahead(x, y),
+      svg: `<g class="photo-figure" transform="translate(${r2(sx)} ${r2(sy)}) scale(${flip ? -r2(k) : r2(k)} ${r2(k)})">${svg}</g>`,
+    });
   }
   return out;
 }
