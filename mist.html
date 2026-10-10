@@ -56,7 +56,7 @@
     import { sunFor, shadowSVG } from './src/render/shadows.js';
     import { STRUCTURES } from './structures/index.js';
     import { drawTree } from './features/trees.js';
-    import { visibility, browLines, browRuns, BROWS } from './src/render/brows.js';
+    import { visibility, hiddenAt, browLines, browRuns, BROWS } from './src/render/brows.js';
     import { pencil } from './src/render/pencil.js';
     import { contours } from './src/terrain/elevation.js';
     import { mulberry32, valueNoise2D } from './src/core/random.js';
@@ -107,13 +107,13 @@
       const g = new Painter(cam, { x, y }, rotation, seed);
       g.rigid = [x, y];
       try { def.draw(g, { type, seed, id: items.length, node: 0, rotation }); } catch (e) { console.warn(type, e.message); return; }
-      items.push({ d: depth(x, y) + 0.5, kind: 'thing', x, y, svg: g.toGroundSVG() + shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+      items.push({ d: depth(x, y) + 0.5, kind: 'thing', x, y, body: g.toSVG(), svg: g.toGroundSVG() + shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
     }
     function tree(x, y, kind, h) {
       const g = new Painter(cam, { x, y }, 0, Math.floor(rnd() * 1e9));
       g.rigid = [x, y];
       drawTree(g, 0, 0, kind, h);
-      items.push({ d: depth(x, y), kind: 'thing', x, y, svg: shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+      items.push({ d: depth(x, y), kind: 'thing', x, y, body: g.toSVG(), svg: shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
     }
     // a line on the ground cut into short pieces, each at its own depth
     function groundLine(pts, cls, piece = 0.6) {
@@ -136,8 +136,8 @@
     }
 
     // the brows, a stroke at a time, each at the depth of the ground under it
+    const vis = visibility(cam, height, box);
     {
-      const vis = visibility(cam, height, box);
       browLines(vis, cam).forEach((line, n) => {
         for (const run of browRuns(line)) {
           for (const pts of pencil(run.points, n, BROWS.pencil)) {
@@ -179,6 +179,17 @@
     for (let k = 0; k < 14; k++) tree(...P(-U + rnd() * 2 * U, 14.8 + rnd() * 0.6), 'spreading', 0.45 + rnd() * 0.2);
     for (let k = 0; k < 10; k++) tree(...P(-U + rnd() * 2 * U, 15.5 + rnd() * 4), rnd() < 0.5 ? 'sapling' : 'spreading', 0.4 + rnd() * 0.2);
     items.sort((a, b) => a.d - b.d);
+    // what each drawing takes up on the screen (without its shadow), for
+    // the mist to lump up against: measured once, drawn off the page
+    {
+      const probe = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      probe.style.cssText = 'position:absolute;left:-9999px;top:0;width:10px;height:10px';
+      probe.innerHTML = '<g class="scene layer-objects"></g>';
+      document.body.appendChild(probe);
+      const g = probe.firstChild;
+      for (const it of items) if (it.body) { g.innerHTML = it.body; it.box = g.getBBox(); delete it.body; }
+      probe.remove();
+    }
     const tMax = Math.max(...items.map((i) => i.d)), tMin = Math.min(...items.map((i) => i.d));
 
     // ---------- the picture's frame ----------
@@ -227,10 +238,152 @@
       return fill + rub;
     }
 
+    // A drawn cloud band (kasumi) at depth t from screen x xa to xb, `up`
+    // above the ground: a few long shallow lobes along the top, the ends
+    // rounded, the underside nearly straight, one line inside along the top.
+    function kasumi(t, xa, xb, up, r) {
+      xb = Math.min(VX1 + 30, xb);
+      const y = groundY((xa + xb) / 2, t, up), h = 20 + r() * 10;
+      let d = `M${r2(xa)} ${r2(y)}`;
+      let x = xa;
+      while (x < xb - 10) { const nx = Math.min(xb, x + 60 + r() * 70); d += `A${r2((nx - x) / 2)} ${r2((nx - x) / (9 + r() * 6))} 0 0 1 ${r2(nx)} ${r2(y + (r() - 0.5) * 2)}`; x = nx; }
+      d += `A${r2(h / 2)} ${r2(h / 2)} 0 0 1 ${r2(xb)} ${r2(y + h)}`;
+      for (x = xb; x > xa + 20;) { x -= 30 + r() * 40; d += `L${r2(Math.max(xa, x))} ${r2(y + h + (r() - 0.5) * 1.5)}`; }
+      d += `A${r2(h / 2)} ${r2(h / 2)} 0 0 1 ${r2(xa)} ${r2(y)}Z`;
+      const ia = xa + (xb - xa) * (0.08 + r() * 0.15), ib = xb - (xb - xa) * (0.1 + r() * 0.25);
+      const inner = `<path class="mist-inner" d="M${r2(ia)} ${r2(y + 5)}L${r2(ib)} ${r2(y + 5 + (r() - 0.5) * 2)}"/>`;
+      return { d: t, svg: `<path class="mist" d="${d}"/><path class="mist-line" d="${d}"/>${inner}` };
+    }
+
+    // The valley mist (option B) as paper slices at its height, each put in
+    // among the drawing at its own depth; with `lobed`, drawn round like a
+    // kasumi band (option E): lobes along its far shore where it lies
+    // against the hillside, a line inside along that shore, a plainer pen
+    // line along its near edge, and small lumps where it closes round a
+    // house or a tree standing in it.
+    function valleyMist(level, r, lobed) {
+      const fogY = (t) => (t / 2 - level * Z) * T;
+      const inMap = (x, y) => x > -0.5 && y > -0.5 && x < N - 0.5 && y < N - 0.5;
+      const at = (u, t) => [(t + u) / 2 + cam.cx, (t - u) / 2 + cam.cy];
+      // the top: flat at `level`, in thin slices across the view, each
+      // where the ground under it is lower; each slice's top is ragged, so
+      // where it cuts across a house the line is broken, not ruled
+      const du = 0.2, dt = 0.2, out = [];
+      for (let t = tMin - 1; t < tMax + 2; t += dt) {
+        let d = '', run = null;
+        const close = (u1) => {
+          if (run == null) return;
+          const x0 = run * COS30 * T, x1 = u1 * COS30 * T, y0 = fogY(t), y1 = fogY(t + dt) + 1.5;
+          d += `M${r2(x0)} ${r2(y1)}`;
+          for (let x = x0; x < x1; x += 1.5 + r() * 2.5) d += `L${r2(x)} ${r2(y0 - (lobed ? 0 : r() < 0.1 ? 3 + r() * 3 : r() * 2))}`;
+          d += `L${r2(x1)} ${r2(y0)}L${r2(x1)} ${r2(y1)}Z`;
+          run = null;
+        };
+        for (let u = -N - 1; u < N + 1; u += du) {
+          const [x, y] = at(u + du / 2, t + dt / 2);
+          if (inMap(x, y) && height(x, y) < level) { if (run == null) run = u; } else close(u);
+        }
+        close(N + 1);
+        if (d) out.push({ d: t + dt, svg: `<path class="mist" d="${d}"/>` });
+      }
+      if (!lobed) {
+        // the shore: the line at `level` on the hillside, in broken strokes
+        contours((x, y) => height(x, y), box, { step: 0.1, interval: 1, index: 1, only: level }).forEach(({ points }, n) => {
+          for (const pts of pencil(points, n, { len: [0.3, 1.2], gap: [0.05, 0.5], drift: 0.04, skip: 0.25 })) {
+            const [mx, my] = pts[pts.length >> 1];
+            out.push({ d: depth(mx, my) + 0.01, svg: `<path class="mist-edge" d="${pts.map(([x, y], i) => { const [sx, sy] = cam.project(x, y, 0); return `${i ? 'L' : 'M'}${r2(sx)} ${r2(sy)}`; }).join('')}"/>` });
+          }
+        });
+        return out;
+      }
+      // Its edges, a screen column at a time: down each column the mist
+      // comes in runs; a run's back end is the far shore (seen from above,
+      // the mist's top edge), its front end the near shore (its lower
+      // edge) – unless the run ends at the map's edge, or the ground there
+      // is hidden behind nearer ground. Neighbouring columns' ends are
+      // joined into lines.
+      const dx = 2, st = 0.03;
+      const far = [], near = [];
+      const chain = (lines, x, y, t) => {
+        const open = lines.find((l) => { const p = l[l.length - 1]; return x - p[0] <= dx + 0.01 && x - p[0] > 0 && Math.abs(p[1] - y) < 7; });
+        if (open) open.push([x, y, t]); else lines.push([[x, y, t]]);
+      };
+      for (let sx = VX0 - 30; sx <= VX1 + 30; sx += dx) {
+        const u = sx / (COS30 * T);
+        let prev = false, prevIn = false;
+        for (let t = tMin - 2; t < tMax + 3; t += st) {
+          const [x, y] = at(u, t), inside = inMap(x, y);
+          const fog = inside && height(x, y) < level;
+          if (fog && !prev && prevIn && !hiddenAt(vis, cam, x, y)) chain(far, sx, fogY(t), t);
+          if (!fog && prev && inside && !hiddenAt(vis, cam, x, y)) chain(near, sx, fogY(t - st), t - st);
+          prev = fog; prevIn = inside;
+        }
+      }
+      // the far shore: lobes standing up off it, each filled with paper
+      // down to the shore itself and drawn at the depth of its nearer end
+      for (const line of far) {
+        if (line.length < 3) continue;
+        let i = 0;
+        while (i < line.length - 1) {
+          const n = Math.max(2, Math.round((30 + r() * 50) / dx));
+          const j = Math.min(line.length - 1, i + n);
+          const a = line[i], b = line[j], w = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          const arc = `A${r2(w / 2)} ${r2(w / (4 + r() * 4))} 0 0 1 ${r2(b[0])} ${r2(b[1])}`;
+          const back = line.slice(i, j + 1).reverse().map(([x, y]) => `L${r2(x)} ${r2(y)}`).join('');
+          out.push({ d: Math.max(a[2], b[2]) + 0.01, svg: `<path class="mist" d="M${r2(a[0])} ${r2(a[1])}${arc}${back}Z"/><path class="mist-line" d="M${r2(a[0])} ${r2(a[1])}${arc}"/>` });
+          i = j;
+        }
+        // a line inside along the shore, over the middle of long stretches
+        if (line.length * dx > 90) {
+          const from = Math.floor(line.length * (0.15 + r() * 0.15)), to = Math.ceil(line.length * (0.7 + r() * 0.15));
+          for (let k = from; k < to - 1;) {
+            const e = Math.min(to - 1, k + 8 + Math.floor(r() * 14));
+            const pts = line.slice(k, e + 1);
+            out.push({ d: Math.max(...pts.map((p) => p[2])) + 0.02, svg: `<path class="mist-inner" d="${pts.map(([x, y], m) => `${m ? 'L' : 'M'}${r2(x)} ${r2(y + 6)}`).join('')}"/>` });
+            k = e + 1 + Math.floor(r() * 3);
+          }
+        }
+      }
+      // the near shore: a plain pen line, in a few long strokes
+      for (const line of near) {
+        if (line.length < 3) continue;
+        for (let k = 0; k < line.length - 1;) {
+          const e = Math.min(line.length - 1, k + 10 + Math.floor(r() * 20));
+          const pts = line.slice(k, e + 1);
+          out.push({ d: Math.max(...pts.map((p) => p[2])) + 0.01, svg: `<path class="mist-line" d="${pts.map(([x, y], m) => `${m ? 'L' : 'M'}${r2(x)} ${r2(y)}`).join('')}"/>` });
+          k = e + (r() < 0.3 ? 2 : 0);
+        }
+      }
+      // lumps round whatever stands in it and comes out of the top
+      // (at the top of the first slice drawn after it, which is where it is
+      // cut, and drawn after that slice; only if it shows above that)
+      for (const it of items) {
+        const y = fogY(it.d - dt);
+        if (!it.box || height(it.x, it.y) >= level || it.box.y > y - 3 || it.box.y + it.box.height < y) continue;
+        const x0 = it.box.x - 3, x1 = it.box.x + it.box.width + 3;
+        const n = Math.max(1, Math.round((x1 - x0) / (10 + r() * 6)));
+        let d = `M${r2(x0)} ${r2(y)}`;
+        for (let k = 1; k <= n; k++) {
+          const xa = x0 + ((x1 - x0) * (k - 1)) / n, xb = x0 + ((x1 - x0) * k) / n;
+          d += `A${r2((xb - xa) / 2)} ${r2((xb - xa) / (2.2 + r() * 1.5))} 0 0 1 ${r2(xb)} ${r2(y + (r() - 0.5) * 1.5)}`;
+        }
+        out.push({ d: it.d + dt + 0.001, svg: `<path class="mist" d="${d}L${r2(x1)} ${r2(y + 8)}L${r2(x0)} ${r2(y + 8)}Z"/><path class="mist-line" d="${d}"/>` });
+      }
+      return out;
+    }
+
     // ---------- the options ----------
     const draw = (list) => list.map((i) => i.svg).join('');
     const OPTIONS = [
       ['none', 'No mist', 'The valley as it is, for comparison.', () => draw(items)],
+
+      ['valley-bands', 'E · Mist in the valley, drawn as cloud bands (B + D)',
+        `The valley mist of B, up to the same height (${LEVEL}), but drawn round like D's bands: where it lies against the hillside its edge stands up in lobes, with a line inside along it; its near edge, where the slope in front comes out of it, is a plain pen line; and where it closes round a roof or a tree that stands out of it, it lumps up a little. Above it, two loose bands of the same hang across the hillside.`,
+        () => {
+          const r = mulberry32(SEED + 31), W = VX1 - VX0;
+          const bands = [[8.0, 0.0, 0.5, 1.0], [6.6, 0.55, 0.4, 1.2]].map(([tt, x0, w, up]) => kasumi(tt - 11, VX0 + W * x0, VX0 + W * (x0 + w), up, r));
+          return draw([...items, ...valleyMist(LEVEL, r, true), ...bands].sort((a, b) => a.d - b.d));
+        }],
 
       ['bands', 'A · Banks of mist by distance (Tōhaku)',
         'Three banks of mist at three depths, each lying on the ground a little way up. Behind each one the drawing simply stops: paper below a ragged edge, and above it a few sideways eraser strokes rubbed through the lines, so it gives out rather than being cut. Only what stands high enough – the church, the hilltop, the far roofs – comes through.',
@@ -254,40 +407,7 @@
       ['pool', 'B · Mist in the valley (inversion)',
         `The mist lies like a lake up to one height (here ${LEVEL}): everything below it is gone, everything above it is drawn as usual – the hill and the church, the roofs of the higher houses, the blocks on the slope in front. Its shore is the line where the hillside comes out of it, drawn lightly in broken strokes. Nearer ground and houses that stand out of it are drawn over it.`,
         () => {
-          // the mist's top: flat at LEVEL; drawn as thin slices across the
-          // view, each where the ground under it is lower, put in among the
-          // drawing at its own depth
-          const du = 0.2, dt = 0.2, r = mulberry32(SEED + 17);
-          const slices = [];
-          for (let t = tMin - 1; t < tMax + 2; t += dt) {
-            let d = '', run = null;
-            // (each slice's top is ragged, so where it cuts across a house or
-            // a tree the line is broken like a pencil's, not ruled)
-            const close = (u1) => {
-              if (run == null) return;
-              const x0 = run * COS30 * T, x1 = u1 * COS30 * T, y0 = (t / 2 - LEVEL * Z) * T, y1 = ((t + dt) / 2 - LEVEL * Z) * T + 1.5;
-              d += `M${r2(x0)} ${r2(y1)}`;
-              for (let x = x0; x < x1; x += 1.5 + r() * 2.5) d += `L${r2(x)} ${r2(y0 - (r() < 0.1 ? 3 + r() * 3 : r() * 2))}`;
-              d += `L${r2(x1)} ${r2(y0)}L${r2(x1)} ${r2(y1)}Z`;
-              run = null;
-            };
-            for (let u = -N - 1; u < N + 1; u += du) {
-              const x = (t + dt / 2 + u + du / 2) / 2 + cam.cx, y = (t + dt / 2 - u - du / 2) / 2 + cam.cy;
-              const inside = x > -0.5 && y > -0.5 && x < N - 0.5 && y < N - 0.5;
-              if (inside && height(x, y) < LEVEL) { if (run == null) run = u; } else close(u);
-            }
-            close(N + 1);
-            if (d) slices.push({ d: t + dt, svg: `<path class="mist" d="${d}"/>` });
-          }
-          // the shore: the line at LEVEL on the hillside, in broken strokes
-          const shore = [];
-          contours((x, y) => height(x, y), box, { step: 0.1, interval: 1, index: 1, only: LEVEL }).forEach(({ points }, n) => {
-            for (const pts of pencil(points, n, { len: [0.3, 1.2], gap: [0.05, 0.5], drift: 0.04, skip: 0.25 })) {
-              const [mx, my] = pts[pts.length >> 1];
-              shore.push({ d: depth(mx, my) + 0.01, svg: `<path class="mist-edge" d="${pts.map(([x, y], i) => { const [sx, sy] = cam.project(x, y, 0); return `${i ? 'L' : 'M'}${r2(sx)} ${r2(sy)}`; }).join('')}"/>` });
-            }
-          });
-          return draw([...items, ...slices, ...shore].sort((a, b) => a.d - b.d));
+          return draw([...items, ...valleyMist(LEVEL, mulberry32(SEED + 17), false)].sort((a, b) => a.d - b.d));
         }],
 
       ['fade', 'C · The pen giving out with distance',
@@ -311,30 +431,15 @@
           const W = VX1 - VX0;
           // [t (as P), left end and length as shares of the width, height above the ground]
           const spots = [[8.4, 0.02, 0.55, 0.9], [10.7, 0.4, 0.62, 0.45], [13.0, -0.1, 0.5, 0.3], [16.3, 0.35, 0.6, 0.6]];
-          const bands = spots.map(([tt, x0, w, up]) => {
-            const t = tt - 11;
-            const xa = VX0 + W * x0, xb = Math.min(VX1 + 30, xa + W * w), mid = (xa + xb) / 2;
-            const y = groundY(mid, t, up), h = 20 + r() * 10;
-            // the top: a few long shallow lobes; the ends rounded; the
-            // underside nearly straight
-            let d = `M${r2(xa)} ${r2(y)}`;
-            let x = xa;
-            while (x < xb - 10) { const nx = Math.min(xb, x + 60 + r() * 70); d += `A${r2((nx - x) / 2)} ${r2((nx - x) / (9 + r() * 6))} 0 0 1 ${r2(nx)} ${r2(y + (r() - 0.5) * 2)}`; x = nx; }
-            d += `A${r2(h / 2)} ${r2(h / 2)} 0 0 1 ${r2(xb)} ${r2(y + h)}`;
-            for (x = xb; x > xa + 20;) { x -= 30 + r() * 40; d += `L${r2(Math.max(xa, x))} ${r2(y + h + (r() - 0.5) * 1.5)}`; }
-            d += `A${r2(h / 2)} ${r2(h / 2)} 0 0 1 ${r2(xa)} ${r2(y)}Z`;
-            // one line inside, along part of the top
-            const ia = xa + (xb - xa) * (0.08 + r() * 0.15), ib = xb - (xb - xa) * (0.1 + r() * 0.25);
-            const inner = `<path class="mist-inner" d="M${r2(ia)} ${r2(y + 5)}L${r2(ib)} ${r2(y + 5 + (r() - 0.5) * 2)}"/>`;
-            return { d: t, svg: `<path class="mist" d="${d}"/><path class="mist-line" d="${d}"/>${inner}` };
-          });
+          const bands = spots.map(([tt, x0, w, up]) => kasumi(tt - 11, VX0 + W * x0, VX0 + W * (x0 + w), up, r));
           return draw([...items, ...bands].sort((a, b) => a.d - b.d));
         }],
+
     ];
 
     // ---------- the page ----------
     const out = document.getElementById('out');
-    out.insertAdjacentHTML('beforeend', `<h1>Mist sketches</h1><p>The same little valley four ways, in ${schemes.map((s) => SCHEMES[s].name).join(' and ')}. The mist is always the paper colour (--bg), so on Night's black paper it is black. No blur, no fading: paper laid over, an eraser, or the pen giving out. Add <code>?schemes=0,1,2,3</code>, <code>?seed=N</code>, <code>?level=1.2</code> (option B's height).</p>`);
+    out.insertAdjacentHTML('beforeend', `<h1>Mist sketches</h1><p>The same little valley five ways, in ${schemes.map((s) => SCHEMES[s].name).join(' and ')}. The mist is always the paper colour (--bg), so on Night's black paper it is black. No blur, no fading: paper laid over, an eraser, or the pen giving out. Add <code>?schemes=0,1,2,3</code>, <code>?seed=N</code>, <code>?level=1.2</code> (option B's height).</p>`);
     const only = q.get('only');
     for (const [id, title, text, make] of OPTIONS) {
       if (only && only !== id) continue;
