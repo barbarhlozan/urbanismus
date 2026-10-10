@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dědina – mist sketches</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--main); font: 12px system-ui; margin: 16px; }
+    h1 { font-weight: 500; }
+    h2 { font-weight: 500; margin: 28px 0 2px; }
+    p { margin: 0 0 8px; color: var(--detail); max-width: 80ch; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
+    figure { margin: 0; background: var(--bg); --fg: var(--main); --contour: color-mix(in srgb, var(--detail) 30%, var(--bg)); }
+    figcaption { padding: 2px 4px; color: var(--detail); }
+    svg { display: block; position: static; border: 1px solid #8884; }
+    /* the mist's own marks */
+    .mist { fill: var(--bg); stroke: none; }
+    .mist-rub { fill: none; stroke: var(--bg); stroke-linecap: round; }
+    .mist-edge { fill: none; stroke: var(--detail); stroke-width: var(--pen-2); stroke-linecap: round; }
+    .mist-line { fill: none; stroke: var(--main); stroke-width: var(--pen-3); stroke-linecap: round; stroke-linejoin: round; }
+    .mist-inner { fill: none; stroke: var(--detail); stroke-width: var(--pen-2); stroke-linecap: round; }
+    .stream { fill: none; stroke: var(--main); stroke-width: var(--pen-3); stroke-linecap: round; }
+    .road { fill: none; stroke: var(--main); stroke-width: var(--pen-3); stroke-linecap: round; }
+    /* the pen fading with distance (option C): each step back loses a
+       little more – the wall lines and hatching first, then the outline pen
+       breaks up and turns to the lighter detail pen */
+    .far-1 :is(.ln, polyline, .roof-hatch, .wall-shade, .hatch, .s1, .s2, .s3, .w2, .w3) { display: none; }
+    .far-1 :is(polygon, .filled) { stroke-dasharray: 14 2 9 3; }
+    .far-2 :is(.ln, polyline, .roof-hatch, .wall-shade, .hatch, .ink, [class*="s"]:not(.filled):not(polygon)) { display: none; }
+    .far-2 :is(polygon, .filled) { stroke: var(--detail) !important; stroke-dasharray: 7 3 3 5; }
+    .far-2 .brow, .far-2 .stream, .far-2 .road { stroke-dasharray: 5 4 2 6; }
+    .far-3 :is(.ln, polyline, .roof-hatch, .wall-shade, .hatch, .ink, .foot, [class*="s"]:not(.filled):not(polygon)) { display: none; }
+    .far-3 :is(polygon, .filled) { stroke: var(--detail) !important; stroke-dasharray: 3 6 1 9; stroke-width: var(--pen-2); }
+    .far-3 .brow, .far-3 .stream, .far-3 .road { stroke-dasharray: 2 7 1 10; }
+    .layer-objects .far-1 .filled.shade-1, .layer-objects .far-1 .filled.shade-2, .layer-objects .far-2 .filled, .layer-objects .far-3 .filled { fill: var(--bg); }
+    .far-2 .glyph { stroke-dasharray: 5 3 2 4; }
+    .far-3 .glyph { stroke-dasharray: 2 5 1 7; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: mist, sketched four ways over the same little valley, to pick
+    // one before it goes into the game. The scene is made of the map's own
+    // pieces – buildings (structures/), trees (features/trees.js), brows
+    // (render/brows.js) on a small height map – drawn back to front, and the
+    // mist goes in between, so what stands nearer is drawn over it.
+    //   mist.html?schemes=0,2&seed=3&level=0.7&only=pool&tile=56
+    //   schemes  colour schemes side by side (src/theme.js; 2 is Night, black paper)
+    //   level    option B: the mist's top, in heights of the map (z)
+    import { applyTheme, SCHEMES } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter } from './src/render/painter.js';
+    import { sunFor, shadowSVG } from './src/render/shadows.js';
+    import { STRUCTURES } from './structures/index.js';
+    import { drawTree } from './features/trees.js';
+    import { visibility, browLines, browRuns, BROWS } from './src/render/brows.js';
+    import { pencil } from './src/render/pencil.js';
+    import { contours } from './src/terrain/elevation.js';
+    import { mulberry32, valueNoise2D } from './src/core/random.js';
+
+    const q = new URLSearchParams(location.search);
+    const schemes = (q.get('schemes') ?? '0,2').split(',').map(Number);
+    applyTheme(schemes[0]);
+    const SEED = +(q.get('seed') ?? 1), LEVEL = +(q.get('level') ?? 0.75);
+    const N = 22; // the map: N × N grid steps, of which the middle is shown
+    const cam = new Camera({ width: N, height: N }, { tile: +(q.get('tile') ?? 56) });
+    const T = cam.tile, Z = cam.zScale, COS30 = Math.cos(Math.PI / 6);
+    const r2 = (n) => Math.round(n * 100) / 100;
+
+    // ---------- the land ----------
+    // A valley across the view: a high hill behind (a church on top, spruce
+    // wood on its back), the village and a stream along the bottom, a gentle
+    // slope in front with blocks of flats. t = depth (grows towards the
+    // viewer), 0 at the back corner of the map.
+    const noise = valueNoise2D(SEED + 7, 3);
+    const smooth = (a, b, v) => { const k = Math.min(1, Math.max(0, (v - a) / (b - a))); return k * k * (3 - 2 * k); };
+    const bump = (x, y, cx, cy, r, h) => h * Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (r * r));
+    // Placed in view terms: u across the screen (left to right), t from the
+    // back (0) to the front (about 22); P(u, t) -> grid [x, y].
+    const P = (u, t) => [(t + 10 + u) / 2, (t + 10 - u) / 2];
+    function height(x, y) {
+      const t = x + y - 10, u = x - y;
+      const back = 3.1 * (1 - smooth(5, 11, t));
+      const front = 1.1 * smooth(14.5, 21, t);
+      return back + front + bump(u, t, -2, 5, 2.2, 0.5) + bump(u, t, 5, 8, 2.5, 0.6) + (noise(x, y) - 0.5) * 0.3;
+    }
+    const step = 0.25, box = [-0.5, -0.5, N - 0.5, N - 0.5];
+    const lift = (x, y) => height(x, y);
+    let lo = Infinity, hi = -Infinity;
+    for (let y = box[1]; y <= box[3]; y += step) for (let x = box[0]; x <= box[2]; x += step) { const h = height(x, y); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+    lift.range = [lo, hi];
+    cam.lift = lift;
+    const depth = (x, y) => cam.depth(x, y);
+
+    // ---------- the scene, as items to draw back to front ----------
+    // { d: depth, svg, kind: 'ground' | 'thing', x, y }
+    const items = [];
+    const sun = sunFor(cam);
+    const rnd = mulberry32(SEED * 2654435761);
+    const DEF = Object.fromEntries(STRUCTURES.map((d) => [d.id, d]));
+
+    function building(type, x, y, rotation, seed = Math.floor(rnd() * 1e9)) {
+      const def = DEF[type];
+      const g = new Painter(cam, { x, y }, rotation, seed);
+      g.rigid = [x, y];
+      try { def.draw(g, { type, seed, id: items.length, node: 0, rotation }); } catch (e) { console.warn(type, e.message); return; }
+      items.push({ d: depth(x, y) + 0.5, kind: 'thing', x, y, svg: g.toGroundSVG() + shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+    }
+    function tree(x, y, kind, h) {
+      const g = new Painter(cam, { x, y }, 0, Math.floor(rnd() * 1e9));
+      g.rigid = [x, y];
+      drawTree(g, 0, 0, kind, h);
+      items.push({ d: depth(x, y), kind: 'thing', x, y, svg: shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+    }
+    // a line on the ground cut into short pieces, each at its own depth
+    function groundLine(pts, cls, piece = 0.6) {
+      const dense = [];
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1], [bx, by] = pts[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 0.15));
+        for (let k = i === 1 ? 0 : 1; k <= n; k++) dense.push([ax + (bx - ax) * k / n, ay + (by - ay) * k / n]);
+      }
+      let run = [dense[0]], len = 0;
+      for (let i = 1; i < dense.length; i++) {
+        run.push(dense[i]);
+        len += Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1]);
+        if (len >= piece || i === dense.length - 1) {
+          const d = run.map(([x, y], k) => { const [sx, sy] = cam.project(x, y, 0); return `${k ? 'L' : 'M'}${r2(sx)} ${r2(sy)}`; }).join('');
+          const [mx, my] = run[run.length >> 1];
+          items.push({ d: depth(mx, my), kind: 'ground', x: mx, y: my, svg: `<path class="${cls}" d="${d}"/>` });
+          run = [dense[i]]; len = 0;
+        }
+      }
+    }
+
+    // the brows, a stroke at a time, each at the depth of the ground under it
+    {
+      const vis = visibility(cam, height, box);
+      browLines(vis, cam).forEach((line, n) => {
+        for (const run of browRuns(line)) {
+          for (const pts of pencil(run.points, n, BROWS.pencil)) {
+            const [mx, my] = pts[pts.length >> 1];
+            const [wx, wy] = cam.unproject(mx * T, my * T);
+            const cls = ['brow light', 'brow', 'brow outline'][run.tier];
+            items.push({ d: depth(wx, wy) - 0.05, kind: 'ground', x: wx, y: wy, svg: `<path class="${cls}" d="${pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x * T)} ${r2(y * T)}`).join('')}"/>` });
+          }
+        }
+      });
+    }
+    // the stream along the valley floor, and the village road above it
+    const U = 7; // the view: u from -U to U
+    const along = (t, wob, phase) => Array.from({ length: 61 }, (_, i) => {
+      const u = -U - 2 + ((2 * U + 4) * i) / 60;
+      return P(u, t + Math.sin(u * 0.5 + phase) * wob);
+    });
+    groundLine(along(14.0, 0.4, 1), 'stream');
+    groundLine(along(14.3, 0.45, 1.3), 'stream');
+    groundLine(along(11.0, 0.3, 0.3), 'road');
+    groundLine(along(11.5, 0.3, 0.3), 'road');
+    const at = (u, t) => P(u, t + Math.sin(u * 0.5 + 0.3) * 0.3); // (following the road's bends)
+
+    // the village: houses either side of the road, the pub, the shop, a farm
+    const behind = ['house', 'house', 'house-wide', 'hospoda', 'house', 'house', 'house', 'house', 'house'];
+    behind.forEach((type, i) => building(type, ...at(-6.4 + i * 1.6 + (rnd() - 0.5) * 0.3, 10.0), 1));
+    const before = ['house', 'jednota', 'house', 'house', 'house-wide', 'house', 'farmstead'];
+    before.forEach((type, i) => building(type, ...at(-5.8 + i * 1.9 + (rnd() - 0.5) * 0.3, 12.5), 3));
+    // up the hill: cottages, the church on top
+    for (const u of [-5.5, -3.6, 1.2, 3.2, 5.6]) building('house', ...P(u + (rnd() - 0.5) * 0.4, 7.9 + rnd() * 0.6), 1);
+    for (const u of [-4.6, 0.2, 4.4]) building('house', ...P(u + (rnd() - 0.5) * 0.4, 6.4 + rnd() * 0.4), 1);
+    building('church', ...P(-2, 4.6), 1);
+    // the slope in front: panel blocks of flats
+    building('block', ...P(-3.5, 17.5), 1); building('block', ...P(2.8, 17.2), 1); building('apartments', ...P(-0.2, 19.4), 1);
+    // trees: spruce wood along the hilltop, orchards behind the houses,
+    // trees along the stream
+    for (let k = 0; k < 60; k++) { const u = -U - 1 + rnd() * (2 * U + 2), t = 2 + rnd() * 4; if (Math.abs(u + 2) > 1.4 || t < 3) tree(...P(u, t), 'spruce', 0.5 + rnd() * 0.25); }
+    for (let k = 0; k < 24; k++) tree(...at(-U + rnd() * 2 * U, 9.0 + rnd() * 0.5), rnd() < 0.7 ? 'spreading' : 'sapling', 0.4 + rnd() * 0.15);
+    for (let k = 0; k < 14; k++) tree(...P(-U + rnd() * 2 * U, 14.8 + rnd() * 0.6), 'spreading', 0.45 + rnd() * 0.2);
+    for (let k = 0; k < 10; k++) tree(...P(-U + rnd() * 2 * U, 15.5 + rnd() * 4), rnd() < 0.5 ? 'sapling' : 'spreading', 0.4 + rnd() * 0.2);
+    items.sort((a, b) => a.d - b.d);
+    const tMax = Math.max(...items.map((i) => i.d)), tMin = Math.min(...items.map((i) => i.d));
+
+    // ---------- the picture's frame ----------
+    const VX0 = -U * COS30 * T, VX1 = U * COS30 * T;
+    const VY0 = cam.project(...P(0, 3), 0)[1] - 1.2 * T, VY1 = cam.project(...P(0, 20.5), 0)[1];
+
+    // ---------- pen helpers ----------
+    // a ragged top edge across the picture: screen x -> y, cut into short
+    // vertical tongues, as a pencil's hatching breaks off
+    function raggedTop(yAt, r, { reach = 3, deep = 0.06 } = {}) {
+      const pts = [];
+      for (let x = VX0 - 10; x <= VX1 + 10; x += 2 + r() * 3) {
+        const tongue = r() < deep ? reach * (1.5 + r() * 2) : reach * r();
+        pts.push([x, yAt(x) + tongue]);
+      }
+      return pts;
+    }
+    const pathOf = (pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x)} ${r2(y)}`).join('');
+    // the ground's screen y at screen x, depth t, raised by `up`
+    const groundY = (sx, t, up = 0) => {
+      const u = sx / (COS30 * T);
+      const [rx, ry] = [(t + u) / 2, (t - u) / 2];
+      const x = rx + cam.cx, y = ry + cam.cy; // (rotation 0)
+      return (t / 2) * T - (height(x, y) + up) * Z * T;
+    };
+    // a band of mist: paper below a ragged edge, and above it a fringe of
+    // eraser strokes – sideways, short, rubbed through the drawing so it
+    // still shows between them – thinning out upwards
+    function band(edge, r, { fringe = 26, rubs = 6 } = {}) {
+      const fill = `<path class="mist" d="${pathOf(edge)}L${VX1 + 10} ${VY1 + 40}L${VX0 - 10} ${VY1 + 40}Z"/>`;
+      let rub = '';
+      for (let k = 0; k < rubs; k++) {
+        const up = fringe * ((k + 0.5) / rubs), w = 4.2 * (1 - k / rubs) + 0.8;
+        let d = '';
+        for (let x = VX0 - 10; x < VX1 + 10;) {
+          const len = 8 + r() * 40, gap = 3 + r() * (6 + k * 10);
+          const yAt = (xx) => { let best = edge[0]; for (const p of edge) if (Math.abs(p[0] - xx) < Math.abs(best[0] - xx)) best = p; return best[1]; };
+          if (r() < 0.85) {
+            const y0 = yAt(x) - up + (r() - 0.5) * 3, y1 = yAt(x + len) - up + (r() - 0.5) * 3;
+            d += `M${r2(x)} ${r2(y0)}L${r2(x + len)} ${r2(y1)}`;
+          }
+          x += len + gap;
+        }
+        rub += `<path class="mist-rub" stroke-width="${r2(w)}" d="${d}"/>`;
+      }
+      return fill + rub;
+    }
+
+    // ---------- the options ----------
+    const draw = (list) => list.map((i) => i.svg).join('');
+    const OPTIONS = [
+      ['none', 'No mist', 'The valley as it is, for comparison.', () => draw(items)],
+
+      ['bands', 'A · Banks of mist by distance (Tōhaku)',
+        'Three banks of mist at three depths, each lying on the ground a little way up. Behind each one the drawing simply stops: paper below a ragged edge, and above it a few sideways eraser strokes rubbed through the lines, so it gives out rather than being cut. Only what stands high enough – the church, the hilltop, the far roofs – comes through.',
+        () => {
+          const r = mulberry32(SEED + 11);
+          // [where (t, as P), how high above the ground there]: behind the
+          // hillside cottages, the houses behind the road, and the stream
+          const cuts = [[9.0, 1.4], [10.9, 0.5], [16.4, 0.9]].map(([t, up]) => [t - 11, up]);
+          const swell = valueNoise2D(SEED + 5, 160); // the banks rise and dip along their length
+          let out = '', k = 0;
+          for (const it of items) {
+            while (k < cuts.length && it.d >= cuts[k][0]) {
+              const [t, up] = cuts[k++];
+              out += band(raggedTop((x) => groundY(x, t, up * (0.45 + 1.1 * swell(x, t * 50))), r), r);
+            }
+            out += it.svg;
+          }
+          return out;
+        }],
+
+      ['pool', 'B · Mist in the valley (inversion)',
+        `The mist lies like a lake up to one height (here ${LEVEL}): everything below it is gone, everything above it is drawn as usual – the hill and the church, the roofs of the higher houses, the blocks on the slope in front. Its shore is the line where the hillside comes out of it, drawn lightly in broken strokes. Nearer ground and houses that stand out of it are drawn over it.`,
+        () => {
+          // the mist's top: flat at LEVEL; drawn as thin slices across the
+          // view, each where the ground under it is lower, put in among the
+          // drawing at its own depth
+          const du = 0.2, dt = 0.2, r = mulberry32(SEED + 17);
+          const slices = [];
+          for (let t = tMin - 1; t < tMax + 2; t += dt) {
+            let d = '', run = null;
+            // (each slice's top is ragged, so where it cuts across a house or
+            // a tree the line is broken like a pencil's, not ruled)
+            const close = (u1) => {
+              if (run == null) return;
+              const x0 = run * COS30 * T, x1 = u1 * COS30 * T, y0 = (t / 2 - LEVEL * Z) * T, y1 = ((t + dt) / 2 - LEVEL * Z) * T + 1.5;
+              d += `M${r2(x0)} ${r2(y1)}`;
+              for (let x = x0; x < x1; x += 1.5 + r() * 2.5) d += `L${r2(x)} ${r2(y0 - (r() < 0.1 ? 3 + r() * 3 : r() * 2))}`;
+              d += `L${r2(x1)} ${r2(y0)}L${r2(x1)} ${r2(y1)}Z`;
+              run = null;
+            };
+            for (let u = -N - 1; u < N + 1; u += du) {
+              const x = (t + dt / 2 + u + du / 2) / 2 + cam.cx, y = (t + dt / 2 - u - du / 2) / 2 + cam.cy;
+              const inside = x > -0.5 && y > -0.5 && x < N - 0.5 && y < N - 0.5;
+              if (inside && height(x, y) < LEVEL) { if (run == null) run = u; } else close(u);
+            }
+            close(N + 1);
+            if (d) slices.push({ d: t + dt, svg: `<path class="mist" d="${d}"/>` });
+          }
+          // the shore: the line at LEVEL on the hillside, in broken strokes
+          const shore = [];
+          contours((x, y) => height(x, y), box, { step: 0.1, interval: 1, index: 1, only: LEVEL }).forEach(({ points }, n) => {
+            for (const pts of pencil(points, n, { len: [0.3, 1.2], gap: [0.05, 0.5], drift: 0.04, skip: 0.25 })) {
+              const [mx, my] = pts[pts.length >> 1];
+              shore.push({ d: depth(mx, my) + 0.01, svg: `<path class="mist-edge" d="${pts.map(([x, y], i) => { const [sx, sy] = cam.project(x, y, 0); return `${i ? 'L' : 'M'}${r2(sx)} ${r2(sy)}`; }).join('')}"/>` });
+            }
+          });
+          return draw([...items, ...slices, ...shore].sort((a, b) => a.d - b.d));
+        }],
+
+      ['fade', 'C · The pen giving out with distance',
+        'No paper laid over anything: the drawing itself gets sparer the further back it is. First the wall lines, hatching and shadows go, then the outlines break up and turn to the lighter pen, until the far hill is a few dashes. Nearest the viewer nothing changes.',
+        () => {
+          let out = '', cur = -1;
+          const steps = [0.4, 0.58, 0.72]; // shares of the depth, front to back, where each step begins
+          for (const it of items) {
+            const back = (tMax - it.d) / (tMax - tMin);
+            const f = back > steps[2] ? 3 : back > steps[1] ? 2 : back > steps[0] ? 1 : 0;
+            if (f !== cur) { if (cur >= 0) out += '</g>'; out += `<g class="far-${f}">`; cur = f; }
+            out += it.svg;
+          }
+          return out + '</g>';
+        }],
+
+      ['kasumi', 'D · Drawn cloud bands (kasumi)',
+        'As on old Japanese screens of a city seen from above: long bands of mist with an outline of shallow lobes in the pen, one line inside along the top, plain paper within. They lie at a few depths across the village, hiding what is behind them, and whatever stands nearer is drawn over them.',
+        () => {
+          const r = mulberry32(SEED + 23);
+          const W = VX1 - VX0;
+          // [t (as P), left end and length as shares of the width, height above the ground]
+          const spots = [[8.4, 0.02, 0.55, 0.9], [10.7, 0.4, 0.62, 0.45], [13.0, -0.1, 0.5, 0.3], [16.3, 0.35, 0.6, 0.6]];
+          const bands = spots.map(([tt, x0, w, up]) => {
+            const t = tt - 11;
+            const xa = VX0 + W * x0, xb = Math.min(VX1 + 30, xa + W * w), mid = (xa + xb) / 2;
+            const y = groundY(mid, t, up), h = 20 + r() * 10;
+            // the top: a few long shallow lobes; the ends rounded; the
+            // underside nearly straight
+            let d = `M${r2(xa)} ${r2(y)}`;
+            let x = xa;
+            while (x < xb - 10) { const nx = Math.min(xb, x + 60 + r() * 70); d += `A${r2((nx - x) / 2)} ${r2((nx - x) / (9 + r() * 6))} 0 0 1 ${r2(nx)} ${r2(y + (r() - 0.5) * 2)}`; x = nx; }
+            d += `A${r2(h / 2)} ${r2(h / 2)} 0 0 1 ${r2(xb)} ${r2(y + h)}`;
+            for (x = xb; x > xa + 20;) { x -= 30 + r() * 40; d += `L${r2(Math.max(xa, x))} ${r2(y + h + (r() - 0.5) * 1.5)}`; }
+            d += `A${r2(h / 2)} ${r2(h / 2)} 0 0 1 ${r2(xa)} ${r2(y)}Z`;
+            // one line inside, along part of the top
+            const ia = xa + (xb - xa) * (0.08 + r() * 0.15), ib = xb - (xb - xa) * (0.1 + r() * 0.25);
+            const inner = `<path class="mist-inner" d="M${r2(ia)} ${r2(y + 5)}L${r2(ib)} ${r2(y + 5 + (r() - 0.5) * 2)}"/>`;
+            return { d: t, svg: `<path class="mist" d="${d}"/><path class="mist-line" d="${d}"/>${inner}` };
+          });
+          return draw([...items, ...bands].sort((a, b) => a.d - b.d));
+        }],
+    ];
+
+    // ---------- the page ----------
+    const out = document.getElementById('out');
+    out.insertAdjacentHTML('beforeend', `<h1>Mist sketches</h1><p>The same little valley four ways, in ${schemes.map((s) => SCHEMES[s].name).join(' and ')}. The mist is always the paper colour (--bg), so on Night's black paper it is black. No blur, no fading: paper laid over, an eraser, or the pen giving out. Add <code>?schemes=0,1,2,3</code>, <code>?seed=N</code>, <code>?level=1.2</code> (option B's height).</p>`);
+    const only = q.get('only');
+    for (const [id, title, text, make] of OPTIONS) {
+      if (only && only !== id) continue;
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2><p>${text}</p>`);
+      const row = document.createElement('div');
+      row.className = 'row';
+      out.appendChild(row);
+      const svg = make();
+      for (const s of schemes) {
+        const fig = document.createElement('figure');
+        applyTheme(s, fig);
+        fig.innerHTML = `<svg width="${Math.round(VX1 - VX0)}" height="${Math.round(VY1 - VY0)}" viewBox="${r2(VX0)} ${r2(VY0)} ${r2(VX1 - VX0)} ${r2(VY1 - VY0)}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0 sz-1 sw-1" style="--sun: 1">${svg}</g></svg><figcaption>${SCHEMES[s].name}</figcaption>`;
+        row.appendChild(fig);
+      }
+    }
+    applyTheme(schemes[0]);
+  </script>
+</body>
+</html>
