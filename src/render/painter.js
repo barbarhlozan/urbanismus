@@ -1038,7 +1038,7 @@ export class Painter {
             const a = 0.04 + 0.08 * Math.abs(hash2(k, i, 6)), b = 0.08 + 0.2 * Math.abs(hash2(k, i, 7));
             const lerp = (t) => [r0 + (r1 - r0) * t, h0 + (h1 - h0) * t];
             const [ra, ha] = lerp(a), [rb, hb] = lerp(1 - b);
-            this.line([at(ra, j, ha), at(rb, j, hb)], { cls: 'roof-hatch', lod });
+            this.line([at(ra, j, ha), at(rb, j, hb)], { cls: `roof-hatch${tierClass(tierOf(k), 'rh')}`, lod });
           }
         }
       }

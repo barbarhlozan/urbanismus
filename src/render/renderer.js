@@ -95,8 +95,22 @@ const VIEW_SETTLE = 150;
 // A drawn element (painter.js) carrying detail class d2, or d1 / d2 (atDetail).
 const DETAIL_2 = /<(?:path|polygon|polyline|circle|ellipse|rect|line)\b[^>]*\bclass="[^"]*\bd2\b[^"]*"[^>]*\/>/g;
 const DETAIL_1_2 = /<(?:path|polygon|polyline|circle|ellipse|rect|line)\b[^>]*\bclass="[^"]*\bd[12]\b[^"]*"[^>]*\/>/g;
+// Roof hatching (painter.js) in density tiers above n, for n = 0, 1, 2.
+const ROOF_TIERS = [1, 2, 3].map((n) => new RegExp(`<(?:path|polyline)\\b[^>]*\\bclass="[^"]*\\brh[${n}-3]\\b[^"]*"[^>]*\\/>`, 'g'));
+const ROOF_TIER_CLASS = / rh[1-3]\b/g;
+// An object's detail changes only once the zoom is this share past its
+// threshold (Renderer.bandOf), so one resting on it doesn't switch to and fro.
+const BAND_HOLD = 0.02;
 const OVERSCAN = 0.25;
 const r2 = (n) => Math.round(n * 100) / 100;
+// An object's place among the others in when its detail changes
+// (Renderer.bandOf): 0..1, seeded by its key ('s12', 'f7', 'k3-4').
+function detailRank(key) {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  h = Math.imul(h ^ (h >>> 15), 2246822507);
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
 
 // Trees swaying in the wind (Renderer.swayTrees): at most `most` on screen
 // at once, only at zoom `minZoom` or closer, updated `fps` times a second.
@@ -158,7 +172,8 @@ export class Renderer {
     this.showAgents = true; // (both switchable in the temporary debug panel)
     this.cullOn = true;     // hide objects outside the view (cull)
     this.constantStrokes = true; // line widths kept on screen as the zoom changes (updateStroke)
-    this.rebuildQueue = [];   // object keys to redraw for a new level of detail, nearest the middle last (queueRebuild)
+    this.rebuildQueue = new Set(); // object keys to redraw for a new level of detail (rebandObjects)
+    this.rebuildOrder = null; // the same, nearest the middle last, once the view has settled (frame)
     this.rebuildCost = 1;     // ms that redrawing one of them took lately (frame)
     this.hiddenKinds = new Set(); // TEMPORARY (debug panel): objects hidden by key letter, 's' buildings, 'f' trees, 'k' street lamps…
     this.contours = STYLE.contours;
@@ -338,13 +353,15 @@ export class Renderer {
     for (const ink of Object.values(this.ink)) if (ink.busy) ink.tick();
     if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
     // a new level of detail: the objects in sight, as many as fit in
-    // config.render.rebuildBudget ms by what they took so far (queueRebuild),
+    // config.render.rebuildBudget ms by what they took so far (rebandObjects),
     // once the view has settled – each batch repaints the whole objects layer
     let batch = 0;
-    if (this.rebuildQueue.length && !this.objsAll && performance.now() - this.movedAt > VIEW_SETTLE) {
+    if (this.rebuildQueue.size && !this.objsAll && performance.now() - this.movedAt > VIEW_SETTLE) {
+      this.rebuildOrder ??= this.nearestLast(this.rebuildQueue);
       const n = Math.max(1, Math.floor(this.config.render.rebuildBudget / this.rebuildCost));
-      while (batch < n && this.rebuildQueue.length) {
-        const key = this.rebuildQueue.pop();
+      while (batch < n && this.rebuildOrder.length) {
+        const key = this.rebuildOrder.pop();
+        this.rebuildQueue.delete(key);
         if (!this.objs.get(key)?.stale) continue;
         this.objsDirty.add(key);
         batch++;
@@ -1136,18 +1153,11 @@ export class Renderer {
       this.dirty.add('parked');
     }
     // far out the woods are one shape each (forest.js), their trees not drawn
-    const woods = z < this.config.render.forest.zoom;
-    if (woods !== this.woodsOn) {
-      this.woodsOn = woods;
-      this.dirty.add('forest');
-      this.cull();
-    }
-    // forest trees: plainer crowns further out, redrawn when that changes
-    const { trees } = this.config.render;
-    const detail = z >= trees.medium ? 0 : z >= trees.far ? 1 : 2;
-    if (detail !== this.treeDetail) {
-      if (this.treeDetail !== undefined) this.queueRebuild((key) => key[0] === 'f');
-      this.treeDetail = detail;
+    this.updateWoods(z);
+    // each object's own detail (bandOf), redrawn where it changes
+    if (z !== this.bandZoom) {
+      this.bandZoom = z;
+      this.rebandObjects();
     }
     // shadow hatching: the stroke tiers that keep strokes apart on screen,
     // on the ground (sz) and on walls (sw) – when anything is hatched (a
@@ -1161,15 +1171,96 @@ export class Renderer {
       }
       this.shadeTiers = tiers;
     }
+    // the map's level, for the rest of what's drawn with detail classes
+    // (contours, the overlay); not the objects, which go by their own
     const level = z >= medium ? 0 : z >= far ? 1 : 2;
     if (level === this.lodLevel) return;
     for (const s of [this.svg, this.ground, this.top]) {
       s.classList.remove(`lod-${this.lodLevel}`);
       s.classList.add(`lod-${level}`);
     }
-    // the objects are drawn with this level's detail only (atDetail)
-    if (this.lodLevel !== undefined) this.queueRebuild(() => true);
     this.lodLevel = level;
+  }
+
+  // An object's detail at zoom z, a number made of three parts: its level
+  // (0 full, 1 without the facade detail, 2 bare; config.render.lod), the
+  // densest tier of roof hatching it keeps (0–3, painter.js: strokes about
+  // config.render.roofGap px apart on screen at least) and, for a tree,
+  // how plain its crown is (config.render.trees). Each object crosses
+  // these zooms a little sooner or later than the next – its own share of
+  // them, from 1 − lod.spread to 1, seeded by its key – so a change goes
+  // through the town over a stretch of zooms rather than all at once;
+  // and only once the zoom is BAND_HOLD past, if it was drawn with `prev`.
+  bandOf(key, z, prev) {
+    const at = (zz) => {
+      const { lod, trees, roofGap } = this.config.render;
+      const r = 1 - lod.spread * detailRank(key);
+      const level = (zz < lod.medium * r) + (zz < lod.far * r);
+      // tier n keeps every 2^(3 − n)th stroke, LOOK.hatch apart
+      let roof = 3;
+      if (key[0] === 's') while (roof > 0 && LOOK.hatch * 2 ** (3 - roof) * this.camera.tile * zz < roofGap * r) roof--;
+      const tree = key[0] === 'f' ? (zz < trees.medium * r) + (zz < trees.far * r) : 0;
+      return [level, roof, tree];
+    };
+    const now = at(z);
+    if (prev !== undefined) {
+      const was = [prev >> 4, (prev >> 2) & 3, prev & 3];
+      const closer = at(z * (1 + BAND_HOLD)), further = at(z * (1 - BAND_HOLD));
+      // each part only goes up with the zoom (roof) or down (level, tree)
+      const keep = was[0] >= closer[0] && was[0] <= further[0]
+        && was[1] <= closer[1] && was[1] >= further[1]
+        && was[2] >= closer[2] && was[2] <= further[2];
+      if (keep) return prev;
+    }
+    return (now[0] << 4) | (now[1] << 2) | now[2];
+  }
+
+  // The zoom changed: objects whose detail (bandOf) changes with it are
+  // redrawn – those in sight a batch per frame once the view has settled
+  // (frame), the rest once they come into sight (stale, see cull()).
+  rebandObjects() {
+    const z = this.bandZoom;
+    for (const [key, e] of this.objs) {
+      if (e.band === undefined) continue;
+      const band = this.bandOf(key, z, e.band);
+      if (band !== e.band || e.hide) this.hideAhead(e, band);
+      if (band !== e.band) {
+        if (e.bandStale) continue;
+        e.stale = e.bandStale = true;
+        if (e.shown !== false) {
+          this.rebuildQueue.add(key);
+          this.rebuildOrder = null;
+        }
+      } else if (e.bandStale) {
+        // back where it was drawn before it was redrawn
+        e.stale = e.bandStale = false;
+      }
+    }
+  }
+
+  // The facade detail an object's drawing has that `band` leaves out hides
+  // at once (a class on its groups, styles.css), until it is redrawn
+  // without it; what it lacks, and its roof hatching, wait for the redraw.
+  hideAhead(e, band) {
+    const level = band >> 4;
+    const hide = level > e.band >> 4 ? `lv${level}` : '';
+    if (hide === (e.hide ?? '')) return;
+    for (const g of [e.g, e.lg]) {
+      if (e.hide) g.classList.remove(e.hide);
+      if (hide) g.classList.add(hide);
+    }
+    e.hide = hide;
+  }
+
+  // Keys sorted by how far their objects are from the middle of the view,
+  // the furthest first.
+  nearestLast(keys) {
+    const v = this.viewBox, cx = v ? (v[0] + v[2]) / 2 : 0, cy = v ? (v[1] + v[3]) / 2 : 0;
+    const far = (key) => {
+      const b = this.objs.get(key)?.box;
+      return b ? Math.hypot((b[0] + b[2]) / 2 - cx, (b[1] + b[3]) / 2 - cy) : Infinity;
+    };
+    return [...keys].map((key) => [far(key), key]).sort((a, b) => b[0] - a[0]).map(([, key]) => key);
   }
 
   renderObjects() {
@@ -1212,7 +1303,7 @@ export class Renderer {
         const { bounds, box } = this.placeOf(entry.at);
         if (!this.inView(box)) {
           if (['minX', 'maxX', 'minY', 'maxY'].some((k) => entry.bounds[k] !== bounds[k])) orderChanged = true;
-          Object.assign(entry, { bounds, box, stale: true });
+          Object.assign(entry, { bounds, box, stale: true, bandStale: false });
           this.cull([entry]);
           continue;
         }
@@ -1270,7 +1361,12 @@ export class Renderer {
       entry.bounds = b;
       entry.box = built.box;
       entry.at = built.at;
-      entry.stale = false;
+      entry.band = built.band;
+      if (entry.hide) {
+        for (const g of [entry.g, entry.lg]) g.classList.remove(entry.hide);
+        entry.hide = '';
+      }
+      entry.stale = entry.bandStale = false;
       this.cull([entry]);
       if (this.born.has(key) && !entry.shown) this.born.delete(key); // out of sight: no pen
       if (this.born.has(key)) {
@@ -1382,7 +1478,8 @@ export class Renderer {
     const out = this.paintStreet(key);
     if (!out) return null;
     const { painter, x, y } = out;
-    return { svg: mergeRuns(this.atDetail(painter.toSVG())), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
+    const band = this.bandFor(`k${key}`);
+    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
   }
 
   // The painters behind buildStreet / buildFeature / buildStructure, for any
@@ -1410,38 +1507,30 @@ export class Renderer {
   }
 
   buildFeature(f) {
-    const out = this.paintFeature(f, this.camera, this.treeDetail);
+    const band = f && this.bandFor(`f${f.id}`);
+    const out = this.paintFeature(f, this.camera, band & 3);
     if (!out) return null;
     const { painter, x, y } = out;
-    return { svg: mergeRuns(this.atDetail(painter.toSVG())), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
+    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
   }
 
-  // A drawing without the details the current level hides (.lod-1 .d2,
-  // .lod-2 .d1 in styles.css): left out rather than only hidden, as the
-  // browser restyles and lays out hidden elements too. Changing the level
-  // redraws the objects (updateLod, queueRebuild).
-  atDetail(svg) {
-    const level = this.lodLevel ?? 0;
-    return level ? svg.replace(level >= 2 ? DETAIL_1_2 : DETAIL_2, '') : svg;
+  // The detail (bandOf) an object is drawn with now: as it was drawn last
+  // unless the zoom has moved on far enough.
+  bandFor(key) {
+    return this.bandOf(key, this.bandZoom ?? this.drawn.zoom, this.objs.get(key)?.band);
   }
 
-  // Redraw the objects whose key passes test(key), for a new level of
-  // detail: those in sight a batch per frame (config.render.rebuildPerFrame,
-  // see frame()), the rest once they come into sight (stale, see cull()).
-  // The middle of the window goes first: the queue is taken from its end.
-  queueRebuild(test) {
-    const queued = new Set(this.rebuildQueue);
-    for (const [key, e] of this.objs) {
-      if (!test(key)) continue;
-      e.stale = true;
-      if (e.shown !== false) queued.add(key);
-    }
-    const v = this.viewBox, cx = v ? (v[0] + v[2]) / 2 : 0, cy = v ? (v[1] + v[3]) / 2 : 0;
-    const far = (key) => {
-      const b = this.objs.get(key)?.box;
-      return b ? Math.hypot((b[0] + b[2]) / 2 - cx, (b[1] + b[3]) / 2 - cy) : Infinity;
-    };
-    this.rebuildQueue = [...queued].map((key) => [far(key), key]).sort((a, b) => b[0] - a[0]).map(([, key]) => key);
+  // A drawing without the details its band (bandOf) leaves out: the
+  // elements tagged d2, or d1 / d2 (painter.js), and the denser tiers of
+  // roof hatching – left out rather than hidden, as the browser restyles
+  // and lays out hidden elements too. The tiers kept lose their tier
+  // class, so each roof plane's strokes merge into one path again
+  // (mergeRuns).
+  atDetail(svg, band = 0) {
+    const level = band >> 4, roof = (band >> 2) & 3;
+    if (level) svg = svg.replace(level >= 2 ? DETAIL_1_2 : DETAIL_2, '');
+    if (roof < 3) svg = svg.replace(ROOF_TIERS[roof], '');
+    return svg.replace(ROOF_TIER_CLASS, '');
   }
 
   paintFeature(f, camera = this.camera, detail = 0) {
@@ -1464,7 +1553,8 @@ export class Renderer {
     const out = this.paintStructure(s);
     if (!out) return null;
     const { painter, points } = out;
-    return { svg: mergeRuns(this.atDetail(painter.toSVG())), ground: mergeRuns(this.atDetail(painter.toGroundSVG())), shade: this.shadeOf(painter), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
+    const band = this.bandFor(`s${s.id}`);
+    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), band)), shade: this.shadeOf(painter), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
   }
 
   // An object's shadow (shadows.js): what casts it and the feet of its
@@ -1973,9 +2063,33 @@ export class Renderer {
     }
   }
 
-  // Is it a tree in a wood, while the woods are drawn as one shape each?
+  // Is it a tree in a wood that is drawn as one shape?
   inWoods(e) {
-    return this.woodsOn && e.key?.[0] === 'f' && this.forestState().trees.has(Number(e.key.slice(1)));
+    return this.farWoods?.size > 0 && e.key?.[0] === 'f' && this.farWoods.has(this.forestState().woodOf.get(Number(e.key.slice(1))));
+  }
+
+  // Which woods are drawn as one shape (forest.js) at zoom z: those it is
+  // further out than config.render.forest.zoom for, each by its own share
+  // of it (lod.spread, as the buildings' detail, bandOf), so the woods
+  // don't all turn at once; and each only once the zoom is BAND_HOLD past.
+  updateWoods(z) {
+    const { forest, lod } = this.config.render;
+    this.farWoods ??= new Set();
+    if (z >= forest.zoom * (1 + BAND_HOLD) && !this.farWoods.size) return; // (not even found while close)
+    const state = this.forestState();
+    if (z === this.woodsZoom && state === this.woodsFor) return;
+    this.woodsZoom = z;
+    this.woodsFor = state;
+    const far = new Set();
+    for (const w of state.woods) {
+      const at = forest.zoom * (1 - lod.spread * detailRank(`w${w.id}`));
+      const was = this.farWoods.has(w.id);
+      if (z < at * (was ? 1 + BAND_HOLD : 1 - BAND_HOLD)) far.add(w.id);
+    }
+    if (far.size === this.farWoods.size && [...far].every((id) => this.farWoods.has(id))) return;
+    this.farWoods = far;
+    this.dirty.add('forest');
+    this.cull();
   }
 
   // The woods (forest.js), found again after trees come or go.
@@ -1984,13 +2098,15 @@ export class Renderer {
       const { world, config } = this;
       const ways = new SegmentIndex([...networkPolylines(world.networks.road, config.road), ...networkPolylines(world.networks.rail, config.rail)]);
       this.forests = findForests(world, config.render.forest, ways);
-      if (this.woodsOn) queueMicrotask(() => this.cull()); // trees that joined or left a wood
+      if (this.farWoods?.size) queueMicrotask(() => { this.woodsZoom = null; this.updateWoods(this.drawn.zoom); this.cull(); }); // trees that joined or left a wood
     }
     return this.forests;
   }
 
   renderForest() {
-    const svg = this.woodsOn ? forestSVG(this.forestState(), (x, y) => this.project(x, y), this.config.render.forest, this.camera) : '';
+    const state = this.farWoods?.size ? this.forestState() : null;
+    const loops = state ? state.woods.filter((w) => this.farWoods.has(w.id)).flatMap((w) => w.loops) : [];
+    const svg = loops.length ? forestSVG({ ...state, loops }, (x, y) => this.project(x, y), this.config.render.forest, this.camera) : '';
     if (svg !== this.forestDrawn) this.layers.forest.innerHTML = this.forestDrawn = svg;
   }
 

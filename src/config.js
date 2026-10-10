@@ -20,9 +20,17 @@ export const CONFIG = {
   render: {
     // Detail levels by zoom: below `medium` small details hide (facade lines,
     // fences, props, paving patterns); below `far` lots and parked cars hide too.
-    lod: { medium: 0.9, far: 0.55 },
+    // Each building, tree and lamp changes a little further out than that,
+    // by up to `spread` of it (seeded per object, Renderer.bandOf), so the
+    // detail goes a few at a time as you zoom out, not all at once.
+    lod: { medium: 0.9, far: 0.55, spread: 0.2 },
+    // Roof hatching thins out further away so that its strokes stay about
+    // this many px apart on screen (every 2nd, 4th, 8th stroke kept) and
+    // never close up into solid ink.
+    roofGap: 2.2,
     // Forest trees are drawn plainer further out (smoother crown outlines,
-    // see features/trees.js): below `medium` a little, below `far` more.
+    // see features/trees.js): below `medium` a little, below `far` more
+    // (each tree by its own share, as lod.spread).
     trees: { medium: 1.5, far: 0.9 },
     // Line widths are kept about the same on screen by rescaling them when
     // the zoom has changed by this factor (styles.css, --stroke): in between

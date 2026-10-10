@@ -7,7 +7,7 @@
 // map's sign for a wood. Lone trees and small groups stay
 // trees.
 //
-//   findForests(world, cfg, ways)    { trees: Set of feature ids in woods, loops }
+//   findForests(world, cfg, ways)    { trees: Set of feature ids in woods, loops, woods }
 //   forestSVG(forests, project, cfg, camera) the layer's SVG (Renderer.renderForest)
 //
 // The outline is the line where the woods' cover (each tree's crown,
@@ -45,7 +45,7 @@ export function findForests(world, cfg, ways = null) {
   const size = new Map();
   trees.forEach((_, i) => size.set(root(i), (size.get(root(i)) ?? 0) + 1));
   const wood = trees.filter((_, i) => size.get(root(i)) >= cfg.minTrees);
-  if (!wood.length) return { trees: new Set(), loops: [], cover: () => 0 };
+  if (!wood.length) return { trees: new Set(), loops: [], woods: [], woodOf: new Map(), cover: () => 0 };
 
   // the cover: 1 at a tree, 0 from `reach` away; the outline at 0.5
   const woodCells = buckets(wood, cfg.reach);
@@ -62,7 +62,51 @@ export function findForests(world, cfg, ways = null) {
   }
   const pad = cfg.reach + cfg.step;
   const lines = contours(cover, [x0 - pad, y0 - pad, x1 + pad, y1 + pad], { step: cfg.step, interval: 0.5, index: 1, only: 0.5 });
-  return { trees: new Set(wood.map((t) => t.id)), loops: lines.map((l) => straighten(l.points, cfg.straighten)).filter((p) => p.length > 3), cover };
+  const loops = lines.map((l) => straighten(l.points, cfg.straighten)).filter((p) => p.length > 3);
+  return { trees: new Set(wood.map((t) => t.id)), loops, ...woodsOf(loops, wood, root, trees), cover };
+}
+
+// The woods one by one, so each can turn into its shape at its own zoom
+// (Renderer.updateWoods): `woods`, each { id, loops, trees } – its outline
+// and the clearings in it, the ids of the trees it stands for, and its id
+// (its lowest tree id, so it keeps it as trees come and go elsewhere) –
+// and `woodOf`, tree id -> wood id. A tree the straightened outline left
+// out goes with the wood of the others in its group.
+function woodsOf(loops, wood, root, trees) {
+  // a loop inside an odd number of others is a clearing in the innermost
+  const depth = loops.map((l) => loops.filter((o) => o !== l && inside(o, ...l[0])).length);
+  const woods = [];
+  const at = new Map(); // loop index of an outline -> its wood
+  loops.forEach((l, i) => {
+    if (depth[i] % 2) return;
+    const w = { id: Infinity, loops: [l], trees: [] };
+    at.set(i, w);
+    woods.push(w);
+  });
+  loops.forEach((l, i) => {
+    if (!(depth[i] % 2)) return;
+    const j = loops.findIndex((o, k) => depth[k] === depth[i] - 1 && inside(o, ...l[0]));
+    at.get(j)?.loops.push(l);
+  });
+  const index = new Map(trees.map((t, i) => [t.id, i]));
+  const byGroup = new Map(), lost = [];
+  for (const t of wood) {
+    // the innermost outline around it
+    let best = -1;
+    at.forEach((w, i) => { if ((best < 0 || depth[i] > depth[best]) && inside(loops[i], t.x, t.y)) best = i; });
+    if (best < 0) { lost.push(t); continue; }
+    at.get(best).trees.push(t.id);
+    byGroup.set(root(index.get(t.id)), at.get(best));
+  }
+  for (const t of lost) byGroup.get(root(index.get(t.id)))?.trees.push(t.id);
+  const woodOf = new Map();
+  for (const w of woods) {
+    for (const id of w.trees) {
+      w.id = Math.min(w.id, id);
+      woodOf.set(id, w.id);
+    }
+  }
+  return { woods: woods.filter((w) => w.trees.length), woodOf };
 }
 
 // Each wood: its shape filled with the paper colour and hatched, its

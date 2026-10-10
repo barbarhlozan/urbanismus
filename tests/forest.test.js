@@ -43,3 +43,14 @@ test('a road through a wood is kept clear of it', () => {
   assert.ok(cover(8, 10) < 0.5, 'on the road');
   assert.ok(cover(8, 7) > 0.5, 'in the wood');
 });
+
+test('woods far apart are separate woods, each with its own trees', () => {
+  const world = flatWorld(40, 30);
+  plant(world, 3, 3, 8, 8);
+  plant(world, 25, 15, 32, 22);
+  const { trees, woods, woodOf } = findForests(world, cfg);
+  assert.equal(woods.length, 2);
+  assert.equal(woods[0].trees.length + woods[1].trees.length, trees.size);
+  for (const w of woods) for (const id of w.trees) assert.equal(woodOf.get(id), w.id);
+  assert.notEqual(woods[0].id, woods[1].id);
+});

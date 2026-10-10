@@ -299,13 +299,19 @@ html, body {
 .sw-1 .w2, .sw-1 .w3,
 .sw-2 .w3 { display: none; }
 
-/* Detail levels (set on both SVGs by the renderer from the zoom) */
+/* Detail levels (set on both SVGs by the renderer from the zoom) – not
+   for buildings, trees and their lots: each is drawn with its own level,
+   the detail it hides left out (Renderer.atDetail) */
 .lod-1 .d2,
 .lod-2 .d1,
 .lod-2 .d2,
 #world.lod-2 .layer-parked,
 #world.lod-2 .driveway,
 #world.lod-2 .zebra { display: none; }
+.layer-objects .d1, .layer-objects .d2, .layer-lots .d1, .layer-lots .d2 { display: inline; }
+/* …and until one is redrawn for a new level, the detail it leaves out is
+   hidden (Renderer.hideAhead) */
+.lv1 .d2, .lv2 .d1, .lv2 .d2 { display: none; }
 
 .overlay .hover, .overlay .anchor {
   fill: none;
