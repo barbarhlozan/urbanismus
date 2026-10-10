@@ -66,6 +66,17 @@ test('the weather survives saving and loading, and old saves start fair', () => 
   assert.equal(World.fromJSON(json).weather.kind, 'fair'); // (World's own default, before the system starts it)
 });
 
+test('a save from when there was overcast starts cloudy', () => {
+  const world = flatWorld();
+  const json = JSON.parse(JSON.stringify(world.toJSON()));
+  json.weather = { kind: 'overcast', until: 0, n: 3 };
+  const loaded = World.fromJSON(json);
+  new WeatherSystem(loaded, CONFIG);
+  assert.equal(loaded.weather.kind, 'cloudy');
+  assert.ok(loaded.weather.until > loaded.time);
+  assert.ok(!kinds.includes('overcast'));
+});
+
 test('set() makes the weather so, for a spell', () => {
   const world = flatWorld();
   const sys = new WeatherSystem(world, CONFIG);
@@ -73,6 +84,7 @@ test('set() makes the weather so, for a spell', () => {
   assert.equal(world.weather.kind, 'rain');
   assert.ok(world.weather.until > world.time);
   assert.throws(() => sys.set('snow'));
+  assert.throws(() => sys.set('overcast'));
 });
 
 test('in a storm fewer people cycle, and walkers draw with umbrellas', async () => {

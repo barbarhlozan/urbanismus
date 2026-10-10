@@ -206,31 +206,32 @@ export const CONFIG = {
   // (fair never turns to rain without clouds first). How long each lasts, in
   // simulated seconds [shortest, longest]; src/sim/weather.js.
   weather: {
-    kinds: ['fair', 'cloudy', 'overcast', 'rain', 'storm'],
+    kinds: ['fair', 'cloudy', 'rain', 'storm'],
     start: 'cloudy',
     // what can follow each kind, and how likely (the weights are shares) –
     // mostly cloudy, now and then clearing up or clouding over into rain,
     // a storm only out of rain. Over a long time this comes to roughly
-    // cloudy 50 %, fair 19 %, overcast 15 %, rain 14 %, storm 2 %.
+    // cloudy 55 %, fair 27 %, rain 16 %, storm 2 %. (There was an overcast
+    // between cloudy and rain; a save still in it starts cloudy,
+    // WeatherSystem.)
     next: {
       fair: { cloudy: 1 },
-      cloudy: { fair: 0.45, overcast: 0.55 },
-      overcast: { cloudy: 0.5, rain: 0.5 },
-      rain: { overcast: 0.5, cloudy: 0.2, storm: 0.3 },
+      cloudy: { fair: 0.6, rain: 0.4 },
+      rain: { cloudy: 0.7, storm: 0.3 },
       storm: { rain: 1 },
     },
-    lasts: { fair: [400, 900], cloudy: [500, 1100], overcast: [150, 400], rain: [240, 540], storm: [120, 260] },
+    lasts: { fair: [400, 900], cloudy: [500, 1100], rain: [240, 540], storm: [120, 260] },
     // how much the sun shades the walls turned away from it (1 full, 0 none):
     // under a grey sky there is little to tell one side from the other
-    sun: { fair: 1, cloudy: 1, overcast: 0.25, rain: 0.2, storm: 0.15 },
+    sun: { fair: 1, cloudy: 1, rain: 0.2, storm: 0.15 },
     // how hard it rains (render/rain.js: 1 = rain)
     rain: { rain: 1, storm: 2.4 },
     // the grey sky's shade over the whole map (styles.css #gloom): the detail
     // colour laid over it at this opacity
-    gloom: { overcast: 0.3, rain: 0.2, storm: 0.4 },
+    gloom: { rain: 0.2, storm: 0.4 },
     // the wind in the trees (Renderer.swayTrees): how far a tree's top leans,
     // as a share of its height
-    wind: { fair: 0.025, cloudy: 0.045, overcast: 0.05, rain: 0.07, storm: 0.14 },
+    wind: { fair: 0.025, cloudy: 0.045, rain: 0.07, storm: 0.14 },
     // what people do in it (sim/agents.js, render/people.js): their
     // activities' weights scaled (config.activities: more stay in, fewer go
     // for a walk), the share still cycling, how often visitors come, and the

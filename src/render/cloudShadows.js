@@ -22,7 +22,7 @@
 // ground (the view is isometric). Only those
 // near the view are kept: they come in from beyond its edge, and any that
 // have to appear inside it (the weather turning) fade in, as they fade out
-// when it clears. Overcast and rain have none – it is all shade then, and
+// when it clears. Rain and storm have none – it is all shade then, and
 // the walls lose their shading instead (config.weather.sun).
 
 import { THEME } from '../theme.js';

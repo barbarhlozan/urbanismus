@@ -1,6 +1,6 @@
 // The weather: one for the whole map. It holds for a while (config.weather
 // .lasts), then turns to one of the kinds that may follow it, by the weights
-// in config.weather.next – mostly cloudy, rain only out of overcast, a storm
+// in config.weather.next – mostly cloudy, rain only out of cloudy, a storm
 // only out of rain, so it always clouds over first. The state is
 // world.weather = { kind, until, n }: `until` in world.time, `n` how many
 // changes there have been. What comes next depends only on the world's seed
@@ -13,6 +13,7 @@ export class WeatherSystem {
     this.world = world;
     this.config = config.weather;
     const w = world.weather;
+    // a kind there is no more (an old save's overcast) starts as `start`
     if (!this.config.kinds.includes(w.kind)) w.kind = this.config.start;
     if (!w.until) w.until = this.world.time + this.lasts(w);
   }

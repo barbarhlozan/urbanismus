@@ -109,10 +109,6 @@ weather.cloudy
   cs: Polojasno
   en: Partly cloudy
 
-weather.overcast
-  cs: Zataženo
-  en: Overcast
-
 weather.rain
   cs: Déšť
   en: Rain
