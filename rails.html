@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dědina – railway track sketches</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--main); font: 12px system-ui; margin: 16px; }
+    h1 { font-weight: 500; margin: 0 0 6px; }
+    h2 { font-weight: 500; margin: 32px 0 2px; }
+    h3 { font-weight: 500; margin: 0 0 2px; font-size: 13px; }
+    p { margin: 0 0 8px; color: var(--detail); max-width: 82ch; }
+    .bar { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin: 10px 0 4px; }
+    .bar span { color: var(--detail); }
+    .bar button { font: inherit; background: var(--bg); color: var(--main); border: 1px solid var(--main); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+    .bar button.on { background: var(--main); color: var(--bg); }
+    .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+    .cell { display: flex; flex-direction: column; gap: 3px; }
+    .cell small { color: var(--detail); }
+    .cell .note { max-width: 520px; }
+    svg.pic { display: block; position: static; border: 1px solid color-mix(in srgb, var(--detail) 40%, transparent); background: var(--bg); }
+    /* a scheme of its own (the last section): the colours set on the cell */
+    .swatch { padding: 6px; background: var(--bg); color: var(--main); border-radius: 4px; }
+
+    /* ---- the track treatments, in the map's pens (--pen-1…5, device px
+       times --stroke, as styles.css) ---- */
+    /* A: the ballast bed's edges (a stroke twice the pen, its inner half
+       covered by the bed's fill, so overlapping beds at switches merge) */
+    .t-bed-line { fill: none; stroke: var(--main); stroke-width: calc(2 * var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linejoin: round; }
+    .t-bed-fill { fill: var(--bg); stroke: none; }
+    .t-sleeper { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linecap: butt; }
+    .t-rail { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3, 1px) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+    /* B: two rails a little heavier, sparse ties in the main pen */
+    .t-rail.b { stroke-width: calc(var(--pen-4, 1.4px) * var(--stroke, 1)); }
+    .t-tick { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linecap: round; }
+    /* C: the map symbol, its width and dashes growing with the zoom past 1.6 */
+    .grow .rail { stroke-width: calc(3.6px * var(--stroke, 1) * var(--grow, 1)); }
+    .grow .rail-dash { stroke-width: calc(var(--pen-4, 1.4px) * var(--stroke, 1) * var(--grow, 1));
+      stroke-dasharray: calc(7px * var(--stroke, 1) * var(--grow, 1)) calc(7px * var(--stroke, 1) * var(--grow, 1)); }
+    /* D: one line crossed by ties */
+    .t-spine { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-4, 1.4px) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+    .t-tie { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3, 1px) * var(--stroke, 1)); stroke-linecap: butt; }
+    /* the roadway over the track at the crossing */
+    .t-road-fill { fill: var(--bg); stroke: none; }
+    .t-oblong { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-3, 1px) * var(--stroke, 1)); stroke-linejoin: round; }
+  </style>
+</head>
+<body>
+  <h1>Railway track sketches</h1>
+  <p>Close-zoom treatments for the railway, drawn with the game's own code: the isometric camera (tile 34), the roads' sway (<code>wobble</code> in render/painter.js), the station (structures/station.js) through the Painter with its shadows, the M 152.0 railcar (render/vehicles.js) and the level-crossing signs (render/crossings.js). Line widths are the map's pens in device pixels, as the game draws them at each zoom. Nothing in the game has changed.</p>
+  <div class="bar" id="bar"></div>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: rail track treatments for close zoom, side by side.
+    //   rails.html?scheme=1&zoom=2.2&switch=1.4
+    import { SCHEMES, THEME } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter, wobble } from './src/render/painter.js';
+    import { vehicleSVG, headingIndex, VEHICLES } from './src/render/vehicles.js';
+    import { signsAt, signSVG, flashSVG } from './src/render/crossings.js';
+    import { offsetPolyline } from './src/roads/geometry.js';
+    import { shadowSVG, sunFor, tierAt, groundSpacing, wallSpacing } from './src/render/shadows.js';
+    import { station } from './structures/station.js';
+    import { CONFIG } from './src/config.js';
+
+    const q = new URLSearchParams(location.search);
+    // the scheme: the one the game last used (read only, never saved from here)
+    let saved = 0;
+    try { saved = +(localStorage.getItem('urbanismus.scheme') ?? 0) || 0; } catch { /* none */ }
+    const state = {
+      scheme: q.has('scheme') ? +q.get('scheme') : saved,
+      zoom: +(q.get('zoom') ?? 2.2),
+      L: +(q.get('switch') ?? 1.4),
+    };
+    // --fg (the old name for main, used by .road and .rail) is resolved where
+    // it's declared, so it's set again with the colours
+    const setScheme = (el, s) => {
+      for (const k of ['bg', 'main', 'detail']) el.style.setProperty(`--${k}`, SCHEMES[s][k]);
+      el.style.setProperty('--fg', SCHEMES[s].main);
+    };
+
+    const cam = new Camera({ width: 1, height: 1 }, { tile: CONFIG.camera.tile, zScale: CONFIG.camera.zScale });
+    const NEAR = VEHICLES.minZoom; // 1.6: cars and trains turn into models
+    const DPR = devicePixelRatio || 1;
+    const r2 = (n) => Math.round(n * 100) / 100;
+
+    // ---------- the piece of railway (world grid units) ----------
+    // A straight through a station (the 3×2 'station', front to the line),
+    // a curve, then down past a level crossing with a road.
+    const ST = { x: 0, y: -1 }; // the station's dot, turned so its platform faces +y (the viewer)
+    const arc = (cx, cy, r, a0, a1, n = 24) => Array.from({ length: n + 1 }, (_, i) => {
+      const a = a0 + ((a1 - a0) * i) / n;
+      return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+    });
+    const MAIN = [[-6, 0], [3.2, 0], ...arc(3.2, 1, 1, -Math.PI / 2, 0).slice(1), [4.2, 8]];
+    const ROAD = [[-6, 2.5], [10, 2.5]];
+    const SPACING = 0.64; // the passing track, as station.js
+    // the passing track: straight beside the island platform, a switch at
+    // each end – an S-curve L long (the game's now: 0.8, smoothstep)
+    function passing(L, ease = 'cos') {
+      const f = ease === 'cos' ? (t) => (1 - Math.cos(Math.PI * t)) / 2 : (t) => t * t * (3 - 2 * t);
+      const n = ease === 'cos' ? 32 : 8, x0 = 0.8, out = []; // the game's: 8 points
+      for (let i = 0; i <= n; i++) { const t = i / n; out.push([-x0 - L + L * t, -SPACING * f(t)]); }
+      for (let i = 0; i <= n; i++) { const t = i / n; out.push([x0 + L * t, -SPACING * f(1 - t)]); }
+      return out;
+    }
+    const tracksFor = (L) => [{ line: MAIN, main: true }, { line: passing(L, L === 0.8 ? 'smooth' : 'cos'), main: false }];
+    // trains: one at the platform, one coming up to the crossing (its lights flash)
+    const TRAINS = [{ at: [0.15, 0], dir: [1, 0] }, { at: [4.2, 1.5], dir: [0, 1] }];
+    const CROSSING = { pos: [4.2, 2.5], dir: [1, 0], kind: 'road', near: [[ROAD[0], ROAD[1]]] };
+
+    // ---------- geometry helpers ----------
+    function densify(pts, step = 0.04) {
+      const out = [pts[0]];
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+        const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / step));
+        for (let k = 1; k <= n; k++) out.push([ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n]);
+      }
+      return out;
+    }
+    const sway = ([x, y]) => { const [dx, dy] = wobble(x, y); return [x + dx, y + dy]; };
+    const P = (p) => cam.project(...sway(p), 0);
+    const pathOf = (pts, close = false) => `M${pts.map((p) => P(p).map(r2).join(' ')).join('L')}${close ? 'Z' : ''}`;
+    // points every `step` along a line, with the direction there
+    function along(pts, step, phase = 0.5) {
+      const out = [];
+      let left = step * phase;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+        const l = Math.hypot(bx - ax, by - ay);
+        if (!l) continue;
+        let s = left;
+        while (s <= l) { out.push({ p: [ax + ((bx - ax) * s) / l, ay + ((by - ay) * s) / l], t: [(bx - ax) / l, (by - ay) / l] }); s += step; }
+        left = s - l;
+      }
+      return out;
+    }
+    const distToLine = ([x, y], pts) => {
+      let best = Infinity;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+        const ex = bx - ax, ey = by - ay, l2 = ex * ex + ey * ey;
+        const t = l2 ? Math.max(0, Math.min(1, ((x - ax) * ex + (y - ay) * ey) / l2)) : 0;
+        best = Math.min(best, Math.hypot(ax + ex * t - x, ay + ey * t - y));
+      }
+      return best;
+    };
+    const ROAD_EDGE = CONFIG.road.edge;
+    const inRoad = (p, pad = 0.012) => distToLine(p, ROAD) < ROAD_EDGE + pad;
+    // ties across a line: `half` either side, every `step`; a side track's
+    // are left out where it runs into the main line's bed
+    function ties(tracks, step, half, keep = () => true) {
+      let d = '';
+      for (const { line, main } of tracks) {
+        const dense = densify(line, 0.02);
+        for (const { p, t } of along(dense, step)) {
+          if (inRoad(p, half * 0.6) || !keep(p)) continue;
+          if (!main && distToLine(p, MAIN) < half * 1.7) continue;
+          const n = [-t[1] * half, t[0] * half];
+          d += pathOf([[p[0] - n[0], p[1] - n[1]], [p[0] + n[0], p[1] + n[1]]]);
+        }
+      }
+      return d;
+    }
+    const band = (line, e) => {
+      const dense = densify(line);
+      return [...offsetPolyline(dense, e), ...offsetPolyline(dense, -e).reverse()];
+    };
+    const lines = (tracks, offsets) => tracks.flatMap(({ line }) => offsets.map((o) => pathOf(offsetPolyline(densify(line), o)))).join('');
+
+    // ---------- the road and its crossing ----------
+    function road() {
+      const fill = `<path class="t-road-fill" d="${pathOf(band(ROAD, ROAD_EDGE), true)}"/>`;
+      const edges = [ROAD_EDGE, -ROAD_EDGE].map((o) => pathOf(offsetPolyline(densify(ROAD), o))).join('');
+      return `${fill}<path class="road" d="${edges}"/>`;
+    }
+    function signs(close) {
+      if (!close) return '';
+      // lit: the train is within config.crossing.approach of it
+      return signsAt(CROSSING).map((s, i) => {
+        const [sx, sy] = P([s.x, s.y]);
+        return `<g transform="translate(${r2(sx)} ${r2(sy)})">${signSVG(cam, s.heading, s.kind)}${flashSVG(cam, s.heading, i % 2)}</g>`;
+      }).join('');
+    }
+
+    // ---------- trains ----------
+    function trains(close) {
+      const len = CONFIG.trains.length;
+      return TRAINS.map(({ at: [x, y], dir: [dx, dy] }, i) => {
+        if (close) {
+          const [sx, sy] = P([x, y]);
+          return `<g class="agent car" transform="translate(${r2(sx)} ${r2(sy)})">${vehicleSVG(cam, `railcar:${len}`, headingIndex(Math.atan2(dy, dx)), i % VEHICLES.hands)}</g>`;
+        }
+        // far out: an oblong as long as the railcar (Renderer.placeTrain)
+        const r = THEME.carriageRadius, half = len / 2 - 0.03;
+        const [ax, ay] = cam.project(x - dx * half, y - dy * half, 0.04), [bx, by] = cam.project(x + dx * half, y + dy * half, 0.04);
+        const l = Math.hypot(bx - ax, by - ay) || 1, [ux, uy] = [(bx - ax) / l, (by - ay) / l], [nx, ny] = [-uy * r, ux * r];
+        const pts = [[ax - ux * r + nx, ay - uy * r + ny], [bx + ux * r + nx, by + uy * r + ny], [bx + ux * r - nx, by + uy * r - ny], [ax - ux * r - nx, ay - uy * r - ny]];
+        return `<path class="t-oblong" d="M${pts.map((p) => p.map(r2).join(' ')).join('L')}Z"/>`;
+      }).join('');
+    }
+
+    // ---------- the station (cached per zoom tier) ----------
+    const stationCache = new Map();
+    function stationSVG(zoom) {
+      const px = cam.tile * zoom;
+      const key = `${tierAt(px, groundSpacing())}|${tierAt(px, wallSpacing())}`;
+      if (!stationCache.has(key)) {
+        const g = new Painter(cam, ST, 2, 7);
+        station.draw(g, { type: 'station', seed: 7, id: 0, node: 0, rotation: 2 });
+        const shade = shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sunFor(cam));
+        stationCache.set(key, { ground: g.toGroundSVG(), shade, objects: g.toSVG(), cls: `lod-0 sz-${tierAt(px, groundSpacing())} sw-${tierAt(px, wallSpacing())}` });
+      }
+      return stationCache.get(key);
+    }
+
+    // ---------- the four treatments ----------
+    // each: (tracks, zoom) -> { under (below the road), over (above it), cls }
+    const symbol = (tracks) => `<path class="rail" d="${tracks.map(({ line }) => pathOf(densify(line))).join('')}"/><path class="rail-dash" d="${tracks.map(({ line }) => pathOf(densify(line))).join('')}"/>`;
+    const OPTIONS = [
+      {
+        id: 'A', title: 'A · ballast bed, two rails, sleepers',
+        note: 'Like a road: the bed as two thin edge lines (0.07 either side, a little wider than the railcar), two rails in the line pen, sleepers as close hatching in the detail pen. The beds of two tracks run into one at a switch. The rails carry on across the road; bed and sleepers stop at its edges.',
+        far: 'symbol',
+        draw(tracks) {
+          const beds = tracks.map(({ line }) => pathOf(band(line, 0.07), true)).join('');
+          return {
+            under: `<path class="t-bed-line" d="${beds}"/><path class="t-bed-fill" d="${beds}"/><path class="t-sleeper" d="${ties(tracks, 0.045, 0.043)}"/>`,
+            over: `<path class="t-rail" d="${lines(tracks, [0.024, -0.024])}"/>`,
+          };
+        },
+      },
+      {
+        id: 'B', title: 'B · two rails, sparse ties',
+        note: 'Only what a train needs: two rails, slightly heavier, and a tie every 0.11 – just past the rails, in the line pen. No bed. Lightest of the four; at a switch the rails cross as they would.',
+        far: 'symbol',
+        draw(tracks) {
+          return {
+            under: `<path class="t-tick" d="${ties(tracks, 0.11, 0.04)}"/>`,
+            over: `<path class="t-rail b" d="${lines(tracks, [0.024, -0.024])}"/>`,
+          };
+        },
+      },
+      {
+        id: 'C', title: 'C · the map symbol, growing with the zoom',
+        note: 'Today\'s line with its dashes, but past zoom 1.6 its width and dashes grow with the map (×zoom/1.6), so at 4 it is 2.5 times as wide and the railcar stays on it. Nothing new to learn; still a symbol, not a track.',
+        far: 'symbol',
+        draw(tracks, zoom) {
+          return { under: `<g class="grow" style="--grow:${r2(zoom / NEAR)}">${symbol(tracks)}</g>`, over: '' };
+        },
+      },
+      {
+        id: 'D', title: 'D · one line crossed by ties',
+        note: 'The railway of hand-drawn plans and old maps: one line, crossed by short ties. Far out the ties stay a fixed few pixels apart, so it is its own map symbol at every zoom (no switch at 1.6); closer in they keep to the ground and open up. Reads as a sketch, not a model. It would replace the dashed band everywhere.',
+        far: 'own',
+        draw(tracks, zoom) {
+          const k = Math.max(1, NEAR / zoom);
+          return {
+            under: `<path class="t-tie" d="${ties(tracks, 0.07 * k, 0.042 * k)}"/>`,
+            over: `<path class="t-spine" d="${tracks.map(({ line }) => pathOf(densify(line))).join('')}"/>`,
+          };
+        },
+      },
+    ];
+
+    // One picture: option `opt` at `zoom`, `w`×`h` CSS px round world point `at`.
+    function picture(opt, zoom, L, w, h, at, { train = true } = {}) {
+      const tracks = tracksFor(L);
+      const close = zoom >= NEAR;
+      const st = stationSVG(zoom);
+      let under = '', over = '';
+      if (close || opt.far === 'own') ({ under, over } = opt.draw(tracks, zoom));
+      else under = symbol(tracks);
+      const [cx, cy] = cam.project(...at, 0);
+      const vw = w / zoom, vh = h / zoom;
+      const svg = `<svg class="pic" xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${r2(cx - vw / 2)} ${r2(cy - vh / 2)} ${r2(vw)} ${r2(vh)}" style="--stroke:${CONFIG.render.lineWeight / (zoom * DPR)}">`
+        + `<g class="scene layer-objects ${st.cls}">${st.ground}</g>`
+        + `<g class="scene">${under}${road()}${over}</g>`
+        + `<g class="scene layer-objects ${st.cls}">${st.shade}${st.objects}</g>`
+        + `<g class="scene">${train ? trains(close) : ''}${signs(close)}</g></svg>`;
+      return svg;
+    }
+
+    // ---------- the page ----------
+    const out = document.getElementById('out');
+    const bar = document.getElementById('bar');
+    const buttons = (label, items, key) => {
+      const html = items.map(([v, name]) => `<button data-k="${key}" data-v="${v}" class="${state[key] === v ? 'on' : ''}">${name}</button>`).join('');
+      return `<span>${label}</span>${html}`;
+    };
+    function drawBar() {
+      bar.innerHTML = buttons('Colours', SCHEMES.map((s, i) => [i, s.name]), 'scheme')
+        + buttons('Zoom (top pictures)', [[1.6, '1.6'], [2.2, '2.2'], [3, '3'], [4, '4']], 'zoom')
+        + buttons('Switch length', [[0.8, '0.8 (now)'], [1.4, '1.4'], [2.2, '2.2']], 'L');
+    }
+    bar.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      state[b.dataset.k] = +b.dataset.v;
+      const u = new URL(location);
+      u.searchParams.set({ scheme: 'scheme', zoom: 'zoom', L: 'switch' }[b.dataset.k], b.dataset.v);
+      history.replaceState(null, '', u);
+      render();
+    });
+
+    const cell = (svg, caption) => `<div class="cell">${svg}${caption ? `<small>${caption}</small>` : ''}</div>`;
+    const MID = [1.5, 0.5], CROSS = [4.05, 2.1], PLATFORM = [-0.35, -0.3], CURVE = [3.75, 1.5];
+    function render() {
+      setScheme(document.documentElement, state.scheme);
+      drawBar();
+      const { zoom, L } = state;
+      let html = '';
+
+      html += `<h2>The four, at zoom ${zoom}</h2><p>The game starts at 2.2; cars and trains become models from 1.6. Switches ${L} long${L === 0.8 ? ' – as the game draws them now' : ''}.</p><div class="row">`;
+      for (const o of OPTIONS) html += `<div class="cell"><h3>${o.title}</h3>${picture(o, zoom, L, 600, 470, MID)}<small class="note">${o.note}</small></div>`;
+      html += '</div>';
+
+      html += '<h2>Side by side, close up (zoom 4)</h2><p>The level crossing with a lokálka coming (its lights flashing), and the platform end with the switch.</p>';
+      html += `<div class="row">${OPTIONS.map((o) => cell(picture(o, 4, L, 300, 250, CROSS), o.title)).join('')}</div>`;
+      html += `<div class="row" style="margin-top:10px">${OPTIONS.map((o) => cell(picture(o, 4, L, 300, 250, PLATFORM), o.title)).join('')}</div>`;
+
+      html += '<h2>Handing over to the far symbol</h2><p>The same spot at the map\'s real size, zoom 1 to 4. Below 1.6 the game draws today\'s symbol and the train as an oblong; at 1.6 the models come in. 1.5 and 1.6 sit side by side: that is the moment of the change.</p>';
+      const ZS = [1, 1.3, 1.5, 1.6, 2.2, 3, 4];
+      for (const o of OPTIONS) {
+        html += `<h3 style="margin-top:14px">${o.title}</h3><div class="row" style="gap:6px">`;
+        html += ZS.map((z) => cell(picture(o, z, L, 180, 150, CURVE), `zoom ${z}${z === 1.5 ? ' (far)' : z === 1.6 ? ' (close)' : ''}`)).join('');
+        html += '</div>';
+      }
+
+      html += '<h2>Switches at a station</h2><p>The passing track leaves the line and comes back at the platform\'s ends, 0.64 aside (room for the island platform). Today a switch is 0.8 long, eased with smoothstep in 8 points: its steepest is about 50° off the line – the kink. Longer switches ease out more gently (as a cosine S-curve here): 1.4 is about 35° at the steepest, 2.2 about 25°. At 2.2 the switches reach 1.5 past the station\'s footprint, so the straight track it needs grows from 3.2 to 6.' + '</p>';
+      for (const o of OPTIONS) {
+        html += `<h3 style="margin-top:14px">${o.title}</h3><div class="row" style="gap:6px">`;
+        html += [0.8, 1.4, 2.2].map((l) => cell(picture(o, 3, l, 380, 230, [-0.8 - l / 2 + 0.2, -0.35], { train: false }), `switch ${l}${l === 0.8 ? ' (now)' : ''}`)).join('');
+        html += '</div>';
+      }
+
+      html += '<h2>In every colour scheme</h2><p>The crossing at zoom 2.2, each option in the four schemes.</p>';
+      for (const o of OPTIONS) {
+        html += `<h3 style="margin-top:14px">${o.title}</h3><div class="row" style="gap:6px">`;
+        html += SCHEMES.map((s, i) => `<div class="cell swatch" data-scheme="${i}">${picture(o, 2.2, L, 240, 170, CROSS)}<small>${s.name}</small></div>`).join('');
+        html += '</div>';
+      }
+      out.innerHTML = html;
+      for (const el of out.querySelectorAll('[data-scheme]')) setScheme(el, +el.dataset.scheme);
+    }
+    render();
+  </script>
+</body>
+</html>
