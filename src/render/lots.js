@@ -13,7 +13,7 @@ import { rotateQuarter } from '../core/grid.js';
 import { SegmentIndex } from '../core/geom2d.js';
 import { networkPolylines, streetKerbs } from '../roads/geometry.js';
 
-const ROAD_GAP = 0.11;  // clearance from the road centre line
+const ROAD_GAP = 0.135; // clearance from the road centre line (config.road.edge 0.11, and a little)
 const STEP = 0.05;      // sampling along plot edges
 const YARD_MAX = -0.92; // yards never reach past this (just short of the road dot)
 const YARD_OPEN = -0.62; // depth where no road is in front

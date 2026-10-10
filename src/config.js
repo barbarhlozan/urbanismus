@@ -64,9 +64,11 @@ export const CONFIG = {
   road: {
     cornerRadius: 0.5, // fraction of the shorter adjoining segment (max 0.5)
     curveSamples: 8,
-    edge: 0.088,       // roads are drawn as two edge lines this far from the centre
-                       // (cars keep sim.laneOffset right of it; lots stop at ROAD_GAP in render/lots.js)
-    kerb: 0.154,       // streets (roads with sidewalks): kerb lines this far from the centre
+    edge: 0.11,        // roads are drawn as two edge lines this far from the centre (about 5.4 m
+                       // wide at 24.5 m a step; cars keep sim.laneOffset right of the centre,
+                       // cyclists bike.sideOffset; lots stop at ROAD_GAP in render/lots.js)
+    kerb: 0.19,        // streets (roads with sidewalks): kerb lines this far from the centre,
+                       // the sidewalk between them and the edge
     junctionRadius: 0.15, // cars round junction turns this much (same scale as cornerRadius)
   },
 
@@ -261,9 +263,14 @@ export const CONFIG = {
   },
 
   sim: {
-    agentSpeed: 0.77,   // cars, grid steps per second
-    walkSpeed: 0.28,    // pedestrians
-    laneOffset: 0.044,  // cars keep this far right of the road centre
+    // A village pace: at 24.5 m a step a car on an open road goes about
+    // 55 km/h, in the village about 38 – some five times a walker, who at
+    // about 9 km/h is still a little brisk (real life is ten times).
+    agentSpeed: 0.62,   // cars on an open road, grid steps per second
+    village: 0.7,       // …this share of it on roads through the village (streets, or buildings beside the road)…
+    villageReach: 1.5,  // …a building within this many grid steps of the road
+    walkSpeed: 0.1,     // pedestrians
+    laneOffset: 0.052,  // cars keep this far right of the road centre (a car is 0.036 half-wide)
     doorPad: 0.45,      // trips start / end at the building's edge, this far from its dot
     doorSlowdown: 0.9,  // cars and bikes ease in / out over this distance from a door…
     doorMinSpeed: 0.2,  // …down to this share of their speed right at the door
@@ -306,7 +313,7 @@ export const CONFIG = {
     park: [30, 75],     // seconds wandering in a park / square
     porch: [20, 50],    // seconds in front of the house
     pause: [2, 6],      // seconds standing at each spot
-    speed: 0.5,         // share of walking speed
+    speed: 0.8,         // share of walking speed
     porchReach: 0.65,   // the spot this far out from the door dot…
     porchWidth: 0.3,    // …give or take this much along the front
   },
@@ -377,15 +384,15 @@ export const CONFIG = {
     comfortDistance: 8,   // walk (rather than ride / drive) when the walk is at most this long
     maxDistance: 14,      // never walk further than this
     longWalkChance: 0.15, // chance of walking anyway when it's between the two
-    strollMin: 2,         // strolls turn round this far along footpaths…
-    strollMax: 8,         // …at most this far
-    sideOffset: 0.11,     // pedestrians keep this far right of the line on a street (its sidewalk)…
+    strollMin: 1.5,       // strolls turn round this far along footpaths…
+    strollMax: 5,         // …at most this far (at walking pace, a couple of minutes there and back)
+    sideOffset: 0.15,     // pedestrians keep this far right of the line on a street (its sidewalk)…
     laneOffset: 0.035,    // …this far on a lane (near its edge)…
     pathOffset: 0.015,    // …and this far on a footpath
   },
 
   bike: {
-    speed: 0.52,          // grid steps per second
+    speed: 0.25,          // grid steps per second
     // Chance of cycling a trip too long to walk, by its length: nearShare up
     // to `near`, falling to farShare at `far`, then `share` up to maxDistance.
     near: 8,
@@ -394,20 +401,28 @@ export const CONFIG = {
     farShare: 0.5,
     share: 0.15,
     maxDistance: 30,      // never cycle further than this
-    sideOffset: 0.077,    // cyclists keep this far right of the line on a road…
+    sideOffset: 0.1,      // cyclists keep this far right of the line on a road, by its edge, clear of the cars…
     laneOffset: 0.025,    // …this far on a lane…
     pathOffset: 0.015,    // …and this far on a footpath
   },
 
-  // Cars slow down where roads get crowded. Only cars are affected.
+  // Cars, trucks, buses and cyclists keep behind whoever is in front of them
+  // in their lane (sim/agents.js, follow): they look `look` grid steps
+  // ahead (`across` for someone crossing their way), start braking `brake`
+  // before and stop `gap` behind its back. So they queue at junctions,
+  // behind a bus at its stop and at level crossings. Oncoming traffic and
+  // cyclists by the edge are passed.
   traffic: {
-    cell: 1,              // cars are counted per grid cell of this size
-    capacity: 1,          // other cars a car tolerates nearby before slowing
-    slowdown: 0.45,       // each car over capacity cuts speed by this share (compounding)
-    minSpeed: 0.2,        // never slower than this share of full speed
-    ease: 0.9,            // how quickly cars brake / pick up speed (per second)
-    laneCell: 0.05,       // whether a car is on a lane is remembered per square this size
-    interval: 0.1,        // cars are counted (and their speeds eased) every this many simulated seconds
+    look: 0.8,            // (far enough to see a queue past a junction before going into it, `box`)
+    across: 0.45,
+    brake: 0.22,
+    gap: { drive: 0.05, cycle: 0.035 },
+    lane: 0.6,            // in the same lane: sideways within this share of their two half-widths
+    creep: 2.5,           // seconds held up by someone across their way (a junction, a driveway): then they edge on through
+    stall: 40,            // …by someone in their lane (should a queue ever close on itself)
+    box: 0.26,            // grid steps round a junction's dot where nobody stops in a queue (they wait short of it)
+    cell: 0.6,            // vehicles are looked up in squares this size (more than half of `look`, and a bit)
+    ramp: 0.6,            // grid steps over which the speed changes between open road, village and lane
   },
 
   // The story (src/story/, written in story/story.txt – see story/README.md).

@@ -44,9 +44,12 @@
 // split only where it turns back at a stop, with the stops' places on it
 // (see spawnBus, moveBus); a.x / a.y is its front, a.tx / a.ty its back.
 //
-// Traffic: cars slow down where roads are crowded (config.traffic, see
-// trafficSpeeds), and on single-track lanes (config.lane), where they keep
-// near the middle. Pedestrians and cyclists always move at their own pace.
+// Traffic: vehicles (cars, trucks, buses) go their full speed on open
+// roads, slower through the village (config.sim.village) and on single-track
+// lanes (config.lane), where they keep near the middle – a profile along
+// each leg (pace). Vehicles and cyclists keep behind whoever is in front of
+// them in their lane and queue (config.traffic, see follow). Pedestrians
+// always move at their own pace.
 //
 // Drivers use parking lots without owning cars: leaving by car takes a parked
 // car from the lot there (if any), arriving parks one (see sim/parking.js).
@@ -235,7 +238,7 @@ export class AgentSystem {
     this.updateCommuters(dt);
     this.updateDeliveries(dt);
     this.updateBuses(dt);
-    const traffic = this.trafficSpeeds(dt);
+    this.follow(dt);
     const closed = this.trains?.closed;
     for (const k of this.queues.keys()) if (!closed?.has(k.split('|')[0])) this.queues.delete(k);
     for (const [id, a] of this.agents) {
@@ -288,14 +291,14 @@ export class AgentSystem {
           break;
         case 'out':
           if (a.bus) {
-            if (!this.moveBus(a, dt, traffic)) this.agents.delete(id); // left the map
+            if (!this.moveBus(a, dt)) this.agents.delete(id); // left the map
             break;
           }
         // falls through
         case 'back': {
           const leg = a.state === 'out' ? a.trip.out : a.trip.back;
-          const step = this.speedOf(a.trip.mode) * (a.trip.mode === 'drive' ? traffic(a) : 1) * this.doorEase(a, leg) * (a.truck ? this.config.trucks.speed : 1) * dt;
-          a.s = Math.min(a.s + step, Math.max(a.s, this.crossingStop(a, leg)));
+          const step = this.speedOf(a.trip.mode) * paceAt(leg, a.s) * a.followK * this.doorEase(a, leg) * (a.truck ? this.config.trucks.speed : 1) * dt;
+          a.s = Math.min(a.s + Math.min(step, a.room), Math.max(a.s, this.crossingStop(a, leg)));
           [a.x, a.y] = pointAt(leg, a.s);
           if (a.truck) [a.tx, a.ty] = backPoint(leg, a.s, this.config.trucks.trailer);
           if (a.s < leg.total) break;
@@ -720,7 +723,7 @@ export class AgentSystem {
 
   // Move a bus on: easing into each stop, waiting there, pulling away, on
   // to its next leg where it turns back. false once it has left the map.
-  moveBus(a, dt, traffic) {
+  moveBus(a, dt) {
     const cfg = this.config.buses;
     if (a.pause > 0) {
       if ((a.pause -= dt) > 0) return true;
@@ -737,8 +740,8 @@ export class AgentSystem {
     const { doorSlowdown: zone, doorMinSpeed: min } = this.config.sim;
     const t = Math.max(0, Math.min(1, (a.s - a.left) / zone, next ? (target - a.s) / zone : 1));
     const ease = min + (1 - min) * t * t * (3 - 2 * t);
-    const step = this.speedOf('drive') * cfg.speed * traffic(a) * ease * dt;
-    a.s = Math.min(a.s + step, Math.max(a.s, this.crossingStop(a, leg)), target);
+    const step = this.speedOf('drive') * cfg.speed * paceAt(leg, a.s) * a.followK * ease * dt;
+    a.s = Math.min(a.s + Math.min(step, a.room), Math.max(a.s, this.crossingStop(a, leg)), target);
     this.placeBus(a);
     if (a.s < target - 1e-6) return true;
     if (!next) return false;
@@ -943,54 +946,132 @@ export class AgentSystem {
 
   // ----- traffic -----
 
-  // Counts cars per grid cell and direction and returns (agent) -> speed
-  // factor 0..1. A car looks at its own cell and the one just ahead; every
-  // car there going the same way beyond `capacity` slows it down (oncoming
-  // traffic doesn't). Factors ease towards their target so cars brake and
-  // accelerate smoothly.
-  // Counting goes over every car, so it's done every config.traffic.interval
-  // seconds rather than every frame (the factors ease over seconds anyway),
-  // and it reuses its map and list.
-  trafficSpeeds(dt) {
-    const { cell, capacity, slowdown, minSpeed, ease, interval } = this.config.traffic;
-    const factor = (this.trafficFactor ??= (a) => (a.speed ?? 1) * (a.laneK ?? 1));
-    this.trafficDt = (this.trafficDt ?? 0) + dt;
-    if (this.trafficDt < interval) return factor;
-    dt = this.trafficDt;
-    this.trafficDt = 0;
-    const key = (x, y, dir) => (Math.round(x / cell) * 4096 + Math.round(y / cell)) * 4 + dir;
-    const counts = (this.trafficCounts ??= new Map());
-    const cars = (this.trafficCars ??= []);
-    counts.clear();
-    cars.length = 0;
-    const onLane = this.laneTest();
+  // Every frame: how far each vehicle and cyclist may go before it is up
+  // against whoever is in front of it (a.room) and how fast, as a share
+  // (a.followK) – braking over traffic.brake, stopping traffic.gap behind.
+  // Each is a stretch from its back to its front (a car's middle is a.x /
+  // a.y, a truck's or bus's front, its back a.tx / a.ty); it looks ahead
+  // of its front, straight on, for a part of another within its lane
+  // (sideways less than traffic.lane of their two half-widths, up to
+  // traffic.look ahead) or, crossing its way, of their whole width (up to
+  // traffic.across). Oncoming ones
+  // are passed; one pulling out of a driveway or turning into one is off
+  // the road for everyone else, but still gives way itself. Two held up by
+  // each other across a junction: the nearer goes; held up by someone across
+  // its way longer than traffic.creep, it edges on through anyway – held up
+  // in its lane, only after traffic.stall (longer than a bus stands at a
+  // stop or a level crossing stays closed).
+  // Looked up in a grid of traffic.cell squares; nothing is allocated.
+  follow(dt) {
+    const cfg = this.config.traffic;
+    const list = (this.followList ??= []);
+    const heads = (this.followHeads ??= new Map());
+    list.length = 0;
+    heads.clear();
+    const cell = cfg.cell;
+    const key = (x, y) => Math.floor(x / cell) * 4096 + Math.floor(y / cell);
     for (const a of this.agents.values()) {
-      if (!VISIBLE.has(a.state) || a.trip.mode !== 'drive') continue;
+      if (a.state !== 'out' && a.state !== 'back') continue;
+      const mode = a.trip.mode;
+      if (mode !== 'drive' && mode !== 'cycle') continue;
       const leg = a.state === 'out' ? a.trip.out : a.trip.back;
-      const ahead = pointAt(leg, Math.min(leg.total, a.s + 0.6 * cell));
-      const dx = ahead[0] - a.x, dy = ahead[1] - a.y;
-      const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 0 : 1) : dy > 0 ? 2 : 3;
-      a.cell = key(a.x, a.y, dir);
-      a.ahead = key(ahead[0], ahead[1], dir);
-      counts.set(a.cell, (counts.get(a.cell) ?? 0) + 1);
-      cars.push(a);
+      const [x0, y0] = pointAt(leg, a.s - 0.03), [x1, y1] = pointAt(leg, a.s + 0.03);
+      const l = Math.hypot(x1 - x0, y1 - y0);
+      if (l > 1e-6) [a.hx, a.hy] = [(x1 - x0) / l, (y1 - y0) / l];
+      if (a.truck || a.bus) {
+        [a.fx, a.fy, a.bx, a.by] = [a.x, a.y, a.tx, a.ty];
+        a.half = a.bus ? 0.044 : 0.042;
+        a.nose = 0;
+        a.len = a.bus ? this.config.buses.length : this.config.trucks.trailer;
+      } else {
+        const len = mode === 'drive' ? 0.085 : 0.03;
+        [a.fx, a.fy, a.bx, a.by] = [a.x + a.hx * len, a.y + a.hy * len, a.x - a.hx * len, a.y - a.hy * len];
+        a.half = mode === 'drive' ? 0.037 : 0.012;
+        a.nose = len;
+        a.len = 2 * len;
+      }
+      // how fast it went last frame (grid steps per second)
+      a.v = dt > 0 ? Math.hypot(a.x - a.px, a.y - a.py) / dt : 0;
+      [a.px, a.py] = [a.x, a.y];
+      // off the road: on its way out of a driveway, or into one
+      a.aside = (leg.doorStart && a.s < 0.4) || (leg.doorEnd && leg.total - a.s < 0.3);
+      a.blocker = null;
+      const k = key((a.fx + a.bx) / 2, (a.fy + a.by) / 2);
+      a.next = heads.get(k) ?? -1;
+      heads.set(k, list.length);
+      list.push(a);
     }
-    let sum = 0;
-    for (const a of cars) {
-      const here = counts.get(a.cell) - 1;
-      const there = a.ahead === a.cell ? here : counts.get(a.ahead) ?? 0;
-      const crowd = Math.max(0, Math.max(here, there) - capacity);
-      const target = Math.max(minSpeed, (1 - slowdown) ** crowd);
-      a.speed = a.speed ?? 1;
-      a.speed += (target - a.speed) * Math.min(1, ease * dt);
-      sum += a.speed;
-      // lanes: slower, but that's not congestion (not in flow)
-      const lane = onLane(a.x, a.y) ? this.config.lane.speed : 1;
-      a.laneK = a.laneK ?? lane;
-      a.laneK += (lane - a.laneK) * Math.min(1, ease * dt);
+    const { look, across: lookAcross, lane } = cfg;
+    for (const a of list) {
+      const { fx, fy, hx, hy } = a;
+      const ax = (fx + a.bx) / 2, ay = (fy + a.by) / 2;
+      const mx = fx + hx * look / 2, my = fy + hy * look / 2;
+      const cx = Math.floor(mx / cell), cy = Math.floor(my / cell);
+      let ahead = Infinity, across = Infinity, blocker = null, leader = null;
+      for (let i = cx - 1; i <= cx + 1; i++) {
+        for (let j = cy - 1; j <= cy + 1; j++) {
+          for (let n = heads.get(i * 4096 + j) ?? -1, b; n >= 0; n = b.next) {
+            b = list[n];
+            if (b === a || b.aside) continue;
+            const along = hx * b.hx + hy * b.hy;
+            if (along < -0.3) continue; // oncoming
+            const crossing = along < 0.7;
+            if (crossing ? a.creep > 0 : a.slip > 0) continue;
+            // going the same way: only one whose middle is ahead (so two side by side don't hold each other up)
+            if (!crossing && ((b.fx + b.bx) / 2 - ax) * hx + ((b.fy + b.by) / 2 - ay) * hy <= 0) continue;
+            const lim = crossing ? a.half + b.half : lane * (a.half + b.half);
+            for (let p = 0; p < 3; p++) {
+              const px = (p === 0 ? b.bx : p === 1 ? (b.bx + b.fx) / 2 : b.fx) - fx;
+              const py = (p === 0 ? b.by : p === 1 ? (b.by + b.fy) / 2 : b.fy) - fy;
+              const d = px * hx + py * hy;
+              if (d < -0.03 || d > (crossing ? lookAcross : look) || Math.abs(px * hy - py * hx) >= lim) continue;
+              if (!crossing) { if (d < ahead) [ahead, leader] = [d, b]; }
+              else if (d < across) [across, blocker] = [d, b];
+            }
+          }
+        }
+      }
+      a.ahead = ahead;
+      a.across = across;
+      a.leader = leader;
+      a.blocker = blocker;
     }
-    this.flow = cars.length ? sum / cars.length : 1; // average car speed, 1 = free flowing
-    return factor;
+    const { brake } = cfg;
+    for (const a of list) {
+      let near = a.ahead;
+      const b = a.blocker;
+      // held up by each other across a junction: the nearer goes
+      const yields = b && !(b.blocker === a && (a.across < b.across || (a.across === b.across && a.id < b.id)));
+      if (yields) near = Math.min(near, a.across);
+      let room = near - cfg.gap[a.trip.mode === 'cycle' ? 'cycle' : 'drive'];
+      // in a queue that stands: not in a junction (others would have to
+      // wait for it), but short of it until there's room past it
+      const lead = a.leader;
+      if (lead && near === a.ahead && lead.v < 0.05) {
+        const { boxes } = a.state === 'out' ? a.trip.out : a.trip.back;
+        const front = a.s + a.nose;
+        for (let i = 0; boxes && i < boxes.length; i += 2) {
+          const [e, x] = [boxes[i], boxes[i + 1]];
+          if (e > front + room) break;
+          if (front <= e && front + room - a.len < x) {
+            room = e - front;
+            break;
+          }
+        }
+      }
+      a.room = Math.max(0, room);
+      const target = Math.max(0, Math.min(1, room / brake));
+      a.followK = target < a.followK ? target : Math.min(target, a.followK + dt * 1.5); // pulls away gently
+      if (a.creep > 0) a.creep -= dt;
+      else if (yields && a.across <= a.ahead && room < 0.02) {
+        if ((a.held += dt) > cfg.creep) [a.held, a.creep] = [0, 1.5];
+      } else a.held = 0;
+      // (and should a queue ever close on itself: after traffic.stall, on)
+      if (a.slip > 0) a.slip -= dt;
+      else if (room < 0.02 && a.ahead < a.across) {
+        if ((a.stall += dt) > cfg.stall) [a.stall, a.slip] = [0, 2];
+      } else a.stall = 0;
+    }
   }
 
   driveRoute(home, dest) {
@@ -1056,8 +1137,8 @@ export class AgentSystem {
       exit: plan.exit ?? null,
       nodes: plan.nodes,
       backNodes: plan.backNodes ?? null,
-      out: this.leg(offsetPolyline(smooth, side), plan.fromDoor != null, atDoor),
-      back: this.leg(offsetPolyline(back, side), plan.backNodes ? false : atDoor, home),
+      out: this.leg(offsetPolyline(smooth, side), plan.fromDoor != null, atDoor, drive),
+      back: this.leg(offsetPolyline(back, side), plan.backNodes ? false : atDoor, home, drive),
     };
   }
 
@@ -1096,28 +1177,69 @@ export class AgentSystem {
     return this.roadwayTest;
   }
 
-  // (x, y) -> is it on a single-track lane? The roadway test looks up
-  // nearby segments, and every car asks it every frame (trafficSpeeds), so
-  // its answers are kept per small square (config.traffic.laneCell) until
-  // the roads change.
-  laneTest() {
-    const test = this.roadway();
-    if (this.laneTestFor !== test) {
-      this.laneTestFor = test;
-      this.laneSeen = new Map();
+  // A measured leg, remembering which of its ends is at a building's door;
+  // a drive's with its pace.
+  leg(points, doorStart, doorEnd, drive = false) {
+    const leg = { ...measurePolyline(points), doorStart, doorEnd, pace: null, boxes: null };
+    if (drive) {
+      leg.pace = this.pace(leg);
+      leg.boxes = this.boxes(leg);
     }
-    const seen = this.laneSeen, q = this.config.traffic.laneCell;
-    return (x, y) => {
-      const k = Math.round(x / q) * 65536 + Math.round(y / q);
-      let lane = seen.get(k);
-      if (lane === undefined) seen.set(k, (lane = test([x, y]) === 'lane'));
-      return lane;
-    };
+    return leg;
   }
 
-  // A measured leg, remembering which of its ends is at a building's door.
-  leg(points, doorStart, doorEnd) {
-    return { ...measurePolyline(points), doorStart, doorEnd };
+  // Where a leg goes through junctions (three roads or more): within
+  // traffic.box of the dot. [in, out, in, out…] arc lengths, in order.
+  boxes(leg) {
+    const { world } = this;
+    const r = this.config.traffic.box, step = 0.04;
+    const out = [];
+    let inside = false;
+    for (let s = 0; s <= leg.total + step; s += step) {
+      const [x, y] = pointAt(leg, Math.min(s, leg.total));
+      const [i, j] = [Math.round(x), Math.round(y)];
+      const n = world.grid.inBounds(i, j) ? world.grid.index(i, j) : -1;
+      const here = n >= 0 && (x - i) ** 2 + (y - j) ** 2 < r * r && world.roads.hasNode(n) && world.roads.degree(n) >= 3;
+      if (here !== inside) out.push(Math.min(s, leg.total));
+      inside = here;
+    }
+    if (inside) out.push(leg.total);
+    return out;
+  }
+
+  // The share of full speed at each point of a drive's leg: 1 on an open
+  // road, sim.village through the village (a street, or a building within
+  // sim.villageReach of the road), lane.speed on a single-track lane.
+  // Changes are spread over traffic.ramp grid steps – slowing down before
+  // the village, speeding up after it.
+  pace(leg) {
+    const { world, config } = this;
+    const onRoad = this.roadway();
+    const { village, villageReach: r } = config.sim;
+    const built = (x, y) => {
+      for (let j = Math.ceil(y - r); j <= y + r; j++) {
+        for (let i = Math.ceil(x - r); i <= x + r; i++) {
+          if ((i - x) ** 2 + (j - y) ** 2 <= r * r && world.grid.inBounds(i, j) && world.structureAt(world.grid.index(i, j))) return true;
+        }
+      }
+      return false;
+    };
+    const { points, cum } = leg;
+    const n = points.length;
+    const k = new Float64Array(n).fill(NaN);
+    for (let i = 0; i < n; i++) {
+      const where = onRoad(points[i]);
+      if (where === 'lane') k[i] = config.lane.speed;
+      else if (where) k[i] = where === 'street' || built(...points[i]) ? village : 1;
+    }
+    // off the road (a door, off the map): as the road next to it
+    for (let i = 1; i < n; i++) if (Number.isNaN(k[i])) k[i] = k[i - 1];
+    for (let i = n - 2; i >= 0; i--) if (Number.isNaN(k[i])) k[i] = k[i + 1];
+    if (Number.isNaN(k[0])) k.fill(1);
+    const ramp = config.traffic.ramp;
+    for (let i = 1; i < n; i++) k[i] = Math.min(k[i], k[i - 1] + (cum[i] - cum[i - 1]) / ramp);
+    for (let i = n - 2; i >= 0; i--) k[i] = Math.min(k[i], k[i + 1] + (cum[i + 1] - cum[i]) / ramp);
+    return k;
   }
 
   // Cars and bikes pull away from and roll up to doors slowly: speed factor
@@ -1144,8 +1266,8 @@ export class AgentSystem {
 
   beginLeg(a, leg) {
     a.s = 0;
-    a.speed = 1;
-    a.laneK = undefined;
+    a.followK = 1;
+    a.room = Infinity;
     [a.x, a.y] = leg.points[0];
     [a.tx, a.ty] = [a.x, a.y];
   }
@@ -1173,6 +1295,22 @@ export class AgentSystem {
 // States in which an agent is out and about (drawn).
 const VISIBLE = new Set(['out', 'back', 'linger', 'wait']);
 
+// The share of full speed at arc length s of a leg (its pace; 1 without).
+function paceAt(leg, s) {
+  const k = leg.pace;
+  if (!k) return 1;
+  const { cum } = leg;
+  if (s <= 0) return k[0];
+  if (s >= leg.total) return k[k.length - 1];
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= s) lo = mid; else hi = mid;
+  }
+  const t = (s - cum[lo]) / (cum[hi] - cum[lo] || 1);
+  return k[lo] + (k[hi] - k[lo]) * t;
+}
+
 // A new agent with every field it may get later, always in this order: the
 // update and the renderer read them for thousands of agents every frame,
 // and objects that grew the same fields in different orders (a car gets
@@ -1182,7 +1320,9 @@ function newAgent(fields) {
   return Object.assign({
     id: null, home: null, state: 'home', timer: 0, trip: null, s: 0, x: 0, y: 0, tx: 0, ty: 0,
     visitor: false, commuter: false, truck: false, bus: false,
-    speed: undefined, laneK: undefined, cell: 0, ahead: 0, waitKey: null, slot: 0, wander: null, retry: null,
+    followK: 1, room: Infinity, held: 0, creep: 0, stall: 0, slip: 0, fx: 0, fy: 0, bx: 0, by: 0, hx: 1, hy: 0, half: 0, next: -1,
+    nose: 0, len: 0, px: 0, py: 0, v: 0, aside: false, leader: null, blocker: null, ahead: Infinity, across: Infinity,
+    waitKey: null, slot: 0, wander: null, retry: null,
     legs: null, leg: 0, call: 0, pause: 0, left: 0,
   }, fields);
 }

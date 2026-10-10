@@ -14,7 +14,7 @@ import { VEHICLES } from './vehicles.js';
 // Where a sign stands from the crossing: `along` the road, `aside` to its
 // right; pole height.
 const PLACE = {
-  road: { along: 0.3, aside: 0.17, h: 0.2 },
+  road: { along: 0.3, aside: 0.21, h: 0.2 },  // (past a street's kerb, config.road)
   lane: { along: 0.26, aside: 0.12, h: 0.16 },
   path: { along: 0.22, aside: 0.07, h: 0.15 },
 };

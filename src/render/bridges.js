@@ -20,6 +20,7 @@
 //   hiddenUnder(bridges, deck, camera)  (x, y) -> is a ground point behind a deck on screen
 
 import { rotateQuarter } from '../core/grid.js';
+import { CONFIG } from '../config.js';
 
 export const BRIDGE = {
   clearance: 0.16, // deck above the water, grid units of height
@@ -27,7 +28,7 @@ export const BRIDGE = {
   abutment: 0.15,  // grid units of deck past each bank
   low: 0.5,        // grid units of water under which the deck is lower (by the width) and needs no piers
   thickness: 0.05, // of the deck, seen from the side
-  road: { half: 0.1, rail: 0.06, post: 0.16 },  // railings: this far out, high, posts apart
+  road: { half: CONFIG.road.edge + 0.012, rail: 0.06, post: 0.16 },  // railings: this far out (just past the edge), high, posts apart
   rail: { half: 0.09, truss: 0.24, panel: 0.25 }, // truss girders: this far out, high, panel length
   path: { half: 0.05, rail: 0.05, post: 0.12 },
 };
@@ -54,8 +55,8 @@ export function findBridges(world) {
       }
       if (ends.length !== 2) continue;
       let half = BRIDGE[kind].half;
-      if (kind === 'road' && [...span, ...ends].some((n) => world.sidewalksAt(n).length)) half += 0.06;
-      else if (kind === 'road' && span.every((n) => [...graph.neighbors(n)].every((m) => world.isLane(n, m)))) half -= 0.035; // a lane's
+      if (kind === 'road' && [...span, ...ends].some((n) => world.sidewalksAt(n).length)) half = CONFIG.road.kerb + 0.006; // past the sidewalk
+      else if (kind === 'road' && span.every((n) => [...graph.neighbors(n)].every((m) => world.isLane(n, m)))) half = CONFIG.lane.edge + 0.015; // a lane's
       const a = layer.pos(ends[0]), b = layer.pos(ends[1]);
       const { from, to, water } = banks(field, a, b);
       const clearance = BRIDGE.clearance * Math.min(1, 0.4 + water / (2 * BRIDGE.low));

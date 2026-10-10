@@ -8,7 +8,7 @@ import { edgeCurve, measurePolyline, pointAt } from './geometry.js';
 
 export const FURNITURE = {
   zebra: { at: 0.32, len: 0.06, stripes: 5 }, // from the junction; stripe length; stripes across the road
-  lamp: { off: 0.2, clear: 0.08 },             // from the centre line; room kept from footpaths and railways
+  lamp: { off: 0.235, clear: 0.08 },           // from the centre line (outside the kerb, config.road); room kept from footpaths and railways
 };
 
 // Point and unit direction at arc length s.
