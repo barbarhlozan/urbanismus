@@ -283,10 +283,13 @@ const MARGIN = 40;
 //   most      the most particles drawn in a frame: beyond it the houses'
 //             smoke thins first, then the works' too
 //   minZoom   per kind: further out than this, none
+//   fps       drawn again this often while the view stands still (smoke
+//             moves slowly); at once when the view moves
 export const SMOKE_DRAW = {
   style: { house: 'curl', stack: 'puff' },
   most: 1500,
   minZoom: { house: 1, stack: 0 },
+  fps: 30,
 };
 
 export class ParticleCanvas {
@@ -304,6 +307,11 @@ export class ParticleCanvas {
     const dpr = devicePixelRatio || 1;
     const W = innerWidth, H = innerHeight;
     const w = Math.round(W * dpr), h = Math.round(H * dpr);
+    const view = `${camera.zoom} ${camera.panX} ${camera.panY} ${camera.rotation} ${w} ${h}`;
+    const now = performance.now();
+    if (view === this.view && now - this.at < 1000 / draw.fps - 2) return;
+    this.view = view;
+    this.at = now;
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
@@ -342,6 +350,7 @@ export class ParticleCanvas {
   }
 
   clear() {
+    this.view = null;
     if (this.empty) return;
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
