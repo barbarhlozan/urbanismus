@@ -61,7 +61,7 @@
     import { vehicleSVG, headingIndex, VEHICLES } from './src/render/vehicles.js';
     import { signsAt, signSVG, flashSVG } from './src/render/crossings.js';
     import { offsetPolyline } from './src/roads/geometry.js';
-    import { shadowSVG, sunFor, tierAt, groundSpacing, wallSpacing } from './src/render/shadows.js';
+    import { shadowSVG, sunFor } from './src/render/shadows.js';
     import { station } from './structures/station.js';
     import { CONFIG } from './src/config.js';
 
@@ -203,16 +203,15 @@
       }).join('');
     }
 
-    // ---------- the station (cached per zoom tier) ----------
+    // ---------- the station (drawn once) ----------
     const stationCache = new Map();
     function stationSVG(zoom) {
-      const px = cam.tile * zoom;
-      const key = `${tierAt(px, groundSpacing())}|${tierAt(px, wallSpacing())}`;
+      const key = 'station';
       if (!stationCache.has(key)) {
         const g = new Painter(cam, ST, 2, 7);
         station.draw(g, { type: 'station', seed: 7, id: 0, node: 0, rotation: 2 });
-        const shade = shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sunFor(cam));
-        stationCache.set(key, { ground: g.toGroundSVG(), shade, objects: g.toSVG(), cls: `lod-0 sz-${tierAt(px, groundSpacing())} sw-${tierAt(px, wallSpacing())}` });
+        const shade = shadowSVG({ feet: g.feet, project: g.groundProjector() }, sunFor(cam));
+        stationCache.set(key, { ground: g.toGroundSVG(), shade, objects: g.toSVG(), cls: 'lod-0' });
       }
       return stationCache.get(key);
     }

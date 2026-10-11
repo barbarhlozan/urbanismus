@@ -233,17 +233,15 @@ html, body {
 .layer-objects .foot { stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
 .layer-objects .roof-hatch { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 .layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
-/* cast shadows: pen hatching on the ground (src/render/shadows.js) */
-.shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
-/* SUN.ground / SUN.walls 'tone': flat shade instead of strokes */
-.shadow.tone { fill: color-mix(in srgb, var(--detail) 16%, var(--bg)); stroke: none; }
-/* --sun: how much the sun shades them, from the weather (config.weather.sun,
-   set on #objects by main.js and on a photo by photo.js); eased as it turns */
+/* shadows (src/render/shadows.js): a scribble on the ground at the foot of
+   a wall turned from the sun, a few strokes by its lit edge – in the
+   outline pen, as the roof hatching. --sun: how much the sun shows, from
+   the weather (config.weather.sun, set on #world and #objects by main.js,
+   on a photo by photo.js); under a grey sky they fade almost away */
 @property --sun { syntax: '<number>'; inherits: true; initial-value: 1; }
-#objects { transition: --sun 4s; }
-.layer-objects .filled.shade-1 { fill: color-mix(in srgb, var(--detail) calc(9% * var(--sun)), var(--bg)); }
-.layer-objects .filled.shade-2 { fill: color-mix(in srgb, var(--detail) calc(18% * var(--sun)), var(--bg)); }
-.layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
+#world, #objects { transition: --sun 4s; }
+.shadow { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
+.layer-objects .wall-shade { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-opacity: var(--sun); }
 /* screen-facing line drawings (trees, see features/trees.js) */
 /* woods far out, one shape each (render/forest.js): as a tree's crown */
 .layer-forest .forest { fill: var(--bg); stroke: none; fill-rule: evenodd; }
@@ -301,15 +299,6 @@ html, body {
 .agent.cyclist { stroke: var(--fg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 .train { fill: var(--fg); stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
 .parked { fill: var(--bg); stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
-
-/* Shadow hatching density (src/render/shadows.js): stroke tiers above the
-   one the zoom allows hide – on the ground (s, sz) and on walls (w, sw) */
-.sz-0 .s1, .sz-0 .s2, .sz-0 .s3,
-.sz-1 .s2, .sz-1 .s3,
-.sz-2 .s3,
-.sw-0 .w1, .sw-0 .w2, .sw-0 .w3,
-.sw-1 .w2, .sw-1 .w3,
-.sw-2 .w3 { display: none; }
 
 /* Detail levels (set on both SVGs by the renderer from the zoom) – not
    for buildings, trees and their lots: each is drawn with its own level,

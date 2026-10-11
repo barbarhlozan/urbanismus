@@ -62,7 +62,7 @@
     import { SCHEMES, THEME } from './src/theme.js';
     import { Camera } from './src/render/camera.js';
     import { Painter, LOOK } from './src/render/painter.js';
-    import { SUN, sunFor, shadowSVG, tierAt, groundSpacing, wallSpacing } from './src/render/shadows.js';
+    import { sunFor, shadowSVG } from './src/render/shadows.js';
     import { door, chimney } from './structures/kit.js';
 
     const q = new URLSearchParams(location.search);
@@ -179,7 +179,7 @@
     function render(i) {
       const g = painter();
       STEPS[i].draw(g);
-      const shade = shadowSVG({ casts: g.casts, feet: g.feet, project: g.groundProjector() }, sunFor(cam));
+      const shade = shadowSVG({ feet: g.feet, project: g.groundProjector() }, sunFor(cam));
       return { shadows: shade, solids: g.toSVG() };
     }
 
@@ -209,7 +209,7 @@
       const scale = box.width / w;
       svg.style.setProperty('--stroke', (1.5 / scale).toFixed(4));
       svg.style.setProperty('--sun', 1);
-      $('scene').setAttribute('class', `scene layer-objects lod-0 sz-${tierAt(scale * cam.tile, groundSpacing())} sw-${tierAt(scale * cam.tile, wallSpacing())}`);
+      $('scene').setAttribute('class', 'scene layer-objects lod-0');
       drawGrid(g, scale);
       solids.innerHTML = '';
       shown = [];

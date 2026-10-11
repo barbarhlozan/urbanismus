@@ -15,9 +15,9 @@
 //   rails    – railways: the map symbol, a solid line with dashes inside
 //   roads    – roads + driveways (for buildings without surroundings);
 //              over the railways, so level crossings read as road
-//   shadows  – cast shadows of structures and features, as hatching
-//              (shadows.js); built together with objects, over the roads
-//              so a shadow runs on across the street
+//   shadows  – the scribbles at the foot of shaded walls (shadows.js);
+//              built together with objects, over the roads so a scribble
+//              runs on across the street
 //   parked   – parked cars (hollow squares) in parking lots
 //   trains   – one railcar each (an oblong)
 //   agents   – moving dots; sit under objects so buildings hide them correctly
@@ -78,7 +78,7 @@ import { rockLines, ROCK_LOOK } from './rocks.js';
 import { STEEP_LINES, steepLines } from './steep.js';
 import { carMark, personMark } from './marks.js';
 import { mergeRuns, placeInOrder, isoSort } from './order.js';
-import { SUN, sunFor, shadowSVG, tierAt, groundSpacing, wallSpacing } from './shadows.js';
+import { SUN, sunFor, shadowSVG } from './shadows.js';
 import { findForests, forestSVG } from './forest.js';
 
 // (gallery.html and others import these from here)
@@ -1160,18 +1160,6 @@ export class Renderer {
       this.bandZoom = z;
       this.rebandObjects();
     }
-    // shadow hatching: the stroke tiers that keep strokes apart on screen,
-    // on the ground (sz) and on walls (sw) – when anything is hatched (a
-    // class change on the map restyles all of it)
-    const hatched = SUN.on && (SUN.walls === true || ['cast', 'hatch', 'scribble'].includes(SUN.ground));
-    const tiers = hatched ? `sz-${tierAt(this.camera.tile * z, groundSpacing())} sw-${tierAt(this.camera.tile * z, wallSpacing())}` : this.shadeTiers;
-    if (tiers !== this.shadeTiers) {
-      for (const s of [this.svg, this.ground, this.top]) {
-        if (this.shadeTiers) s.classList.remove(...this.shadeTiers.split(' '));
-        s.classList.add(...tiers.split(' '));
-      }
-      this.shadeTiers = tiers;
-    }
     // the map's level, for the rest of what's drawn with detail classes
     // (contours, the overlay); not the objects, which go by their own
     const level = z >= medium ? 0 : z >= far ? 1 : 2;
@@ -1558,18 +1546,18 @@ export class Renderer {
     return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), band)), shade: this.shadeOf(painter), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
   }
 
-  // An object's shadow (shadows.js): what casts it and the feet of its
+  // An object's shadow (shadows.js): the feet of its
   // walls, in world points, and how its ground projects – kept on the object's entry, so the shadow alone
   // can be drawn again for another sun (renderShadows).
   shadeOf(painter) {
-    return painter.casts.length || painter.feet.length ? { casts: painter.casts, feet: painter.feet, project: painter.groundProjector() } : null;
+    return painter.feet.length ? { feet: painter.feet, project: painter.groundProjector() } : null;
   }
 
   shadowSVG(shade) {
     return shade ? shadowSVG(shade, sunFor(this.camera)) : '';
   }
 
-  // Every object's shadow drawn again from its casters, with SUN as it is
+  // Every object's shadow drawn again from its feet, with SUN as it is
   // now – without repainting the objects (mark the layer dirty after a
   // change to SUN).
   renderShadows() {
@@ -1975,8 +1963,8 @@ export class Renderer {
         y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
       }
     }
-    // its shadow reaches out by its height along the sun, any way it falls
-    const s = SUN.on ? top * SUN.length * t * 1.2 : 0;
+    // the scribble at its foot reaches out a little along the sun, any way it falls
+    const s = SUN.on && SUN.scribble ? SUN.scribble.most * t * 1.5 : 0;
     return [x0 - t - s, y0 - top * this.camera.zScale * t - 2 * t, x1 + t + s, y1 + t + s];
   }
 

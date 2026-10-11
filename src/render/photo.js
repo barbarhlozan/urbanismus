@@ -3,7 +3,8 @@
 //
 // Everything draws through a PerspectiveCamera (perspective.js): the
 // structures, trees and street lamps with their own draw code (the
-// renderer's paint* functions), the roads, footpaths, fences and railways with the
+// renderer's paint* functions) with the scribbles at the foot of their shaded
+// walls (shadows.js), the roads, footpaths, fences and railways with the
 // renderer's ink items; deer, cows and sheep as the map's figures.
 //
 // The ground is solid: it is cut into bands across the view, each a little
@@ -22,6 +23,7 @@ import { BRIDGE } from './bridges.js';
 import { VEHICLES, vehicleSVGIn, modelFor, truckFor } from './vehicles.js';
 import { signsAt, signSVGIn, flashSVGIn, litLight } from './crossings.js';
 import { wobble } from './painter.js';
+import { sunFor, shadowSVG } from './shadows.js';
 import { cloudsSVG } from './clouds.js';
 import { DEER, deerSVG } from './deer.js';
 import { LIVESTOCK, livestockSVG } from './livestock.js';
@@ -108,6 +110,7 @@ export function takePhoto(renderer, shot) {
   // objects; may not have happened yet right after loading)
   renderer.free ??= freeTest(world, renderer.config);
   const solids = [];
+  const sun = sunFor(cam);
   const take = (out) => {
     if (!out) return;
     const { painter } = out;
@@ -116,6 +119,14 @@ export function takePhoto(renderer, shot) {
       const [gx, gy] = painter.groundAt[i];
       if (Math.hypot(gx - x, gy - y) >= PHOTO.lots) bands.add(bandAt(gx, gy), 'lots', svg);
     });
+    // the scribbles at the foot of its shaded walls, each on the ground
+    // band where it lies
+    const project = painter.groundProjector();
+    for (const f of painter.feet) {
+      const [mx, my] = [(f.a[0] + f.b[0]) / 2, (f.a[1] + f.b[1]) / 2];
+      const svg = Math.hypot(mx - x, my - y) >= PHOTO.clear ? shadowSVG({ feet: [f], project }, sun) : '';
+      if (svg) bands.add(bandAt(mx, my), 'lots', svg);
+    }
   };
   for (const s of world.structures.values()) {
     const nodes = world.nodesOf(s);

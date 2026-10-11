@@ -133,7 +133,7 @@ const livestock = new LivestockSystem(world, CONFIG);
 const weather = new WeatherSystem(world, CONFIG);
 const rain = new RainCanvas(document.getElementById('rain'));
 const cloudShadows = new CloudShadows(document.getElementById('cloud-shadows'), world.seed);
-// the walls' shading follows the sun (styles.css --sun), and a grey sky
+// the shadows follow the sun (styles.css --sun), and a grey sky
 // shades the whole map (#gloom) and, a little less, the UI's paper (--gloom)
 const objectsSvg = document.getElementById('objects');
 const gloomEl = document.getElementById('gloom');
@@ -142,7 +142,7 @@ let wind = 0;
 const showSun = (kind) => {
   if (kind === sunFor) return;
   sunFor = kind;
-  objectsSvg.style.setProperty('--sun', CONFIG.weather.sun[kind] ?? 1);
+  for (const el of [svg, objectsSvg]) el.style.setProperty('--sun', CONFIG.weather.sun[kind] ?? 1);
   gloomEl.style.opacity = CONFIG.weather.gloom[kind] ?? 0;
   uiRoot.style.setProperty('--gloom', `${Math.round((CONFIG.weather.gloom[kind] ?? 0) * 100)}%`);
 };

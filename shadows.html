@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dědina – shadow sketches</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--main); font: 13px system-ui; margin: 16px; }
+    h1 { font-weight: 500; font-size: 20px; margin: 0 0 4px; }
+    h2 { font-weight: 500; font-size: 14px; margin: 22px 0 4px; }
+    p { margin: 0 0 8px; color: var(--detail); max-width: 76ch; }
+    a { color: var(--main); }
+    .grid { display: grid; grid-template-columns: 7em repeat(var(--cols), auto); gap: 4px 6px; align-items: center; justify-content: start; }
+    .grid > .head { color: var(--main); align-self: end; padding-bottom: 2px; }
+    .grid > .head small { display: block; color: var(--detail); font-size: 11px; max-width: 18ch; }
+    .grid > .side { color: var(--detail); }
+    svg { display: block; position: static; }
+    .cell { border: 1px solid color-mix(in srgb, var(--detail) 30%, transparent); }
+    /* the treatments' own marks: the building's outline pen (main), as the roof hatching */
+    .layer-objects .wall-hatch { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+    .layer-objects .stipple { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: ways to shade buildings, side by side, drawn with the real
+    // Painter (LOOK, the pen set): the game's (render/shadows.js) and the
+    // ones tried before it was chosen, and the flat grey fill it replaced.
+    // Each treatment swaps the painter's wall shading (_shade) for its own
+    // for the length of a drawing.
+    //   shadows.html?scheme=3&rot=0
+    import { applyTheme, SCHEMES } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter } from './src/render/painter.js';
+    import { SUN, sunFor, hash, awayFrom, shadowSVG, tierOf, tierClass } from './src/render/shadows.js';
+    import { STRUCTURE_TYPES } from './structures/index.js';
+    const q = new URLSearchParams(location.search);
+    applyTheme(q.has('scheme') ? +q.get('scheme') : undefined);
+    const ROT = +(q.get('rot') ?? 0);
+    const r2 = (n) => Math.round(n * 100) / 100;
+    const BASE = { ...SUN };
+    const GAME = Painter.prototype._shade;
+
+    // ----- strokes on a wall, in the wall's own plane -----
+
+    // A wall (local 3D points, upright, convex) as a flat polygon: u along
+    // it, w up; and back to 3D.
+    function wallFrame(points) {
+      const o = points[0];
+      let e = null;
+      for (const p of points) {
+        const dx = p[0] - o[0], dy = p[1] - o[1], l = Math.hypot(dx, dy);
+        if (l > 1e-6) { e = [dx / l, dy / l]; break; }
+      }
+      if (!e) return null;
+      return {
+        flat: points.map((p) => [(p[0] - o[0]) * e[0] + (p[1] - o[1]) * e[1], p[2]]),
+        back: (u, w) => [o[0] + e[0] * u, o[1] + e[1] * u, w],
+      };
+    }
+
+    // Parallel strokes across a flat polygon, `lean` degrees from level,
+    // `gap` apart: [k, t0, t1] with t along the strokes (growing upwards).
+    function across(flat, lean, gap) {
+      const a = (lean * Math.PI) / 180, d = [Math.cos(a), Math.sin(a)], n = [-Math.sin(a), Math.cos(a)];
+      const tc = flat.map(([u, w]) => [u * d[0] + w * d[1], u * n[0] + w * n[1]]);
+      const cs = tc.map((p) => p[1]);
+      const out = [];
+      for (let k = Math.ceil(Math.min(...cs) / gap); k * gap <= Math.max(...cs); k++) {
+        const c = k * gap, ts = [];
+        for (let i = 0; i < tc.length; i++) {
+          const p = tc[i], r = tc[(i + 1) % tc.length];
+          if ((p[1] - c) * (r[1] - c) > 0 || p[1] === r[1]) continue;
+          ts.push(p[0] + ((c - p[1]) / (r[1] - p[1])) * (r[0] - p[0]));
+        }
+        if (ts.length >= 2) out.push([k, Math.min(...ts), Math.max(...ts)]);
+      }
+      const back = (t, c) => [t * d[0] + c * n[0], t * d[1] + c * n[1]];
+      return { lines: out, at: (k, t) => back(t, k * gap) };
+    }
+
+    // Hand hatching on a wall: strokes leaning `lean`, ragged at the top
+    // (or the foot, `hang`), thinning out across the wall from a seeded end,
+    // each sketched with the painter's own wobble. By density tier, as the
+    // roof hatching (rh classes), so the map thins them with the roofs.
+    function wallHatch(g, points, { gap = 0.03, lean = 62, share = 1, ragged = 0.45, fade = 0.55, hang = false, seed = 0 } = {}) {
+      const f = wallFrame(points);
+      if (!f) return;
+      const { lines, at } = across(f.flat, lean, gap);
+      if (!lines.length) return;
+      const k0 = lines[0][0], k1 = lines[lines.length - 1][0];
+      const flip = hash(seed, 3.7) < 0.5;
+      const d = ['', '', '', ''];
+      for (const [k, t0, t1] of lines) {
+        if (hash(k, 0.5 + seed) >= share) continue;
+        const x = k1 > k0 ? (flip ? k1 - k : k - k0) / (k1 - k0) : 0;
+        if (hash(k + seed, 1.3) < fade * x ** 1.2) continue;
+        const len = t1 - t0;
+        if (len < gap * 0.8) continue;
+        let a = t0 + len * (0.03 + 0.06 * hash(k, t0 + seed));
+        let b = t1 - len * Math.min(0.8, ragged * (0.1 + 0.9 * x) * hash(t1 + seed, k) + 0.04);
+        if (hang) [a, b] = [t0 + (t1 - b), t1 - (a - t0)];
+        if (b - a < gap * 0.8) continue;
+        const [ua, wa] = at(k, a), [ub, wb] = at(k, b);
+        d[tierOf(k)] += g._sketch([f.back(ua, wa), f.back(ub, wb)], false, 0.7).d;
+      }
+      d.forEach((path, n) => {
+        if (path) g.current.parts.push(`<path d="${path}" class="ln wall-hatch${tierClass(n, 'rh')} d1"/>`);
+      });
+    }
+
+    // Stippling: dots on a jittered grid over the wall, thicker towards its
+    // foot and towards a seeded end.
+    function wallStipple(g, points, { gap = 0.02, share = 1, seed = 0 } = {}) {
+      const f = wallFrame(points);
+      if (!f) return;
+      const us = f.flat.map((p) => p[0]), ws = f.flat.map((p) => p[1]);
+      const [u0, u1, w0, w1] = [Math.min(...us), Math.max(...us), Math.min(...ws), Math.max(...ws)];
+      const inside = (u, w) => {
+        let c = false;
+        for (let i = 0, j = f.flat.length - 1; i < f.flat.length; j = i++) {
+          const [ui, wi] = f.flat[i], [uj, wj] = f.flat[j];
+          if ((wi > w) !== (wj > w) && u < ((uj - ui) * (w - wi)) / (wj - wi) + ui) c = !c;
+        }
+        return c;
+      };
+      const flip = hash(seed, 3.7) < 0.5;
+      let d = '';
+      for (let u = u0 + gap / 2; u < u1; u += gap) for (let w = w0 + gap / 2; w < w1; w += gap) {
+        const ju = u + (hash(u * 31 + seed, w) - 0.5) * gap, jw = w + (hash(w * 17, u + seed) - 0.5) * gap;
+        if (!inside(ju, jw)) continue;
+        const across = (flip ? u1 - ju : ju - u0) / (u1 - u0 || 1), up = (jw - w0) / (w1 - w0 || 1);
+        const p = share * (0.85 - 0.55 * up) * (1 - 0.6 * across);
+        if (hash(ju * 7.3 + seed, jw * 3.1) >= p) continue;
+        const [sx, sy] = g._proj(f.back(ju, jw)).split(',').map(Number);
+        d += `M${r2(sx)} ${r2(sy)}l.01 0`;
+      }
+      if (d) g.current.parts.push(`<path d="${d}" class="stipple d1"/>`);
+    }
+
+    // How far a wall (local points, local normal n) is turned from the sun, 0..1.
+    function share(g, n) {
+      const w = g._wallNormal(n);
+      if (!w) return 0;
+      g._sun ??= sunFor(g.camera);
+      return Math.min(1, Math.max(0, (awayFrom(w, g._sun) - 0.1) / 0.5));
+    }
+    const seedOf = (g, points) => { const [x, y] = g.toWorld(points[0][0], points[0][1]); return (x * 13.1 + y * 7.7) % 97; };
+    // ----- the treatments -----
+    const T = [
+      { id: 'game', name: 'in the game', note: 'a scribble at the foot, a few low strokes by the lit corner', ground: (g) => shadowSVG({ feet: g.feet, project: g.groundProjector() }, sunFor(g.camera)) },
+      { id: 'none', name: 'no shadows', note: 'just the drawing', sun: { on: false } },
+      { id: 'hatch', name: 'hand hatching', note: 'shaded walls only, the outline pen',
+        shade(points, n) { const s = share(this, n); if (s > 0) wallHatch(this, points, { share: Math.min(1, s * 1.3), seed: seedOf(this, points) }); } },
+      { id: 'sparse', name: 'a few strokes', note: 'hatching, much looser',
+        shade(points, n) { const s = share(this, n); if (s > 0) wallHatch(this, points, { gap: 0.05, lean: 70, share: s * 0.9, ragged: 0.8, fade: 0.9, seed: seedOf(this, points) }); } },
+      { id: 'stipple', name: 'stippling', note: 'dots, thicker at the foot',
+        shade(points, n) { const s = share(this, n); if (s > 0) wallStipple(this, points, { share: Math.min(1, s * 1.4), seed: seedOf(this, points) }); } },
+    ];
+    const only = q.get('only')?.split(',');
+    const shown = only ? T.filter((t) => only.includes(t.id)) : T;
+
+    function use(t) {
+      Object.assign(SUN, BASE, t.sun);
+      Painter.prototype._shade = t.shade ?? GAME;
+    }
+
+    // ----- what is drawn -----
+    const SUBJECTS = [
+      { label: 'village house', type: 'house', kind: 'street', seed: 11 },
+      { label: 'house, cube', type: 'house', kind: 'cube', seed: 5 },
+      { label: 'panelák', type: 'block', seed: 7 },
+      { label: 'church', type: 'church', kind: 'onion', seed: 3 },
+    ];
+    function paint(cam, subj, x = 0, y = 0) {
+      const def = STRUCTURE_TYPES[subj.type];
+      const seed = (subj.seed * 2654435761) >>> 0;
+      const g = new Painter(cam, { x, y }, ROT, seed);
+      def.draw(g, { type: def.id, seed, id: subj.seed, node: 0, rotation: ROT, data: { kind: subj.kind } });
+      return g;
+    }
+    function svgOf(t, items, cam) {
+      use(t);
+      let ground = '', body = '';
+      for (const it of items) {
+        const g = paint(cam, it, it.x, it.y);
+        ground += g.toGroundSVG() + (t.ground ? t.ground(g) : '');
+        body += g.toSVG();
+      }
+      return ground + body;
+    }
+    // a figure framed to fit, shown at a map zoom `z` (strokes as the map draws them)
+    function figure(svg, z, w, h, extra = '') {
+      const el = document.createElement('div');
+      el.className = 'cell';
+      el.innerHTML = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="--stroke:${1 / z}"><g class="scene layer-objects lod-0" style="--sun:1">${svg}</g></svg>`;
+      return el;
+    }
+    function fit(el, z, cam) {
+      const s = el.querySelector('svg'), b = s.querySelector('g').getBBox();
+      const k = (z * 32) / cam.tile; // screen px per scene px at that zoom
+      const w = +s.getAttribute('width') / k, h = +s.getAttribute('height') / k;
+      s.setAttribute('viewBox', `${b.x + b.width / 2 - w / 2} ${b.y + b.height / 2 - h / 2} ${w} ${h}`);
+    }
+
+    const out = document.getElementById('out');
+    const scheme = SCHEMES.map((s, i) => `<a href="?scheme=${i}&rot=${ROT}">${s.name}</a>`).join(' · ');
+    out.insertAdjacentHTML('beforeend', `<h1>Shadow sketches</h1>
+      <p>Ways of shading the buildings, side by side, drawn with the game's own painter and pens. Each column is one treatment: the first is the game's, the others were tried before it was chosen (the game had flat grey walls before). Colours: ${scheme}. Turned: <a href="?scheme=${q.get('scheme') ?? ''}&rot=${(ROT + 1) % 4}">next quarter</a>.</p>`);
+
+    const cam = new Camera({ width: 1, height: 1 }, { tile: 64 });
+    cam.rotation = ROT;
+    const grid = (title, rows) => {
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2>`);
+      const el = document.createElement('div');
+      el.className = 'grid';
+      el.style.setProperty('--cols', shown.length);
+      el.innerHTML = '<div></div>' + shown.map((t) => `<div class="head">${t.name}<small>${t.note}</small></div>`).join('');
+      out.appendChild(el);
+      for (const [label, cell] of rows) {
+        el.insertAdjacentHTML('beforeend', `<div class="side">${label}</div>`);
+        for (const t of shown) el.appendChild(cell(t));
+      }
+    };
+
+    // close up: each framed to fill its figure, strokes as the map draws
+    // them at that zoom
+    const whole = (el, cam) => {
+      const s = el.querySelector('svg'), b = s.querySelector('g').getBBox();
+      const w = +s.getAttribute('width'), h = +s.getAttribute('height');
+      const k = Math.min(w / b.width, h / b.height) * 0.9;
+      s.style.setProperty('--stroke', 32 / (cam.tile * k));
+      s.setAttribute('viewBox', `${b.x + b.width / 2 - w / k / 2} ${b.y + b.height / 2 - h / k / 2} ${w / k} ${h / k}`);
+    };
+    grid('Close up', SUBJECTS.map((subj) => [subj.label, (t) => {
+      const el = figure(svgOf(t, [subj], cam), 1, 180, 200);
+      requestAnimationFrame(() => whole(el, cam));
+      return el;
+    }]));
+
+    // a few of them together, further out
+    const village = [
+      { type: 'church', kind: 'onion', seed: 3, x: 0, y: 0 },
+      { type: 'house', kind: 'street', seed: 11, x: 2, y: -0.6 },
+      { type: 'house', kind: 'cube', seed: 5, x: 2, y: 1 },
+      { type: 'house', kind: 'farm', seed: 9, x: -0.4, y: 2 },
+      { type: 'block', seed: 7, x: 3.6, y: 0.4 },
+      { type: 'apartments', seed: 4, x: 1.4, y: 2.6 },
+    ].sort((a, b) => a.x + a.y - (b.x + b.y));
+    const camMap = new Camera({ width: 1, height: 1 }, { tile: 32 });
+    camMap.rotation = ROT;
+    grid('Further out', [2.5, 1].map((z) => [`zoom ${z}`, (t) => {
+      const el = figure(svgOf(t, village, camMap), z, 180, 210);
+      requestAnimationFrame(() => fit(el, z, camMap));
+      return el;
+    }]));
+    use(T[0]);
+  </script>
+</body>
+</html>

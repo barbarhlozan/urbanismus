@@ -75,13 +75,11 @@ function drawSpruce(g, x, y, height, simple) {
   const crown = plain(g, outline, height, PLAIN.spruce);
   if (!LEAFY) {
     g.shape(x, y, 0, crown, { smooth: true, cls: 'tree' });
-    castTree(g, x, y, outline);
   } else {
     const vs = outline.map((p) => p[1]);
     const mid = [0, (Math.min(...vs) + Math.max(...vs)) / 2];
     g.shape(x, y, 0, crown, { smooth: true, cls: 'tree crown' });
     g.strokes(x, y, 0, penOutline(g, crown, mid, { drift: 0.012, goes: 1 }), { cls: 'crown-line' });
-    castTree(g, x, y, outline);
     // hatch inside the smooth outline: it runs through the points' midpoints,
     // pulled in a little towards the trunk; on the shaded side only
     const clip = midpoints(outline).map(([u, v]) => [u * 0.8, v]);
@@ -91,18 +89,6 @@ function drawSpruce(g, x, y, height, simple) {
   }
   g.strokes(x, y, 0, inside, { cls: 'trunk', lod: 2 });
   g.strokes(x, y, 0, branches, { cls: 'twig', lod: 2 });
-}
-
-// A tree's shadow: its crown turned into a round lump (Painter.castShape)
-// on a thin trunk down to the ground – and for the contact shadows, a
-// small block at its foot about half the crown wide and half the tree high.
-function castTree(g, x, y, outline) {
-  g.castShape(x, y, 0, outline);
-  const top = Math.min(...outline.map((p) => p[1])) / g.camera.zScale, w = 0.012;
-  g.cast([0, top].flatMap((z) => [[x - w, y, z], [x + w, y, z], [x, y + w, z], [x, y - w, z]]));
-  const r = Math.max(...outline.map((p) => Math.abs(p[0]))) * 0.5;
-  const h = Math.max(...outline.map((p) => p[1])) / g.camera.zScale * 0.5;
-  g.castFoot([[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]], h);
 }
 
 function bareParts(g, kind, height, simple) {
@@ -124,7 +110,6 @@ export function drawShrub(g, x, y, height) {
     const lines = hatchIn(g, flip(clip), step).map(flip);
     const shade = roundShade(lines, [0, cy], rx, ry, g.range(0.25, 0.45), g.range(0.15, 0.3), step * 0.5);
     g.strokes(x, y, 0, scribble(g, shade, step), { cls: 'leaf' });
-    g.castShape(x, y, 0, outline);
     return;
   }
   const lines = [];
@@ -242,7 +227,6 @@ function drawLeafy(g, x, y, kind, H, simple) {
   const lines = hatchIn(g, flip(clip), step).map(flip);
   const shade = roundShade(lines, [lean, cy], rx, ry, bulge, shift, step * 0.5);
   g.strokes(x, y, 0, scribble(g, shade, step), { cls: 'leaf', lod: 1 });
-  castTree(g, x, y, outline);
 }
 
 // A lumpy closed outline around (cx, cy) with half axes rx, ry: points

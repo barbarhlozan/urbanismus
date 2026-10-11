@@ -231,8 +231,8 @@ export const CONFIG = {
       storm: { rain: 1 },
     },
     lasts: { fair: [400, 900], cloudy: [500, 1100], rain: [240, 540], storm: [120, 260] },
-    // how much the sun shades the walls turned away from it (1 full, 0 none):
-    // under a grey sky there is little to tell one side from the other
+    // how much the shadows show (render/shadows.js, styles.css --sun; 1 full,
+    // 0 none): under a grey sky there is little to tell one side from the other
     sun: { fair: 1, cloudy: 1, rain: 0.2, storm: 0.15 },
     // how hard it rains (render/rain.js: 1 = rain)
     rain: { rain: 1, storm: 2.4 },
