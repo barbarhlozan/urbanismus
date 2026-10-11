@@ -19,7 +19,7 @@
     svg { display: block; position: static; }
     .cell { border: 1px solid color-mix(in srgb, var(--detail) 30%, transparent); }
     /* the treatments' own marks: the building's outline pen (main), as the roof hatching */
-    .layer-objects .wall-hatch { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+    .layer-objects .wall-hatch { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
     .layer-objects .stipple { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
   </style>
 </head>
@@ -151,12 +151,10 @@
     const seedOf = (g, points) => { const [x, y] = g.toWorld(points[0][0], points[0][1]); return (x * 13.1 + y * 7.7) % 97; };
     // ----- the treatments -----
     const T = [
-      { id: 'game', name: 'in the game', note: 'a scribble at the foot, a few low strokes by the lit corner', ground: (g) => shadowSVG({ feet: g.feet, project: g.groundProjector() }, sunFor(g.camera)) },
+      { id: 'game', name: 'in the game', note: 'a scribble at the foot, a few loose strokes on the wall, the secondary pen', ground: (g) => shadowSVG({ feet: g.feet, project: g.groundProjector() }, sunFor(g.camera)) },
       { id: 'none', name: 'no shadows', note: 'just the drawing', sun: { on: false } },
       { id: 'hatch', name: 'hand hatching', note: 'shaded walls only, the outline pen',
         shade(points, n) { const s = share(this, n); if (s > 0) wallHatch(this, points, { share: Math.min(1, s * 1.3), seed: seedOf(this, points) }); } },
-      { id: 'sparse', name: 'a few strokes', note: 'hatching, much looser',
-        shade(points, n) { const s = share(this, n); if (s > 0) wallHatch(this, points, { gap: 0.05, lean: 70, share: s * 0.9, ragged: 0.8, fade: 0.9, seed: seedOf(this, points) }); } },
       { id: 'stipple', name: 'stippling', note: 'dots, thicker at the foot',
         shade(points, n) { const s = share(this, n); if (s > 0) wallStipple(this, points, { share: Math.min(1, s * 1.4), seed: seedOf(this, points) }); } },
     ];

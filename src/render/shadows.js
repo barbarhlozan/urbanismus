@@ -9,14 +9,14 @@
 //             keeps an object's feet and redraws only this stroke from them
 //             (shadowSVG), so a sun that moves later on needs no repainting
 //             of buildings.
-//   strokes   on the wall itself: a small group of parallel strokes by its
-//             edge next to the lit corner, rising from the foot and getting
-//             shorter, evenly, away from that edge (cornerStrokes, drawn by
-//             Painter._shade with the painter's own wobble). Only on walls
-//             turned well away, so most buildings get one group at most.
+//   strokes   on the wall itself: a few loose parallel strokes, leaning,
+//             with ragged tops, thinning out across the wall from a seeded
+//             end (wallStrokes, drawn by Painter._shade with the painter's
+//             own wobble); the further the wall is turned away, the more of
+//             them.
 //
-// Both are drawn in the outline pen and fade with the weather (--sun in
-// styles.css). The wall strokes go by the roof hatching's density tiers
+// Both are drawn in the secondary pen (--detail) and fade with the weather
+// (--sun in styles.css). The wall strokes go by the roof hatching's density tiers
 // (rh1…rh3), so the map thins them out with the roofs, building by
 // building, as it zooms out.
 
@@ -40,18 +40,19 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //            length, but no further than `most` (grid units)
 //   tooth    about this far apart along the wall (grid units)
 // strokes (null: none):
-//   from     as for the scribble, but turned further away
+//   from     as for the scribble; from `full` on the wall gets `most` of its
+//            strokes, in between fewer
 //   gap      between the strokes, in the wall's plane (grid units)
 //   lean     their angle from level, in the wall's plane (degrees)
-//   band     how far along the wall from the lit edge they go (share of it)
-//   reach    the first stroke's height, as a share of the wall's
+//   ragged   how unevenly their tops stop short (0 = all full height)
+//   fade     how much they thin out across the wall (0 = not at all)
 export const SUN = {
   on: true,
   fall: 150,
   length: 0.55,
   low: 0.08,
   scribble: { from: 0.1, reach: 0.35, most: 0.09, tooth: 0.07 },
-  strokes: { from: 0.5, gap: 0.055, lean: 72, band: 0.45, reach: 0.4 },
+  strokes: { from: 0.1, full: 0.6, most: 0.9, gap: 0.05, lean: 70, ragged: 0.8, fade: 0.9 },
 };
 
 // The density tier of hatch line k: every 8th (0), every 4th (1), every
@@ -140,19 +141,25 @@ export function shadowSVG(shade, sun) {
   return d ? `<path d="${d}" class="shadow"/>` : '';
 }
 
+// How many of a wall's strokes to draw (0..1), from how far it is turned
+// away from the sun (awayFrom).
+export function strokeShare(away, sun) {
+  const st = sun.strokes;
+  if (!st || away <= st.from) return 0;
+  return st.most * Math.min(1, (away - st.from) / Math.max(1e-6, st.full - st.from));
+}
+
 // The strokes on a wall, in its own plane: `flat` is the wall as a convex
-// polygon [[u, w]…] (u along it, w up from its foot), `edge` the u of its
-// lit edge. Returns [[u0, w0], [u1, w1], k] per stroke, nearest the edge
-// first (k counts them, for tierOf): parallel lines `lean` from level and
-// `gap` apart, each from just above the foot up to `reach` of the wall's
-// height (or its edge, if that comes first), shortening evenly to a
-// quarter of that across the `band`.
-export function cornerStrokes(flat, edge, { gap, lean, band, reach }, seed = 0) {
+// polygon [[u, w]…] (u along it, w up). Returns [[u0, w0], [u1, w1], k] per
+// stroke (k its line, for tierOf): parallel lines `lean` from level and
+// `gap` apart, `share` of them drawn; each starts just above the foot and
+// stops short of the top by a seeded, ragged amount, more so towards the
+// far end, and they thin out (`fade`) towards that end, which is seeded
+// per wall.
+export function wallStrokes(flat, { gap, lean, ragged, fade }, share = 1, seed = 0) {
   const a = (lean * Math.PI) / 180, d = [Math.cos(a), Math.sin(a)], n = [-Math.sin(a), Math.cos(a)];
   const tc = flat.map(([u, w]) => [u * d[0] + w * d[1], u * n[0] + w * n[1]]);
-  const us = flat.map((p) => p[0]), cs = tc.map((p) => p[1]);
-  const width = Math.max(...us) - Math.min(...us);
-  const ws = flat.map((p) => p[1]), height = Math.max(...ws) - Math.min(...ws);
+  const cs = tc.map((p) => p[1]);
   const back = (t, c) => [t * d[0] + c * n[0], t * d[1] + c * n[1]];
   const lines = [];
   for (let k = Math.ceil(Math.min(...cs) / gap); k * gap <= Math.max(...cs); k++) {
@@ -162,15 +169,22 @@ export function cornerStrokes(flat, edge, { gap, lean, band, reach }, seed = 0) 
       if ((p[1] - c) * (q[1] - c) > 0 || p[1] === q[1]) continue;
       ts.push(p[0] + ((c - p[1]) / (q[1] - p[1])) * (q[0] - p[0]));
     }
-    if (ts.length < 2) continue;
-    const [t0, t1] = [Math.min(...ts), Math.max(...ts)];
-    const x = Math.abs(back(t0, c)[0] - edge) / (width * band || 1);
-    if (x <= 1 && t1 - t0 >= gap) lines.push([x, k, t0, t1]);
+    if (ts.length >= 2) lines.push([k, Math.min(...ts), Math.max(...ts)]);
   }
-  lines.sort((p, q) => p[0] - q[0]);
-  return lines.map(([x, k, t0, t1], i) => {
-    const len = t1 - t0, s = t0 + len * 0.04;
-    const e = Math.min(t1 - len * 0.04, s + (height * reach * (1 - 0.75 * x) * (0.95 + 0.1 * hash(k, seed))) / d[1]);
-    return [back(s, k * gap), back(e, k * gap), i];
-  });
+  if (!lines.length) return [];
+  const k0 = lines[0][0], k1 = lines[lines.length - 1][0];
+  const flip = hash(seed, 3.7) < 0.5;
+  const out = [];
+  for (const [k, t0, t1] of lines) {
+    if (hash(k, 0.5 + seed) >= share) continue;
+    const x = k1 > k0 ? (flip ? k1 - k : k - k0) / (k1 - k0) : 0;
+    if (hash(k + seed, 1.3) < fade * x ** 1.2) continue;
+    const len = t1 - t0;
+    if (len < gap * 0.8) continue;
+    const s = t0 + len * (0.03 + 0.06 * hash(k, t0 + seed));
+    const e = t1 - len * Math.min(0.8, ragged * (0.1 + 0.9 * x) * hash(t1 + seed, k) + 0.04);
+    if (e - s < gap * 0.8) continue;
+    out.push([back(s, k * gap), back(e, k * gap), k]);
+  }
+  return out;
 }

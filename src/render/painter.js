@@ -27,8 +27,8 @@
 //   g.solid(x, y, z)                         start a new depth-sorted group manually
 //   g.cylinder(x, y, z, r, h, sides, opts)   upright polygonal cylinder (chimneys, silos)
 //
-// Shadows – a wall standing on the ground and turned away from the sun gets
-// a scribble on the ground at its foot and a few strokes by its lit edge
+// Shadows – a wall turned away from the sun gets a few loose strokes, and
+// where it stands on the ground a scribble at its foot
 // (render/shadows.js; opts.shadow = false: neither for this face).
 //
 // Ground drawing – flat linework at z = 0 (lawns, paving, parking lines,
@@ -84,7 +84,7 @@ import { color } from '../theme.js';
 import { mulberry32 } from '../core/random.js';
 import { MinHeap } from '../core/heap.js';
 import { siteWalks } from '../roads/siteWalks.js';
-import { SUN, sunFor, tierOf, tierClass, awayFrom, cornerStrokes } from './shadows.js';
+import { SUN, sunFor, tierOf, tierClass, awayFrom, strokeShare, wallStrokes } from './shadows.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 // Photos (a perspective camera): roof hatching at most this many px apart
@@ -610,22 +610,18 @@ export class Painter {
     return this;
   }
 
-  // The strokes on a wall standing on the ground and turned well away from
-  // the sun (SUN.strokes, render/shadows.js cornerStrokes): a few by its
-  // edge next to the lit corner – the end further right on screen, as the
-  // sun comes from the right (SUN.fall) – sketched with the painter's own
-  // wobble. Drawn right after the wall, so what is drawn on it later (ink
-  // windows) covers them; by the roof hatching's density tiers, and hidden
-  // with the facade detail when far.
+  // A wall turned away from the sun gets a few loose strokes (SUN.strokes,
+  // render/shadows.js wallStrokes), the more the further it is turned,
+  // sketched with the painter's own wobble. Drawn right after the wall, so
+  // what is drawn on it later (ink windows) covers them; by the roof
+  // hatching's density tiers, and hidden with the facade detail when far.
   _shade(points, n) {
-    const st = SUN.strokes;
-    if (!SUN.on || !st || !this.casting) return;
+    if (!SUN.on || !SUN.strokes || !this.casting) return;
     const w = this._wallNormal(n);
     if (!w) return;
     this._sun ??= sunFor(this.camera);
-    if (awayFrom(w, this._sun) < st.from) return;
-    const zs = points.map((p) => p[2]);
-    if (Math.min(...zs) > ON_GROUND || Math.max(...zs) - Math.min(...zs) < SUN.low) return;
+    const share = strokeShare(awayFrom(w, this._sun), this._sun);
+    if (share <= 0) return;
     // the wall in its own plane: u along it from points[0], w up
     const o = points[0];
     const e = points.map((p) => [p[0] - o[0], p[1] - o[1]]).find(([dx, dy]) => Math.hypot(dx, dy) > 1e-6);
@@ -633,13 +629,10 @@ export class Painter {
     const l = Math.hypot(e[0], e[1]), ex = e[0] / l, ey = e[1] / l;
     const flat = points.map((p) => [(p[0] - o[0]) * ex + (p[1] - o[1]) * ey, p[2]]);
     const back = ([u, z]) => [o[0] + ex * u, o[1] + ey * u, z];
-    const us = flat.map((f) => f[0]);
-    const [u0, u1] = [Math.min(...us), Math.max(...us)];
-    const sx = (u) => this._project(...this._world(...back([u, 0])))[0];
     const [wx, wy] = this.toWorld(o[0], o[1]);
     const d = ['', '', '', ''];
-    for (const [a, b, k] of cornerStrokes(flat, sx(u1) > sx(u0) ? u1 : u0, st, (wx * 13.1 + wy * 7.7) % 97)) {
-      d[tierOf(k)] += this._sketch([back(a), back(b)], false, 0.5).d;
+    for (const [a, b, k] of wallStrokes(flat, SUN.strokes, share, (wx * 13.1 + wy * 7.7) % 97)) {
+      d[tierOf(k)] += this._sketch([back(a), back(b)], false, 0.7).d;
     }
     d.forEach((path, t) => {
       if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln wall-shade${tierClass(t, 'rh')}`)}/>`);

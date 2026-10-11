@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SUN, groundDir, sunFor, shadedFeet, shadowPath, cornerStrokes, tierOf } from '../src/render/shadows.js';
+import { SUN, groundDir, sunFor, shadedFeet, shadowPath, wallStrokes, strokeShare, tierOf } from '../src/render/shadows.js';
 
 // the sun casting along +x
 const sun = (over = {}) => ({ ...SUN, ...over, cast: [SUN.length, 0] });
@@ -39,23 +39,21 @@ test('the scribble is one short zigzag on the shaded side', () => {
   assert.equal(shadowPath({ feet, project }, sun({ scribble: null })), '');
 });
 
-test('wall strokes stay by the lit edge, rise from the foot and shorten evenly', () => {
-  const wall = [[0, 0], [1, 0], [1, 0.6], [0, 0.6]];
+test('wall strokes: more the further a wall is turned, ragged and thinning out', () => {
   const st = SUN.strokes;
-  const strokes = cornerStrokes(wall, 1, st);
-  assert.ok(strokes.length >= 2);
-  for (const [a, b] of strokes) {
-    assert.ok(a[0] >= 1 - st.band - 1e-9, 'within the band from the edge');
-    assert.ok(a[1] < 0.05, 'from the foot');
-    assert.ok(b[1] <= 0.6 * st.reach * 1.06 + 1e-9, 'kept low');
+  assert.equal(strokeShare(st.from, sun()), 0);
+  assert.ok(strokeShare((st.from + st.full) / 2, sun()) < strokeShare(1, sun()));
+  assert.equal(strokeShare(1, sun()), st.most);
+  const wall = [[0, 0], [4, 0], [4, 0.6], [0, 0.6]];
+  const all = wallStrokes(wall, { ...st, ragged: 0, fade: 0 }, 1, 3);
+  const loose = wallStrokes(wall, st, 1, 3);
+  assert.ok(loose.length < all.length * 0.8 && loose.length > all.length * 0.2, 'thinned out');
+  for (const [a, b] of loose) {
+    assert.ok(a[1] < 0.06 || a[0] < 0.25 || a[0] > 3.75, 'from near the foot or a side edge');
+    assert.ok(b[1] <= 0.6 + 1e-9 && b[1] > a[1], 'upwards, within the wall');
   }
-  // nearest the edge first, and (where the wall's edge doesn't cut them)
-  // no taller than the one before by more than the jitter
-  const tops = strokes.filter(([, b]) => b[0] < 1 - 1e-6).map(([, b]) => b[1]);
-  for (let i = 1; i < tops.length; i++) assert.ok(tops[i] <= tops[i - 1] * 1.12);
-  // the other edge mirrors it
-  assert.ok(cornerStrokes(wall, 0, st).every(([a]) => a[0] <= st.band + 1e-9));
-  assert.deepEqual(strokes.map(([, , k]) => k), strokes.map((_, i) => i));
+  assert.ok(loose.some(([, b]) => b[1] < 0.5), 'some stop well short of the top');
+  assert.ok(wallStrokes(wall, st, 0.3, 3).length < loose.length);
 });
 
 test('density tiers: every 8th, 4th, other', () => {
