@@ -35,7 +35,7 @@ export const CLOUD_SHADOWS = {
   lumps: [2, 4],      // blobs of wash in one cloud
   squash: 0.58,       // on the ground: height per width (isometric)
   wind: 0.22,         // grid units per simulated second
-  look: 'pen',        // 'pen' (hatched lines) or 'wash' (watercolour)
+  look: 'wash',       // 'wash' (watercolour) or 'pen' (hatched lines)
   tone: 0.001,          // how strong the wash is put down
   // the wash: layers laid over each other, each this opaque; how many
   // times the outline's edges are split, and how far a split may wander
