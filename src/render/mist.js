@@ -41,6 +41,7 @@ const COS30 = Math.cos(Math.PI / 6);
 //   innerFrom  …on stretches at least this long (scene px at tile 32)
 //   lump       the lumps where it closes round an object: each this long…
 //   lumpRise   …over its height
+//   fade       ms a step of it takes to come or go (mistIn, mistOut)
 export const MIST = {
   du: 0.08,
   dt: 0.04,
@@ -51,6 +52,7 @@ export const MIST = {
   innerFrom: 50,
   lump: [8, 14],
   lumpRise: [2.4, 3.6],
+  fade: 7000,
 };
 
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -130,10 +132,14 @@ export function mistSVG({ runs, far, near, level, du }, camera, seed = 1) {
   }
   // the far shore: lobes standing up off it, each filled with paper down
   // to the shore; a line inside along the longer stretches
-  let lobeFill = '', lobeLine = '', inner = '';
+  // (each line its own <path>, one stroke, so the pen can draw it in along
+  // its length: mistIn)
+  let lobeFill = '', lines = '';
+  const stroke = (cls, d) => (d ? `<path class="${cls}" d="${d}"/>` : '');
   for (const line of far) {
     if (line.length < 3) continue;
     const step = line.length > 1 ? Math.abs(line[1][0] - line[0][0]) || 1 : 1;
+    let lobeLine = `M${P(line[0][0], line[0][1])}`;
     let i = 0;
     while (i < line.length - 1) {
       const j = Math.min(line.length - 1, i + Math.max(2, Math.round((range(MIST.lobe) * k) / step)));
@@ -142,31 +148,30 @@ export function mistSVG({ runs, far, near, level, du }, camera, seed = 1) {
       const turn = (Math.atan2(by - ay, bx - ax) * 180) / Math.PI; // (the lobe stands off the shore however it runs)
       const arc = `A${r2(len / 2)} ${r2(len / range(MIST.lobeRise))} ${r2(turn)} 0 1 ${P(bx, by)}`;
       lobeFill += `M${P(ax, ay)}${arc}${line.slice(i, j).reverse().map(([x, y]) => `L${P(x, y)}`).join('')}Z`;
-      lobeLine += `M${P(ax, ay)}${arc}`;
+      lobeLine += arc;
       i = j;
     }
+    lines += stroke('mist-line', lobeLine);
     if (line.length * step > MIST.innerFrom * k) {
       const from = Math.floor(line.length * (0.12 + rnd() * 0.15)), to = Math.ceil(line.length * (0.72 + rnd() * 0.15));
       for (let a = from; a < to - 1;) {
         const b = Math.min(to - 1, a + Math.max(3, Math.round((range([10, 28]) * k) / step)));
-        inner += line.slice(a, b + 1).map(([x, y], m) => `${m ? 'L' : 'M'}${P(x, y + MIST.inner * k)}`).join('');
+        lines += stroke('mist-inner', line.slice(a, b + 1).map(([x, y], m) => `${m ? 'L' : 'M'}${P(x, y + MIST.inner * k)}`).join(''));
         a = b + 1 + Math.floor(rnd() * 3);
       }
     }
   }
   // the near edge: a plain pen line, in a few long strokes
-  let edge = '';
   for (const line of near) {
     if (line.length < 3) continue;
     const step = Math.abs(line[1][0] - line[0][0]) || 1;
     for (let a = 0; a < line.length - 1;) {
       const b = Math.min(line.length - 1, a + Math.max(3, Math.round((range([20, 60]) * k) / step)));
-      edge += line.slice(a, b + 1).map(([x, y], m) => `${m ? 'L' : 'M'}${P(x, y)}`).join('');
+      lines += stroke('mist-line', line.slice(a, b + 1).map(([x, y], m) => `${m ? 'L' : 'M'}${P(x, y)}`).join(''));
       a = b + (rnd() < 0.3 ? 1 : 0);
     }
   }
-  return `<path class="mist" d="${fill}"/><path class="mist" d="${lobeFill}"/>`
-    + `<path class="mist-line" d="${lobeLine}"/><path class="mist-inner" d="${inner}"/><path class="mist-line" d="${edge}"/>`;
+  return `<path class="mist" d="${fill}"/><path class="mist" d="${lobeFill}"/>${lines}`;
 }
 
 // An object's cover. `at`: its place (Renderer.placeOf: world `points`,
@@ -222,8 +227,49 @@ export function coverSVG(camera, at, base, height, level, seed = 1) {
       a = b;
     }
     fill += `${lumps}${run.slice().reverse().map(([x, , y]) => `L${P(x, y)}`).join('')}Z`;
-    line += lumps;
+    line += `<path class="mist-line" d="${lumps}"/>`;
     i = j + 1;
   }
-  return fill ? `<path class="mist" d="${fill}"/><path class="mist-line" d="${line}"/>` : '';
+  return fill ? `<path class="mist" d="${fill}"/>${line}` : '';
 }
+
+// A step of the mist coming and going (the renderer calls these as it
+// rises and sinks), slowly, over MIST.fade ms: the paper settles in
+// and the pen draws its lines one by one, each along its length, the
+// strokes overlapping as a hand would; going, the lines are taken back
+// the same way and the paper thins away – so for a while the drawing
+// below shows through. `g`: a group of mistSVG / coverSVG's output.
+export function mistIn(g, { fade = MIST.fade, seed = 1 } = {}) {
+  return animate(g, fade, false, seed);
+}
+
+// …and away; `g` is removed once it is gone.
+export function mistOut(g, { fade = MIST.fade, seed = 1 } = {}) {
+  g.classList.add('leaving');
+  const done = animate(g, fade, true, seed);
+  setTimeout(() => g.remove(), done + 50);
+}
+
+function animate(g, T, reverse, seed) {
+  const rnd = mulberry32(seed);
+  const run = (el, kf, a, b, easing) => {
+    if (reverse) kf = kf.slice().reverse();
+    el.animate(kf, { duration: Math.max(1, b - a), delay: reverse ? T - b : a, easing, fill: reverse ? 'forwards' : 'backwards' });
+  };
+  for (const el of g.querySelectorAll('path')) {
+    if (el.classList.contains('mist')) {
+      run(el, [{ opacity: 0 }, { opacity: 1 }], 0, T * 0.85, 'ease-in-out');
+      continue;
+    }
+    let len = 0;
+    try { len = el.getTotalLength(); } catch { /* not measurable */ }
+    if (!(len > 0)) continue;
+    // each stroke in its own part of the time, the longer the longer
+    const d = Math.min(T * 0.6, T * 0.15 + len * 12);
+    const a = rnd() * (T - d);
+    const n = len * 1.05 + 4;
+    run(el, [{ strokeDasharray: `${n} ${n}`, strokeDashoffset: n + 1 }, { strokeDasharray: `${n} ${n}`, strokeDashoffset: 0 }], a, a + d, 'ease-in-out');
+  }
+  return T;
+}
+

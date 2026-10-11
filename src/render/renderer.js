@@ -46,7 +46,7 @@
 
 import { THEME } from '../theme.js';
 import { STYLE } from './style.js';
-import { mistLevel, mistSurface, mistSVG, coverSVG } from './mist.js';
+import { MIST, mistLevel, mistSurface, mistSVG, coverSVG, mistIn, mistOut } from './mist.js';
 import { Painter, LOOK, wobble } from './painter.js';
 import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex } from './vehicles.js';
 import { PEOPLE, bodyFor, walkerSVG, cyclistSVG, canoeSVG, canoeMarkSVG } from './people.js';
@@ -2270,37 +2270,72 @@ export class Renderer {
     return mistLevel(...this.groundRange, this.config.weather.mist, this.mistRisen);
   }
 
+  // Each step of the mist rising or sinking comes in slowly over the last
+  // (mistIn, mistOut) – the paper settling, the pen drawing its lines –
+  // and so do the covers of what stands in it. Drawn again for another
+  // reason (the view turned, the ground changed), it is just there.
   renderMist() {
     const { camera, world } = this;
     const level = this.mistRisen ? this.mistTop() : null;
-    if (level == null) this.layers.mist.innerHTML = '';
-    else {
+    const animate = drawEnabled() && level !== this.mistLevel && this.mistLevel !== undefined;
+    const seed = Math.round((level ?? 0) * 1000) ^ world.seed;
+    let svg = '';
+    if (level != null) {
       const { grid } = world;
       const m = 1.2; // (as the contours: the ground is drawn a little past the map)
       const surface = mistSurface(camera, this.groundHeight(), [-m, -m, grid.width - 1 + m, grid.height - 1 + m], level);
-      this.layers.mist.innerHTML = mistSVG(surface, camera, world.seed);
+      svg = mistSVG(surface, camera, world.seed);
+    }
+    const layer = this.layers.mist;
+    if (animate) for (const old of layer.querySelectorAll(':scope > g:not(.leaving)')) mistOut(old, { seed });
+    else layer.innerHTML = '';
+    if (svg) {
+      const g = layer.appendChild(document.createElementNS(SVGNS, 'g'));
+      g.innerHTML = svg;
+      if (animate) mistIn(g, { seed });
     }
     this.mistLevel = level;
-    for (const e of this.objs.values()) this.coverMist(e);
+    for (const e of this.objs.values()) this.coverMist(e, animate);
   }
 
   // What of an object is under the mist: covered over with paper and the
-  // cut lumped (coverSVG), or all of it hidden.
-  coverMist(e) {
-    e.g.querySelector(':scope > .mist-cover')?.remove();
+  // cut lumped (coverSVG), or all of it hidden – coming and going slowly
+  // with `animate` (as the mist's own steps, renderMist).
+  coverMist(e, animate = false) {
+    animate &&= e.shown !== false;
+    const seed = detailRank(e.key ?? '') * 1e9;
+    for (const old of e.g.querySelectorAll(':scope > .mist-cover:not(.leaving)')) {
+      if (animate) mistOut(old, { seed });
+      else old.remove();
+    }
+    if (!animate) for (const old of e.g.querySelectorAll(':scope > .mist-cover')) old.remove();
     const level = this.mistLevel;
     let svg = '';
     if (level != null && e.at) {
       const [ax, ay] = e.at.anchor ?? e.at.points[0];
       const height = this.groundHeight();
-      svg = coverSVG(this.camera, e.at, height(ax, ay), height, level, detailRank(e.key ?? '') * 1e9);
+      svg = coverSVG(this.camera, e.at, height(ax, ay), height, level, seed);
     }
-    e.g.classList.toggle('mist-under', svg === 'under');
-    if (!svg || svg === 'under') return;
+    const under = svg === 'under';
+    if (under !== e.g.classList.contains('mist-under')) {
+      // sinking out of sight or coming up again: it fades
+      e.g.getAnimations().forEach((a) => a.id === 'mist-under' && a.cancel());
+      if (animate) {
+        const kf = [{ opacity: 1 }, { opacity: 0 }];
+        const a = e.g.animate(under ? kf : kf.reverse(), { duration: MIST.fade * 0.85, easing: 'ease-in-out', fill: 'forwards', id: 'mist-under' });
+        e.g.classList.remove('mist-under');
+        a.onfinish = () => {
+          e.g.classList.toggle('mist-under', under);
+          a.cancel();
+        };
+      } else e.g.classList.toggle('mist-under', under);
+    }
+    if (!svg || under) return;
     const g = document.createElementNS(SVGNS, 'g');
     g.setAttribute('class', 'mist-cover');
     g.innerHTML = svg;
     e.g.appendChild(g);
+    if (animate) mistIn(g, { seed });
   }
 
   // Put the drawings of the objects in sight back in the objects layer, in
