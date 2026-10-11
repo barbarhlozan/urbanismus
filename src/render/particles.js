@@ -35,11 +35,11 @@ import { PEN } from './agentCanvas.js';
 //   pen     line width (PEN) and ink (palette name)
 export const PARTICLES = {
   house: {
-    rate: 0.9, life: 6, rise: 0.75, drift: 1.1, wander: 0.05, size: [0.045, 0.13],
+    rate: 0.6, life: 10, rise: 1.5, drift: 1.1, wander: 0.05, size: [0.045, 0.13],
     in: 0.12, out: 0.4, on: { every: 70, share: 0.45 }, pen: 2, ink: 'main',
   },
   stack: {
-    rate: 1.4, life: 11, rise: 1.6, drift: 2.2, wander: 0.08, size: [0.1, 0.34],
+    rate: 1.1, life: 20, rise: 3, drift: 2.2, wander: 0.08, size: [0.1, 0.34],
     in: 0.05, out: 0.45, on: null, pen: 3, ink: 'main',
   },
 };

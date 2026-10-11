@@ -165,14 +165,16 @@ export function pallets(g, x, y) {
 }
 
 // Street lamp, the Czechoslovak kind: a thick bullet-shaped foot, a thin
-// pole, a flat disc of a shade on top. `h`: height to the shade.
+// pole, a flat disc of a shade on top. `h`: height to the shade. All in
+// the secondary pen, so it sits back from the street.
 export function lamp(g, x, y, h = 0.24) {
   if (!g.isFree(x, y, 0.03)) return;
+  const pen = { stroke: 'detail' };
   g.detailed(2, () => {
-    g.lathe(x, y, 0, [[0.012, 0], [0.012, 0.04], [0.008, 0.052], [0.003, 0.056]], 8, { smooth: true });
+    g.lathe(x, y, 0, [[0.012, 0], [0.012, 0.04], [0.008, 0.052], [0.003, 0.056]], 8, { smooth: true, ...pen });
     g.solid(x, y, h / 2);
-    g.line([[x, y, 0.056], [x, y, h]]);
-    g.lathe(x, y, h, [[0.03, 0], [0.03, 0.012]], 12, { smooth: true });
+    g.line([[x, y, 0.056], [x, y, h]], pen);
+    g.lathe(x, y, h, [[0.03, 0], [0.03, 0.012]], 12, { smooth: true, ...pen });
   });
 }
 

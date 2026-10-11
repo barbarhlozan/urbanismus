@@ -170,7 +170,7 @@ html, body {
 /* zebra crossings: short stripes across a street at a junction */
 .zebra {
   fill: none;
-  stroke: var(--fg);
+  stroke: var(--detail);
   stroke-width: calc(var(--pen-5) * var(--stroke, 1));
   stroke-linecap: butt;
 }
@@ -1074,7 +1074,7 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 
 /* buildMenu.js moves the tabs, and Erase, Photo and Terrain, into the two
    boxes of .bm-rail, columns of cells under the top bar, a gap between;
-   the panel is a drawer of tiles to its left, three across, as tall as
+   the panel is a drawer of tiles to its left, two across, as tall as
    its group; the dock keeps the bottom edge, there only while a tool is
    in hand */
 .build-menu.rail {
@@ -1108,7 +1108,7 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 .build-menu.rail .bm-loose .key { display: none; }
 
 .build-menu.rail .bm-panel {
-  width: calc(3 * var(--tile) + 2 * 2px + 12px + 2 * var(--line));
+  width: calc(2 * var(--tile) + 2px + 12px + 2 * var(--line));
   /* down to just above the dock */
   max-height: calc(100vh - 16px - var(--bar-h) - 12px - 20px - var(--bar-h) - 20px - 4 * var(--line) - var(--safe-t) - var(--safe-b));
   max-height: calc(100dvh - 16px - var(--bar-h) - 12px - 20px - var(--bar-h) - 20px - 4 * var(--line) - var(--safe-t) - var(--safe-b));
@@ -1117,7 +1117,8 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 .build-menu.rail .bm-caption { display: none; }
 .build-menu.rail .bm-body { padding-top: 6px; }
 .build-menu.rail .bm-tools { justify-content: start; }
-.build-menu.rail .bm-title { display: block; flex: 1; min-width: 0; align-self: center; padding: 0 3px 0 10px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.build-menu.rail .bm-title { display: block; flex: 1; min-width: 0; align-self: center; padding: 0 3px 0 8px; font-size: 10.5px; line-height: 1.1; overflow-wrap: break-word; }
+/* (a narrow drawer: a long group name takes two lines) */
 .bm-pin .opt-icon { width: 15px; height: 15px; }
 .bm-pin .opt-icon path { stroke-width: 1.1 !important; fill: none !important; }
 #ui .bm-pin[aria-pressed="true"] { background: var(--fg); color: var(--bg); }

@@ -15,9 +15,9 @@ const KEPT = ['p', 'l'];
 
 // The key of the i-th tile of a group laid out `cols` across, by where the
 // tile sits: the tiles' rows in blocks of three, each block taking the next
-// `cols` keys along the three letter rows – three across, q w e / a s d /
-// z x c, then r t y / f g h / v b n… – so a tile's key lies on the keyboard
-// as the tile lies in the menu. null for one that would take P or L, or
+// `cols` keys along the three letter rows – two across, q w / a s / z x,
+// then e r / d f / c v… – so a tile's key lies on the keyboard as the tile
+// lies in the menu. null for one that would take P or L, or
 // runs off the keyboard.
 export function slotKey(i, cols) {
   const row = Math.floor(i / cols);

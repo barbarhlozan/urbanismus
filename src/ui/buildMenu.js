@@ -204,10 +204,10 @@ export class BuildMenu {
 
   // Keys for what's shown: a number for each open group's tab, and in each
   // group a letter for each tool, by where its tile sits (slotKey) in the
-  // drawer's three columns or the panel's four (styles.css).
+  // drawer's two columns or the panel's four (styles.css).
   giveKeys(open) {
     this.keyedGroups = open;
-    const cols = this.rail ? 3 : 4;
+    const cols = this.rail ? 2 : 4;
     this.groupKeys = new Map(open.map((g, i) => [GROUP_KEYS[i], g.id]));
     this.slotKeys = new Map(); // group id -> Map(key -> tool id)
     for (const tab of this.el.querySelectorAll('.bm-tab')) {
