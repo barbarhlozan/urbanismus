@@ -132,12 +132,14 @@ export class Camera {
     this.panX = px - (px - this.panX) * k;
     this.panY = py - (py - this.panY) * k;
     this.zoom = next;
+    this.keepInBounds();
   }
 
   centerOn(x, y, vw, vh) {
     const [sx, sy] = this.project(x, y, 0);
     this.panX = vw / 2 - sx * this.zoom;
     this.panY = vh / 2 - sy * this.zoom;
+    this.keepInBounds();
   }
 
   // Rotate the view around whatever is currently at the centre of the screen.
@@ -147,4 +149,84 @@ export class Camera {
     this.rotation = (this.rotation + dir + 4) % 4;
     this.centerOn(wx, wy, vw, vh);
   }
+
+  // ---- keeping the map in view ----
+  //
+  // The middle of the screen stays over the map, or over a strip of paper
+  // around it: up to FREE of the screen's shorter side past the last dots
+  // freely, then the drag gets heavier and stops after about EASE more. The
+  // map is a square in world space, so x and y are kept apart and it holds
+  // the same in every rotation. A gentle stop, nothing springs back.
+
+  // The window size (main.js, also on resize); keeps the view in bounds.
+  setViewport(vw, vh) {
+    this.viewport = [vw, vh];
+    this.keepInBounds();
+  }
+
+  // Paper allowed past the map's edge, in grid steps at this zoom:
+  // [free, free + ease].
+  margins() {
+    const side = Math.min(...this.viewport) / (this.tile * this.zoom);
+    return [Camera.FREE * side, (Camera.FREE + Camera.EASE) * side];
+  }
+
+  // The flat ground point in the middle of the screen.
+  middle() {
+    const [vw, vh] = this.viewport;
+    return this.unprojectFlat(...this.clientToScene(vw / 2, vh / 2));
+  }
+
+  // Put the flat ground point (x, y) in the middle of the screen.
+  setMiddle(x, y) {
+    const [vw, vh] = this.viewport;
+    const a = (x - this.cx), b = (y - this.cy);
+    const [rx, ry] = rotateQuarter(a, b, this.rotation);
+    this.panX = vw / 2 - (rx - ry) * COS30 * this.tile * this.zoom;
+    this.panY = vh / 2 - (rx + ry) * SIN30 * this.tile * this.zoom;
+  }
+
+  // Pan by (dx, dy) screen pixels (a drag), heavier towards the limit.
+  pan(dx, dy) {
+    if (!this.viewport) {
+      this.panX += dx;
+      this.panY += dy;
+      return;
+    }
+    const before = this.middle();
+    this.panX += dx;
+    this.panY += dy;
+    const after = this.middle();
+    const [free, most] = this.margins();
+    const ease = most - free;
+    const hi = [2 * this.cx, 2 * this.cy]; // the last dots
+    const out = [0, 1].map((k) => {
+      const v = before[k], step = after[k] - v;
+      // how far past the free strip, on the side it's heading to
+      const over = step < 0 ? -free - v : v - hi[k] - free;
+      if (over + Math.abs(step) <= 0) return after[k];
+      // dv/du = 1 - over / ease: slows the closer it gets, never reaches
+      // the end (taken in small pieces so it's the same however it's split)
+      let left = Math.abs(step), o = over, moved = 0;
+      if (o < 0) { moved = Math.min(left, -o); left -= moved; o += moved; }
+      moved += Math.max(0, ease - o) * (1 - Math.exp(-left / ease));
+      return v + Math.sign(step) * moved;
+    });
+    this.setMiddle(...out);
+    this.keepInBounds();
+  }
+
+  // The hard limit (after zooming, resizing, turning): the middle of the
+  // screen goes no further than the end of the margin.
+  keepInBounds() {
+    if (!this.viewport) return;
+    const [, most] = this.margins();
+    const [x, y] = this.middle();
+    const cx = Math.min(2 * this.cx + most, Math.max(-most, x));
+    const cy = Math.min(2 * this.cy + most, Math.max(-most, y));
+    if (cx !== x || cy !== y) this.setMiddle(cx, cy);
+  }
 }
+
+Camera.FREE = 0.1;  // of the screen's shorter side: paper past the edge before the drag gets heavier
+Camera.EASE = 0.12; // ...and how much further it slows to a stop

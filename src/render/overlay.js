@@ -113,7 +113,8 @@ export class OverlayKit {
       for (let x = Math.ceil((px - REACH) / step) * step; x <= px + REACH; x += step) {
         const d = Math.hypot(x - px, y - py);
         const i = grid.nodeAt(x, y);
-        if (d > REACH || i < 0 || terrain.isWater(i)) continue;
+        // (half steps round onto the map: -0.5 is a dot on no grid)
+        if (d > REACH || i < 0 || x < 0 || y < 0 || terrain.isWater(i)) continue;
         const main = Number.isInteger(x) && Number.isInteger(y);
         const fade = r2(1 - (d / REACH) ** 2);
         if (main && building) {

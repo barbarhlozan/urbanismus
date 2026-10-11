@@ -107,6 +107,7 @@ const camera = new Camera(world.grid, CONFIG.camera);
 camera.warp = makeWarp(world.seed, STYLE.warp, STYLE.tremor);
 camera.lift = makeLift(world.elevation, ELEVATION.relief, STYLE.relief,
   [-3, -3, world.grid.width + 2, world.grid.height + 2], 0.125); // (fine enough for the cliff faces, terrain/rocks.js)
+camera.setViewport(innerWidth, innerHeight); // (keeps the map in view, see Camera.pan)
 camera.centerOn(camera.cx, camera.cy, innerWidth, innerHeight);
 
 // Keep whatever is in the middle of the screen in the middle when resizing.
@@ -117,6 +118,7 @@ window.addEventListener('resize', () => {
   camera.panX += (w - viewport[0]) / 2;
   camera.panY += (h - viewport[1]) / 2;
   viewport = [w, h];
+  camera.setViewport(w, h);
 });
 
 const clock = new SimClock(CONFIG);

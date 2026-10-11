@@ -45,7 +45,7 @@ export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle
       }
       if (touches.size > 2) return;
     }
-    drag = { id: e.pointerId, type: e.pointerType, button: e.button, x: e.clientX, y: e.clientY, panX: camera.panX, panY: camera.panY, moved: false };
+    drag = { id: e.pointerId, type: e.pointerType, button: e.button, x: e.clientX, y: e.clientY, last: null, moved: false };
   });
 
   el.addEventListener('pointermove', (e) => {
@@ -54,8 +54,7 @@ export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle
       touches.set(e.pointerId, local(e));
       if (pinch && touches.size === 2) {
         const next = pinchState();
-        camera.panX += next.mid[0] - pinch.mid[0];
-        camera.panY += next.mid[1] - pinch.mid[1];
+        camera.pan(next.mid[0] - pinch.mid[0], next.mid[1] - pinch.mid[1]);
         camera.zoomAt(...next.mid, next.dist / pinch.dist);
         pinch = next;
         return;
@@ -67,11 +66,13 @@ export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle
       const threshold = isMouse ? DRAG_THRESHOLD.mouse : DRAG_THRESHOLD.touch;
       if (!drag.moved && Math.hypot(dx, dy) > threshold) {
         drag.moved = true;
+        drag.last = [drag.x, drag.y];
         el.classList.add('panning');
       }
+      // step by step: past the edge of the map the drag gets heavier (Camera.pan)
       if (drag.moved) {
-        camera.panX = drag.panX + dx;
-        camera.panY = drag.panY + dy;
+        camera.pan(e.clientX - drag.last[0], e.clientY - drag.last[1]);
+        drag.last = [e.clientX, e.clientY];
       }
     }
     if (isMouse) onPointer(...pick(e));

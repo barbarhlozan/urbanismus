@@ -59,9 +59,13 @@ export class ToolManager {
     this.listeners.add(fn);
   }
 
-  // Pointer moved to world position (x, y), or left the map (null).
+  // Pointer moved to world position (x, y), or left the map (null). Past
+  // the outermost dots (more than half a step) counts as off the map: a
+  // big building snaps by its middle, and would otherwise follow the
+  // pointer out onto the paper.
   pointer(x, y) {
-    this.point = x == null ? null : [x, y];
+    const on = x != null && x > -0.5 && y > -0.5 && x < this.grid.width - 0.5 && y < this.grid.height - 0.5;
+    this.point = on ? [x, y] : null;
     this.resnap();
   }
 
