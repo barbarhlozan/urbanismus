@@ -522,16 +522,17 @@ export class Painter {
 
   // Site paths (world.sitePaths) and the walkways they make
   // (roads/siteWalks.js) in local coordinates:
-  // g.site.paths = { hub: [x, y], exits: [{ pos: [x, y], dir: [dx, dy], road, site }],
+  // g.site.paths = { hub: [x, y], exits: [{ pos: [x, y], dir: [dx, dy], road, site, edge }],
   //                  lines: [[[x, y]…]…], plaza, loop, centre: [x, y] }
-  // road / site: the exit leads onto a street / into a neighbouring site.
+  // road / site: the exit leads onto a street / into a neighbouring site;
+  // edge: where it meets that street (render/lots.js siteEdges), if given.
   setSitePaths(paths) {
     const { hubPos, exits } = paths;
     const local = ([x, y]) => rotateQuarter(x - this.ox, y - this.oy, -this.rotation);
     const walks = siteWalks({ half: 0.5, ...paths });
     this.site.paths = {
       hub: local(hubPos),
-      exits: exits.map((e) => ({ pos: local(e.pos), dir: rotateQuarter(e.dir[0], e.dir[1], -this.rotation), road: e.road >= 0, site: (e.site ?? -1) >= 0 })),
+      exits: exits.map((e) => ({ pos: local(e.pos), dir: rotateQuarter(e.dir[0], e.dir[1], -this.rotation), road: e.road >= 0, site: (e.site ?? -1) >= 0, ...(e.edge ? { edge: local(e.edge) } : {}) })),
       lines: walks.lines.map((line) => line.map(local)),
       plaza: walks.plaza,
       loop: walks.loop,

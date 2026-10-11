@@ -208,6 +208,42 @@ export function fitSite(world, config, site) {
   return sides.flatMap((side) => simplify(side.map(fit)).slice(0, -1));
 }
 
+// Where each way in from a street or lane (world.sitePaths exits with a
+// `road`) meets that road as drawn: straight out from the footprint along
+// the exit's direction, to the road's outer line – a street's kerb, a lane's
+// edge (or its sidewalk's kerb). Found on the drawn curves, so a road that
+// bends in towards the park is met where it is, not where its dot is.
+// Returns the paths with `edge: [x, y]` (world) on those exits.
+export function siteEdges(world, config, paths) {
+  const index = roadCentres(world, config);
+  const exits = paths.exits.map((e) => {
+    if (e.road < 0) return e;
+    const [dx, dy] = e.dir;
+    const lane = world.laneOnly(e.road), walks = world.sidewalksAt(e.road).length > 0;
+    const half = lane ? (walks ? config.lane.kerb : config.lane.edge) : (walks ? config.road.kerb : config.road.edge);
+    // from the footprint's own row of dots (always inside the park)
+    const o = [e.pos[0] - dx * 0.5, e.pos[1] - dy * 0.5];
+    // (a road running straight off, along the ray, isn't hit: its dot is)
+    const [rx, ry] = world.grid.xy(e.road);
+    const hit = index.cast(o, [dx, dy], 1.5) ?? (rx - o[0]) * dx + (ry - o[1]) * dy;
+    let t = hit - half;
+    // (a road met at a slant: back off until it's `half` clear)
+    while (t > 0.3 && index.distance([o[0] + dx * t, o[1] + dy * t], half - 1e-3) !== Infinity) t -= 0.01;
+    return { ...e, edge: [o[0] + dx * Math.max(t, 0.3), o[1] + dy * Math.max(t, 0.3)] };
+  });
+  return { ...paths, exits };
+}
+
+// The roads' drawn centre lines only (no kerbs), rebuilt when they change.
+let centres = null;
+function roadCentres(world, config) {
+  const layer = world.networks.road;
+  if (centres?.layer !== layer || centres.version !== layer.version) {
+    centres = { layer, version: layer.version, index: new SegmentIndex(networkPolylines(layer, config.road)) };
+  }
+  return centres.index;
+}
+
 // The ground a plot claims, in half-dot squares ("quarters": [i/2, i/2 + .5]
 // × [j/2, j/2 + .5], world coordinates). Its own dots are its own; a plot
 // that spreads (gardens, SPREAD in structures/plots.js) also takes the empty

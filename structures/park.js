@@ -37,23 +37,29 @@ function lineDistance(p, line) {
 
 // The park's walkways (g.site.paths): each line drawn in the footpath style
 // (two narrow edges), open where it meets another one or the plaza; exits
-// facing a road carry on to the lawn edge, and entrance posts stand at every
-// way in (not between two parks). From here on nothing else in the park is
-// put on them (g.isFree).
+// onto a street or lane run straight on to the road's edge or kerb as drawn
+// (exit.edge, render/lots.js siteEdges) – cut short there when the road
+// comes in closer than the exit – and entrance posts stand at every way in
+// (not between two parks). From here on nothing else in the park is put on
+// them (g.isFree).
 // `under` (x, y) -> true: what covers the ground there (a pitch) – the
 // walkways stop at its edge, and people just cross it.
 function walkways(g, { under = null } = {}) {
   const paths = g.site.paths;
   const { hub, exits, lines, plaza } = paths;
-  const { x0, y0, x1, y1 } = g.site;
-  const lawnEdge = (p) => {
-    const e = exits.find((x) => x.road && Math.hypot(x.pos[0] - p[0], x.pos[1] - p[1]) < 1e-6);
-    if (!e) return [];
-    const [dx, dy] = e.dir;
-    return [[dx > 0 ? x1 : dx < 0 ? x0 : e.pos[0], dy > 0 ? y1 : dy < 0 ? y0 : e.pos[1]]];
+  const roadExit = (p) => exits.find((x) => x.edge && Math.hypot(x.pos[0] - p[0], x.pos[1] - p[1]) < 1e-6);
+  // `line` (running out to p = its last point) up to the road's edge
+  const toRoad = (line) => {
+    const e = roadExit(line[line.length - 1]);
+    if (!e) return line;
+    const past = (q) => (q[0] - e.edge[0]) * e.dir[0] + (q[1] - e.edge[1]) * e.dir[1];
+    if (past(e.pos) < 0) return [...line, e.edge];
+    const out = [line[0]];
+    for (let i = 1; i < line.length && past(line[i]) < 0; i++) out.push(line[i]);
+    return out.length < line.length ? [...out, e.edge] : out;
   };
   lines.forEach((line, i) => {
-    const full = [...lawnEdge(line[0]), ...line, ...lawnEdge(line[line.length - 1])];
+    const full = toRoad(toRoad(line).reverse()).reverse();
     const others = lines.filter((_, j) => j !== i);
     const open = (p) => (!plaza || Math.hypot(p[0] - hub[0], p[1] - hub[1]) >= plaza) && others.every((o) => lineDistance(p, o) >= W * 0.95)
       && !under?.(...p);
@@ -62,7 +68,12 @@ function walkways(g, { under = null } = {}) {
     }
   });
   if (plaza && !under?.(...hub)) g.groundCircle(hub[0], hub[1], plaza, { cls: 'fp' });
-  for (const e of exits) if (!e.site) gate(g, e.pos[0] - e.dir[0] * 0.08, e.pos[1] - e.dir[1] * 0.08, e.dir);
+  for (const e of exits) {
+    if (e.site) continue;
+    // (on the park's side of the road, however close it comes)
+    const [px, py] = e.edge && (e.pos[0] - e.edge[0]) * e.dir[0] + (e.pos[1] - e.edge[1]) * e.dir[1] > -0.08 ? e.edge : e.pos;
+    gate(g, px - e.dir[0] * 0.08, py - e.dir[1] * 0.08, e.dir);
+  }
   // keep what comes next off them (a little leeway for benches beside them)
   // (what stands on the plaza, in the middle, is meant to)
   const free = g.free;

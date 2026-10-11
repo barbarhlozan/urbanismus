@@ -62,7 +62,7 @@ import { YARDS } from '../../structures/yards.js';
 import { drawPlot, boundaryChance, wander, SPREAD, SPREAD_DENSITY } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
 import { pointInPolygon } from '../core/geom2d.js';
-import { fitYard, fitSite, freeTest, pathIndex, railIndex, plotClaim } from './lots.js';
+import { fitYard, fitSite, siteEdges, freeTest, pathIndex, railIndex, plotClaim } from './lots.js';
 import { zebraCrossings, streetLamp, FURNITURE } from '../roads/furniture.js';
 import { lamp } from '../../structures/kit.js';
 import { networkPolylines } from '../roads/geometry.js';
@@ -1692,7 +1692,7 @@ export class Renderer {
       painter.follow = true; // parks and squares lie on the ground like yards
       const site = world.siteArea(s.type, s.node, s.rotation);
       painter.setSite(fitSite(world, this.config, site));
-      painter.setSitePaths(world.sitePaths(s));
+      painter.setSitePaths(siteEdges(world, this.config, world.sitePaths(s)));
       const [x0, y0, x1, y1] = site.rect;
       points.push([x0 + STRUCTURE_PAD, y0 + STRUCTURE_PAD], [x1 - STRUCTURE_PAD, y1 - STRUCTURE_PAD]);
     }

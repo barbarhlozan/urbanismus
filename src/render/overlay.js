@@ -5,7 +5,7 @@
 import { smoothPolyline } from '../roads/geometry.js';
 import { Painter } from './painter.js';
 import { drawSeed, tiltOf, roadFront } from '../../structures/index.js';
-import { fitSite } from './lots.js';
+import { fitSite, siteEdges } from './lots.js';
 import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
 import { controlArt } from '../ui/icons.js';
@@ -184,7 +184,7 @@ export class OverlayKit {
     if (def.site) {
       painter.setSite(fitSite(this.world, this.config, this.world.siteArea(def.id, node, rotation)));
       const s = { id: -1, type: def.id, node, rotation, seed, data: {} };
-      painter.setSitePaths(this.world.sitePaths(s));
+      painter.setSitePaths(siteEdges(this.world, this.config, this.world.sitePaths(s)));
     }
     painter.setTilt(tiltOf(def, instance, undefined, this.world));
     painter.roadGap = (def.footprint ?? [[0, 0]]).length === 1 ? roadFront(this.world, instance).gap : 1;

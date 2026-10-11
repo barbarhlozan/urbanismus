@@ -172,10 +172,13 @@ export function yardOf(def, s, { cars = true } = {}) {
 // roadFront); else a small turn so a street of houses doesn't line up like
 // a grid, up to LOOK.tilt degrees either way, seeded like the rest of its
 // look (only types with `tilt: true`). Never while sharing a wall with a
-// neighbour (the walls must meet). Without `world` (no road known) only the
-// small turn.
+// neighbour (the walls must meet), and never for parks and squares (`site`):
+// their ground – the outline fitted to the roads, the ways in, the walkways
+// meeting a neighbour's – is laid out on the map, and turning the drawing
+// would swing it off (walkways running out across the road). Without
+// `world` (no road known) only the small turn.
 export function tiltOf(def, s, join = { left: false, right: false }, world = null) {
-  if ((def.footprint ?? [[0, 0]]).length !== 1 || join.left || join.right) return 0;
+  if ((def.footprint ?? [[0, 0]]).length !== 1 || join.left || join.right || def.site) return 0;
   const road = world ? roadFront(world, s).tilt : 0;
   if (Math.abs(road) > 1e-6) return road;
   if (!LOOK.tilt || !def.tilt) return 0;
