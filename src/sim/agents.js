@@ -956,18 +956,24 @@ export class AgentSystem {
   // traffic.look ahead) or, crossing its way, of their whole width (up to
   // traffic.across). Oncoming ones
   // are passed; one pulling out of a driveway or turning into one is off
-  // the road for everyone else, but still gives way itself. Two held up by
-  // each other across a junction: the nearer goes; held up by someone across
-  // its way longer than traffic.creep, it edges on through anyway – held up
-  // in its lane, only after traffic.stall (longer than a bus stands at a
-  // stop or a level crossing stays closed).
+  // the road for everyone else, but still gives way itself. Junctions
+  // (traffic.box round the dot) take one way through at a time: nobody goes
+  // in while someone in it crosses their way, nor stops in it in a queue –
+  // so they never lock up there. Elsewhere, two held up by each other across
+  // their ways: the nearer goes; held up by someone across its way longer
+  // than traffic.creep, it edges on through anyway. One that hasn't moved
+  // for traffic.stall (longer than a bus stands at a stop or a level
+  // crossing stays closed) is stuck for good: it is taken to the end of
+  // its way.
   // Looked up in a grid of traffic.cell squares; nothing is allocated.
   follow(dt) {
     const cfg = this.config.traffic;
     const list = (this.followList ??= []);
     const heads = (this.followHeads ??= new Map());
+    const junctions = (this.followJunctions ??= new Map()); // junction dot -> who is in it
     list.length = 0;
     heads.clear();
+    for (const inside of junctions.values()) inside.length = 0;
     const cell = cfg.cell;
     const key = (x, y) => Math.floor(x / cell) * 4096 + Math.floor(y / cell);
     for (const a of this.agents.values()) {
@@ -996,6 +1002,22 @@ export class AgentSystem {
       // off the road: on its way out of a driveway, or into one
       a.aside = (leg.doorStart && a.s < 0.4) || (leg.doorEnd && leg.total - a.s < 0.3);
       a.blocker = null;
+      // the junction it is in, or comes up to next
+      a.box = null;
+      a.toBox = Infinity;
+      const front = a.s + a.nose;
+      for (const b of leg.boxes ?? NONE) {
+        if (b.out <= front - a.len + 0.06) continue; // past it (its back may stick out into the edge of the circle: paths cross well inside it)
+        a.box = b;
+        a.toBox = Math.max(0, b.in - front);
+        break;
+      }
+      // in it – or about to go in, and let in last frame
+      if (a.box && (front >= a.box.in || a.claim)) {
+        let inside = junctions.get(a.box.node);
+        if (!inside) junctions.set(a.box.node, (inside = []));
+        inside.push(a);
+      }
       const k = key((a.fx + a.bx) / 2, (a.fy + a.by) / 2);
       a.next = heads.get(k) ?? -1;
       heads.set(k, list.length);
@@ -1016,9 +1038,12 @@ export class AgentSystem {
             const along = hx * b.hx + hy * b.hy;
             if (along < -0.3) continue; // oncoming
             const crossing = along < 0.7;
-            if (crossing ? a.creep > 0 : a.slip > 0) continue;
-            // going the same way: only one whose middle is ahead (so two side by side don't hold each other up)
-            if (!crossing && ((b.fx + b.bx) / 2 - ax) * hx + ((b.fy + b.by) / 2 - ay) * hy <= 0) continue;
+            // (two at one junction: see below)
+            if (crossing && (a.creep > 0 || (a.box && a.box.node === b.box?.node && a.toBox < look && b.toBox < look))) continue;
+            // going the same way: only one whose middle is ahead, along the
+            // two's headings together (so of two side by side, or turning
+            // a little apart, only one can be ahead of the other)
+            if (!crossing && ((b.fx + b.bx) / 2 - ax) * (hx + b.hx) + ((b.fy + b.by) / 2 - ay) * (hy + b.hy) <= 0) continue;
             const lim = crossing ? a.half + b.half : lane * (a.half + b.half);
             for (let p = 0; p < 3; p++) {
               const px = (p === 0 ? b.bx : p === 1 ? (b.bx + b.fx) / 2 : b.fx) - fx;
@@ -1043,20 +1068,40 @@ export class AgentSystem {
       // held up by each other across a junction: the nearer goes
       const yields = b && !(b.blocker === a && (a.across < b.across || (a.across === b.across && a.id < b.id)));
       if (yields) near = Math.min(near, a.across);
-      let room = near - cfg.gap[a.trip.mode === 'cycle' ? 'cycle' : 'drive'];
-      // in a queue that stands: not in a junction (others would have to
-      // wait for it), but short of it until there's room past it
+      const gap = cfg.gap[a.trip.mode === 'cycle' ? 'cycle' : 'drive'];
+      let room = near - gap;
+      // in a queue that stands or crawls: not into a junction (others would
+      // have to wait for it), but short of it until there's room past it
       const lead = a.leader;
-      if (lead && near === a.ahead && lead.v < 0.05) {
+      if (lead && near === a.ahead && lead.v < cfg.crawl) {
         const { boxes } = a.state === 'out' ? a.trip.out : a.trip.back;
         const front = a.s + a.nose;
-        for (let i = 0; boxes && i < boxes.length; i += 2) {
-          const [e, x] = [boxes[i], boxes[i + 1]];
+        for (const { in: e, out: x } of boxes ?? NONE) {
           if (e > front + room) break;
           if (front <= e && front + room - a.len < x) {
-            room = e - front;
+            room = e - front - 0.02;
             break;
           }
+        }
+      }
+      // a junction: in only when nobody in it crosses its way (going in
+      // from the same side, or straight on or right from the opposite one,
+      // is fine) and there is room for it on the far side, along its way
+      // (turning too), behind whoever stands or crawls there – so nobody
+      // is ever left standing in one; about to go in, it holds its place
+      a.claim = false;
+      a.yieldTo = null;
+      if (a.box && a.toBox > 0 && a.toBox < look) {
+        const inside = junctions.get(a.box.node);
+        let clear = true;
+        if (inside) for (const o of inside) if (o !== a && crosses(a.box, o.box)) [clear, a.yieldTo] = [false, o];
+        if (clear && a.toBox < look / 2) clear = this.roomPast(a, gap, heads, list);
+        if (!clear) room = Math.min(room, a.toBox - 0.02);
+        else if (a.toBox < cfg.claim && room > a.toBox) {
+          a.claim = true;
+          let list = inside;
+          if (!list) junctions.set(a.box.node, (list = []));
+          if (!list.includes(a)) list.push(a);
         }
       }
       a.room = Math.max(0, room);
@@ -1066,12 +1111,49 @@ export class AgentSystem {
       else if (yields && a.across <= a.ahead && room < 0.02) {
         if ((a.held += dt) > cfg.creep) [a.held, a.creep] = [0, 1.5];
       } else a.held = 0;
-      // (and should a queue ever close on itself: after traffic.stall, on)
-      if (a.slip > 0) a.slip -= dt;
-      else if (room < 0.02 && a.ahead < a.across) {
-        if ((a.stall += dt) > cfg.stall) [a.stall, a.slip] = [0, 2];
+      // should a queue ever close on itself (round a block, through two
+      // junctions): after traffic.stall it is spared the rest of the way,
+      // as if it had got there (rather than driving through the others)
+      if (a.v < 0.01 && a.followK < 0.05) {
+        if ((a.stall += dt) > cfg.stall) {
+          a.stall = 0;
+          const leg = a.state === 'out' ? a.trip.out : a.trip.back;
+          if (a.bus) a.legs.length = a.leg + 1;
+          a.s = leg.total;
+          a.room = Infinity;
+        }
       } else a.stall = 0;
     }
+  }
+
+  // Is there room for vehicle a past the junction it comes up to (a.box),
+  // along its leg: nobody going its way standing or crawling within its
+  // length and `gap` of the far side? (follow's grid: heads, list)
+  roomPast(a, gap, heads, list) {
+    const { cell, crawl } = this.config.traffic;
+    const leg = a.state === 'out' ? a.trip.out : a.trip.back;
+    const from = a.box.out - a.nose + a.len; // (a.s when its back is out)
+    for (let k = 0; k <= 3; k++) {
+      const s = from + ((a.nose + gap) * k) / 3;
+      if (s > leg.total) break;
+      const [px, py] = pointAt(leg, s), [qx, qy] = pointAt(leg, s + 0.03);
+      const l = Math.hypot(qx - px, qy - py) || 1;
+      const [dx, dy] = [(qx - px) / l, (qy - py) / l];
+      const cx = Math.floor(px / cell), cy = Math.floor(py / cell);
+      for (let i = cx - 1; i <= cx + 1; i++) {
+        for (let j = cy - 1; j <= cy + 1; j++) {
+          for (let n = heads.get(i * 4096 + j) ?? -1, b; n >= 0; n = b.next) {
+            b = list[n];
+            if (b === a || b.aside || b.v >= 2 * crawl || b.hx * dx + b.hy * dy < 0.5) continue;
+            // how far p is from b's stretch
+            const [ex, ey] = [b.fx - b.bx, b.fy - b.by], e2 = ex * ex + ey * ey || 1e-9;
+            const t = Math.max(0, Math.min(1, ((px - b.bx) * ex + (py - b.by) * ey) / e2));
+            if (Math.hypot(px - b.bx - ex * t, py - b.by - ey * t) < b.half + 0.01) return false;
+          }
+        }
+      }
+    }
+    return true;
   }
 
   driveRoute(home, dest) {
@@ -1137,8 +1219,8 @@ export class AgentSystem {
       exit: plan.exit ?? null,
       nodes: plan.nodes,
       backNodes: plan.backNodes ?? null,
-      out: this.leg(offsetPolyline(smooth, side), plan.fromDoor != null, atDoor, drive),
-      back: this.leg(offsetPolyline(back, side), plan.backNodes ? false : atDoor, home, drive),
+      out: this.leg(offsetPolyline(smooth, side), plan.fromDoor != null, atDoor, drive, plan.mode === 'cycle'),
+      back: this.leg(offsetPolyline(back, side), plan.backNodes ? false : atDoor, home, drive, plan.mode === 'cycle'),
     };
   }
 
@@ -1178,32 +1260,44 @@ export class AgentSystem {
   }
 
   // A measured leg, remembering which of its ends is at a building's door;
-  // a drive's with its pace.
-  leg(points, doorStart, doorEnd, drive = false) {
+  // a drive's with its pace, a drive's or ride's with its junctions.
+  leg(points, doorStart, doorEnd, drive = false, wheels = false) {
     const leg = { ...measurePolyline(points), doorStart, doorEnd, pace: null, boxes: null };
-    if (drive) {
-      leg.pace = this.pace(leg);
-      leg.boxes = this.boxes(leg);
-    }
+    if (drive) leg.pace = this.pace(leg);
+    if (drive || wheels) leg.boxes = this.boxes(leg);
     return leg;
   }
 
   // Where a leg goes through junctions (three roads or more): within
-  // traffic.box of the dot. [in, out, in, out…] arc lengths, in order.
+  // traffic.box of the dot. In order: [{ node, in, out (arc lengths), ix,
+  // iy (the way it goes in), turn (>0 right, <0 left) }].
   boxes(leg) {
     const { world } = this;
     const r = this.config.traffic.box, step = 0.04;
     const out = [];
-    let inside = false;
+    let box = null;
+    const dir = (s) => {
+      const [x0, y0] = pointAt(leg, s - 0.05), [x1, y1] = pointAt(leg, s + 0.05);
+      const l = Math.hypot(x1 - x0, y1 - y0) || 1;
+      return [(x1 - x0) / l, (y1 - y0) / l];
+    };
     for (let s = 0; s <= leg.total + step; s += step) {
-      const [x, y] = pointAt(leg, Math.min(s, leg.total));
+      const at = Math.min(s, leg.total);
+      const [x, y] = pointAt(leg, at);
       const [i, j] = [Math.round(x), Math.round(y)];
       const n = world.grid.inBounds(i, j) ? world.grid.index(i, j) : -1;
       const here = n >= 0 && (x - i) ** 2 + (y - j) ** 2 < r * r && world.roads.hasNode(n) && world.roads.degree(n) >= 3;
-      if (here !== inside) out.push(Math.min(s, leg.total));
-      inside = here;
+      if (here && !box) out.push((box = { node: n, in: at, out: leg.total, ix: 0, iy: 0, turn: 0 }));
+      else if (!here && box) {
+        box.out = at;
+        box = null;
+      }
     }
-    if (inside) out.push(leg.total);
+    for (const b of out) {
+      [b.ix, b.iy] = dir(b.in);
+      const [ox, oy] = dir(b.out);
+      b.turn = ox * -b.iy + oy * b.ix; // along its right hand
+    }
     return out;
   }
 
@@ -1295,6 +1389,18 @@ export class AgentSystem {
 // States in which an agent is out and about (drawn).
 const VISIBLE = new Set(['out', 'back', 'linger', 'wait']);
 
+const NONE = [];
+
+// Two ways through one junction (AgentSystem.boxes) that cross: from the
+// same side never, from opposite sides when either turns left, otherwise
+// always.
+function crosses(p, q) {
+  const d = p.ix * q.ix + p.iy * q.iy;
+  if (d > 0.7) return false;
+  if (d < -0.7) return p.turn < -0.5 || q.turn < -0.5;
+  return true;
+}
+
 // The share of full speed at arc length s of a leg (its pace; 1 without).
 function paceAt(leg, s) {
   const k = leg.pace;
@@ -1320,8 +1426,8 @@ function newAgent(fields) {
   return Object.assign({
     id: null, home: null, state: 'home', timer: 0, trip: null, s: 0, x: 0, y: 0, tx: 0, ty: 0,
     visitor: false, commuter: false, truck: false, bus: false,
-    followK: 1, room: Infinity, held: 0, creep: 0, stall: 0, slip: 0, fx: 0, fy: 0, bx: 0, by: 0, hx: 1, hy: 0, half: 0, next: -1,
-    nose: 0, len: 0, px: 0, py: 0, v: 0, aside: false, leader: null, blocker: null, ahead: Infinity, across: Infinity,
+    followK: 1, room: Infinity, held: 0, creep: 0, stall: 0, fx: 0, fy: 0, bx: 0, by: 0, hx: 1, hy: 0, half: 0, next: -1,
+    box: null, toBox: Infinity, claim: false, yieldTo: null, nose: 0, len: 0, px: 0, py: 0, v: 0, aside: false, leader: null, blocker: null, ahead: Infinity, across: Infinity,
     waitKey: null, slot: 0, wander: null, retry: null,
     legs: null, leg: 0, call: 0, pause: 0, left: 0,
   }, fields);

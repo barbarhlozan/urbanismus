@@ -173,3 +173,45 @@ test('a queue waits short of a junction, not in it', () => {
   assert.ok(front <= 10 - CONFIG.traffic.box + 0.03, `stopped short of it (front at ${front.toFixed(2)})`);
   assert.ok(front > 9.4, `but came up to it (${front.toFixed(2)})`);
 });
+
+test('a busy crossroads: everyone gets through, nobody drives through anyone', () => {
+  const ends = {};
+  const { agents } = town((w) => {
+    road(w, [2, 12], [22, 12]);
+    road(w, [12, 2], [12, 22]);
+    // a house at each arm's end, a shop at each other arm's end
+    ends.w = w.placeStructure('house', w.grid.index(3, 13));
+    ends.e = w.placeStructure('house', w.grid.index(21, 11));
+    ends.n = w.placeStructure('house', w.grid.index(11, 3));
+    ends.s = w.placeStructure('house', w.grid.index(13, 21));
+  });
+  // from each end to the other three: straight on, left and right, five cars apart on each
+  const cars = [];
+  for (const [from, tos] of [['w', 'ens'], ['e', 'wns'], ['n', 'swe'], ['s', 'nwe']]) {
+    [...tos].forEach((to, k) => {
+      for (let i = 0; i < 2; i++) {
+        const plan = agents.driveRoute(ends[from], ends[to]);
+        const a = { ...agents.agents.get(`${ends[from].id}:0`), id: `${from}${to}${i}` };
+        agents.begin(a, plan, ends[to].id);
+        a.state = 'out';
+        a.s = 8.5 - (k * 2 + i) * 0.45; // queued up towards the junction
+        cars.push(a);
+      }
+    });
+  }
+  only(agents, ...cars);
+  let worst = Infinity;
+  run(agents, 120, () => {
+    const out = cars.filter((a) => a.state === 'out');
+    for (let i = 0; i < out.length; i++) {
+      for (let j = i + 1; j < out.length; j++) {
+        const a = out[i], b = out[j];
+        const dot = a.hx * b.hx + a.hy * b.hy;
+        if (Math.abs(dot) < 0.7) worst = Math.min(worst, Math.hypot(a.x - b.x, a.y - b.y));
+      }
+    }
+  });
+  const left = cars.filter((a) => a.state === 'out').map((a) => `${a.id} at ${a.x.toFixed(2)},${a.y.toFixed(2)}`);
+  assert.deepEqual(left, [], 'everyone got through');
+  assert.ok(worst > 0.1, `no two crossing each other overlapped (closest ${worst.toFixed(3)})`);
+});

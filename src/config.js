@@ -419,8 +419,10 @@ export const CONFIG = {
     gap: { drive: 0.05, cycle: 0.035 },
     lane: 0.6,            // in the same lane: sideways within this share of their two half-widths
     creep: 2.5,           // seconds held up by someone across their way (a junction, a driveway): then they edge on through
-    stall: 40,            // …by someone in their lane (should a queue ever close on itself)
-    box: 0.26,            // grid steps round a junction's dot where nobody stops in a queue (they wait short of it)
+    stall: 45,            // seconds standing still: stuck for good (a queue closed on itself), taken to the end of the way
+    crawl: 0.12,          // grid steps per second: one in front slower than this, and nobody goes into a junction without room past it
+    box: 0.26,            // grid steps round a junction's dot: one way through at a time (and no one may cross it), nobody stops in it in a queue
+    claim: 0.12,          // this far before going into a junction its place there is held
     cell: 0.6,            // vehicles are looked up in squares this size (more than half of `look`, and a bit)
     ramp: 0.6,            // grid steps over which the speed changes between open road, village and lane
   },
