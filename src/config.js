@@ -23,7 +23,8 @@ export const CONFIG = {
     // Each building, tree and lamp changes a little further out than that,
     // by up to `spread` of it (seeded per object, Renderer.bandOf), so the
     // detail goes a few at a time as you zoom out, not all at once.
-    lod: { medium: 0.9, far: 0.55, spread: 0.2 },
+    // From `near` on, windows get their glazing bars (LOOK.open, painter.js).
+    lod: { medium: 0.9, far: 0.55, spread: 0.2, near: 3 },
     // Roof hatching thins out further away so that its strokes stay about
     // this many px apart on screen (every 2nd, 4th, 8th stroke kept) and
     // never close up into solid ink.

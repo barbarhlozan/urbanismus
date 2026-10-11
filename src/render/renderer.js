@@ -99,6 +99,8 @@ const DETAIL_1_2 = /<(?:path|polygon|polyline|circle|ellipse|rect|line)\b[^>]*\b
 // Roof hatching (painter.js) in density tiers above n, for n = 0, 1, 2.
 const ROOF_TIERS = [1, 2, 3].map((n) => new RegExp(`<(?:path|polyline)\\b[^>]*\\bclass="[^"]*\\brh[${n}-3]\\b[^"]*"[^>]*\\/>`, 'g'));
 const ROOF_TIER_CLASS = / rh[1-3]\b/g;
+// The bit of an object's band (Renderer.bandOf) set close up, from lod.near.
+const NEAR = 64;
 // An object's detail changes only once the zoom is this share past its
 // threshold (Renderer.bandOf), so one resting on it doesn't switch to and fro.
 const BAND_HOLD = 0.02;
@@ -1277,11 +1279,12 @@ export class Renderer {
     this.lodLevel = level;
   }
 
-  // An object's detail at zoom z, a number made of three parts: its level
+  // An object's detail at zoom z, a number made of four parts: its level
   // (0 full, 1 without the facade detail, 2 bare; config.render.lod), the
   // densest tier of roof hatching it keeps (0–3, painter.js: strokes about
   // config.render.roofGap px apart on screen at least) and, for a tree,
-  // how plain its crown is (config.render.trees). Each object crosses
+  // how plain its crown is (config.render.trees), and for a building
+  // whether its windows are drawn close up (NEAR). Each object crosses
   // these zooms a little sooner or later than the next – its own share of
   // them, from 1 − lod.spread to 1, seeded by its key – so a change goes
   // through the town over a stretch of zooms rather than all at once;
@@ -1295,19 +1298,22 @@ export class Renderer {
       let roof = 3;
       if (key[0] === 's') while (roof > 0 && LOOK.hatch * 2 ** (3 - roof) * this.camera.tile * zz < roofGap * r) roof--;
       const tree = key[0] === 'f' ? (zz < trees.medium * r) + (zz < trees.far * r) : 0;
-      return [level, roof, tree];
+      // a building's windows close up (Painter._window, LOOK.open)
+      const near = key[0] === 's' && LOOK.open && zz >= lod.near * r ? 1 : 0;
+      return [level, roof, tree, near];
     };
     const now = at(z);
     if (prev !== undefined) {
-      const was = [prev >> 4, (prev >> 2) & 3, prev & 3];
+      const was = [(prev >> 4) & 3, (prev >> 2) & 3, prev & 3, prev & NEAR ? 1 : 0];
       const closer = at(z * (1 + BAND_HOLD)), further = at(z * (1 - BAND_HOLD));
       // each part only goes up with the zoom (roof) or down (level, tree)
       const keep = was[0] >= closer[0] && was[0] <= further[0]
         && was[1] <= closer[1] && was[1] >= further[1]
-        && was[2] >= closer[2] && was[2] <= further[2];
+        && was[2] >= closer[2] && was[2] <= further[2]
+        && was[3] <= closer[3] && was[3] >= further[3];
       if (keep) return prev;
     }
-    return (now[0] << 4) | (now[1] << 2) | now[2];
+    return (now[3] ? NEAR : 0) | (now[0] << 4) | (now[1] << 2) | now[2];
   }
 
   // The zoom changed: objects whose detail (bandOf) changes with it are
@@ -1337,8 +1343,8 @@ export class Renderer {
   // at once (a class on its groups, styles.css), until it is redrawn
   // without it; what it lacks, and its roof hatching, wait for the redraw.
   hideAhead(e, band) {
-    const level = band >> 4;
-    const hide = level > e.band >> 4 ? `lv${level}` : '';
+    const level = (band >> 4) & 3;
+    const hide = level > ((e.band >> 4) & 3) ? `lv${level}` : '';
     if (hide === (e.hide ?? '')) return;
     for (const g of [e.g, e.lg]) {
       if (e.hide) g.classList.remove(e.hide);
@@ -1622,7 +1628,7 @@ export class Renderer {
   // class, so each roof plane's strokes merge into one path again
   // (mergeRuns).
   atDetail(svg, band = 0) {
-    const level = band >> 4, roof = (band >> 2) & 3;
+    const level = (band >> 4) & 3, roof = (band >> 2) & 3;
     if (level) svg = svg.replace(level >= 2 ? DETAIL_1_2 : DETAIL_2, '');
     if (roof < 3) svg = svg.replace(ROOF_TIERS[roof], '');
     return svg.replace(ROOF_TIER_CLASS, '');
@@ -1687,6 +1693,8 @@ export class Renderer {
     const rigid = [row.reduce((a, p) => a + p[0], 0) / row.length, row.reduce((a, p) => a + p[1], 0) / row.length];
     painter.rigid = rigid;
     painter.sways = live;
+    // windows close up (Painter._window): as the band it is drawn with
+    if (live) painter.near = !!(this.bandFor(`s${s.id}`) & NEAR);
     const points = world.nodesOf(s).map((n) => world.grid.xy(n));
     if (def.site) {
       painter.follow = true; // parks and squares lie on the ground like yards

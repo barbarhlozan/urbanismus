@@ -36,6 +36,7 @@
     //   &shadow=0    no shadows at all, &walls=0 no wall strokes, &scribble=0 none at the foot;
     //                any other SUN key works too, e.g. &fall=60&length=1 (src/render/shadows.js)
     //   &lod=1       as seen from middle zoom (2: far), to check what thins out
+    //   &near=0      windows as further out, without their glazing bars (&open=false: ink blocks)
     //   &speed=3     pen animations slowed down (DRAW in src/render/draw.js)
     // Click a drawing to watch it sketched in, shift-click to watch it erased.
     import { applyTheme } from './src/theme.js';
@@ -164,6 +165,7 @@
         const seed = (k + 1) * 2654435761 >>> 0;
         const g = new Painter(cam, { x: 0, y: 0 }, 0, seed);
         if (q.has('join')) g.join = { left: true, right: true };
+        g.near = q.get('near') !== '0';
         if (def.site) {
           // parks and squares: their footprint as the site
           const xs = def.footprint.map((f) => f[0]), ys = def.footprint.map((f) => f[1]);

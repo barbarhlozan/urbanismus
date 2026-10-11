@@ -92,6 +92,9 @@ const r2 = (n) => Math.round(n * 100) / 100;
 // their glazing bars from this many px wide
 const PHOTO_HATCH = 5;
 const PHOTO_PANE = 7;
+// The map (LOOK.open): glazing bars in windows from this many scene px wide
+// (at zoom 1; they show only close up, see Painter._window)
+const MAP_PANE = 1.2;
 // how near the ground (local z) a wall's foot is taken to stand on it
 const ON_GROUND = 0.03;
 
@@ -103,6 +106,8 @@ const ON_GROUND = 0.03;
 //   sketch  hand-drawn wobble, in scene px at tile 32 (0 = ruler straight)
 //   overshoot  with sketch: edges run on past corners by about this much (scene px at tile 32)
 //   ink     windows as solid blocks of ink instead of outlines
+//   open    with ink, the map draws windows open too, as in photos: a
+//           frame, and close up its glazing bars (Painter._window)
 //   thin    with ink: this many times fewer windows along a wall (1 = every bay)
 //   hatch   pencil strokes down pitched roofs, this far apart (0 = none)
 //   ground  a stroke along the foot of each building, running past its corners by about this much
@@ -114,7 +119,7 @@ const ON_GROUND = 0.03;
 export const LOOK = {
   eave: 0.03, fascia: 0, sill: false, tall: true, sketch: 5,
   overshoot: 1.5, ink: true, thin: 1.4, hatch: 0.03, ground: 0.04, floors: false, roads: 0.035,
-  tilt: 10,
+  tilt: 10, open: true,
 };
 
 // The hand-drawn sway of roads: a smooth shift [dx, dy] of the map at
@@ -236,6 +241,7 @@ export class Painter {
     this.bounds = null;   // local [x0, y0, x1, y1] of all solids drawn
     this.join = { left: false, right: false }; // set by the renderer, see structures/index.js
     this.current = null;
+    this.near = true;     // drawn close up: windows with their glazing bars (set by the renderer, see _window)
     this.rigid = null;    // world [x, y]: move as one piece, see _project()
     this.follow = false;  // with rigid: still rise and fall with the ground, see _liftAt()
     this.sways = false;   // trees drawn in it lean in the wind on their own (swayFrom, toSVG)
@@ -765,7 +771,7 @@ export class Painter {
         const zb = z0 + i * step + (step - wh) * (LOOK.tall ? 0.4 : 0.55), zt = zb + wh;
         if (ribbon) {
           const t0 = spacing * 0.3, t1 = len - spacing * 0.3;
-          this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n, cls });
+          this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n, cls, bay: spacing });
           continue;
         }
         for (let c = 0; c < cols; c++) {
@@ -1153,26 +1159,43 @@ export class Painter {
     this._spread(points);
     if (opts.facing && !this._facing(opts.facing, points[0])) return this;
     const lod = opts.lod ?? (opts.facing ? Math.max(2, this.lod) : this.lod);
-    if (opts.cls === 'ink' && this.camera.perspective && this._window(points, opts, lod)) return this;
+    if (opts.cls === 'ink' && (this.camera.perspective || LOOK.open) && this._window(points, opts, lod)) return this;
     this.current.parts.push(this._outline(points, false, opts, lod));
     return this;
   }
 
   // An ink window (a closed outline of four corners: bottom left, bottom
-  // right, top right, top left) in a photo: an open frame instead of a
-  // block of ink, and once it is big enough on the picture a glazing bar
-  // down the middle and a transom.
+  // right, top right, top left) drawn open, as a frame: in a photo always,
+  // on the map with LOOK.open. Its glazing bars – a casement's cross, a
+  // ribbon's mullions every opts.bay – only close up: in a photo once the
+  // window is PHOTO_PANE px wide, on the map when the building is drawn
+  // `near` (Renderer.paintStructure, lod.near) and the window is MAP_PANE
+  // wide. On the map they go after the solid's other parts, so the frames
+  // of a wall make one run (mergeRuns) and the bars another, rather than
+  // an element each.
   _window(points, opts, lod) {
     if (points.length !== 5) return false;
+    const photo = this.camera.perspective;
     const [a, b, c, e] = points;
-    this.current.parts.push(this._outline(points, false, { ...opts, cls: 'pane' }, lod));
     const scr = (p) => this._project(...this._world(p[0], p[1], p[2]));
-    const [sa, sb] = [scr(a), scr(b)];
-    if (Math.hypot(sb[0] - sa[0], sb[1] - sa[1]) < PHOTO_PANE) return true;
+    const [sa, sb, sc] = [scr(a), scr(b), scr(c)];
+    const wide = Math.hypot(sb[0] - sa[0], sb[1] - sa[1]), high = Math.hypot(sc[0] - sb[0], sc[1] - sb[1]);
+    const out = this.current.parts;
+    out.push(this._outline(points, false, { ...opts, cls: 'pane' }, lod));
+    // the map's windows are 1–3 px at zoom 1: bars only where there's room
+    if (photo ? wide < PHOTO_PANE : !this.near || (wide * 32) / this.camera.tile < MAP_PANE) return true;
+    const late = photo ? out : (this.current.late ??= []);
     const mix = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t);
-    const bars = { ...opts, cls: 'pane bar' };
-    this.current.parts.push(this._outline([mix(a, b, 0.5), mix(e, c, 0.5)], false, bars, lod));
-    this.current.parts.push(this._outline([mix(a, e, 0.68), mix(b, c, 0.68)], false, bars, lod));
+    const bar = (p, q) => late.push(this._outline([p, q], false, { ...opts, cls: 'pane bar' }, lod));
+    if (opts.bay && wide > high * 3) {
+      // a band of windows: a mullion every bay
+      const n = Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / opts.bay);
+      for (let i = 1; i < n; i++) bar(mix(a, b, i / n), mix(e, c, i / n));
+      return true;
+    }
+    // a casement: a bar down the middle and a transom
+    bar(mix(a, b, 0.5), mix(e, c, 0.5));
+    bar(mix(a, e, 0.68), mix(b, c, 0.68));
     return true;
   }
 
@@ -1239,6 +1262,6 @@ export class Painter {
   toSVG() {
     return orderSolids(this.solids).map((s) => (s.sway
       ? `<g class="sway" data-foot="${r2(s.sway[0])} ${r2(s.sway[1])}">${s.parts.join('')}</g>`
-      : s.parts.join(''))).join('');
+      : s.parts.join('') + (s.late?.join('') ?? ''))).join('');
   }
 }

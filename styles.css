@@ -242,6 +242,10 @@ html, body {
 .layer-objects .foot { stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
 .layer-objects .roof-hatch { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 .layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
+/* windows drawn open (LOOK.win, Painter._window): a frame, and close up its
+   glazing bars in the finest pen */
+.layer-objects .pane { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+.layer-objects .pane.bar { fill: none; stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
 /* shadows (src/render/shadows.js): a scribble on the ground at the foot of
    a wall turned from the sun, a few loose strokes on it – in the
    secondary pen, behind the drawing. --sun: how much the sun shows, from
