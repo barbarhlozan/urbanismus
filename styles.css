@@ -69,8 +69,9 @@ html, body {
    <canvas> with the moving people, vehicles and trains, #view-top (the
    buildings, trees and tool previews), then #trains-top: train carriages
    with nothing nearer in front of them, so they pass in front of stations
-   and buildings behind the track, and the weather
-   over all of it: #cloud-shadows (cloudShadows.js), #gloom (a grey sky's
+   and buildings behind the track, #smoke: chimney smoke (particles.js),
+   over the roofs it comes from, and the weather over all of it:
+   #cloud-shadows (cloudShadows.js), #gloom (a grey sky's
    shade, config.weather.gloom), #rain (rain.js).
    The two .view wrappers are larger than the window and moved on the GPU
    while the camera moves (position and size set by Renderer.placeView);
@@ -89,7 +90,7 @@ html, body {
   display: block;
   user-select: none;
 }
-#agents, #trains-top, #cloud-shadows, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
+#agents, #trains-top, #smoke, #cloud-shadows, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
 /* a grey sky's shade over the whole map (config.weather.gloom) */
 #gloom { position: fixed; inset: 0; pointer-events: none; background: var(--detail); opacity: 0; transition: opacity 4s; }
 /* mist in the valleys (src/render/mist.js): paper over what is under it, its
@@ -99,6 +100,12 @@ html, body {
 .layer-mist, .mist-cover, .mist-veil { opacity: 0.9; }
 .mist-line { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .mist-inner { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+/* chimney smoke in a photo (particles.js smokeSVG; on the map it is the
+   #smoke canvas): the pen, and a puff's paper */
+.smoke { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.smoke.pen-3 { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+.smoke-dots { fill: var(--main); stroke: none; }
+.smoke-paper { fill: var(--bg); stroke: none; }
 .mist-under { opacity: 0.1; }
 #input {
   position: fixed;

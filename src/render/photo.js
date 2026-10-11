@@ -30,6 +30,7 @@ import { cloudsSVG } from './clouds.js';
 import { DEER, deerSVG } from './deer.js';
 import { LIVESTOCK, livestockSVG } from './livestock.js';
 import { PEOPLE, bodyFor, walkerSVG, cyclistSVG } from './people.js';
+import { smokeSVG } from './particles.js';
 
 export const PHOTO = {
   width: 480,
@@ -117,10 +118,12 @@ export function takePhoto(renderer, shot) {
   renderer.free ??= freeTest(world, renderer.config);
   const solids = [];
   const sun = sunFor(cam);
+  const vents = [];
   const take = (out) => {
     if (!out) return;
     const { painter } = out;
     solids.push(...painter.solids);
+    vents.push(...painter.vents);
     painter.ground.forEach((svg, i) => {
       const [gx, gy] = painter.groundAt[i];
       if (Math.hypot(gx - x, gy - y) >= PHOTO.lots) bands.add(bandAt(gx, gy), 'lots', svg);
@@ -204,7 +207,7 @@ export function takePhoto(renderer, shot) {
     if (near <= PHOTO.clear || (near < PHOTO.trees && TREE.test(svg)) || (near < PHOTO.tuft && TUFT.test(svg))) continue;
     layers.push({ depth: so.depth, svg });
   }
-  layers.push(...bands.layers(), ...photoMist(renderer, cam, bands.d), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen), ...people(renderer, cam, seen));
+  layers.push(...bands.layers(), ...photoMist(renderer, cam, bands.d), ...smoke(renderer, cam, vents), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen), ...people(renderer, cam, seen));
   layers.sort((a, b) => a.depth - b.depth);
   // each in the pen for its distance; neighbours in the same pen share a group
   let svg = '', open = null;
@@ -632,6 +635,27 @@ function animals(renderer, cam, seen) {
         svg: `<g class="photo-figure" transform="translate(${r2(sx)} ${r2(sy)}) scale(${fx < sx ? -r2(k) : r2(k)} ${r2(k)})">${svg}</g>`,
       });
     }
+  }
+  return out;
+}
+
+// Chimney smoke as it is at the moment of the photo (particles.js, the
+// map's own), at each chimney's distance: as large against its building as
+// on the map, just behind what stands nearer. None from a chimney under
+// the mist.
+function smoke(renderer, cam, vents) {
+  const { world, config } = renderer;
+  const kind = world.weather?.kind;
+  const env = { wind: config.weather.wind[kind] ?? 0, rain: config.weather.rain[kind] ?? 0, mist: renderer.mistRisen ?? 0 };
+  const level = renderer.mistLevel;
+  const out = [];
+  for (const v of vents) {
+    const [x, y, z] = v.at;
+    const ahead = cam.ahead(x, y);
+    if (ahead < PHOTO.clear) continue;
+    if (level != null && (cam.lift?.(x, y) ?? 0) + z < level) continue;
+    const svg = smokeSVG(v, world.time, env, { tile: cam.scaleAt(x, y), zScale: 1 });
+    if (svg) out.push({ depth: -ahead + 0.02, dist: ahead, svg });
   }
   return out;
 }

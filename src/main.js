@@ -615,6 +615,7 @@ function loop(now) {
     // may jump it)
     wind += (sky.wind - wind) * Math.min(1, simDt / 4);
     renderer.swayTrees(world.time, wind);
+    renderer.smokeFrame(world.time, { wind, rain: sky.rain, mist: renderer.mistRisen });
     hud.update();
     chronicle.update(dt);
     if (!opening) story.update(dt); // (the story waits for the map to be drawn)

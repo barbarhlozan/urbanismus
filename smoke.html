@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dědina – smoke sketches</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--main); font: 12px system-ui; margin: 16px; }
+    h1 { font-weight: 500; }
+    h2 { font-weight: 500; margin: 28px 0 2px; }
+    p { margin: 0 0 8px; color: var(--detail); max-width: 80ch; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    figure { margin: 0; background: var(--bg); position: relative; --fg: var(--main); }
+    figcaption { padding: 2px 4px; color: var(--detail); }
+    svg { display: block; position: static; border: 1px solid #8884; }
+    canvas { position: absolute; left: 1px; top: 1px; pointer-events: none; }
+    .mist { fill: var(--bg); stroke: none; }
+    .mist-line { fill: none; stroke: var(--main); stroke-width: var(--pen-3); stroke-linecap: round; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: chimney smoke, sketched four ways, each in still air, in
+    // wind, in rain and in mist, in every colour scheme – to pick one before
+    // it goes into the game. The houses and the works are the map's own
+    // drawings; the smoke is render/particles.js, the game's own code, on a
+    // canvas over each picture.
+    //   smoke.html?schemes=0,2&only=curl&tile=56
+    import { applyTheme, SCHEMES } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter } from './src/render/painter.js';
+    import { sunFor, shadowSVG } from './src/render/shadows.js';
+    import { STRUCTURES } from './structures/index.js';
+    import { drawTree } from './features/trees.js';
+    import { PARTICLES, paintParticles } from './src/render/particles.js';
+    import { mulberry32 } from './src/core/random.js';
+
+    const q = new URLSearchParams(location.search);
+    const schemes = (q.get('schemes') ?? '0,1,2,3').split(',').map(Number);
+    applyTheme(schemes[0]);
+    const N = 12;
+    const cam = new Camera({ width: N, height: N }, { tile: +(q.get('tile') ?? 56) });
+    const r2 = (n) => Math.round(n * 100) / 100;
+    const rnd = mulberry32(5);
+    const DEF = Object.fromEntries(STRUCTURES.map((d) => [d.id, d]));
+    const sun = sunFor(cam);
+
+    // ---------- the scene: a street of houses, a bakery, a boiler house ----------
+    const items = [], vents = [];
+    function building(type, x, y, rotation, seed = Math.floor(rnd() * 1e9)) {
+      const g = new Painter(cam, { x, y }, rotation, seed);
+      g.rigid = [x, y];
+      DEF[type].draw(g, { type, seed, id: items.length, node: 0, rotation });
+      vents.push(...g.vents);
+      items.push({ d: cam.depth(x, y) + 0.5, svg: g.toGroundSVG() + shadowSVG({ feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+    }
+    function tree(x, y, kind, h) {
+      const g = new Painter(cam, { x, y }, 0, Math.floor(rnd() * 1e9));
+      g.rigid = [x, y];
+      drawTree(g, 0, 0, kind, h);
+      items.push({ d: cam.depth(x, y), svg: shadowSVG({ feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+    }
+    building('vytopna-medium', 3.4, 3.6, 1);
+    building('house', 5.3, 4.5, 1);
+    building('house', 6.3, 3.9, 1);
+    building('house-wide', 6.3, 5.9, 1);
+    building('pekarna', 4.3, 6.1, 1);
+    building('house', 7.3, 5.0, 1);
+    for (const [x, y] of [[5.0, 5.3], [7.4, 3.4], [3.4, 5.4], [7.2, 6.8]]) tree(x, y, 'spreading', 0.45 + rnd() * 0.2);
+    items.sort((a, b) => a.d - b.d);
+    const scene = items.map((i) => i.svg).join('');
+
+    // the view: round the drawings and the smoke over them
+    const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    tmp.innerHTML = `<g class="scene layer-objects">${scene}</g>`;
+    document.body.appendChild(tmp);
+    const bb = tmp.firstChild.getBBox();
+    tmp.remove();
+    const VX0 = bb.x - 90, VY0 = bb.y - 150, VW = bb.width + 60, VH = bb.height + 150;
+    // where the mist's top lies in the mist pictures: a third of the way up
+    const mistY = VY0 + VH * 0.62;
+
+    // ---------- the options ----------
+    const STYLE_OPTIONS = [
+      ['curl', 'A · Curls', 'Each puff a small curl, a turn and a bit of a spiral, as a pen draws smoke in the margin. Drawn in as it leaves the chimney, growing as it rises, and taken back from where the pen started as it ends. The works\' stack gives off more and bigger curls, for longer.',
+        { house: 'curl', stack: 'curl' }],
+      ['puff', 'B · Puffs', 'Rounds of shallow lobes, like the mist\'s lobes, on paper: the younger ones, lower down, go over the older ones above them, so the plume reads as one heap of overlapping outlines. Each is drawn in round and taken back the same way.',
+        { house: 'puff', stack: 'puff' }],
+      ['dots', 'C · Stipple', 'A trail of dots, set down one by one where the smoke is and lifted one by one as it thins. The lightest: from far it is a grey haze over the roof, made of dots.',
+        { house: 'dots', stack: 'dots' }],
+      ['wisp', 'D · A line', 'One wavering line up from the chimney through where the smoke is, growing from the mouth and taken back from its far end. A works\' stack draws its plume\'s two edges, widening as they go.',
+        { house: 'wisp', stack: 'wisp' }],
+      ['mixed', 'E · Curls for houses, puffs for works (A + B)', 'A house\'s stove gives off a few curls; a works\' boilers a heavy leaning plume of puffs.',
+        { house: 'curl', stack: 'puff' }],
+    ];
+    const WEATHER = [
+      ['still', 'still air (fair)', { wind: 0.02, rain: 0, mist: 0 }],
+      ['wind', 'wind (cloudy)', { wind: 0.07, rain: 0, mist: 0 }],
+      ['storm', 'storm wind and rain', { wind: 0.14, rain: 2.4, mist: 0 }],
+      ['rain', 'rain', { wind: 0.05, rain: 1, mist: 0 }],
+      ['mist', 'mist', { wind: 0.005, rain: 0, mist: 1 }],
+    ];
+
+    // ---------- the page ----------
+    const out = document.getElementById('out');
+    out.insertAdjacentHTML('beforeend', `<h1>Smoke sketches</h1><p>Chimney smoke four ways (and one mix), in still air, wind, a storm, rain and mist, in ${schemes.map((s) => SCHEMES[s].name).join(', ')}. Here every stove is lit; in the game a house's only some of the time, each in its own spells, and a works' boilers always. Like the mist, nothing fades: each mark is drawn in by the pen and taken back. Wind bends it over to the left, as the trees lean; rain makes it thinner and shorter; in mist it lies low over the roofs. Add <code>?schemes=0,2</code>, <code>?only=curl</code>, <code>?tile=64</code>.</p>`);
+    const only = q.get('only');
+    const panels = [];
+    // every stove lit here (in the game a house's is some of the time)
+    const LIT = Object.fromEntries(Object.entries(PARTICLES).map(([k, K]) => [k, { ...K, on: null }]));
+    const shown = vents.map((e) => [e, LIT[e.kind]]);
+
+    const dpr = devicePixelRatio || 1;
+    for (const [id, title, text, style] of STYLE_OPTIONS) {
+      if (only && only !== id) continue;
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2><p>${text}</p>`);
+      for (const s of schemes) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        out.appendChild(row);
+        for (const [wid, wname, env] of WEATHER) {
+          const fig = document.createElement('figure');
+          applyTheme(s, fig);
+          const mist = env.mist ? `<path class="mist" d="M${r2(VX0)} ${r2(mistY)}H${r2(VX0 + VW)}V${r2(VY0 + VH)}H${r2(VX0)}Z"/><path class="mist-line" d="M${r2(VX0 + 6)} ${r2(mistY)}H${r2(VX0 + VW * 0.55)}M${r2(VX0 + VW * 0.6)} ${r2(mistY + 0.5)}H${r2(VX0 + VW - 8)}"/>` : '';
+          // (in mist the houses stand in it to their eaves: the scene is
+          // drawn, then the paper over its lower part, then the roofs again
+          // clipped above the top)
+          const body = env.mist
+            ? `${scene}${mist}<g clip-path="url(#above-${s}-${id})">${scene}</g><clipPath id="above-${s}-${id}"><rect x="${r2(VX0)}" y="${r2(VY0)}" width="${r2(VW)}" height="${r2(mistY - VY0)}"/></clipPath>`
+            : scene;
+          fig.innerHTML = `<svg width="${Math.round(VW)}" height="${Math.round(VH)}" viewBox="${r2(VX0)} ${r2(VY0)} ${r2(VW)} ${r2(VH)}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0 sz-1 sw-1" style="--sun: ${env.rain ? 0.2 : env.mist ? 0.4 : 1}">${body}</g></svg><canvas width="${Math.round(VW * dpr)}" height="${Math.round(VH * dpr)}" style="width:${Math.round(VW)}px;height:${Math.round(VH)}px"></canvas><figcaption>${wname} · ${SCHEMES[s].name}</figcaption>`;
+          row.appendChild(fig);
+          // (a chimney sunk in the mist gives off none that shows)
+          const vis = env.mist ? shown.filter(([e]) => e.y < mistY) : shown;
+          panels.push({ ctx: fig.querySelector('canvas').getContext('2d'), env, style, pal: SCHEMES[s], rain: env.rain, seed: panels.length, shown: vis });
+        }
+      }
+    }
+    applyTheme(schemes[0]);
+
+    // a few rain strokes over the rain pictures (as render/rain.js, simpler)
+    function rain(ctx, p, t) {
+      const n = Math.round(40 * Math.min(2, p.rain));
+      ctx.strokeStyle = p.pal.detail;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const h = Math.sin(i * 12.9898 + p.seed) * 43758.5453 % 1, h2 = Math.sin(i * 78.233) * 43758.5453 % 1;
+        const life = 0.5, a = ((t + Math.abs(h) * life) % life) / life;
+        const x = VX0 + Math.abs(h2) * VW, y = VY0 + a * VH;
+        ctx.moveTo(x + 2, y - 9); ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    const t0 = performance.now() / 1000 - 30;
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const time = now / 1000 - t0;
+      for (const p of panels) {
+        const { ctx } = p;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.setTransform(dpr, 0, 0, dpr, -VX0 * dpr, -VY0 * dpr);
+        paintParticles(ctx, p.shown, { time, env: p.env, tile: cam.tile, zScale: cam.zScale, unit: 1, style: p.style, pal: p.pal });
+        if (p.rain) rain(ctx, p, time);
+      }
+    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

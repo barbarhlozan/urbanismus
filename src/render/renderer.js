@@ -58,6 +58,7 @@ import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, s
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
 import { AgentCanvas, AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
+import { ParticleCanvas } from './particles.js';
 import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
 import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
@@ -164,6 +165,8 @@ export class Renderer {
     this.pen = new AgentCanvas(document.getElementById('agents'));
     // over the buildings: carriages nothing nearer could hide (see screened)
     this.penTop = new AgentCanvas(document.getElementById('trains-top'));
+    // over those: chimney smoke (particles.js, smokeFrame)
+    this.smoke = new ParticleCanvas(document.getElementById('smoke'));
     this.parking = parking;
     this.world = world;
     this.camera = camera;
@@ -1469,6 +1472,8 @@ export class Renderer {
       entry.box = built.box;
       entry.at = built.at;
       entry.band = built.band;
+      entry.vents = built.vents?.length ? built.vents : null;
+      entry.ventsTurn = this.camera.rotation;
       this.coverMist(entry);
       if (entry.hide) {
         for (const g of [entry.g, entry.lg]) g.classList.remove(entry.hide);
@@ -1662,7 +1667,7 @@ export class Renderer {
     if (!out) return null;
     const { painter, points } = out;
     const band = this.bandFor(`s${s.id}`);
-    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), band)), shade: this.shadeOf(painter), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top, anchor: painter.rigid }) };
+    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), band)), shade: this.shadeOf(painter), vents: painter.vents, ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top, anchor: painter.rigid }) };
   }
 
   // An object's shadow (shadows.js): the feet of its
@@ -2242,6 +2247,23 @@ export class Renderer {
     line.setAttribute('y1', s / 2);
     line.setAttribute('x2', s);
     line.setAttribute('y2', s / 2);
+  }
+
+  // Chimney smoke (particles.js) from the buildings in sight: `time`
+  // simulated seconds, `env` the weather ({ wind, rain, mist }). Not from a
+  // chimney under the mist, which hides it.
+  smokeFrame(time, env) {
+    if (!this.showAgents) return this.smoke.clear();
+    const vents = [];
+    const height = this.mistLevel != null ? this.groundHeight() : null;
+    for (const e of this.objs.values()) {
+      if (!e.vents || e.shown === false || e.ventsTurn !== this.camera.rotation) continue;
+      for (const v of e.vents) {
+        if (height && (this.camera.lift?.(v.at[0], v.at[1]) ?? 0) + v.at[2] < this.mistLevel) continue;
+        vents.push(v);
+      }
+    }
+    this.smoke.frame(this.camera, this.strokeK, vents, time, env);
   }
 
   // The mist (weather 'mist', mist.js): `risen` 0 (none) to 1, in steps

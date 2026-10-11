@@ -236,6 +236,7 @@ export class Painter {
     this.groundAt = [];   // world [x, y] of each ground entry, for photo.js (its nearest point to a perspective camera)
     this.site = null;
     this.spots = [];
+    this.vents = [];      // chimney mouths: { x, y } scene, `at` world, kind, k, seed (see vent())
     this.lod = 0;
     this.free = null;     // set by the renderer: (x, y, r) -> bool, local coords
     this.bounds = null;   // local [x0, y0, x1, y1] of all solids drawn
@@ -1136,6 +1137,18 @@ export class Painter {
     return this;
   }
 
+  // A chimney's mouth at local (x, y, z), giving off smoke of `kind`
+  // (render/particles.js PARTICLES) at size k. Call right after drawing
+  // the chimney, so it moves with it on the relief.
+  vent(x, y, z, kind = 'house', k = 1) {
+    const [lx, ly] = this._turn(x, y);
+    const at = [this.ox + lx, this.oy + ly, this.oz + z];
+    const [x0, y0] = this._project(...at);
+    const seed = Math.imul(Math.round(at[0] * 997), 2654435761) ^ Math.imul(Math.round(at[1] * 991), 40503) ^ Math.round(z * 1013);
+    this.vents.push({ x: x0, y: y0, at, kind, k, seed: seed >>> 0 });
+    return this;
+  }
+
   // Ground point (world x, y) -> scene px, as this painter draws its ground:
   // for drawing its shadows (render/shadows.js).
   groundProjector() {
@@ -1151,6 +1164,7 @@ export class Painter {
     this.ground.push(...other.ground);
     this.groundAt.push(...other.groundAt);
     this.spots.push(...other.spots);
+    this.vents.push(...other.vents);
     return this;
   }
 

@@ -394,14 +394,17 @@ export function aerials(g, x0, x1, y, z, n = 3) {
   });
 }
 
-// Brick chimney standing on the roof (starts at z, pokes out above the ridge).
+// Brick chimney standing on the roof (starts at z, pokes out above the
+// ridge); a stove's smoke comes out of it now and then (render/particles.js).
 export function chimney(g, x, y, z, h, s = 0.045) {
   g.box(x - s / 2, y - s / 2, z, s, s, h);
+  g.vent?.(x, y, z + h, 'house', Math.min(1.3, Math.max(0.7, s / 0.1)));
 }
 
-// Tapered industrial chimney.
+// Tapered industrial chimney, its boilers' smoke always going.
 export function stack(g, x, y, h, r = 0.08) {
   g.lathe(x, y, 0, [[r, 0], [r * 0.55, h], [r * 0.62, h + 0.02], [r * 0.62, h + 0.04]], 10);
+  g.vent?.(x, y, h + 0.04, 'stack', Math.min(1.4, Math.max(0.6, r / 0.07)));
 }
 
 // Flag pole with a small pennant.
