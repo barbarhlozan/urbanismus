@@ -1154,6 +1154,7 @@ export class Renderer {
     }
     // far out the woods are one shape each (forest.js), their trees not drawn
     this.updateWoods(z);
+    if (this.farWoods.size) this.forestHatch(z);
     // each object's own detail (bandOf), redrawn where it changes
     if (z !== this.bandZoom) {
       this.bandZoom = z;
@@ -2105,9 +2106,33 @@ export class Renderer {
 
   renderForest() {
     const state = this.farWoods?.size ? this.forestState() : null;
-    const loops = state ? state.woods.filter((w) => this.farWoods.has(w.id)).flatMap((w) => w.loops) : [];
-    const svg = loops.length ? forestSVG({ ...state, loops }, (x, y) => this.project(x, y), this.config.render.forest, this.camera) : '';
+    const woods = state ? state.woods.filter((w) => this.farWoods.has(w.id)) : [];
+    this.forestHatchAt = this.hatchScale(this.drawn.zoom);
+    const svg = woods.length ? forestSVG({ woods, cover: state.cover }, (x, y) => this.project(x, y), this.config.render.forest, this.camera, this.config.render.forest.hatch / this.forestHatchAt) : '';
     if (svg !== this.forestDrawn) this.layers.forest.innerHTML = this.forestDrawn = svg;
+  }
+
+  // The woods' hatching keeps its spacing on screen (config.render.forest
+  // .hatch px): the zoom in the steps the line widths go by (strokeStep),
+  // and the pattern set again when it moves a step.
+  hatchScale(z) {
+    const step = this.config.render.strokeStep;
+    return step ** Math.round(Math.log(z) / Math.log(step));
+  }
+
+  forestHatch(z) {
+    const k = this.hatchScale(z);
+    if (k === this.forestHatchAt) return;
+    this.forestHatchAt = k;
+    const pattern = this.layers.forest.querySelector('#forest-hatch');
+    if (!pattern) return;
+    const s = r2(this.config.render.forest.hatch / k);
+    pattern.setAttribute('width', s);
+    pattern.setAttribute('height', s);
+    const line = pattern.firstElementChild;
+    line.setAttribute('y1', s / 2);
+    line.setAttribute('x2', s);
+    line.setAttribute('y2', s / 2);
   }
 
   // Put the drawings of the objects in sight back in the objects layer, in

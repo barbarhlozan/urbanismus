@@ -247,11 +247,11 @@ html, body {
 /* screen-facing line drawings (trees, see features/trees.js) */
 /* woods far out, one shape each (render/forest.js): as a tree's crown */
 .layer-forest .forest { fill: var(--bg); stroke: none; fill-rule: evenodd; }
-.layer-forest .forest-edge { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
+.layer-forest .forest-edge { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 /* its trees (forest.js signs): drawn as the map's trees in .layer-objects */
 .layer-forest .filled { fill: var(--bg); stroke-linejoin: round; }
 .layer-forest .filled.tree { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
-.layer-forest .forest-fill { fill: url(#forest-hatch); stroke: none; fill-rule: evenodd; }
+.layer-forest .forest-band { fill: none; stroke: url(#forest-hatch); stroke-linejoin: round; }
 .layer-forest .forest-hatch { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 .glyph { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .glyph.trunk { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }

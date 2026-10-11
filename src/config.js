@@ -47,17 +47,17 @@ export const CONFIG = {
     // Further out than `zoom` a wood is drawn as one shape (render/forest.js):
     // trees within `link` of one another, at least `minTrees` of them. Its
     // outline runs about reach / 2 out from the outer trees, found in
-    // samples `step` apart, and is straightened into sides with sharp
-    // corners, wandering at most `straighten` from that line. It stays
-    // `clear` from the middle of roads and railways; `hatch`: the spacing
-    // of the hatching inside, in scene px. Its sides are drawn by hand,
-    // running `over` scene px past the corners and bowing up to `bow`. A
+    // samples `step` apart, and is straightened, wandering at most
+    // `straighten` from that line, then drawn in bumps about `scallop`
+    // grid steps across (a tree crown). It stays `clear` from the middle
+    // of roads and railways. A band `band` grid steps wide inside the edge
+    // is hatched, the strokes `hatch` px apart on screen. A
     // small tree sign stands about every `signs` grid steps where the cover
     // is at least `signCover` (deep enough inside), one of the game's trees
     // `signSize` grid steps tall; `spruces`: the share of them spruces.
     forest: {
-      zoom: 0.9, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, straighten: 0.35, clear: 0.3, hatch: 5,
-      over: 4, bow: 1.5, signs: 2, signCover: 0.6, signSize: 0.6, spruces: 0.4,
+      zoom: 0.9, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, straighten: 0.35, clear: 0.3, hatch: 4,
+      scallop: 0.4, band: 0.5, signs: 2, signCover: 0.6, signSize: 0.6, spruces: 0.4,
     },
   },
 

@@ -1,24 +1,25 @@
 // Woods far out (config.render.forest). Below its zoom the trees that stand
-// together in a wood aren't drawn one by one: each wood is one shape,
-// hatched inside, its outline straight sides with sharp corners, the way a
-// map draws the edge of a forest – drawn by hand, each side its own stroke
-// running on a little past the corners – with a tree drawn here and there
-// inside (the game's own trees, features/trees.js, at their plainest), the
-// map's sign for a wood. Lone trees and small groups stay
-// trees.
+// together in a wood aren't drawn one by one: each wood is one shape, its
+// edge a run of small bumps about a tree crown across, the way an old map
+// draws woodland by hand – the pen lifted and set down again now and then –
+// hatched only in a band just inside that edge, with a tree drawn here and
+// there further in (the game's own trees, features/trees.js, at their
+// plainest). Lone trees and small groups stay trees.
 //
 //   findForests(world, cfg, ways)    { trees: Set of feature ids in woods, loops, woods }
-//   forestSVG(forests, project, cfg, camera) the layer's SVG (Renderer.renderForest)
+//   forestSVG({ woods, cover }, project, cfg, camera) the layer's SVG (Renderer.renderForest)
 //
 // The outline is the line where the woods' cover (each tree's crown,
 // fading out over `reach`) is half full: the contours of that field, then
 // straightened – every point that lies within `straighten` of a straight
-// line between its neighbours is dropped, so what's left are the corners.
-// Roads and railways are cut out of the cover (`ways`), so a wood stops at
-// their edge.
+// line between its neighbours is dropped – and rounded off again on the
+// map (scallops) before the bumps go along it. Roads and railways are cut
+// out of the cover (`ways`), so a wood stops at their edge. The hatching's
+// spacing is set on screen by the renderer as the zoom changes
+// (Renderer.forestHatch, the pattern #forest-hatch).
 
 import { contours } from '../terrain/elevation.js';
-import { sketchLine, seedOf } from './sketch.js';
+import { seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
 import { Painter } from './painter.js';
 import { mergeRuns } from './order.js';
@@ -109,23 +110,84 @@ function woodsOf(loops, wood, root, trees) {
   return { woods: woods.filter((w) => w.trees.length), woodOf };
 }
 
-// Each wood: its shape filled with the paper colour and hatched, its
-// outline drawn by hand, and its tree signs (signs()). `project(x, y)`
+// The woods given: each one's shape filled with the paper colour, its edge
+// drawn by hand in bumps (scallops), hatched in a band `cfg.band` grid
+// steps wide just inside it (the edge stroked wide with the hatching,
+// clipped to the shape), and its tree signs (signs()). `project(x, y)`
 // gives the scene point of a world point; `camera` draws the signs' trees.
-export function forestSVG({ loops, cover }, project, cfg, camera) {
+// `hatch`: the hatching's spacing in scene px.
+export function forestSVG({ woods, cover }, project, cfg, camera, hatch = cfg.hatch) {
+  const loops = woods.flatMap((w) => w.loops);
   if (!loops.length) return '';
+  const size = cfg.scallop * camera.tile;
   let fill = '', edge = '';
-  for (const loop of loops) {
-    const pts = loop.slice(0, -1).map((p) => project(...p));
-    fill += pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x)} ${r2(y)}`).join('') + 'Z';
-    // a stroke per side, crossing at the corners
-    pts.forEach((a, i) => { edge += sketchLine(a, pts[(i + 1) % pts.length], seedOf(a[0], a[1]), { over: cfg.over, bow: cfg.bow }); });
+  for (const w of woods) {
+    w.loops.forEach((loop, i) => {
+      const pts = loop.slice(0, -1).map((p) => project(...p));
+      // the bumps stand out of the wood: out of its outline, into its clearings (i > 0)
+      const out = scallops(pts, size, seedOf(w.id, i, 11), i === 0);
+      fill += out.fill;
+      edge += out.edge;
+    });
   }
-  const s = cfg.hatch;
-  return `<defs><pattern id="forest-hatch" patternUnits="userSpaceOnUse" width="${s}" height="${s}" patternTransform="rotate(-35)">`
-    + `<line class="forest-hatch" x1="0" y1="${s / 2}" x2="${s}" y2="${s / 2}"/></pattern></defs>`
-    + `<path class="forest" d="${fill}"/><path class="forest-fill" d="${fill}"/><path class="forest-edge" d="${edge}"/>`
+  const s = hatch, band = cfg.band * camera.tile * 2;
+  return `<defs><pattern id="forest-hatch" patternUnits="userSpaceOnUse" width="${r2(s)}" height="${r2(s)}" patternTransform="rotate(-35)">`
+    + `<line class="forest-hatch" x1="0" y1="${r2(s / 2)}" x2="${r2(s)}" y2="${r2(s / 2)}"/></pattern>`
+    + `<clipPath id="forest-clip"><path d="${fill}" clip-rule="evenodd"/></clipPath></defs>`
+    + `<path class="forest" d="${fill}"/>`
+    + `<path class="forest-band" d="${fill}" stroke-width="${r2(band)}" clip-path="url(#forest-clip)"/>`
+    + `<path class="forest-edge" d="${edge}"/>`
     + signs(loops, cover, project, cfg, camera);
+}
+
+// A wood's edge on the map (a closed loop of scene points, not repeated at
+// the end): first rounded off (two rounds of corner cutting), then gone
+// round in arcs about `size` px across, each its own length (±30 %), each
+// bulging a third of that out of the wood – `out`: out of the loop (an
+// outline), or into it (a clearing). `fill`: one closed path; `edge`: the
+// same drawn by hand, each arc a little off, the pen now and then lifted
+// and set down again a touch off the line.
+function scallops(loop, size, seed, out) {
+  const rnd = mulberry32(seed);
+  let pts = loop;
+  for (let k = 0; k < 2; k++) {
+    pts = pts.flatMap((a, i) => {
+      const b = pts[(i + 1) % pts.length];
+      return [[a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]];
+    });
+  }
+  // the arcs' ends, at seeded lengths along the loop
+  const lens = pts.map((a, i) => Math.hypot(pts[(i + 1) % pts.length][0] - a[0], pts[(i + 1) % pts.length][1] - a[1]));
+  const total = lens.reduce((a, b) => a + b, 0);
+  const n = Math.max(6, Math.round(total / size));
+  const steps = Array.from({ length: n }, () => 0.7 + rnd() * 0.6);
+  const sum = steps.reduce((a, b) => a + b, 0);
+  const ends = [];
+  let seg = 0, along = 0, at = 0;
+  for (const st of steps) {
+    const [ax, ay] = pts[seg], [bx, by] = pts[(seg + 1) % pts.length];
+    const t = lens[seg] ? (at - along) / lens[seg] : 0;
+    ends.push([ax + (bx - ax) * t, ay + (by - ay) * t]);
+    at += (st / sum) * total;
+    while (seg < pts.length - 1 && along + lens[seg] < at) along += lens[seg++];
+  }
+  // which side is out: the loop's turn (shoelace) says where its inside is
+  let area = 0;
+  pts.forEach((a, i) => { const b = pts[(i + 1) % pts.length]; area += a[0] * b[1] - b[0] * a[1]; });
+  const side = (area > 0 ? -1 : 1) * (out ? 1 : -1);
+  let fill = `M${r2(ends[0][0])} ${r2(ends[0][1])}`, edge = fill;
+  ends.forEach((a, i) => {
+    const b = ends[(i + 1) % n];
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+    const bulge = len * (0.55 + rnd() * 0.2) * side;
+    const c = [(a[0] + b[0]) / 2 - (dy / len) * bulge, (a[1] + b[1]) / 2 + (dx / len) * bulge];
+    fill += `Q${r2(c[0])} ${r2(c[1])} ${r2(b[0])} ${r2(b[1])}`;
+    // by hand: the bulge a little off, and now and then a fresh stroke
+    const j = () => (rnd() - 0.5) * len * 0.12;
+    if (i && rnd() < 0.14) edge += `M${r2(a[0] + j())} ${r2(a[1] + j())}`;
+    edge += `Q${r2(c[0] + j())} ${r2(c[1] + j())} ${r2(b[0])} ${r2(b[1])}`;
+  });
+  return { fill: fill + 'Z', edge };
 }
 
 // Trees standing in the woods, as a map marks a forest: one about every
