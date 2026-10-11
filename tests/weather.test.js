@@ -26,7 +26,7 @@ test('the weather turns only to what may follow it', () => {
   }
 });
 
-test('it is mostly cloudy, and rains now and then', () => {
+test('it is mostly dry, and rains now and then', () => {
   const time = {};
   for (let seed = 1; seed <= 10; seed++) {
     const world = flatWorld();
@@ -38,10 +38,92 @@ test('it is mostly cloudy, and rains now and then', () => {
       time[world.weather.kind] = (time[world.weather.kind] ?? 0) + 1;
     }
   }
-  const most = Object.entries(time).sort((a, b) => b[1] - a[1])[0][0];
-  assert.equal(most, 'cloudy');
   const total = Object.values(time).reduce((a, b) => a + b);
-  assert.ok((time.rain + time.storm) / total < 0.25);
+  const wet = (time.rain + time.storm) / total;
+  assert.ok(wet > 0.1 && wet < 0.3, `wet ${wet}`);
+  assert.ok(time.storm < time.rain);
+});
+
+// Every spell over two hours of a few towns: { kind: [seconds, …] }.
+function spells() {
+  const out = {};
+  for (let seed = 1; seed <= 20; seed++) {
+    const world = flatWorld();
+    world.seed = seed;
+    const sys = new WeatherSystem(world, CONFIG);
+    let kind = world.weather.kind, start = 0;
+    for (let t = 0; t < 7200; t++) {
+      world.time = t;
+      sys.update();
+      if (world.weather.kind !== kind) {
+        if (start) (out[kind] ??= []).push(t - start); // (not the first, cut short)
+        kind = world.weather.kind;
+        start = t;
+      }
+    }
+  }
+  return out;
+}
+
+test('it changes every few minutes, not every few tens', () => {
+  const all = Object.values(spells()).flat();
+  const mean = all.reduce((a, b) => a + b) / all.length;
+  assert.ok(mean > 90 && mean < 240, `a spell lasts ${mean} s on average`);
+  assert.ok(Math.max(...all) <= 600);
+});
+
+test('fair weather is mostly short, but now and then it lasts', () => {
+  const fair = spells().fair.sort((a, b) => a - b);
+  assert.ok(fair[Math.floor(fair.length / 2)] < 240, 'half are under four minutes');
+  assert.ok(fair.some((s) => s > 420), 'some go on over seven');
+});
+
+test('a storm can build out of clouds, and clears to fair', () => {
+  const seen = [];
+  for (let seed = 1; seed <= 10; seed++) {
+    const world = flatWorld();
+    world.seed = seed;
+    seen.push(...run(world, 20000, 1).map((k, i, a) => `${a[i - 1]}>${k}`));
+  }
+  assert.ok(seen.includes('cloudy>storm'));
+  assert.ok(seen.includes('storm>fair'));
+  assert.ok(seen.includes('rain>cloudy'), 'a shower passes');
+  assert.ok(!seen.includes('fair>rain') && !seen.includes('fair>storm'), 'never without clouds first');
+});
+
+test('each blend fits in the shortest spell', () => {
+  const shortest = Math.min(...Object.values(CONFIG.weather.lasts).map(([a]) => a));
+  for (const [q, [before, after]] of Object.entries(CONFIG.weather.blend)) {
+    assert.ok(before + after <= shortest, q);
+    assert.ok(q in CONFIG.weather, `config.weather.${q}`);
+  }
+});
+
+test('the look of it goes over gradually, the wind first', () => {
+  const world = flatWorld();
+  const sys = new WeatherSystem(world, CONFIG);
+  const w = world.weather;
+  Object.assign(w, { kind: 'cloudy', from: 'cloudy', since: 0, until: 200 });
+  sys.following = () => 'storm';
+  const [lead] = CONFIG.weather.blend.wind;
+  assert.equal(sys.sky(100).wind, CONFIG.weather.wind.cloudy);
+  assert.ok(sys.sky(200 - lead / 2).wind > CONFIG.weather.wind.cloudy, 'the wind picks up before the storm');
+  assert.equal(sys.sky(200 - lead / 2).rain, 0, 'before it rains');
+  const before = sys.sky(199.99);
+  // the storm comes: no jump across the change, and the rain thickens
+  world.time = 200;
+  sys.update();
+  assert.equal(w.kind, 'storm');
+  assert.equal(w.from, 'cloudy');
+  const after = sys.sky(200);
+  for (const q of Object.keys(before)) assert.ok(Math.abs(after[q] - before[q]) < 0.02, q);
+  let last = -1;
+  for (let t = 200; t <= 240; t += 5) {
+    const { rain } = sys.sky(t);
+    assert.ok(rain >= last);
+    last = rain;
+  }
+  assert.equal(last, CONFIG.weather.rain.storm);
 });
 
 test('the same seed gives the same weather', () => {
@@ -86,6 +168,16 @@ test('mist comes only after fair weather', () => {
     seen = run(world, 60000).includes('mist');
   }
   assert.ok(seen, 'it does come now and then');
+});
+
+test('a save from before `from` loads with no blend in', () => {
+  const world = flatWorld();
+  run(world, 8000);
+  const json = JSON.parse(JSON.stringify(world.toJSON()));
+  delete json.weather.from;
+  const loaded = World.fromJSON(json);
+  new WeatherSystem(loaded, CONFIG);
+  assert.equal(loaded.weather.from, loaded.weather.kind);
 });
 
 test('each spell knows when it began, old saves included', () => {

@@ -20,18 +20,21 @@
 // The clouds live in scene units (the map's own px at zoom 1), so they stay
 // put on the map as it is panned or zoomed; each is squashed onto the
 // ground (the view is isometric). Only those
-// near the view are kept: they come in from beyond its edge, and any that
-// have to appear inside it (the weather turning) fade in, as they fade out
-// when it clears. Rain and storm have none – it is all shade then, and
-// the walls lose their shading instead (config.weather.sun).
+// near the view are kept: they come in from beyond its edge, and while the
+// sky is clouding over (the cover growing) more fade in where they are
+// seen, as they fade out when it clears. Rain and storm have none – it is
+// all shade then, and the walls lose their shading instead
+// (config.weather.sun, cover).
 
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
 
 export const CLOUD_SHADOWS = {
-  // grid units² of map per cloud, by weather (none: no clouds)
-  spread: { fair: 3600, cloudy: 520 },
-  size: { fair: [3, 7], cloudy: [5, 20] }, // a cloud's width, grid units
+  // grid units² of map per cloud under a cloudy sky (cover 1; config
+  // .weather.cover); a cloud's width, grid units, from a thin sky's to a
+  // cloudy one's
+  spread: 520,
+  size: { thin: [3, 7], cloudy: [5, 20] },
   lumps: [2, 4],      // blobs of wash in one cloud
   squash: 0.58,       // on the ground: height per width (isometric)
   wind: 0.22,         // grid units per simulated second
@@ -57,7 +60,7 @@ export const CLOUD_SHADOWS = {
     gap: 0.1, width: 0.6, tone: 0.55, slant: -0.62, tilt: 0.08,
     bow: 0.03, ends: 1.2, long: [0.5, 1.3], skip: 0.1,
   },
-  fade: 3,            // seconds to fade in or out
+  fade: 6,            // seconds to fade in or out
   most: 80,           // clouds kept at most (far zoomed out)
 };
 
@@ -96,8 +99,9 @@ export class CloudShadows {
     this.wind = [Math.cos(a), Math.sin(a) * CLOUD_SHADOWS.squash];
   }
 
-  // One frame: `dt` simulated seconds, `kind` the weather.
-  frame(dt, camera, kind) {
+  // One frame: `dt` simulated seconds, `cover` how cloudy (config.weather
+  // .cover: 1 cloudy, 0 none).
+  frame(dt, camera, cover) {
     const C = CLOUD_SHADOWS;
     const tile = camera.tile, zoom = camera.zoom;
     const W = innerWidth, H = innerHeight;
@@ -121,16 +125,15 @@ export class CloudShadows {
       return c.a > 0 && c.x > out.x0 && c.x < out.x1 && c.y > out.y0 && c.y < out.y1;
     });
 
-    // as many as the weather wants over this much map
-    const spread = C.spread[kind];
+    // as many as the sky wants over this much map
     const area = ((out.x1 - out.x0) * (out.y1 - out.y0)) / (tile * tile * C.squash);
-    const want = spread ? Math.min(C.most, Math.round(area / spread)) : 0;
+    const want = Math.min(C.most, Math.round((area / C.spread) * cover));
     const staying = this.clouds.filter((c) => !c.leaving);
     for (let i = want; i < staying.length; i++) staying[i].leaving = true;
-    // new ones come in from beyond the edge – unless the weather has just
-    // turned or the view zoomed, when they may fade in where it is seen
-    const anywhere = first || kind !== this.kind || zoom !== this.zoom;
-    this.kind = kind;
+    // new ones come in from beyond the edge – unless the sky is clouding
+    // over or the view zoomed, when they may fade in where it is seen
+    const anywhere = first || cover > this.cover || zoom !== this.zoom;
+    this.cover = cover;
     this.zoom = zoom;
     const inside = (x, y) => x > v.x0 - m / 2 && x < v.x1 + m / 2 && y > v.y0 - m / 2 && y < v.y1 + m / 2;
     for (let i = staying.length; i < want; i++) {
@@ -140,7 +143,7 @@ export class CloudShadows {
         y = out.y0 + Math.random() * (out.y1 - out.y0);
       } while (!anywhere && inside(x, y) && ++tries < 30);
       if (!anywhere && inside(x, y)) break; // (no room past the edge: wait for the wind)
-      this.clouds.push(this.cloud(x, y, kind, tile, inside(x, y) && !first ? 0 : 1));
+      this.clouds.push(this.cloud(x, y, cover, tile, inside(x, y) && !first ? 0 : 1));
       changed = true;
     }
 
@@ -151,10 +154,11 @@ export class CloudShadows {
 
   // A cloud: a few lumps strung out along the wind, its wash painted later
   // (draw), when the colour is known.
-  cloud(x, y, kind, tile, a) {
+  cloud(x, y, cover, tile, a) {
     const C = CLOUD_SHADOWS;
     const rnd = Math.random;
-    const w = between(rnd, C.size[kind] ?? C.size.cloudy) * tile;
+    const k = Math.min(1, cover);
+    const w = between(rnd, [0, 1].map((i) => C.size.thin[i] + (C.size.cloudy[i] - C.size.thin[i]) * k)) * tile;
     const n = Math.round(between(rnd, C.lumps));
     const lumps = [];
     for (let i = 0; i < n; i++) {

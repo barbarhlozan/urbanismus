@@ -45,7 +45,7 @@ export class World {
     this.featureAtNode = new Map();   // node -> feature id
     this.nextId = 1;
     this.time = 0; // simulated seconds the town has been running (the clock, kept in the save)
-    this.weather = { kind: 'fair', since: 0, until: 0, n: 0 }; // the weather now, since and until when (world.time), and how many changes so far (src/sim/weather.js)
+    this.weather = { kind: 'fair', from: 'fair', since: 0, until: 0, n: 0 }; // the weather now, the one before, since and until when (world.time), and how many changes so far (src/sim/weather.js)
     this.story = { seen: [], vars: {}, unlocks: [] }; // what the story has told and unlocked (src/story/)
     this.chronicle = { entries: [], marks: [] }; // the town's chronicle (src/sim/chronicle.js)
 
@@ -1142,7 +1142,7 @@ export class World {
     }
     world.nextId = data.nextId;
     world.time = data.time ?? 0;
-    if (data.weather) world.weather = { kind: data.weather.kind, since: data.weather.since, until: data.weather.until, n: data.weather.n ?? 0 }; // (older saves start fair; without `since`, WeatherSystem works it out)
+    if (data.weather) world.weather = { kind: data.weather.kind, from: data.weather.from, since: data.weather.since, until: data.weather.until, n: data.weather.n ?? 0 }; // (older saves start fair; without `from` or `since`, WeatherSystem works them out)
     world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [] };
     const marks = data.chronicle?.marks ?? [];
     world.chronicle = { entries: data.chronicle?.entries ?? [], marks: (data.version ?? 1) < 4 ? upgradeMarks(marks) : marks };

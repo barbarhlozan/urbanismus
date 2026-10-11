@@ -137,14 +137,22 @@ const cloudShadows = new CloudShadows(document.getElementById('cloud-shadows'), 
 // shades the whole map (#gloom) and, a little less, the UI's paper (--gloom)
 const objectsSvg = document.getElementById('objects');
 const gloomEl = document.getElementById('gloom');
-let sunFor = null;
+// As the weather turns these go over gradually (WeatherSystem.sky), but in
+// steps – each new --sun repaints the whole map – and the CSS eases between.
+let sunFor = null, gloomFor = null;
 let wind = 0;
-const showSun = (kind) => {
-  if (kind === sunFor) return;
-  sunFor = kind;
-  for (const el of [svg, objectsSvg]) el.style.setProperty('--sun', CONFIG.weather.sun[kind] ?? 1);
-  gloomEl.style.opacity = CONFIG.weather.gloom[kind] ?? 0;
-  uiRoot.style.setProperty('--gloom', `${Math.round((CONFIG.weather.gloom[kind] ?? 0) * 100)}%`);
+const showSun = ({ sun, gloom }) => {
+  sun = Math.round(sun * 20) / 20;
+  gloom = Math.round(gloom * 50) / 50;
+  if (sun !== sunFor) {
+    sunFor = sun;
+    for (const el of [svg, objectsSvg]) el.style.setProperty('--sun', sun);
+  }
+  if (gloom !== gloomFor) {
+    gloomFor = gloom;
+    gloomEl.style.opacity = gloom;
+    uiRoot.style.setProperty('--gloom', `${Math.round(gloom * 100)}%`);
+  }
 };
 agents.trains = trains;
 trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
@@ -598,12 +606,14 @@ function loop(now) {
     livestock.update(simDt);
     growth.update(simDt);
     renderer.frame((dots ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open ? null : tools.point, tools.active?.id));
-    cloudShadows.frame(simDt, camera, world.weather.kind);
-    rain.frame(simDt, camera, CONFIG.weather.rain[world.weather.kind] ?? 0);
-    showSun(world.weather.kind);
+    const sky = weather.sky();
+    cloudShadows.frame(simDt, camera, sky.cover);
+    rain.frame(simDt, camera, sky.rain);
+    showSun(sky);
     renderer.setMist(mistRisen(world.weather, world.time, CONFIG.weather.mist));
-    // the wind eases to the weather's
-    wind += ((CONFIG.weather.wind[world.weather.kind] ?? 0) - wind) * Math.min(1, simDt / 4);
+    // the wind eases to the weather's (already gradual, but cmd.weather()
+    // may jump it)
+    wind += (sky.wind - wind) * Math.min(1, simDt / 4);
     renderer.swayTrees(world.time, wind);
     hud.update();
     chronicle.update(dt);

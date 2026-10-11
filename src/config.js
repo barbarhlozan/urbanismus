@@ -217,27 +217,45 @@ export const CONFIG = {
   // (narrow, slow) may climb steeper, `lane`.
   steep: { build: 14, road: 14, lane: 16, rail: 8 },
 
-  // Weather: one for the whole map, moving one step at a time along `kinds`
-  // (fair never turns to rain without clouds first). How long each lasts, in
-  // simulated seconds [shortest, longest]; src/sim/weather.js.
+  // Weather: one for the whole map, turning every few minutes; src/sim/
+  // weather.js.
   weather: {
     kinds: ['fair', 'mist', 'cloudy', 'rain', 'storm'],
     start: 'cloudy',
-    // what can follow each kind, and how likely (the weights are shares) –
-    // mostly cloudy, now and then clearing up or clouding over into rain,
-    // a storm only out of rain; mist settles in the valleys only after
-    // fair weather, and lifts into fair or cloudy. Over a long time this
-    // comes to roughly cloudy 50 %, fair 28 %, rain 15 %, mist 5 %, storm
-    // 2 %. (There was an overcast between cloudy and rain; a save still in
-    // it starts cloudy, WeatherSystem.)
-    next: {
-      fair: { cloudy: 0.75, mist: 0.25 },
-      mist: { fair: 0.5, cloudy: 0.5 },
-      cloudy: { fair: 0.6, rain: 0.4 },
-      rain: { cloudy: 0.7, storm: 0.3 },
-      storm: { rain: 1 },
+    // How long each lasts, in simulated seconds (real seconds at Normal, a
+    // third of that at Fast): [shortest, longest, skew]. With a skew over 1
+    // most spells are short and now and then one lasts – fair weather is
+    // mostly two or three minutes, sometimes ten.
+    lasts: {
+      fair: [80, 600, 3],
+      mist: [90, 180],
+      cloudy: [60, 240],
+      rain: [45, 150],
+      storm: [60, 150],
     },
-    lasts: { fair: [400, 900], mist: [240, 600], cloudy: [500, 1100], rain: [240, 540], storm: [120, 260] },
+    // What can follow each kind, and how likely (the weights are shares):
+    // rain and storms only out of clouds – a short shower passing, or a
+    // storm building – and a storm mostly clears to fair; mist settles in
+    // the valleys only after fair weather. Over a long time this comes to
+    // roughly cloudy 39 %, fair 37 %, rain 14 %, storm 6 %, mist 3 %. (There
+    // was an overcast between cloudy and rain; a save still in it starts
+    // cloudy, WeatherSystem.)
+    next: {
+      fair: { cloudy: 0.85, mist: 0.15 },
+      mist: { fair: 0.5, cloudy: 0.5 },
+      cloudy: { fair: 0.4, rain: 0.45, storm: 0.15 },
+      rain: { cloudy: 0.7, fair: 0.15, storm: 0.15 },
+      storm: { fair: 0.6, rain: 0.4 },
+    },
+    // How the look of it goes over from one kind to the next: [seconds
+    // before the change, seconds after] for each of the tables below
+    // (WeatherSystem.sky) – the wind picks up first, the clouds gather
+    // around the change, the rain thickens after it. Each pair adds up to
+    // no more than the shortest spell.
+    blend: { wind: [25, 10], cover: [20, 20], rain: [10, 25], gloom: [10, 25], sun: [10, 25] },
+    // the cloud shadows (render/cloudShadows.js): how many, 1 for a cloudy
+    // sky's; under rain it is all shade instead (gloom)
+    cover: { fair: 0.15, cloudy: 1 },
     // how much the shadows show (render/shadows.js, styles.css --sun; 1 full,
     // 0 none): under a grey sky there is little to tell one side from the other
     sun: { fair: 1, mist: 0.4, cloudy: 1, rain: 0.2, storm: 0.15 },
