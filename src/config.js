@@ -97,7 +97,11 @@ export const CONFIG = {
   rail: {
     cornerRadius: 0.5,
     curveSamples: 10,
-    gauge: 0.04,         // trains keep this far right of the centre line
+    gauge: 0,            // trains keep this far right of the centre line (0: on the rails)
+    // close up (zoom VEHICLES.minZoom on) the track itself instead of the
+    // map symbol: the ballast bed's edges `bed` either side of the centre,
+    // rails `rail` either side, sleepers `sleeper` either side, every `every`
+    track: { bed: 0.07, rail: 0.024, sleeper: 0.043, every: 0.045 },
   },
 
   // Trains come in through railways that run off the map edge, stop at the

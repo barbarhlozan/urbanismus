@@ -4,7 +4,8 @@
 //
 // The renderer hands over the whole layer as items, one per network segment
 // (or exit, buffer, driveway), each with a stable key and its points on
-// screen. A key that wasn't there last time is drawn in along its line; a
+// screen – or with `runs`, several separate lines drawn in one after
+// another (a track's sleepers). A key that wasn't there last time is drawn in along its line; a
 // key that is gone is erased back along it. Segments built in one go are
 // ranked along the way they were drawn (the order of the dots in the build
 // event), so the pen runs down the new road from where the player started.
@@ -61,6 +62,14 @@ function partial(pts, f, flip) {
 }
 
 const pathD = (pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x)} ${r2(y)}`).join('');
+
+// An item of several separate lines (`runs`, e.g. a track's sleepers): the
+// first f of them, by count, the last one partly; from the end when `flip`.
+function partialRuns(runs, f, flip) {
+  if (flip) runs = runs.slice().reverse();
+  const k = f * runs.length, n = Math.floor(k);
+  return runs.slice(0, n).map(pathD).join('') + (n < runs.length && k > n ? pathD(partial(runs[n], k - n, false)) : '');
+}
 
 export class InkLayer {
   // `classes`: the layer's path classes, back to front.
@@ -153,8 +162,8 @@ export class InkLayer {
       }
       const f = this.frac(m, now);
       if (f <= 0) continue;
-      const { cls, pts } = m.item;
-      moving[cls] = (moving[cls] ?? '') + pathD(partial(pts, f, m.flip));
+      const { cls, pts, runs } = m.item;
+      moving[cls] = (moving[cls] ?? '') + (runs ? partialRuns(runs, f, m.flip) : pathD(partial(pts, f, m.flip)));
     }
     for (const [cls, { settled, moving: el, chunks, dashed }] of Object.entries(this.paths)) {
       const d = moving[cls] ?? '';
@@ -165,6 +174,13 @@ export class InkLayer {
       let end = null, chunk = null;
       for (const it of this.items.values()) {
         if (it.cls !== cls || this.moving.has(it.key)) continue;
+        if (it.runs) {
+          // separate lines: never joined on
+          const c = chunkOf(it.runs[0][0]);
+          out.set(c, (out.get(c) ?? '') + it.runs.map(pathD).join(''));
+          end = null;
+          continue;
+        }
         const [first, ...rest] = it.pts;
         const c = dashed && near(end, first) ? chunk : chunkOf(first);
         out.set(c, (out.get(c) ?? '') + (near(end, first) && c === chunk ? rest.map(([x, y]) => `L${r2(x)} ${r2(y)}`).join('') : pathD(it.pts)));

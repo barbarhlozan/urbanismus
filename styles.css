@@ -185,6 +185,15 @@ html, body {
 .rail-dash { fill: none; stroke: var(--bg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-dasharray: calc(7px * var(--stroke, 1)) calc(7px * var(--stroke, 1)); stroke-linejoin: round; }
 .rail-exit { fill: none; stroke: var(--fg); stroke-width: calc(3.6px * var(--stroke, 1)); stroke-dasharray: calc(3px * var(--stroke, 1)) calc(5px * var(--stroke, 1)); }
 .rail-buffer { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-5) * var(--stroke, 1)); stroke-linecap: square; }
+/* close up (zoom 1.6 on: the rails layer's class .near) the track itself
+   instead of the symbol: the ballast bed's edges, sleepers in the detail
+   pen, two rails; dashed rails past the map edge (Renderer.trackItems) */
+.track-bed { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+.track-sleeper { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: butt; }
+.track-rail { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+.track-exit { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-dasharray: calc(3px * var(--stroke, 1)) calc(4px * var(--stroke, 1)); }
+.layer-rails:not(.near) :is(.track-bed, .track-sleeper, .track-rail, .track-exit),
+.layer-rails.near :is(.rail, .rail-dash, .rail-exit) { display: none; }
 /* bridges (render/bridges.js): railings, the deck's side, piers, a truss;
    thinner posts */
 .bridge { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }

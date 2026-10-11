@@ -6,7 +6,8 @@
 //   main     4×3, a main station: two through tracks and two bay tracks
 //            ending at buffers, three platforms, a hall with a clock tower
 // Extra tracks are for show – trains only use the line itself. They're
-// listed in `tracks` (local polylines) and drawn by the renderer with the
+// listed in `tracks` (local points, a switch curve wherever y changes; see
+// stationTracks for how far switches off the line reach) and drawn by the renderer with the
 // real railways, so they meet the line exactly (see stationTracks).
 // A station brings its own track: placed where there's no railway, it lays
 // a straight piece along its front (canPlace returns it as `lay`, placed
@@ -87,13 +88,14 @@ function nameBoard(g, x, y) {
   g.box(x - 0.11, y - 0.005, 0.13, 0.22, 0.01, 0.045);
 }
 
-// A switch: a gentle S-curve from a on one track to b on a parallel one
-// (along x), as points without a.
-function turnout(a, b, samples = 8) {
+// A switch: an S-curve from a on one track to b on a parallel one (along
+// x), as points without a – a half cosine wave, so it leaves and joins the
+// tracks parallel.
+function turnout(a, b, samples = 24) {
   const out = [];
   for (let i = 1; i <= samples; i++) {
     const t = i / samples;
-    const e = t * t * (3 - 2 * t); // smoothstep: leaves and joins the tracks parallel
+    const e = (1 - Math.cos(Math.PI * t)) / 2;
     out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * e]);
   }
   return out;
@@ -110,18 +112,59 @@ function track(...pts) {
   return out;
 }
 
+// Switches off the line (y = -1) are this long where the line runs on
+// straight far enough past the station; else as long as it does, but never
+// shorter than drawn in `tracks`.
+const SWITCH = 2.2;
+
+// How far (local x, towards `dir` ±1) the line runs on straight from the
+// station's front: its dense dots along the axis, while they're joined and
+// still on the line (the smoothing in World.railPos can pull them off).
+function straightTo(world, s, track, dir) {
+  const rail = world.networks.rail;
+  const [ox, oy] = world.grid.xy(s.node);
+  const [ax, ay] = rotateQuarter(dir, 0, s.rotation);
+  const [nx, ny] = rotateQuarter(0, 1, s.rotation);
+  const [lx, ly] = rail.pos(track[dir > 0 ? track.length - 1 : 0]);
+  const across = (lx - ox) * nx + (ly - oy) * ny; // the line's local y
+  let f = track[dir > 0 ? track.length - 1 : 0], reach = (lx - ox) * ax + (ly - oy) * ay;
+  for (let k = 0; k < 2 * SWITCH + 2; k++) {
+    const [fx, fy] = world.fine.xy(f);
+    if (!world.fine.inBounds(fx + ax, fy + ay)) break;
+    const g = world.fine.index(fx + ax, fy + ay);
+    if (!world.rails.hasEdge(f, g)) break;
+    const [px, py] = rail.pos(g);
+    if (Math.abs((px - ox) * nx + (py - oy) * ny - across) > 0.01) break;
+    reach = (px - ox) * ax + (py - oy) * ay;
+    f = g;
+  }
+  return dir * reach;
+}
+
 // A station's extra tracks in world coordinates: [{ line: [[x, y]…], buffer }]
-// – buffer = the track ends at a buffer stop at its last point.
+// – buffer = the track ends at a buffer stop at its last point. Switches
+// off the line are drawn as long as the line allows (SWITCH).
 export function stationTracks(world, s, def) {
   if (!def.tracks) return [];
   const [ox, oy] = world.grid.xy(s.node);
-  return def.tracks.map(({ pts, buffer }) => ({
-    buffer,
-    line: pts.map(([x, y]) => {
-      const [rx, ry] = rotateQuarter(x, y, s.rotation);
-      return [ox + rx, oy + ry];
-    }),
-  }));
+  const front = trackAlong(world, world.nodesOf(s), s.rotation);
+  const reach = front ? [-1, 1].map((dir) => straightTo(world, s, front, dir)) : null;
+  return def.tracks.map(({ via, buffer }) => {
+    const pts = via.map((p) => [...p]);
+    if (reach) {
+      // the ends on the line, moved out
+      const [a, b] = [pts[0], pts[1]], [c, d] = [pts[pts.length - 1], pts[pts.length - 2]];
+      if (a[1] === -1 && b[1] !== -1) a[0] = Math.min(a[0], Math.max(b[0] - SWITCH, reach[0]));
+      if (c[1] === -1 && d[1] !== -1) c[0] = Math.max(c[0], Math.min(d[0] + SWITCH, reach[1]));
+    }
+    return {
+      buffer,
+      line: track(...pts).map(([x, y]) => {
+        const [rx, ry] = rotateQuarter(x, y, s.rotation);
+        return [ox + rx, oy + ry];
+      }),
+    };
+  });
 }
 
 // Canopy on a row of posts over a platform (y0…y1), from x0 to x1.
@@ -205,7 +248,7 @@ export const station = {
   // front row along the line, the house in the back row
   footprint: [[-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]],
   // a passing track: off the line at one end, back onto it at the other
-  tracks: [{ pts: track([-1.6, -1], [-0.8, -0.36], [0.8, -0.36], [1.6, -1]) }],
+  tracks: [{ via: [[-1.6, -1], [-0.8, -0.36], [0.8, -0.36], [1.6, -1]] }],
   stats: { jobs: 4 },
   agents: 0,
   // towards the road (when there is one behind): see structures/yards.js
@@ -243,10 +286,10 @@ export const main = {
   // two through tracks off the line on both sides, two bays ending at
   // buffers by the concourse on the right
   tracks: [
-    { pts: track([-1.6, -1], [-0.95, -0.5], [1.95, -0.5], [2.6, -1]) },
-    { pts: track([-0.85, -0.5], [-0.3, -0.2], [1.3, -0.2], [1.85, -0.5]) },
-    { pts: track([-0.3, -0.2], [0.3, 0.4], [2.05, 0.4]), buffer: true },
-    { pts: track([0.4, 0.4], [0.85, 0.7], [2.05, 0.7]), buffer: true },
+    { via: [[-1.6, -1], [-0.95, -0.5], [1.95, -0.5], [2.6, -1]] },
+    { via: [[-0.85, -0.5], [-0.3, -0.2], [1.3, -0.2], [1.85, -0.5]] },
+    { via: [[-0.3, -0.2], [0.3, 0.4], [2.05, 0.4]], buffer: true },
+    { via: [[0.4, 0.4], [0.85, 0.7], [2.05, 0.7]], buffer: true },
   ],
   stats: { jobs: 12 },
   agents: 0,

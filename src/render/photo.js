@@ -72,7 +72,7 @@ const TREE = /class="[^"]*\b(tree|crown-line|leaf|hedge)\b/;
 const TUFT = /class="[^"]*\btuft\b/;
 const pt = (p) => `${r2(p[0])} ${r2(p[1])}`;
 // how ink items are layered, back to front (as on the map)
-const NET_ORDER = ['footpath', 'fence-post', 'fence-pillar', 'fence', 'rail', 'rail-dash', 'rail-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
+const NET_ORDER = ['footpath', 'fence-post', 'fence-pillar', 'fence', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
 
 // shot: { x, y, yaw (radians), fov (degrees), eye? }
 export function takePhoto(renderer, shot) {
@@ -155,6 +155,10 @@ export function takePhoto(renderer, shot) {
   } finally {
     renderer.camera = base;
   }
+  // railways as the track itself, as on the map close up (not its symbol);
+  // items of several lines (sleepers) one by one
+  const SYMBOL = new Set(['rail', 'rail-dash', 'rail-exit']);
+  items = items.filter((it) => !SYMBOL.has(it.cls)).flatMap((it) => (it.runs ? it.runs.map((pts) => ({ ...it, pts })) : [it]));
   // up on a bridge: each piece sorted on its own with the decks (below),
   // so the deck hides what is under it and not what is on it
   const raised = [];

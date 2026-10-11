@@ -12,7 +12,8 @@
 //   lots     – flat ground drawing of structures and their surroundings
 //              (lawns, paving, parking lines); built together with objects
 //   paths    – footpaths
-//   rails    – railways: the map symbol, a solid line with dashes inside
+//   rails    – railways: the map symbol, a solid line with dashes inside;
+//              close up the track itself (trackItems)
 //   roads    – roads + driveways (for buildings without surroundings);
 //              over the railways, so level crossings read as road
 //   shadows  – the scribbles at the foot of shaded walls (shadows.js);
@@ -50,7 +51,7 @@ import { DEER, deerSVG, deerMark } from './deer.js';
 import { LIVESTOCK, livestockSVG, livestockMark } from './livestock.js';
 import { fenceGates } from '../sim/pastures.js';
 import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './draw.js';
-import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns } from '../roads/geometry.js';
+import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
 import { AgentCanvas, AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
@@ -105,6 +106,21 @@ const OVERSCAN = 0.25;
 const r2 = (n) => Math.round(n * 100) / 100;
 // An object's place among the others in when its detail changes
 // (Renderer.bandOf): 0..1, seeded by its key ('s12', 'f7', 'k3-4').
+// Points every `step` along a polyline, from half a step in, with the
+// direction there: [{ p, dir }] (a track's sleepers).
+function spaced(pts, step) {
+  const out = [];
+  let s = step / 2;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+    const l = Math.hypot(bx - ax, by - ay);
+    if (!l) continue;
+    for (; s <= l; s += step) out.push({ p: [ax + ((bx - ax) * s) / l, ay + ((by - ay) * s) / l], dir: [(bx - ax) / l, (by - ay) / l] });
+    s -= l;
+  }
+  return out;
+}
+
 function detailRank(key) {
   let h = 2166136261;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
@@ -198,7 +214,7 @@ export class Renderer {
     this.ink = {
       roads: new InkLayer(this.layers.roads, ['driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
       paths: new InkLayer(this.layers.paths, ['footpath', 'bridge', 'bridge-post']),
-      rails: new InkLayer(this.layers.rails, ['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'bridge', 'bridge-post']),
+      rails: new InkLayer(this.layers.rails, ['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'bridge', 'bridge-post']),
       fences: new InkLayer(this.layers.fences, ['fence-post', 'fence-pillar', 'fence']),
     };
     this.buildOrder = new Map(); // network layer -> Map dot -> its place in the last build, for the pen
@@ -246,6 +262,8 @@ export class Renderer {
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) world.events.on(type, () => this.touchStreets());
     on('paths:changed', 'paths');
     on('rails:changed', 'rails');
+    on('roads:changed', 'rails'); // the track stops at level crossings
+    on('paths:changed', 'rails');
     for (const type of ['roads:changed', 'paths:changed']) world.events.on(type, () => (this.roadLines = null));
     // the woods stop at roads and railways (forest.js)
     for (const type of ['roads:changed', 'rails:changed']) {
@@ -830,7 +848,12 @@ export class Renderer {
       // (one line, or its parts in front of a photo camera)
       for (const pts of this.screenLines([line], true, sway, true)) if (pts.length > 1) items.push({ key, cls, pts, a, b });
     };
-    return { items, add };
+    // several separate lines as one item (ink.js `runs`)
+    const addRuns = (key, cls, lines, a, b) => {
+      const runs = this.screenLines(lines, true, sway, true).filter((pts) => pts.length > 1);
+      if (runs.length) items.push({ key, cls, pts: runs[0], runs, a, b });
+    };
+    return { items, add, addRuns };
   }
 
   // Where a new piece comes in the pen's run along the last build of `layer`:
@@ -988,12 +1011,17 @@ export class Renderer {
     const { world } = this;
     const layer = world.networks.rail;
     const { edges, exits, buffers } = railParts(layer, this.config.rail, world.railExits());
-    const { items, add } = this.inkItems(false);
+    const { items, add, addRuns } = this.inkItems(false);
+    const tracks = []; // for the track close up (trackItems)
     // the dashes are a second line over the same track
-    for (const { a, b, line } of edges) for (const cls of ['rail', 'rail-dash']) add(`${cls}${edgeKey(a, b)}`, cls, line, a, b);
+    for (const { a, b, line } of edges) {
+      for (const cls of ['rail', 'rail-dash']) add(`${cls}${edgeKey(a, b)}`, cls, line, a, b);
+      tracks.push({ key: edgeKey(a, b), line, a, b });
+    }
     for (const { node, line, fade } of exits) {
       for (const cls of ['rail', 'rail-dash']) add(`${cls}x${node}`, cls, line, node, node);
       add(`fade${node}`, 'rail-exit', fade, node, node);
+      tracks.push({ key: `x${node}`, line, a: node, b: node, fade });
     }
     for (const { node, line } of buffers) add(`b${node}`, 'rail-buffer', line, node, node);
     this.addBridges('rail', add);
@@ -1002,6 +1030,7 @@ export class Renderer {
       const def = STRUCTURE_TYPES[s.type];
       stationTracks(world, s, def).forEach(({ line, buffer }, i) => {
         for (const cls of ['rail', 'rail-dash']) add(`${cls}s${s.id}.${i}`, cls, line, s.node, s.node);
+        tracks.push({ key: `s${s.id}.${i}`, line, a: s.node, b: s.node });
         if (!buffer) return;
         const [ax, ay] = line[line.length - 2], [bx, by] = line[line.length - 1];
         const l = Math.hypot(bx - ax, by - ay) || 1;
@@ -1009,7 +1038,82 @@ export class Renderer {
         add(`bs${s.id}.${i}`, 'rail-buffer', [[bx + nx, by + ny], [bx - nx, by - ny]], s.node, s.node);
       });
     }
+    this.trackItems(tracks, add, addRuns);
     return items;
+  }
+
+  // The railway close up (shown from zoom VEHICLES.minZoom on, the rails
+  // layer's class `near`; the symbol further out): the ballast bed as two
+  // thin edge lines, sleepers across it in the detail pen, two rails
+  // (config.rail.track). `tracks`: [{ key, line, a, b, fade? }], the
+  // network's segments first, then the stations' tracks. Where beds
+  // overlap (junctions, switches) the edges inside another bed are left
+  // out, so they run into one; a sleeper inside an earlier track's bed too.
+  // At level crossings the bed and sleepers stop at the road; the rails
+  // run on across it. Past the map edge (`fade`) only the rails, dashed.
+  trackItems(tracks, add, addRuns) {
+    const { bed, rail, sleeper, every } = this.config.rail.track;
+    // the tracks' segments in cells, for the distances
+    const CELL = 0.5, cells = new Map();
+    const cellKey = (x, y) => `${Math.floor(x / CELL)},${Math.floor(y / CELL)}`;
+    tracks.forEach(({ line }, t) => {
+      for (let i = 1; i < line.length; i++) {
+        const [p, q] = [line[i - 1], line[i]];
+        const seen = new Set();
+        for (const [x, y] of [p, q, [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]]) {
+          const k = cellKey(x, y);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          if (!cells.has(k)) cells.set(k, []);
+          cells.get(k).push({ t, p, q, first: i === 1, last: i === line.length - 1 });
+        }
+      }
+    });
+    // within r of a track other than t (with `before`: an earlier one) –
+    // nearest on its line, not at its very ends, so a segment carrying on
+    // from where another ends doesn't count
+    const inside = ([x, y], t, r, before = false) => {
+      const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+      for (let i = cx - 1; i <= cx + 1; i++) for (let j = cy - 1; j <= cy + 1; j++) {
+        for (const sg of cells.get(`${i},${j}`) ?? []) {
+          if (sg.t === t || (before && sg.t > t)) continue;
+          const [ex, ey] = [sg.q[0] - sg.p[0], sg.q[1] - sg.p[1]], l2 = ex * ex + ey * ey;
+          if (!l2) continue;
+          const u = ((x - sg.p[0]) * ex + (y - sg.p[1]) * ey) / l2;
+          if ((u <= 0 && sg.first) || (u >= 1 && sg.last)) continue;
+          const v = Math.max(0, Math.min(1, u));
+          if (Math.hypot(sg.p[0] + ex * v - x, sg.p[1] + ey * v - y) < r) return true;
+        }
+      }
+      return false;
+    };
+    // on the road at a level crossing (its width, a little more)
+    const half = { road: this.config.road.edge, lane: this.config.lane.edge, path: this.config.path.edge };
+    // (where the road is drawn: it sways, see wobble())
+    const crossings = (this.trains?.crossingList() ?? []).map((c) => {
+      const [wx, wy] = wobble(...c.pos);
+      return { ...c, pos: [c.pos[0] + wx, c.pos[1] + wy] };
+    });
+    const onRoad = ([x, y], pad) => crossings.some(({ pos, dir, kind }) => {
+      const [dx, dy] = [x - pos[0], y - pos[1]];
+      return Math.abs(dx * dir[0] + dy * dir[1]) < 0.5 && Math.abs(dx * dir[1] - dy * dir[0]) < half[kind] + pad;
+    });
+    tracks.forEach(({ key, line, a, b, fade }, t) => {
+      for (const side of [0, 1]) {
+        const d = side ? -1 : 1;
+        add(`tr${key}.${side}`, 'track-rail', offsetPolyline(line, d * rail), a, b);
+        if (fade) add(`te${key}.${side}`, 'track-exit', offsetPolyline(fade, d * rail), a, b);
+        const edge = keepRuns(offsetPolyline(line, d * bed), (p) => !inside(p, t, bed - 0.004) && !onRoad(p, 0.012));
+        if (edge.length) addRuns(`tb${key}.${side}`, 'track-bed', edge, a, b);
+      }
+      const ties = [];
+      for (const { p, dir } of spaced(line, every)) {
+        if (onRoad(p, sleeper * 0.6) || inside(p, t, bed, true)) continue;
+        const [nx, ny] = [-dir[1] * sleeper, dir[0] * sleeper];
+        ties.push([[p[0] - nx, p[1] - ny], [p[0] + nx, p[1] + ny]]);
+      }
+      if (ties.length) addRuns(`ts${key}`, 'track-sleeper', ties, a, b);
+    });
   }
 
   renderRoads() {
@@ -1146,8 +1250,10 @@ export class Renderer {
       this.layers.meadow.classList.add(`mz${tier}`);
       this.meadowTier = tier;
     }
-    // parked cars switch between dots and models (src/render/vehicles.js)
+    // parked cars switch between dots and models (src/render/vehicles.js),
+    // railways between the map symbol and the track (trackItems)
     const close = z >= VEHICLES.minZoom;
+    this.layers.rails.classList.toggle('near', close);
     if (close !== this.carsClose) {
       this.carsClose = close;
       this.dirty.add('parked');
