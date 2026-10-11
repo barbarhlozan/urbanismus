@@ -7,11 +7,11 @@
 // spread out; one near the horizon is far away, so small, flat and packed
 // closer. Everything is drawn far to near, i.e. from the horizon upwards.
 
-export const CLOUD_KINDS = ['fair', 'cloudy', 'rain', 'storm'];
+export const CLOUD_KINDS = ['fair', 'mist', 'cloudy', 'rain', 'storm'];
 
 export const CLOUDS = {
-  // heaps (fair, cloudy): how many, and how wide at the horizon and overhead
-  heaps: { fair: [2, 3], cloudy: [8, 12] },
+  // heaps (fair, mist, cloudy): how many, and how wide at the horizon and overhead
+  heaps: { fair: [2, 3], mist: [0, 1], cloudy: [8, 12] },
   width: [34, 190],
   flat: [0.16, 0.4],      // a heap's height as a share of its width, far to near
   // strata (cloudy's long layer near the horizon, rain, storm)

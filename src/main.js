@@ -19,7 +19,7 @@ import { OverlayKit } from './render/overlay.js';
 import { AgentSystem } from './sim/agents.js';
 import { GrowthSystem } from './sim/growth.js';
 import { SimClock } from './sim/clock.js';
-import { WeatherSystem } from './sim/weather.js';
+import { WeatherSystem, mistRisen } from './sim/weather.js';
 import { RainCanvas } from './render/rain.js';
 import { CloudShadows } from './render/cloudShadows.js';
 import { ParkingSystem } from './sim/parking.js';
@@ -601,6 +601,7 @@ function loop(now) {
     cloudShadows.frame(simDt, camera, world.weather.kind);
     rain.frame(simDt, camera, CONFIG.weather.rain[world.weather.kind] ?? 0);
     showSun(world.weather.kind);
+    renderer.setMist(mistRisen(world.weather, world.time, CONFIG.weather.mist));
     // the wind eases to the weather's
     wind += ((CONFIG.weather.wind[world.weather.kind] ?? 0) - wind) * Math.min(1, simDt / 4);
     renderer.swayTrees(world.time, wind);

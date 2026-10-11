@@ -22,6 +22,8 @@
 //   parked   – parked cars (hollow squares) in parking lots
 //   trains   – one railcar each (an oblong)
 //   agents   – moving dots; sit under objects so buildings hide them correctly
+//   mist     – mist lying in the valleys (mist.js): paper over everything
+//              below it; what stands in it is cut by its own cover
 //   objects  – structures, features and street lamps, depth sorted together
 //   overlay  – tool previews, hover
 //
@@ -44,6 +46,7 @@
 
 import { THEME } from '../theme.js';
 import { STYLE } from './style.js';
+import { mistLevel, mistSurface, mistSVG, coverSVG } from './mist.js';
 import { Painter, LOOK, wobble } from './painter.js';
 import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex } from './vehicles.js';
 import { PEOPLE, bodyFor, walkerSVG, cyclistSVG, canoeSVG, canoeMarkSVG } from './people.js';
@@ -87,8 +90,8 @@ export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
-const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'objects', 'overlay'];
-const TOP = ['objects', 'overlay']; // in the #objects <svg>, see the constructor
+const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'overlay'];
+const TOP = ['mist', 'objects', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
 // redrawn, and how far past each window edge the map is drawn.
@@ -197,6 +200,7 @@ export class Renderer {
     this.contours = STYLE.contours;
     this.meadow = new Map();        // chunk key 'cx,cy' -> { g, box, svg, shown }
     this.meadowDirty = new Set();   // chunk keys to rebuild
+    this.mistRisen = 0;             // how far up the mist is, 0–1 (setMist)
 
     ground.innerHTML = '<g class="scene"><g class="layer-terrain"></g></g>';
     svg.innerHTML = `
@@ -305,6 +309,8 @@ export class Renderer {
       this.steepLines = null;
       this.waterLines = null;
       this.brows = null;
+      this.groundRange = null;
+      this.dirty.add('mist');
     });
   }
 
@@ -1463,6 +1469,7 @@ export class Renderer {
       entry.box = built.box;
       entry.at = built.at;
       entry.band = built.band;
+      this.coverMist(entry);
       if (entry.hide) {
         for (const g of [entry.g, entry.lg]) g.classList.remove(entry.hide);
         entry.hide = '';
@@ -1655,7 +1662,7 @@ export class Renderer {
     if (!out) return null;
     const { painter, points } = out;
     const band = this.bandFor(`s${s.id}`);
-    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), band)), shade: this.shadeOf(painter), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top }) };
+    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), band)), shade: this.shadeOf(painter), ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top, anchor: painter.rigid }) };
   }
 
   // An object's shadow (shadows.js): the feet of its
@@ -2235,6 +2242,65 @@ export class Renderer {
     line.setAttribute('y1', s / 2);
     line.setAttribute('x2', s);
     line.setAttribute('y2', s / 2);
+  }
+
+  // The mist (weather 'mist', mist.js): `risen` 0 (none) to 1, in steps
+  // (sim/weather.js mistRisen); each step draws it again.
+  setMist(risen) {
+    if (risen === this.mistRisen) return;
+    this.mistRisen = risen;
+    this.dirty.add('mist');
+  }
+
+  // The ground's height as drawn (the relief's lift and the terrain), and
+  // its lowest and highest over the map, for the mist's top.
+  groundHeight() {
+    const { camera, world } = this;
+    return (x, y) => (camera.lift?.(x, y) ?? 0) + world.terrain.heightAt(x, y);
+  }
+
+  mistTop() {
+    const { grid } = this.world;
+    if (!this.groundRange) {
+      const height = this.groundHeight();
+      let lo = Infinity, hi = -Infinity;
+      for (let y = 0; y < grid.height; y += 0.5) for (let x = 0; x < grid.width; x += 0.5) { const h = height(x, y); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+      this.groundRange = [lo, hi];
+    }
+    return mistLevel(...this.groundRange, this.config.weather.mist, this.mistRisen);
+  }
+
+  renderMist() {
+    const { camera, world } = this;
+    const level = this.mistRisen ? this.mistTop() : null;
+    if (level == null) this.layers.mist.innerHTML = '';
+    else {
+      const { grid } = world;
+      const m = 1.2; // (as the contours: the ground is drawn a little past the map)
+      const surface = mistSurface(camera, this.groundHeight(), [-m, -m, grid.width - 1 + m, grid.height - 1 + m], level);
+      this.layers.mist.innerHTML = mistSVG(surface, camera, world.seed);
+    }
+    this.mistLevel = level;
+    for (const e of this.objs.values()) this.coverMist(e);
+  }
+
+  // What of an object is under the mist: covered over with paper and the
+  // cut lumped (coverSVG), or all of it hidden.
+  coverMist(e) {
+    e.g.querySelector(':scope > .mist-cover')?.remove();
+    const level = this.mistLevel;
+    let svg = '';
+    if (level != null && e.at) {
+      const [ax, ay] = e.at.anchor ?? e.at.points[0];
+      const height = this.groundHeight();
+      svg = coverSVG(this.camera, e.at, height(ax, ay), height, level, detailRank(e.key ?? '') * 1e9);
+    }
+    e.g.classList.toggle('mist-under', svg === 'under');
+    if (!svg || svg === 'under') return;
+    const g = document.createElementNS(SVGNS, 'g');
+    g.setAttribute('class', 'mist-cover');
+    g.innerHTML = svg;
+    e.g.appendChild(g);
   }
 
   // Put the drawings of the objects in sight back in the objects layer, in

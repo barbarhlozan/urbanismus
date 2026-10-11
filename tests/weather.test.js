@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../src/config.js';
-import { WeatherSystem } from '../src/sim/weather.js';
+import { WeatherSystem, mistRisen } from '../src/sim/weather.js';
 import { World } from '../src/core/world.js';
 import { flatWorld } from './helpers.js';
 
@@ -75,6 +75,41 @@ test('a save from when there was overcast starts cloudy', () => {
   assert.equal(loaded.weather.kind, 'cloudy');
   assert.ok(loaded.weather.until > loaded.time);
   assert.ok(!kinds.includes('overcast'));
+});
+
+test('mist comes only after fair weather', () => {
+  for (const [from, to] of Object.entries(CONFIG.weather.next)) if (from !== 'fair') assert.ok(!('mist' in to), `${from} -> mist`);
+  let seen = false;
+  for (let seed = 1; seed <= 10 && !seen; seed++) {
+    const world = flatWorld();
+    world.seed = seed;
+    seen = run(world, 60000).includes('mist');
+  }
+  assert.ok(seen, 'it does come now and then');
+});
+
+test('each spell knows when it began, old saves included', () => {
+  const world = flatWorld();
+  run(world, 8000);
+  const w = world.weather;
+  assert.ok(w.since < w.until && w.since <= world.time);
+  const json = JSON.parse(JSON.stringify(world.toJSON()));
+  delete json.weather.since;
+  const loaded = World.fromJSON(json);
+  new WeatherSystem(loaded, CONFIG);
+  assert.equal(loaded.weather.since, w.since);
+});
+
+test('the mist rises in steps, and sinks again before it goes', () => {
+  const opts = { rise: 40, steps: 5 };
+  const w = { kind: 'mist', since: 100, until: 500 };
+  assert.equal(mistRisen({ ...w, kind: 'fair' }, 300, opts), 0);
+  assert.equal(mistRisen(w, 100, opts), 0);
+  assert.equal(mistRisen(w, 101, opts), 0.2);
+  assert.equal(mistRisen(w, 120, opts), 0.6);
+  assert.equal(mistRisen(w, 300, opts), 1);
+  assert.equal(mistRisen(w, 490, opts), 0.4);
+  assert.equal(mistRisen(w, 500, opts), 0);
 });
 
 test('set() makes the weather so, for a spell', () => {

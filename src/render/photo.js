@@ -13,7 +13,9 @@
 // solids are drawn together far to near, so a hill hides what is behind it.
 // Past the last band a skyline of the terrain closes the picture. Lakes
 // are flat: the ground under a lake's water level is drawn at that level
-// (lakeSurface).
+// (lakeSurface). Mist (render/mist.js) is flat too: paper at its top over
+// each band where the ground is under it, nearer than what stands on that
+// band, so it hides the ground and cuts what stands in it (photoMist).
 
 import { PerspectiveCamera } from './perspective.js';
 import { meadowGround, plant } from './meadow.js';
@@ -44,6 +46,10 @@ export const PHOTO = {
   // the last; a solid standing up to `margin` behind a band's far edge is
   // still drawn over it (it stands on it)
   bands: { near: 0.1, far: 20, step: 1.09, margin: 0.35 },
+  // mist (photoMist): sampled in `cols` columns across the picture; a
+  // photographer standing in it sees only `sight` steps; its far shore in
+  // lobes about `lobe` px long, `rise` times as long as high
+  mist: { cols: 120, sight: 1.6, lobe: 22, rise: 5 },
   meadow: 12,    // how far the meadow tufts reach
   // line weight by distance, as in a sketch: heavy in front, hairlines far
   // off. Lines are drawn with the pens as written (styles.css) `at` steps
@@ -198,7 +204,7 @@ export function takePhoto(renderer, shot) {
     if (near <= PHOTO.clear || (near < PHOTO.trees && TREE.test(svg)) || (near < PHOTO.tuft && TUFT.test(svg))) continue;
     layers.push({ depth: so.depth, svg });
   }
-  layers.push(...bands.layers(), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen), ...people(renderer, cam, seen));
+  layers.push(...bands.layers(), ...photoMist(renderer, cam, bands.d), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen), ...people(renderer, cam, seen));
   layers.sort((a, b) => a.depth - b.depth);
   // each in the pen for its distance; neighbours in the same pen share a group
   let svg = '', open = null;
@@ -219,6 +225,80 @@ export function takePhoto(renderer, shot) {
     + skyline(cam, groundAt, range)
     + `<g class="layer-objects">${svg}</g>`
     + '</svg>';
+}
+
+// The mist (render/mist.js, Renderer.mistLevel): over each ground band, a
+// strip of paper at the mist's top for each run of columns where the
+// ground there is under it, drawn just before the next band nearer – so
+// after what stands on this band (but its front `margin`), which it cuts.
+// Its far shore, where the band behind is out of it, in lobes. Standing in
+// it, the photographer sees only what is right by them.
+function photoMist(renderer, cam, d) {
+  const level = renderer.mistLevel;
+  if (level == null) return [];
+  const { terrain } = renderer.world;
+  const lift = cam.lift;
+  const { width, height } = cam;
+  const { cols: COLS, sight, lobe, rise } = PHOTO.mist;
+  if (cam.ez < level) {
+    // paper over all but the nearest, and two drawn bands of it drifting
+    // across (as kasumi: lobes along the top, a flat underside, a line inside)
+    const rnd = mulberry32(Math.imul(Math.round(cam.ex * 100), 2654435761) ^ Math.round(cam.ey * 100));
+    let bands = '';
+    for (const [y, x0, x1] of [[height * (0.3 + rnd() * 0.1), -20, width * (0.5 + rnd() * 0.2)], [height * (0.5 + rnd() * 0.12), width * (0.3 + rnd() * 0.2), width + 20]]) {
+      const h = 16 + rnd() * 8;
+      let d = `M${pt([x0, y])}`;
+      for (let x = x0; x < x1 - 1;) {
+        const nx = Math.min(x1, x + 40 + rnd() * 50);
+        d += `A${r2((nx - x) / 2)} ${r2((nx - x) / (6 + rnd() * 4))} 0 0 1 ${pt([nx, y + (rnd() - 0.5) * 2])}`;
+        x = nx;
+      }
+      d += `A${r2(h / 2)} ${r2(h / 2)} 0 0 1 ${pt([x1, y + h])}L${pt([x0, y + h])}A${r2(h / 2)} ${r2(h / 2)} 0 0 1 ${pt([x0, y])}Z`;
+      const ia = x0 + (x1 - x0) * (0.15 + rnd() * 0.1), ib = x1 - (x1 - x0) * (0.15 + rnd() * 0.15);
+      bands += `<path class="mist" d="${d}"/><path class="mist-line" d="${d}"/><path class="mist-inner" d="M${pt([ia, y + 5])}L${pt([ib, y + 5])}"/>`;
+    }
+    return [{ depth: -sight, dist: sight, svg: `<rect class="mist" x="-4" y="-4" width="${width + 8}" height="${height + 8}"/>${bands}` }];
+  }
+  const ground = (x, y) => terrain.heightAt(x, y) + (lift ? lift(x, y) : 0);
+  const spread = (width / 2 / cam.focal) * 1.15;
+  const us = Array.from({ length: COLS + 1 }, (_, i) => -spread + (2 * spread * i) / COLS);
+  const at = (u, t) => [cam.ex + cam.fx * t + cam.rx * u * t, cam.ey + cam.fy * t + cam.ry * u * t];
+  const top = (u, t) => { const [x, y] = at(u, t); return cam.project(x, y, level - (lift ? lift(x, y) : 0)); };
+  const n = d.length - 1;
+  const wet = Array.from({ length: n }, (_, k) => us.slice(0, COLS).map((u, i) => ground(...at((u + us[i + 1]) / 2, (d[k] + d[k + 1]) / 2)) < level));
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    let fill = '', shore = '';
+    for (let i = 0; i < COLS;) {
+      if (!wet[k][i]) { i++; continue; }
+      let j = i;
+      while (j + 1 < COLS && wet[k][j + 1]) j++;
+      const far = us.slice(i, j + 2).map((u) => top(u, d[k + 1])), near = us.slice(i, j + 2).map((u) => top(u, d[k]));
+      fill += `M${far.map(pt).join('L')}L${near.reverse().map(pt).join('L')}Z`;
+      // the far shore: where the band behind is out of the mist
+      for (let a = i; a <= j;) {
+        if (wet[k + 1]?.[a] !== false) { a++; continue; }
+        let b = a;
+        while (b + 1 <= j && wet[k + 1][b + 1] === false) b++;
+        const p = us.slice(a, b + 2).map((u) => top(u, d[k + 1]));
+        const len = Math.hypot(p[p.length - 1][0] - p[0][0], p[p.length - 1][1] - p[0][1]);
+        const m = Math.max(1, Math.round(len / lobe));
+        let lobes = `M${pt(p[0])}`, back = '';
+        for (let q = 1; q <= m; q++) {
+          const e = p[Math.round((q * (p.length - 1)) / m)], s = p[Math.round(((q - 1) * (p.length - 1)) / m)];
+          const l = Math.hypot(e[0] - s[0], e[1] - s[1]);
+          lobes += `A${r2(l / 2)} ${r2(l / rise)} 0 0 1 ${pt(e)}`;
+        }
+        back = [...p].reverse().map((q) => `L${pt(q)}`).join('');
+        fill += `${lobes}${back}Z`;
+        shore += lobes;
+        a = b + 1;
+      }
+      i = j + 1;
+    }
+    if (fill) out.push({ depth: -(d[k] + PHOTO.bands.margin) - 1e-4, dist: (d[k] + d[k + 1]) / 2, svg: `<path class="mist" d="${fill}"/>${shore ? `<path class="mist-line" d="${shore}"/>` : ''}` });
+  }
+  return out;
 }
 
 // A street's kerb close in front (PHOTO.ground): its top edge, the kerb's

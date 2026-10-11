@@ -105,6 +105,10 @@ weather.fair
   cs: Jasno
   en: Fair
 
+weather.mist
+  cs: Mlha
+  en: Mist
+
 weather.cloudy
   cs: Polojasno
   en: Partly cloudy
