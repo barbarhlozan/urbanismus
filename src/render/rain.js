@@ -20,7 +20,7 @@ export const RAIN = {
   slant: 0.18,        // sideways per downwards
   storm: { slant: 0.2, speed: 0.35 }, // per level of rain over 1: more slant, faster
   splash: 0.18,       // seconds a splash shows
-  width: 0.8,         // stroke width: device px times config.render.lineWeight, as the map's (pen 1)
+  width: 1.5,         // stroke width: device px times config.render.lineWeight, as the map's (pen 1)
   alpha: 0.65,
   ease: 4,            // seconds for the rain to come on or go off
 };
