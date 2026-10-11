@@ -93,11 +93,13 @@ html, body {
 /* a grey sky's shade over the whole map (config.weather.gloom) */
 #gloom { position: fixed; inset: 0; pointer-events: none; background: var(--detail); opacity: 0; transition: opacity 4s; }
 /* mist in the valleys (src/render/mist.js): paper over what is under it, its
-   shores and the cuts round what stands in it drawn in the pen */
+   shores and the cuts round what stands in it drawn in the pen; the paper a
+   little thin, so what is under it shows faintly (MIST.paper) */
 .mist { fill: var(--bg); stroke: none; }
+.layer-mist, .mist-cover, .mist-veil { opacity: 0.9; }
 .mist-line { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .mist-inner { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
-.mist-under { display: none; }
+.mist-under { opacity: 0.1; }
 #input {
   position: fixed;
   inset: 0;

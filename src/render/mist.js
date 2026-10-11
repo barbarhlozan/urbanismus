@@ -42,6 +42,7 @@ const COS30 = Math.cos(Math.PI / 6);
 //   lump       the lumps where it closes round an object: each this long…
 //   lumpRise   …over its height
 //   fade       ms a step of it takes to come or go (mistIn, mistOut)
+//   paper      how much it hides (opacity; styles.css .layer-mist, keep the two alike)
 export const MIST = {
   du: 0.08,
   dt: 0.04,
@@ -53,6 +54,7 @@ export const MIST = {
   lump: [8, 14],
   lumpRise: [2.4, 3.6],
   fade: 7000,
+  paper: 0.9,
 };
 
 const r2 = (n) => Math.round(n * 100) / 100;

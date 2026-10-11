@@ -228,9 +228,9 @@ export function takePhoto(renderer, shot) {
 }
 
 // The mist (render/mist.js, Renderer.mistLevel): over each ground band, a
-// strip of paper at the mist's top for each run of columns where the
-// ground there is under it, drawn just before the next band nearer – so
-// after what stands on this band (but its front `margin`), which it cuts.
+// strip of paper at the mist's top for each column where the ground there
+// is under it, drawn after what stands on this band, which it cuts – and
+// only above what nearer ground already covers (horizon).
 // Its far shore, where the band behind is out of it, in lobes. Standing in
 // it, the photographer sees only what is right by them.
 function photoMist(renderer, cam, d) {
@@ -257,46 +257,59 @@ function photoMist(renderer, cam, d) {
       const ia = x0 + (x1 - x0) * (0.15 + rnd() * 0.1), ib = x1 - (x1 - x0) * (0.15 + rnd() * 0.15);
       bands += `<path class="mist" d="${d}"/><path class="mist-line" d="${d}"/><path class="mist-inner" d="M${pt([ia, y + 5])}L${pt([ib, y + 5])}"/>`;
     }
-    return [{ depth: -sight, dist: sight, svg: `<rect class="mist" x="-4" y="-4" width="${width + 8}" height="${height + 8}"/>${bands}` }];
+    return [{ depth: -sight, dist: sight, svg: `<g class="mist-veil"><rect class="mist" x="-4" y="-4" width="${width + 8}" height="${height + 8}"/>${bands}</g>` }];
   }
   const ground = (x, y) => terrain.heightAt(x, y) + (lift ? lift(x, y) : 0);
   const spread = (width / 2 / cam.focal) * 1.15;
   const us = Array.from({ length: COLS + 1 }, (_, i) => -spread + (2 * spread * i) / COLS);
+  const mid = us.slice(0, COLS).map((u, i) => (u + us[i + 1]) / 2);
   const at = (u, t) => [cam.ex + cam.fx * t + cam.rx * u * t, cam.ey + cam.fy * t + cam.ry * u * t];
-  const top = (u, t) => { const [x, y] = at(u, t); return cam.project(x, y, level - (lift ? lift(x, y) : 0)); };
+  const up = (u, t, h) => { const [x, y] = at(u, t); return cam.project(x, y, h - (lift ? lift(x, y) : 0)); };
   const n = d.length - 1;
-  const wet = Array.from({ length: n }, (_, k) => us.slice(0, COLS).map((u, i) => ground(...at((u + us[i + 1]) / 2, (d[k] + d[k + 1]) / 2)) < level));
+  // per band and column: the ground there, and whether it is under the mist
+  const g = Array.from({ length: n }, (_, k) => mid.map((u) => ground(...at(u, (d[k] + d[k + 1]) / 2))));
+  const wet = g.map((row) => row.map((h) => h < level));
+  // Going out from the photographer, the highest the picture has been
+  // covered up to in each column (by nearer ground, or nearer mist): mist
+  // further off shows only above it – so a strip can be drawn after what
+  // stands on its band and still not over a hill in front of it.
+  const horizon = new Array(COLS).fill(Infinity);
   const out = [];
   for (let k = 0; k < n; k++) {
     let fill = '', shore = '';
-    for (let i = 0; i < COLS;) {
-      if (!wet[k][i]) { i++; continue; }
-      let j = i;
-      while (j + 1 < COLS && wet[k][j + 1]) j++;
-      const far = us.slice(i, j + 2).map((u) => top(u, d[k + 1])), near = us.slice(i, j + 2).map((u) => top(u, d[k]));
-      fill += `M${far.map(pt).join('L')}L${near.reverse().map(pt).join('L')}Z`;
-      // the far shore: where the band behind is out of the mist
-      for (let a = i; a <= j;) {
-        if (wet[k + 1]?.[a] !== false) { a++; continue; }
-        let b = a;
-        while (b + 1 <= j && wet[k + 1][b + 1] === false) b++;
-        const p = us.slice(a, b + 2).map((u) => top(u, d[k + 1]));
-        const len = Math.hypot(p[p.length - 1][0] - p[0][0], p[p.length - 1][1] - p[0][1]);
-        const m = Math.max(1, Math.round(len / lobe));
-        let lobes = `M${pt(p[0])}`, back = '';
-        for (let q = 1; q <= m; q++) {
-          const e = p[Math.round((q * (p.length - 1)) / m)], s = p[Math.round(((q - 1) * (p.length - 1)) / m)];
-          const l = Math.hypot(e[0] - s[0], e[1] - s[1]);
-          lobes += `A${r2(l / 2)} ${r2(l / rise)} 0 0 1 ${pt(e)}`;
-        }
-        back = [...p].reverse().map((q) => `L${pt(q)}`).join('');
-        fill += `${lobes}${back}Z`;
-        shore += lobes;
-        a = b + 1;
+    const farY = [];
+    for (let i = 0; i < COLS; i++) {
+      if (wet[k][i]) {
+        const f0 = up(us[i], d[k + 1], level), f1 = up(us[i + 1], d[k + 1], level);
+        const n0 = up(us[i], d[k], level), n1 = up(us[i + 1], d[k], level);
+        const b0 = Math.min(n0[1], horizon[i]), b1 = Math.min(n1[1], horizon[i]);
+        if (Math.min(b0 - f0[1], b1 - f1[1]) > 0) fill += `M${pt(f0)}L${pt(f1)}L${pt([n1[0] + 0.4, b1 + 0.4])}L${pt([n0[0] - 0.4, b0 + 0.4])}Z`;
       }
-      i = j + 1;
+      farY.push(up(mid[i], d[k + 1], Math.max(g[k][i], level))[1]);
     }
-    if (fill) out.push({ depth: -(d[k] + PHOTO.bands.margin) - 1e-4, dist: (d[k] + d[k + 1]) / 2, svg: `<path class="mist" d="${fill}"/>${shore ? `<path class="mist-line" d="${shore}"/>` : ''}` });
+    // the far shore: where the band behind is out of the mist (and its
+    // ground is not hidden), in lobes standing up off it
+    for (let a = 0; a < COLS;) {
+      if (!(wet[k][a] && wet[k + 1]?.[a] === false)) { a++; continue; }
+      let b = a;
+      while (b + 1 < COLS && wet[k][b + 1] && wet[k + 1][b + 1] === false) b++;
+      const p = us.slice(a, b + 2).map((u) => up(u, d[k + 1], level));
+      if (p.every(([, y], q) => y >= horizon[Math.min(a + q, COLS - 1)] - 0.5)) { a = b + 1; continue; }
+      const len = Math.hypot(p[p.length - 1][0] - p[0][0], p[p.length - 1][1] - p[0][1]);
+      const m = Math.max(1, Math.round(len / lobe));
+      let lobes = `M${pt(p[0])}`;
+      for (let q = 1; q <= m; q++) {
+        const e = p[Math.round((q * (p.length - 1)) / m)], s0 = p[Math.round(((q - 1) * (p.length - 1)) / m)];
+        const l = Math.hypot(e[0] - s0[0], e[1] - s0[1]);
+        lobes += `A${r2(l / 2)} ${r2(l / rise)} 0 0 1 ${pt(e)}`;
+      }
+      fill += `${lobes}${[...p].reverse().map((q) => `L${pt(q)}`).join('')}Z`;
+      shore += lobes;
+      a = b + 1;
+    }
+    for (let i = 0; i < COLS; i++) horizon[i] = Math.min(horizon[i], farY[i]);
+    // after everything standing on this band, before what stands nearer
+    if (fill) out.push({ depth: -d[k] + 1e-4, dist: (d[k] + d[k + 1]) / 2, svg: `<g class="mist-veil"><path class="mist" d="${fill}"/>${shore ? `<path class="mist-line" d="${shore}"/>` : ''}</g>` });
   }
   return out;
 }

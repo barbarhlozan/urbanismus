@@ -2321,7 +2321,7 @@ export class Renderer {
       // sinking out of sight or coming up again: it fades
       e.g.getAnimations().forEach((a) => a.id === 'mist-under' && a.cancel());
       if (animate) {
-        const kf = [{ opacity: 1 }, { opacity: 0 }];
+        const kf = [{ opacity: 1 }, { opacity: 1 - MIST.paper }];
         const a = e.g.animate(under ? kf : kf.reverse(), { duration: MIST.fade * 0.85, easing: 'ease-in-out', fill: 'forwards', id: 'mist-under' });
         e.g.classList.remove('mist-under');
         a.onfinish = () => {

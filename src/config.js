@@ -269,7 +269,7 @@ export const CONFIG = {
     // (grid units) over the lowest, so a flat map has a low ground mist;
     // it rises over `rise` seconds as it comes and sinks as it goes, in
     // `steps` steps
-    mist: { share: 0.3, least: 0.3, rise: 40, steps: 5 },
+    mist: { share: 0.4, least: 0.55, rise: 40, steps: 5 },
     // the wind in the trees (Renderer.swayTrees): how far a tree's top leans,
     // as a share of its height
     wind: { fair: 0.025, mist: 0.005, cloudy: 0.045, rain: 0.07, storm: 0.14 },
