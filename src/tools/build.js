@@ -55,6 +55,8 @@ export function createBuildTool({ world, camera }, defs) {
     defs,
     group: categoryOf(defs[0]),
     touchConfirm: true,
+    // the type in hand (the size picked with Shift)
+    get type() { return def().id; },
 
     // params: { type, rotation } picks up a copy of a built structure
     // (right-click on it)

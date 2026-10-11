@@ -98,11 +98,12 @@ export class OverlayKit {
 
   // While building, the dots within reach of the pointer, fading out with
   // distance, instead of a sheet of them over the whole map; `fine`: the
-  // half steps footpaths, railways and fences take too. With a building in
-  // hand (`building`) none where something stands or runs, and where it
-  // can't stand for the slope a small warning sign in place of the dot;
-  // with a road (`roads`) none under buildings.
-  nearDots(point, { fine = false, building = false, roads = false } = {}) {
+  // half steps footpaths, railways and fences take too. With a structure
+  // in hand (`building`: its type) only the dots it could have
+  // (World.dotBlocked), and where only the slope keeps it off a small
+  // warning sign in place of the dot; with a road (`roads`) none under
+  // buildings.
+  nearDots(point, { fine = false, building = null, roads = false } = {}) {
     if (!point) return '';
     const { world } = this;
     const { grid, terrain } = world;
@@ -118,11 +119,9 @@ export class OverlayKit {
         const main = Number.isInteger(x) && Number.isInteger(y);
         const fade = r2(1 - (d / REACH) ** 2);
         if (main && building) {
-          if (world.tooSteepToBuild(i)) {
-            signs += `<g class="near-steep" opacity="${fade}">${this.steepAt(x, y, 0.06)}</g>`;
-            continue;
-          }
-          if (world.structureAt(i) || world.hasRoad(i) || world.hasRail(i)) continue;
+          const blocked = world.dotBlocked(i, building);
+          if (blocked === 'Too steep') signs += `<g class="near-steep" opacity="${fade}">${this.steepAt(x, y, 0.06)}</g>`;
+          if (blocked) continue;
         }
         if (main && roads && world.structureAt(i)) continue;
         const [sx, sy] = this.project(x, y);

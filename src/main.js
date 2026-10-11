@@ -396,12 +396,13 @@ try {
 }
 setContours(savedContours === null ? STYLE.contours : savedContours === '1');
 // The dots around the pointer (OverlayKit.nearDots): only while building,
-// Select and Photo show the bare map; only those the tool can use.
+// Select and Photo show the bare map; only those the tool can use (with a
+// structure in hand, those the type it's on could have).
 let dots = null;
 tools.onChange((tool) => {
   uiRoot.querySelector('[data-act="photo"]').classList.toggle('on', tool.id === 'photo');
   dots = tool.id === 'inspect' || tool.id === 'photo' ? null
-    : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:'), roads: tool.id === 'road' || tool.id === 'lane' };
+    : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: tool.id === 'road' || tool.id === 'lane' };
 });
 tools.use('inspect');
 
@@ -596,7 +597,7 @@ function loop(now) {
     deer.update(simDt);
     livestock.update(simDt);
     growth.update(simDt);
-    renderer.frame((dots ? overlayKit.nearDots(tools.point, dots) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open ? null : tools.point, tools.active?.id));
+    renderer.frame((dots ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open ? null : tools.point, tools.active?.id));
     cloudShadows.frame(simDt, camera, world.weather.kind);
     rain.frame(simDt, camera, CONFIG.weather.rain[world.weather.kind] ?? 0);
     showSun(world.weather.kind);

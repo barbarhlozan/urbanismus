@@ -26,6 +26,16 @@ test('parks go on any slope, squares do not', () => {
   assert.equal(world.canPlaceStructure('plaza', world.grid.index(10, 10)).reason, 'Too steep');
 });
 
+// the dots round the pointer while building (World.dotBlocked) follow the
+// same rule: no steep sign where the type in hand doesn't mind the slope
+test('the build dots know which types mind the slope', () => {
+  const world = ramp(CONFIG.steep.build * 3);
+  const n = world.grid.index(10, 10);
+  assert.equal(world.dotBlocked(n, 'green'), null);
+  assert.equal(world.dotBlocked(n, 'house'), 'Too steep');
+  assert.equal(world.dotBlocked(n, 'plaza'), 'Too steep');
+});
+
 test('a road may cross a steep slope but not climb it', () => {
   const world = ramp(CONFIG.steep.road + 2);
   const up = world.buildNetwork('road', run(world, [5, 5], [9, 5]));

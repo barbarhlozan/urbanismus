@@ -472,18 +472,31 @@ export class World {
     if (node < 0) return { ok: false, reason: 'Off the map' };
     const nodes = this.footprintNodes(type, node, rotation);
     for (const n of nodes) {
-      if (n < 0) return { ok: false, reason: 'Off the map' };
-      if (this.terrain.isWater(n)) return { ok: false, reason: 'Water' };
-      const sid = this.structureAtNode.get(n);
-      if (sid !== undefined && sid !== ignoreId) return { ok: false, reason: 'Occupied' };
-      if (this.hasRoad(n)) return { ok: false, reason: 'Road' };
-      if (this.railNear(n)) return { ok: false, reason: 'Railway' };
-      const f = this.featureAt(n);
-      if (f && FEATURE_TYPES[f.type]?.clearable === false) return { ok: false, reason: 'Blocked' };
-      if (this.tooSteepToBuild(n, type)) return { ok: false, reason: 'Too steep' };
+      const reason = this.dotBlocked(n, type, ignoreId);
+      if (reason) return { ok: false, reason };
     }
     if (this.fineCoveredBy(nodes).some((f) => this.paths.hasNode(f))) return { ok: false, reason: 'Footpath' };
     return { ok: true };
+  }
+
+  // Why a structure of `type` can't have main dot `n` among its dots, or
+  // null if it can: what fitsStructure checks dot by dot – and what the dots
+  // round the pointer show while building (OverlayKit.nearDots), so a dot is
+  // drawn exactly where the thing in hand could stand. (A footpath running
+  // between two of its dots, and a type's own canPlace rule, are the whole
+  // footprint's business.)
+  dotBlocked(n, type = null, ignoreId = null) {
+    if (n < 0) return 'Off the map';
+    if (this.terrain.isWater(n)) return 'Water';
+    const sid = this.structureAtNode.get(n);
+    if (sid !== undefined && sid !== ignoreId) return 'Occupied';
+    if (this.hasRoad(n)) return 'Road';
+    if (this.railNear(n)) return 'Railway';
+    const f = this.featureAt(n);
+    if (f && FEATURE_TYPES[f.type]?.clearable === false) return 'Blocked';
+    if (this.tooSteepToBuild(n, type)) return 'Too steep';
+    if (this.paths.hasNode(this.coarseToFine(n))) return 'Footpath';
+    return null;
   }
 
   // Where a structure meets the road: { door: footprint node, road: road node }.
