@@ -342,6 +342,24 @@ html, body {
    hidden (Renderer.hideAhead) */
 .lv1 .d2, .lv2 .d1, .lv2 .d2 { display: none; }
 
+/* Road marks (render/roadMarks.js): a pencil note at a building nothing
+   reaches. Quiet always, in the detail pen; firmer while a build or road
+   tool is in hand (Renderer.setNotes); gone in photo mode. A new one is
+   pencilled in once, then holds still. */
+.layer-notes .road-mark {
+  fill: none;
+  stroke: var(--detail);
+  stroke-width: calc(var(--pen-3) * var(--stroke, 1));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 0.25s, stroke-width 0.25s;
+}
+.layer-notes.notes-strong .road-mark { stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
+.layer-notes.notes-off { display: none; }
+.layer-notes .road-mark.new { stroke-dasharray: 1 1; animation: pen-note 0.5s ease-out 0.35s both; }
+@keyframes pen-note { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .layer-notes .road-mark.new { animation: none; stroke-dasharray: none; } }
+
 .overlay .hover, .overlay .anchor {
   fill: none;
   stroke: var(--fg);

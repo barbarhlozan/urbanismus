@@ -25,6 +25,8 @@
 //   mist     – mist lying in the valleys (mist.js): paper over everything
 //              below it; what stands in it is cut by its own cover
 //   objects  – structures, features and street lamps, depth sorted together
+//   notes    – the planner's pencil notes: a road mark at each building
+//              nothing reaches (roadMarks.js); never in a photo
 //   overlay  – tool previews, hover
 //
 // To add a layer: add its name to LAYERS, write render<Name>(), and mark it
@@ -85,14 +87,15 @@ import { carMark, personMark } from './marks.js';
 import { mergeRuns, placeInOrder, isoSort } from './order.js';
 import { SUN, sunFor, shadowSVG } from './shadows.js';
 import { findForests, forestSVG } from './forest.js';
+import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
 
 // (gallery.html and others import these from here)
 export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
-const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'overlay'];
-const TOP = ['mist', 'objects', 'overlay']; // in the #objects <svg>, see the constructor
+const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'notes', 'overlay'];
+const TOP = ['mist', 'objects', 'notes', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
 // redrawn, and how far past each window edge the map is drawn.
@@ -204,6 +207,8 @@ export class Renderer {
     this.meadow = new Map();        // chunk key 'cx,cy' -> { g, box, svg, shown }
     this.meadowDirty = new Set();   // chunk keys to rebuild
     this.mistRisen = 0;             // how far up the mist is, 0–1 (setMist)
+    this.notes = new Map();         // structure id -> { el, d }, its road mark (renderNotes)
+    this.notesShown = false;        // the first marks drawn are already there
 
     ground.innerHTML = '<g class="scene"><g class="layer-terrain"></g></g>';
     svg.innerHTML = `
@@ -262,6 +267,8 @@ export class Renderer {
       world.events.on(`${kind}:removed`, (o) => this.dying.add(`${k}${o.id}`));
     }
     on('roads:changed', 'roads');
+    // road marks: whether a building is reached, and where its mark goes
+    for (const type of ['structure:added', 'structure:removed', 'structure:changed', 'roads:changed', 'paths:changed', 'terrain:changed']) on(type, 'notes');
     // fences: gaps where roads and railways cross them
     on('fences:changed', 'fences');
     on('paths:changed', 'fences'); // (gates)
@@ -2290,6 +2297,54 @@ export class Renderer {
       this.groundRange = [lo, hi];
     }
     return mistLevel(...this.groundRange, this.config.weather.mist, this.mistRisen);
+  }
+
+  // The road marks (roadMarks.js), one <path> per building nothing reaches.
+  // Rebuilt only when a structure, road or footpath changes (or the view
+  // turns): a new mark is pencilled in once, a mark whose building got its
+  // road is rubbed out – no animation after that.
+  renderNotes() {
+    const { world, camera } = this;
+    const project = (x, y) => this.project(x, y);
+    const px = camera.tile / 32;
+    const live = new Set();
+    for (const s of unserved(world)) {
+      live.add(s.id);
+      const d = roadMarkPath(ROAD_MARK.style, markPlace(world, camera, s), (s.seed ^ Math.imul(s.id, 0x9e3779b1)) >>> 0, project, px);
+      let note = this.notes.get(s.id);
+      if (!note) {
+        const el = this.layers.notes.appendChild(document.createElementNS(SVGNS, 'path'));
+        el.setAttribute('class', `road-mark ${ROAD_MARK.style}`);
+        el.setAttribute('pathLength', '1');
+        if (this.notesShown && drawEnabled()) el.classList.add('new');
+        this.notes.set(s.id, (note = { el, d: '' }));
+      }
+      if (note.d !== d) note.el.setAttribute('d', (note.d = d));
+    }
+    for (const [id, { el }] of this.notes) {
+      if (live.has(id)) continue;
+      this.notes.delete(id);
+      if (!drawEnabled()) el.remove();
+      else el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: 'ease-in', fill: 'forwards' }).finished.then(() => el.remove(), () => el.remove());
+    }
+    this.notesShown = true;
+  }
+
+  // How the road marks show: 'quiet' (always), 'strong' (a build or road
+  // tool in hand, when the player can do something about them) or 'off'
+  // (photo mode). See .layer-notes in styles.css.
+  setNotes(mode) {
+    for (const m of ['quiet', 'strong', 'off']) this.layers.notes.classList.toggle(`notes-${m}`, m === mode);
+  }
+
+  // Switch the road marks' hand (ROAD_MARK.styles): all redrawn.
+  setRoadMark(style) {
+    if (!ROAD_MARK.styles.includes(style)) return;
+    ROAD_MARK.style = style;
+    for (const { el } of this.notes.values()) el.remove();
+    this.notes.clear();
+    this.notesShown = false;
+    this.dirty.add('notes');
   }
 
   // Each step of the mist rising or sinking comes in slowly over the last

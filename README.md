@@ -97,6 +97,11 @@ folded there and folds again once you pick a tool.
   cycle, and they face the footpath. Industry, mines, farms and stations still need a road.
   Buildings without a road keep their surroundings (gardens, trees, a plaza) but never get a
   car park or garages.
+- A building nothing reaches (no road, or for those above no footpath either) gets a planner's
+  pencil note on the map: a short stub of road from its door that breaks off into nothing.
+  It's faint all the time and firmer while a building or road tool is in hand; it goes when a
+  road (or footpath) reaches the building, and never shows in a photo. `cmd.roadMark('query')`
+  or `'cross'` switches to the other hands tried (`src/render/roadMarks.js`).
 - Neighbouring apartments and shops facing the same road often share a wall and form a
   street front; panel blocks join into one long block built in sections.
 - The **Landmarks** group has the old town (a chapel, a church, a town hall in three sizes, a
