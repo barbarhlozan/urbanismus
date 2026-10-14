@@ -330,7 +330,7 @@ const followUnlocks = () => {
   // cars, trucks and buses: off the map if locked, and the car parks follow
   agents.followVehicles();
   renderer.dirty.add('parked');
-  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act], .hud .chron')) {
+  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act], .photo-corner, .hud .chron')) {
     btn.classList.toggle('locked', !UNLOCKS.allowsControl(btn.dataset.act ?? 'chronicle'));
   }
   const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu, language: languageMenu };
@@ -377,7 +377,7 @@ followUnlocks();
 // pen-drawn frames on every UI box, to match the sketched map
 // (the corner menu has none: words on the paper)
 sketchFrames(uiRoot, '.hud', HANDS.steady);
-sketchFrames(uiRoot, '.controls, .actions, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
+sketchFrames(uiRoot, '.controls, .photo-corner, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
 sketchFrames(uiRoot, '.popup', HANDS.loose);
 
 // Terrain contour lines: off unless switched on (remembered in this browser).
@@ -404,7 +404,6 @@ setContours(savedContours === null ? STYLE.contours : savedContours === '1');
 // structure in hand, those the type it's on could have).
 let dots = null;
 tools.onChange((tool) => {
-  uiRoot.querySelector('[data-act="photo"]').classList.toggle('on', tool.id === 'photo');
   dots = tool.id === 'inspect' || tool.id === 'photo' ? null
     : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: tool.id === 'road' || tool.id === 'lane' };
 });
@@ -569,12 +568,12 @@ async function openIntro() {
   setTimeout(() => {
     document.body.classList.remove('loading');
     // (the Build menu's own box is centred with a transform: its panel and dock move instead)
-    const panels = [...uiRoot.querySelectorAll('.hud, .controls, .bm-panel, .bm-dock')];
+    const panels = [...uiRoot.querySelectorAll('.hud, .controls, .bm-panel, .bm-dock, .photo-corner')];
     // each stays out of sight until its own entrance starts (else it shows, blinks out, comes in)
     for (const el of panels) el.style.opacity = '0';
     panels.forEach((el, i) => setTimeout(() => {
       el.style.opacity = '';
-      reveal(el, true, { force: true, from: [0, el.closest('.build-menu') ? 14 : -8] });
+      reveal(el, true, { force: true, from: [0, el.closest('.build-menu, .photo-corner') ? 14 : -8] });
     }, i * 70));
   }, INTRO.panels);
   setTimeout(() => {

@@ -49,10 +49,6 @@ controls.unfold
   cs: Ukázat nabídku
   en: Show the menu
 
-control.photo
-  cs: Fotografie
-  en: Photograph
-
 control.terrain
   cs: Terén
   en: Terrain
@@ -432,7 +428,12 @@ another-look
   cs: Jiná podoba
   en: Another look
 
-# photographs
+# photographs: the camera in the bottom-right corner, and photo mode's
+# name and options in the dock while it's in hand
+
+control.photo
+  cs: Fotografie
+  en: Photograph
 
 photo.take
   cs: Vyfotit
