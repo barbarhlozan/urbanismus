@@ -602,6 +602,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .actions button { padding: 7px 12px; border-left: var(--line) solid var(--fg) !important; }
 .actions button:first-child { border-left: none !important; }
 .actions button:hover { background: var(--fg) !important; color: var(--bg) !important; }
+.actions button.on { background: var(--fg) !important; color: var(--bg) !important; }
 .actions button .key { font-size: 10px; margin-right: 6px; color: var(--detail); }
 
 
@@ -1036,6 +1037,9 @@ body.loading #ui { visibility: hidden; }
   white-space: nowrap;
 }
 #ui .bm-opts button:hover, #ui .bm-drop:hover { background: var(--fg); color: var(--bg); }
+/* a setting that's on (Terrain): pressed, as the menu's tabs */
+#ui .bm-opts button.on { background: var(--fg); color: var(--bg); }
+#ui .bm-opts button.on .key { color: inherit; opacity: 0.7; }
 .bm-opts .opt-icon { width: 15px; height: 15px; }
 .bm-opts .opt-icon path, .bm-opts .opt-icon circle { stroke-width: 1.1 !important; fill: none !important; }
 #ui .bm-drop { display: none; font-size: 16px; }

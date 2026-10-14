@@ -128,12 +128,12 @@ export class Hud {
     // anything else's (photo mode), or with the menu open, in the bar here
     let actions = this.tools.actions();
     if (this.buildMenu.dock(actions)) actions = [];
-    const actionsKey = actions.map((a) => a.label).join('|');
+    const actionsKey = actions.map((a) => `${a.label}${a.on ? '+' : ''}`).join('|');
     if (actionsKey !== this.lastActions) {
       this.lastActions = actionsKey;
       this.actionsEl.classList.toggle('hidden', !actions.length);
       this.actionsEl.innerHTML = actions
-        .map((a, i) => `<button data-i="${i}">${a.key ? `<span class="key">${a.key}</span>` : ''}${a.label}</button>`)
+        .map((a, i) => `<button data-i="${i}"${a.on != null ? ` aria-pressed="${a.on}"${a.on ? ' class="on"' : ''}` : ''}>${a.key ? `<span class="key">${a.key}</span>` : ''}${a.label}</button>`)
         .join('');
     }
   }

@@ -81,8 +81,9 @@ a Czech or German layout.
   footpath) to build more of it
 - **Middle click** – same as **Tab** (rotate what you're placing, flip a line's bend)
 - **Drag / wheel** – pan / zoom
-- **Terrain** button – contour lines (off by default, they are the most expensive thing to
-  draw)
+- **Terrain** – contour lines: an option in the dock beside the options of the tool in hand
+  (building, roads and other lines, Erase); once on they stay on whatever's in hand, until
+  switched off there (off by default, they are the most expensive thing to draw)
 
 On a phone it's all taps: tap once to preview, tap again to confirm. The Build menu starts
 folded there and folds again once you pick a tool.

@@ -53,10 +53,6 @@ control.photo
   cs: Fotografie
   en: Photograph
 
-control.terrain
-  cs: Terén
-  en: Terrain
-
 control.colors
   cs: Barvy
   en: Colours
@@ -431,6 +427,12 @@ rotate
 another-look
   cs: Jiná podoba
   en: Another look
+
+# the contour lines, beside the options of a tool that changes the town;
+# they stay on until switched off
+terrain
+  cs: Terén
+  en: Terrain
 
 # photographs
 

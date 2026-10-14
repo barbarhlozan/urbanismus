@@ -10,7 +10,8 @@
 //     hover(node), click(node, pointerEvent),
 //     cancel() -> bool,            // true = handled, false = fall back to Select
 //     key(keyboardEvent) -> bool,  // true = handled
-//     actions() -> [{ label, key?, run }],  // on-screen buttons for keyboard features
+//     actions() -> [{ label, key?, icon?, on?, run }],  // on-screen buttons for keyboard features
+//                                  //   and options (on: a setting shown pressed while it holds)
 //     touchConfirm: true,          // on touch, first tap previews, a second tap on
 //                                  //   the same dot clicks (bool or () -> bool)
 //     overlay(kit, hoverNode) -> svg string,
