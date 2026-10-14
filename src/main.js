@@ -213,10 +213,6 @@ tools.register(createPhotoTool(ctx, {
 
 const actions = {
   debug: () => { debugPanel.toggle(); if (debugPanel.open) hud.buildMenu.makeRoom(); },
-  rotateLeft: () => { camera.rotate(-1, ...viewport); renderer.invalidate(); },
-  rotateRight: () => { camera.rotate(1, ...viewport); renderer.invalidate(); },
-  pause: () => { clock.paused = !clock.paused; },
-  speed: () => clock.cycleSpeed(),
   terrain: () => setContours(!renderer.contours),
   colors: () => { colorMenu.toggle(); if (colorMenu.open) hud.buildMenu.makeRoom(); },
   assets: () => assetsPage.toggle(),
@@ -323,7 +319,7 @@ async function importCity() {
   }
 }
 
-const hud = new Hud(uiRoot, { world, camera, tools, chronicle, actions });
+const hud = new Hud(uiRoot, { world, tools, chronicle, actions });
 const chronicleBook = new ChronicleBook(uiRoot, { world, chronicle });
 // something locked or unlocked: the Build menu and the buttons at the top
 // follow, a tool in hand that may no longer be used is put down, and a panel
@@ -474,11 +470,7 @@ window.addEventListener('keydown', (e) => {
   // by place on the keyboard (ui/keys.js): the number row opens a Build
   // menu group, the letter rows pick a tool in it; a few keys of their own
   const k = keyOf(e);
-  if (k === '[') return actions.rotateLeft();
-  if (k === ']') return actions.rotateRight();
-  if (k === 'l') return actions.pause();
   if (k === ' ') e.preventDefault(); // (Space: another look, while building; not a page scroll)
-  if (k === '`') return actions.speed();
   // the tools for making the game, not playing it: \ the debug panel,
   // Shift+\ the page of every drawing (each still unless locked)
   if (k === '\\') {
@@ -568,7 +560,7 @@ async function openIntro() {
   setTimeout(() => {
     document.body.classList.remove('loading');
     // (the Build menu's own box is centred with a transform: its panel and dock move instead)
-    const panels = [...uiRoot.querySelectorAll('.hud, .controls, .bm-panel, .bm-dock, .credit')];
+    const panels = [...uiRoot.querySelectorAll('.hud, .controls, .bm-panel, .bm-dock')];
     // each stays out of sight until its own entrance starts (else it shows, blinks out, comes in)
     for (const el of panels) el.style.opacity = '0';
     panels.forEach((el, i) => setTimeout(() => {

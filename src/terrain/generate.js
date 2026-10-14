@@ -7,10 +7,13 @@ import { RIVER_SIZES, STREAM } from './rivers.js';
 
 export function generateWorld(world, config) {
   const rng = mulberry32(world.seed);
-  generateRiver(world, rng, config.terrain);
-  generateTributaries(world, rng, config.terrain);
-  generateLakes(world, rng, config.terrain);
-  generateTrees(world, rng, config.terrain);
+  // (the map as it comes: nothing for the player to undo)
+  world.history.aside(() => {
+    generateRiver(world, rng, config.terrain);
+    generateTributaries(world, rng, config.terrain);
+    generateLakes(world, rng, config.terrain);
+    generateTrees(world, rng, config.terrain);
+  });
 }
 
 function mapCenter(grid) {

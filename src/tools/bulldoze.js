@@ -1,7 +1,6 @@
 // Removes whatever is under the pointer: building, then footpath, then a
 // street's sidewalks, then road, then railway, then fence, then trees. Snaps to the dense grid so footpaths between buildings can be hit.
 
-import { isTouch } from '../ui/device.js';
 import { t } from '../core/text.js';
 import { eraseTarget } from './erase.js';
 
@@ -21,10 +20,6 @@ export function createBulldozeTool({ world, renderer }) {
       point = [x, y];
       return world.grid.nodeAt(x, y);
     },
-
-    hint: () => isTouch()
-      ? t('erase.tap')
-      : `${t('erase.click')} · ${t('right-click.stop')}`,
 
     click() {
       target()?.run();

@@ -284,7 +284,7 @@ export const CONFIG = {
   },
 
   time: {
-    // First entry is the starting speed; T / the speed button cycles through them.
+    // First entry is the starting speed (dev/commands.js time() picks others).
     // At Normal (scale 1) simulated seconds are real seconds: every speed
     // and duration in this file is tuned for that.
     speeds: [

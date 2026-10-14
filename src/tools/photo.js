@@ -9,7 +9,6 @@
 // the Take photo button shoots.
 
 import { PHOTO } from '../render/photo.js';
-import { isTouch } from '../ui/device.js';
 import { t } from '../core/text.js';
 
 const LENSES = PHOTO.lenses;
@@ -46,12 +45,6 @@ export function createPhotoTool({ world }, { shoot }) {
     snap(x, y) {
       point = [x, y];
       return world.grid.nodeAt(x, y);
-    },
-
-    hint() {
-      if (!spot) return isTouch() ? t('photo.tap.stand') : `${t('photo.click.stand')} · ${t('right-click.stop')}`;
-      if (isTouch()) return t(aim ? 'photo.tap.take' : 'photo.tap.look');
-      return `${t('photo.aim')} · Shift: ${t('photo.lens').toLowerCase()} · Esc: ${t('photo.move').toLowerCase()}`;
     },
 
     click(node, e) {

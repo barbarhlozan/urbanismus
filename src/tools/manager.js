@@ -13,7 +13,6 @@
 //     actions() -> [{ label, key?, run }],  // on-screen buttons for keyboard features
 //     touchConfirm: true,          // on touch, first tap previews, a second tap on
 //                                  //   the same dot clicks (bool or () -> bool)
-//     hint() -> string,
 //     overlay(kit, hoverNode) -> svg string,
 //     cursor(kit, hoverNode) -> svg string,  // replaces the default hover ring
 //   }
@@ -117,10 +116,6 @@ export class ToolManager {
     const handled = this.active?.key?.(event) ?? false;
     if (handled) this.resnap();
     return handled;
-  }
-
-  hint() {
-    return this.active?.hint?.() ?? '';
   }
 
   overlay(kit) {

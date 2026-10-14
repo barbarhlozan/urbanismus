@@ -22,8 +22,8 @@
 // drawer of tiles opening to the rail's left;
 // a tab opens its group, or folds the drawer if it's the one showing. The
 // dock keeps the middle of the bottom edge, there only while a tool is in
-// hand. Picking a tool folds the drawer unless it's pinned, and it stays
-// folded when the tool is put down: the rail is enough to come back.
+// hand. Picking a tool folds the drawer, and it stays folded when the tool
+// is put down: the rail is enough to come back.
 
 import { CATEGORIES } from '../../structures/index.js';
 import { toolIcon, controlIcon } from './icons.js';
@@ -37,7 +37,6 @@ const groupName = (c) => t(`group.${c.id}`);
 
 const FOLD_KEY = 'urbanismus.buildMenuFolded';
 const GROUP_KEY = 'urbanismus.buildMenuGroup';
-const PIN_KEY = 'urbanismus.buildMenuPinned';
 
 // the tool whose drawing stands for each group on its tab
 const TAB_ICON = { transport: 'road', housing: 'build:house', work: 'build:textilka', farming: 'build:jzd', amenities: 'build:jednota', spaces: 'build:green', heritage: 'build:chapel' };
@@ -53,9 +52,6 @@ const OPTION = {
   'bend-straight': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 12.5 H8 L13.5 7"/><circle cx="2.5" cy="12.5" r="1.1"/></svg>',
   'another-look': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 2.5 H13.5 V13.5 H2.5 Z"/><circle cx="5.5" cy="5.5" r="0.9"/><circle cx="10.5" cy="10.5" r="0.9"/><circle cx="8" cy="8" r="0.9"/></svg>',
 };
-
-// a drawing pin, for keeping the drawer open while building
-const PIN = '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M6 2.5 H10 L9.3 7 L11.5 9.2 H4.5 L6.7 7 Z M8 9.2 V14"/></svg>';
 
 export class BuildMenu {
   constructor(root, tools, actions = {}) {
@@ -95,7 +91,6 @@ export class BuildMenu {
             <button class="bm-tab" role="tab" data-tab="${c.id}" title="${esc(groupName(c))}" aria-label="${esc(groupName(c))}">${tabIcon(c)}<span class="key"></span></button>`).join('')}
           </div>
           <span class="bm-title"></span>
-          <button class="close bm-pin" aria-pressed="false">${PIN}</button>
           <button class="close bm-fold" aria-label="${t('build.fold')}">–</button>
         </div>
         <div class="bm-body">
@@ -124,9 +119,6 @@ export class BuildMenu {
     this.headEl = this.el.querySelector('.bm-head');
     this.tabsEl = this.el.querySelector('.bm-tabs');
     this.looseEl = this.el.querySelector('.bm-loose');
-    this.pinEl = this.el.querySelector('.bm-pin');
-    try { this.pinned = localStorage.getItem(PIN_KEY) === '1'; } catch { this.pinned = false; }
-    this.pin(this.pinned);
     this.layout();
     addEventListener('resize', () => { this.layout(); this.place(); });
     // (the rail grows or shrinks as groups unlock)
@@ -136,7 +128,6 @@ export class BuildMenu {
       const btn = e.target.closest('button');
       if (!btn) return;
       if (btn.classList.contains('bm-fold')) return this.fold(true);
-      if (btn.classList.contains('bm-pin')) return this.pin(!this.pinned, true);
       if (btn.dataset.act) return actions[btn.dataset.act]?.();
       if (btn.classList.contains('bm-toggle')) return this.fold(false);
       if (btn.classList.contains('bm-drop')) return tools.use(tools.defaultId);
@@ -169,10 +160,10 @@ export class BuildMenu {
       this.optsKey = null;
       // out of the way while building (or taking photos: their options bar
       // sits just above), back when done (unless it was folded before);
-      // the rail's drawer only if it isn't pinned, and it stays folded
+      // the rail's drawer stays folded when the tool is put down
       const busy = tool.id !== tools.defaultId;
       if (this.rail) {
-        if (busy && !this.folded && (!this.pinned || !picked)) this.fold(true, false);
+        if (busy && !this.folded) this.fold(true, false);
       } else if (busy && !this.folded) {
         this.fold(true, false);
         this.autoFolded = !isNarrow();
@@ -295,17 +286,6 @@ export class BuildMenu {
   // rail, where the drawer is: the drawer folds to make room for it.
   makeRoom() {
     if (this.rail && !this.folded) this.fold(true, false);
-  }
-
-  // Pinned, the rail's drawer stays open while building.
-  pin(pinned, remember = false) {
-    this.pinned = pinned;
-    this.pinEl.setAttribute('aria-pressed', String(pinned));
-    const title = t(pinned ? 'build.pinned' : 'build.pin');
-    this.pinEl.title = title;
-    this.pinEl.setAttribute('aria-label', title);
-    if (!remember) return;
-    try { localStorage.setItem(PIN_KEY, pinned ? '1' : '0'); } catch { /* storage unavailable */ }
   }
 
   // The options of the tool in hand, shown in the dock while the panel is

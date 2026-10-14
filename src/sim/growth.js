@@ -77,7 +77,8 @@ export class GrowthSystem {
       }
     }
     if (!best) return;
-    const s = world.placeStructure('church', best.n, { rotation: best.rotation });
+    // (the town's own doing: not the player's to undo, see core/history.js)
+    const s = world.history.aside(() => world.placeStructure('church', best.n, { rotation: best.rotation }));
     if (s) this.log(`${codeOf(s)} consecrated · ${STRUCTURE_TYPES.church.name}`, world.centerOf(s));
   }
 }

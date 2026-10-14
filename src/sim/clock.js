@@ -14,10 +14,6 @@ export class SimClock {
     return this.speeds[this.index];
   }
 
-  cycleSpeed() {
-    this.index = (this.index + 1) % this.speeds.length;
-  }
-
   // Real seconds -> simulated seconds.
   step(dt) {
     const sim = this.paused ? 0 : dt * this.speed.scale;

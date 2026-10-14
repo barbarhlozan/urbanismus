@@ -4,7 +4,6 @@
 import { STRUCTURES, STRUCTURE_TYPES, categoryOf, yardOf, kindsOf, kindShown } from '../../structures/index.js';
 import { YARDS, YARD_STYLES } from '../../structures/yards.js';
 import { FEATURE_TYPES } from '../../features/index.js';
-import { isTouch } from '../ui/device.js';
 import { UNLOCKS } from '../story/unlocks.js';
 import { statIcon } from '../ui/icons.js';
 import { t, hasText } from '../core/text.js';
@@ -26,8 +25,6 @@ export function createInspectTool(ctx) {
     id: 'inspect',
     label: t('tool.select'),
     toolbar: false, // it's what you're in when no tool is picked
-
-    hint: () => t(isTouch() ? 'select.tap' : 'select.click'),
 
     click(node, event) {
       nav.page = 'main';

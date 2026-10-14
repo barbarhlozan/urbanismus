@@ -41,10 +41,10 @@ test('every t(…) in the code has its word', () => {
   }
   // the ones put together from a name
   const made = [
-    ...['road', 'lane', 'path', 'rail'].flatMap((id) => [`tool.${id}`, `tool.${id}.blurb`, `network.start.${id}`, `network.tap.${id}`, `network.stop.${id}`]),
+    ...['road', 'lane', 'path', 'rail'].flatMap((id) => [`tool.${id}`, `tool.${id}.blurb`, `network.stop.${id}`]),
     ...['transport', 'housing', 'work', 'amenities', 'spaces', 'heritage'].map((id) => `group.${id}`),
     ...['photo', 'terrain', 'assets', 'debug', 'export', 'import', 'newMap'].flatMap((a) => [`control.${a}`]),
-    ...['residents', 'jobs'].map((k) => `stat.${k}`),
+    ...['residents', 'jobs'].map((k) => `stat.${k}.n`),
     'inspect.clear.tree',
   ];
   for (const key of made) assert.ok(all.has(key), key);

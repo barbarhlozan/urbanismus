@@ -24,45 +24,13 @@ town.name
   cs: Jméno obce
   en: Name of the town
 
-right-click.stop
-  cs: pravé tlačítko: konec
-  en: right-click to stop
-
-# ---------- The town's numbers (top left) ----------
-
-north
-  cs: S
-  en: N
+# ---------- The town (top left) ----------
 
 hud.chronicle
   cs: Kronika
   en: Chronicle
 
-hud.fold
-  cs: Schovat
-  en: Hide
-
-hud.unfold
-  cs: Ukázat
-  en: Show
-
-stat.residents
-  cs: Obyvatelé
-  en: Residents
-
-stat.jobs
-  cs: Pracovní místa
-  en: Jobs
-
-stat.buildings
-  cs: Budovy
-  en: Buildings
-
-stat.cutoff
-  cs: {n} budova odříznutá od cest | {n} budovy odříznuté od cest | {n} budov odříznutých od cest
-  en: {n} cut off from the roads | {n} cut off from the roads
-
-# the same, counted in words in the town's panel ("4 obyvatelé")
+# a building's numbers counted in words in its card ("4 obyvatelé")
 stat.residents.n
   cs: {n} obyvatel | {n} obyvatelé | {n} obyvatel
   en: {n} resident | {n} residents
@@ -70,56 +38,6 @@ stat.residents.n
 stat.jobs.n
   cs: {n} pracovní místo | {n} pracovní místa | {n} pracovních míst
   en: {n} job | {n} jobs
-
-stat.buildings.n
-  cs: {n} budova | {n} budovy | {n} budov
-  en: {n} building | {n} buildings
-
-stat.cutoff.n
-  cs: {n} bez cesty | {n} bez cesty | {n} bez cesty
-  en: {n} without a road | {n} without a road
-
-stat.walk
-  cs: Pěšky
-  en: On foot
-
-stat.cycle
-  cs: Na kole
-  en: Cycling
-
-stat.drive
-  cs: Autem
-  en: Driving
-
-stat.trucks
-  cs: Nákladní auta
-  en: Trucks
-
-stat.buses
-  cs: Autobusy
-  en: Buses
-
-# the weather (the picture and its name when pointing at it, top left)
-
-weather.fair
-  cs: Jasno
-  en: Fair
-
-weather.mist
-  cs: Mlha
-  en: Mist
-
-weather.cloudy
-  cs: Polojasno
-  en: Partly cloudy
-
-weather.rain
-  cs: Déšť
-  en: Rain
-
-weather.storm
-  cs: Bouřka
-  en: Storm
 
 # ---------- The buttons (top right) ----------
 
@@ -384,14 +302,6 @@ build.drop
   cs: Odložit
   en: Put it down
 
-build.pin
-  cs: Připíchnout
-  en: Pin
-
-build.pinned
-  cs: Připíchnuto
-  en: Pinned
-
 group.transport
   cs: Doprava
   en: Transport
@@ -425,14 +335,6 @@ group.heritage
 tool.select
   cs: Vybrat
   en: Select
-
-select.click
-  cs: Klikni na mapu · pravé tlačítko: stavět další takové · tažením posun · kolečkem přiblížení · [ / ] otočení
-  en: Click the map · right-click: build more of what's there · drag to move · scroll to zoom · [ / ] turn
-
-select.tap
-  cs: Klepni na mapu · tažením posun · sevřením přiblížení
-  en: Tap the map · drag to move · pinch to zoom
 
 tool.road
   cs: Silnice
@@ -482,14 +384,6 @@ tool.erase.blurb
   cs: Odstranit cokoli
   en: Remove anything
 
-erase.click
-  cs: Klikni a odstraň budovu, pěšinu, chodníky, kus silnice, železnice nebo ohrady, nebo stromy
-  en: Click to remove a building, footpath, sidewalks, a piece of road, railway or fence, or trees
-
-erase.tap
-  cs: Klepni na to, co odstranit, a klepni znovu
-  en: Tap what to remove, and tap again
-
 # while drawing roads, footpaths and railways
 
 bend
@@ -503,62 +397,6 @@ bend.diagonal
 bend.straight
   cs: nejdřív rovně
   en: straight first
-
-network.start.road
-  cs: Klikni na tečku, odkud povede silnice
-  en: Click the dot the road starts from
-
-network.start.lane
-  cs: Klikni na tečku, odkud povede úzká silnice · přes silnici nebo pěšinu ji zúží
-  en: Click the dot the narrow road starts from · over a road or footpath it narrows it
-
-network.start.path
-  cs: Klikni na tečku, odkud povede pěšina
-  en: Click the dot the footpath starts from
-
-network.start.path.road
-  cs: Podél silnice z ní budou chodníky · u úzké silnice chodník na té straně
-  en: Along a road it becomes sidewalks · by a narrow road, a sidewalk on that side
-
-network.start.rail
-  cs: Klikni na tečku, odkud povede železnice · vyveď ji za kraj mapy a přijedou vlaky
-  en: Click the dot the railway starts from · lead it off the edge of the map and trains come
-
-network.start.fence
-  cs: Klikni na tečku, odkud povede ohrada · uzavři ji dokola a bude z ní pastvina pro krávy nebo ovce
-  en: Click the dot the fence starts from · close it all round and it becomes a pasture for cows or sheep
-
-network.tap.road
-  cs: Klepni na tečku, odkud povede silnice
-  en: Tap the dot the road starts from
-
-network.tap.lane
-  cs: Klepni na tečku, odkud povede úzká silnice · přes silnici nebo pěšinu ji zúží
-  en: Tap the dot the narrow road starts from · over a road or footpath it narrows it
-
-network.tap.path
-  cs: Klepni na tečku, odkud povede pěšina · podél silnice z ní budou chodníky
-  en: Tap the dot the footpath starts from · along a road it becomes sidewalks
-
-network.tap.rail
-  cs: Klepni na tečku, odkud povede železnice
-  en: Tap the dot the railway starts from
-
-network.tap.fence
-  cs: Klepni na tečku, odkud povede ohrada · uzavři ji dokola a bude pastvina
-  en: Tap the dot the fence starts from · close it all round for a pasture
-
-network.tap.end
-  cs: Klepni, kde má skončit
-  en: Tap where it should end
-
-network.tap.build
-  cs: Klepni znovu a postav
-  en: Tap again to build
-
-network.end
-  cs: Klikni na konec · Tab: {bend} · pravé tlačítko: konec
-  en: Click the end · Tab: {bend} · right-click to stop
 
 network.stop.road
   cs: Ukončit silnici
@@ -580,35 +418,7 @@ network.stop.fence
   cs: Ukončit ohradu
   en: End the fence
 
-network.sidewalks.road
-  cs: Podél silnice z ní budou chodníky
-  en: Along the road it becomes sidewalks
-
-network.sidewalks.lane
-  cs: Podél úzké silnice z ní bude chodník na téhle straně
-  en: Along the narrow road it becomes a sidewalk on this side
-
-network.sidewalks.on-lane
-  cs: Na úzké silnici z ní bude chodník po pravé straně
-  en: On the narrow road it becomes a sidewalk on its right
-
-network.narrows
-  cs: Zúží silnici
-  en: Narrows the road
-
-network.widens
-  cs: Rozšíří úzkou silnici
-  en: Widens the narrow road
-
 # while placing buildings
-
-build.click
-  cs: Klikni a postav: {name}
-  en: Click to build: {name}
-
-build.tap
-  cs: Klepni na tečku pro náhled, znovu a postav: {name}
-  en: Tap a dot to preview, again to build: {name}
 
 size
   cs: Velikost
@@ -623,26 +433,6 @@ another-look
   en: Another look
 
 # photographs
-
-photo.click.stand
-  cs: Klikni, kde stát
-  en: Click where to stand
-
-photo.tap.stand
-  cs: Klepni, kde stát
-  en: Tap where to stand
-
-photo.tap.look
-  cs: Klepni, kam se dívat
-  en: Tap where to look
-
-photo.tap.take
-  cs: Vyfoť, nebo klepni a dívej se jinam
-  en: Take the photo, or tap to look elsewhere
-
-photo.aim
-  cs: Miř ukazatelem, kliknutím vyfoť
-  en: Aim with the pointer, click to take the photo
 
 photo.take
   cs: Vyfotit

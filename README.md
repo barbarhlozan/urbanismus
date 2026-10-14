@@ -31,8 +31,7 @@ Shortcuts come in two steps that follow the Build menu: the **number row** opens
 group that's open, its tiles in reading order (**Q W E R T Y U I O**, then **A S D F G H J
 K**, then **Z X C V B N M , . /** – each tile shows its key). The group stays open, so **2**,
 **Q** builds houses and then **W** switches to apartments; pressing the key of the tool in
-hand puts it down. A few keys are always the same: **P** photo, **Backspace** erase, **L**
-pause, **`** speed, **[ ]** turn the view, and while building **Tab** rotate, **Space** another
+hand puts it down. A few keys are always the same: **P** photo, **Backspace** erase, and while building **Tab** rotate, **Space** another
 look, **Shift** size. They go by where the key sits (a US keyboard), so they work the same on
 a Czech or German layout.
 
@@ -81,9 +80,9 @@ a Czech or German layout.
   what's under the pointer (same building, size and rotation, or the road / railway /
   footpath) to build more of it
 - **Middle click** – same as **Tab** (rotate what you're placing, flip a line's bend)
-- **Drag / wheel** – pan / zoom, **[ / ]** – rotate view
-- **L** – pause, **`** (backtick) – speed, **Terrain** button – contour lines (off by default,
-  they are the most expensive thing to draw)
+- **Drag / wheel** – pan / zoom
+- **Terrain** button – contour lines (off by default, they are the most expensive thing to
+  draw)
 
 On a phone it's all taps: tap once to preview, tap again to confirm. The Build menu starts
 folded there and folds again once you pick a tool.

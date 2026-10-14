@@ -23,6 +23,7 @@ import { STRUCTURE_TYPES, footprintOffsets, newSeed } from '../../structures/ind
 import { mulberry32 } from './random.js';
 import { upgrade, upgradeMarks, unretire } from './legacy.js';
 import { FEATURE_TYPES } from '../../features/index.js';
+import { History } from './history.js';
 
 // grade(): how finely a segment's climb is measured along it (grid units)
 const GRADE_STEP = 0.2;
@@ -48,6 +49,7 @@ export class World {
     this.weather = { kind: 'fair', from: 'fair', since: 0, until: 0, n: 0 }; // the weather now, the one before, since and until when (world.time), and how many changes so far (src/sim/weather.js)
     this.story = { seen: [], vars: {}, unlocks: [] }; // what the story has told and unlocked (src/story/)
     this.chronicle = { entries: [], marks: [] }; // the town's chronicle (src/sim/chronicle.js)
+    this.history = new History(this); // undo and redo of the player's changes; every change below calls history.touch() first
 
     this.sidewalks = new Set(); // edgeKey of road segments that are streets (have sidewalks)
     this.lanes = new Set();     // edgeKey of road segments that are single-track lanes (never streets)
@@ -769,6 +771,7 @@ export class World {
 
   placeStructure(type, node, { rotation = 0, seed = newSeed(), data = {} } = {}) {
     if (!this.canPlaceStructure(type, node, rotation).ok) return null;
+    this.history.touch();
     const s = { id: this.nextId++, type, node, rotation, seed, data };
     this._insertStructure(s);
     this.nodesOf(s).forEach((n) => this.clearFeaturesAt(n));
@@ -780,6 +783,7 @@ export class World {
   removeStructure(id) {
     const s = this.structures.get(id);
     if (!s) return false;
+    this.history.touch();
     this._unindexStructure(s);
     this.structures.delete(id);
     this.events.emit('structure:removed', s);
@@ -790,6 +794,7 @@ export class World {
   setYard(id, style) {
     const s = this.structures.get(id);
     if (!s) return;
+    this.history.touch();
     if (style) s.data.yard = style;
     else delete s.data.yard;
     this.events.emit('structure:changed', s);
@@ -800,6 +805,7 @@ export class World {
   restyleStructure(id, kind = null) {
     const s = this.structures.get(id);
     if (!s) return;
+    this.history.touch();
     s.seed = newSeed();
     if (kind) s.data.kind = kind;
     this.events.emit('structure:changed', s);
@@ -813,6 +819,7 @@ export class World {
 
   convertStructure(id, type) {
     if (!this.canConvert(id, type).ok) return false;
+    this.history.touch();
     const s = this.structures.get(id);
     this._unindexStructure(s);
     s.type = type;
@@ -824,6 +831,7 @@ export class World {
 
   addFeature(type, node, props = {}) {
     if (!FEATURE_TYPES[type] || node < 0 || this.featureAt(node)) return null;
+    this.history.touch();
     const f = { id: this.nextId++, type, node, ox: 0, oy: 0, variant: 0, scale: 1, ...props };
     this._insertFeature(f);
     this.events.emit('feature:added', f);
@@ -833,6 +841,7 @@ export class World {
   removeFeature(id) {
     const f = this.features.get(id);
     if (!f) return false;
+    this.history.touch();
     this.features.delete(id);
     this.featureAtNode.delete(f.node);
     this.events.emit('feature:removed', f);
@@ -852,6 +861,7 @@ export class World {
     const layer = this.networks[kind];
     const check = validateRoute(layer, nodes, { lane });
     if (!check.ok) return check;
+    this.history.touch();
     for (const n of nodes) {
       // a railway clears the trees along its way, also between dots
       if (kind === 'rail') this.coarseAround(n).forEach((c) => this.clearFeaturesAt(c));
@@ -893,6 +903,7 @@ export class World {
   removeNetworkAt(kind, node) {
     const layer = this.networks[kind];
     if (!layer.graph.hasNode(node)) return false;
+    this.history.touch();
     const nodes = [node, ...layer.graph.neighbors(node)];
     layer.graph.removeNode(node);
     nodes.push(...this.pruneBridges(layer, nodes));
@@ -1018,6 +1029,7 @@ export class World {
   }
 
   setSidewalks(edges, on) {
+    this.history.touch();
     let changed = false;
     for (const [a, b] of edges) {
       const key = edgeKey(a, b);

@@ -496,44 +496,9 @@ body.touch { --bar-h: 44px; }
 .hud .name-label .stat-icon { flex: 0 0 13px; width: 13px; height: 13px; color: var(--detail); opacity: 0; transition: opacity 0.15s; }
 .hud .name-label:hover .stat-icon, .hud .name:focus + .stat-icon { opacity: 1; }
 body.touch .hud .name-label .stat-icon { opacity: 1; }
-/* a row of numbers, each after its little drawing */
-.hud .row { display: flex; align-items: center; gap: 14px; padding: 4px 10px 5px; border-top: var(--line) solid var(--fg); font-size: 13px; }
-.hud .row:empty { display: none; }
-.hud .stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.hud .stat b { display: inline-block; font-weight: 700; font-variant-numeric: tabular-nums; } /* (inline-block: it hops, motion.js bump) */
-.hud .stat.warn { color: var(--detail); }
 .icon.stat-icon { width: 16px; height: 16px; flex: 0 0 16px; }
 .icon.stat-icon path { stroke-width: 1.1 !important; }
 .icon.stat-icon circle { stroke-width: 1.1 !important; }
-/* (more numbers than fit, a warning among them: they go on to a second line) */
-.hud .stats { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; min-width: 0; }
-/* the weather in a word at the end of the row, quieter */
-.hud .weather { margin-left: auto; align-self: flex-start; color: var(--detail); font-size: 12px; white-space: nowrap; }
-
-/* app name, version and author: quietly in the bottom-left corner */
-.credit {
-  position: fixed;
-  left: calc(20px + var(--safe-l));
-  bottom: calc(14px + var(--safe-b));
-  font-size: 10px;
-  color: var(--detail);
-  pointer-events: none;
-}
-.credit span { font-variant-numeric: tabular-nums; }
-/* the north arrow over it, as in a map's margin (ui/hud.js) */
-.north-box {
-  position: fixed;
-  left: calc(14px + var(--safe-l));
-  bottom: calc(30px + var(--safe-b));
-  width: 40px;
-  height: 40px;
-  pointer-events: none;
-}
-.north { display: block; width: 40px; height: 40px; overflow: visible; }
-.north .needle { fill: none; stroke: var(--fg); stroke-width: calc(1px * var(--stroke, 1)); stroke-linecap: round; }
-.north .half { fill: var(--fg); }
-.north text { fill: var(--fg); font-family: var(--ui-font); font-size: 10px; }
-.hud.folded .row { display: none; }
 
 /* controls: a menu mark in the corner opening into a list of what's set
    now and then, each named (src/ui/hud.js) – no box and no rules, words on
@@ -571,6 +536,17 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 /* the list: each row the list's full width, so the wash fills it */
 #ui .controls button:not(.menu-toggle) { align-self: stretch; justify-content: flex-end; }
 
+/* the imprint, last in the menu: app name, version, author, small and quiet
+   as a printer's line – not a button */
+.controls .imprint {
+  align-self: flex-end;
+  padding: 6px 2px 2px;
+  font-size: 10px;
+  color: var(--detail);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* (#ui: over the .close look) the mark stays put as the list opens */
 #ui .controls .menu-toggle { order: -1; align-self: flex-end; min-height: var(--bar-h); width: var(--bar-h); padding: 0; justify-content: center; }
 .controls .menu-icon { width: 14px; height: 14px; }
@@ -578,21 +554,23 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .controls .menu-icon .bars, .controls.folded .menu-icon .cross { display: none; }
 .controls.folded .menu-icon .bars { display: inline; }
 .controls.folded { width: auto; }
-.controls.folded:not(.folding) button:not(.menu-toggle) { display: none; }
+.controls.folded:not(.folding) button:not(.menu-toggle), .controls.folded:not(.folding) .imprint { display: none; }
 /* folding away (motion.js shrink): the buttons stay until the bar has shrunk, fading */
-.controls.folding button:not(.menu-toggle) { opacity: 0; transition: opacity 100ms; }
+.controls.folding button:not(.menu-toggle), .controls.folding .imprint { opacity: 0; transition: opacity 100ms; }
 /* the pen frame (main.js sketchFrames) only round the open menu, not the
    mark alone */
 .controls.folded .sk-frame, .controls.folding .sk-frame { display: none; }
 /* the list: its words clear of the frame on both sides (the mark stays put) */
 @media (max-width: 1024px) {
   #ui .controls button:not(.menu-toggle) { padding-left: 12px; padding-right: 12px; }
+  .controls .imprint { padding: 6px 12px 2px; }
 }
 /* a wide screen: the words in a line along the top edge, left of the menu
    mark, kept above the Build menu's rail; the names alone, no drawings */
 @media (min-width: 1025px) {
   .controls { flex-direction: row; align-items: center; width: auto; padding: 0 0 0 8px; }
   #ui .controls .menu-toggle { order: 99; align-self: center; }
+  .controls .imprint { order: 98; align-self: center; padding: 0 9px 0 4px; }
   #ui .controls button { padding: 4px 9px; }
   .controls button .ctl-icon, .controls button[data-act="colors"] .swatches { display: none; }
 }
@@ -1066,9 +1044,8 @@ body.loading #ui { visibility: hidden; }
 #ui .bm-opts button:hover .key, #ui .bm-drop:hover .key { color: inherit; opacity: 0.7; }
 body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 
-/* the rail's title and pin (below), not used over the dock */
+/* the rail's title (below), not used over the dock */
 .bm-rail, .bm-title { display: none; }
-#ui .build-menu:not(.rail) .bm-pin { display: none; }
 
 /* ---------- Build menu on a wide screen: a rail along the right edge ---------- */
 
@@ -1119,9 +1096,6 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 .build-menu.rail .bm-tools { justify-content: start; }
 .build-menu.rail .bm-title { display: block; flex: 1; min-width: 0; align-self: center; padding: 0 3px 0 8px; font-size: 10.5px; line-height: 1.1; overflow-wrap: break-word; }
 /* (a narrow drawer: a long group name takes two lines) */
-.bm-pin .opt-icon { width: 15px; height: 15px; }
-.bm-pin .opt-icon path { stroke-width: 1.1 !important; fill: none !important; }
-#ui .bm-pin[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
 
 /* the dock: alone at the bottom, and only with a tool in hand (centred
    without a transform, which the fade-in animates) */
@@ -1447,9 +1421,6 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
     min-width: 0;
   }
   .hud .name { font-size: 16px; }
-  .hud .row { gap: 10px; padding: 3px 8px 4px; font-size: 12px; }
-  .hud .weather { font-size: 11px; }
-  .credit { left: calc(10px + var(--safe-l)); bottom: calc(2px + var(--safe-b)); font-size: 9px; }
 
   .bottom {
     left: calc(8px + var(--safe-l));

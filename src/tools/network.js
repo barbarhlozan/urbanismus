@@ -6,8 +6,7 @@
 // (`lane`); drawing one over the other converts it.
 
 import { planRoute, validateRoute, BEND } from '../roads/routing.js';
-import { isTouch } from '../ui/device.js';
-import { t, reasonText } from '../core/text.js';
+import { t } from '../core/text.js';
 
 // options: { kind, id (default: kind), lane (roads: build lanes), group (Build menu group), fineGrid, curve (config key), hoverRadius }
 // Its words are tool.<id>, tool.<id>.blurb and network.*.<id> (text/ui.txt).
@@ -26,31 +25,7 @@ export function createNetworkTool({ world, config }, options) {
     bend = bend === BEND.DIAGONAL_FIRST ? BEND.STRAIGHT_FIRST : BEND.DIAGONAL_FIRST;
   };
 
-  // Footpath steps on or right beside a road (where a stroke becomes
-  // sidewalks): 'road', 'lane' beside a lane (a sidewalk on that side
-  // only), 'on-lane' right on one (a sidewalk on the right), or null.
-  const streetBeside = (f, g) => {
-    const road = world.roadBeside(f, g);
-    if (!road) return null;
-    if (!world.isLane(...road)) return 'road';
-    return world.sideOf(f, g, road) ? 'lane' : 'on-lane';
-  };
-  const nearAnyRoad = (f) => layer.grid.neighbors(f).some((g) => streetBeside(f, g));
   const overWater = (n) => world.terrain.isWater(world.grid.nodeAt(...layer.dot(n)));
-  const sidewalkNote = (plan) => {
-    if (kind !== 'path' || !plan?.check.ok) return '';
-    const along = plan.nodes.map((n, i) => i > 0 && streetBeside(plan.nodes[i - 1], n));
-    const which = ['road', 'lane', 'on-lane'].find((w) => along.includes(w));
-    return which ? `${t(`network.sidewalks.${which}`)} · ` : '';
-  };
-  // Roads and lanes drawn over each other: what changes.
-  const convertNote = (plan) => {
-    if (kind !== 'road' || !plan?.check.ok) return '';
-    const over = plan.nodes.some((n, i) => i > 0 && world.roads.hasEdge(plan.nodes[i - 1], n) && world.isLane(plan.nodes[i - 1], n) !== lane);
-    if (!over) return '';
-    return `${t(lane ? 'network.narrows' : 'network.widens')} · `;
-  };
-  const note = (plan) => sidewalkNote(plan) || convertNote(plan);
 
   const currentPlan = () => {
     if (start < 0 || hover < 0 || hover === start) return null;
@@ -113,22 +88,6 @@ export function createNetworkTool({ world, config }, options) {
       label: `${t('bend')}: ${bendName(bend)}`, icon: bend === BEND.DIAGONAL_FIRST ? 'bend-diagonal' : 'bend-straight', key: 'Tab', run: flip,
     }],
     cancelLabel: () => t(start >= 0 ? `network.stop.${id}` : 'done'),
-
-    hint() {
-      if (isTouch()) {
-        if (start < 0) return t(`network.tap.${id}`);
-        const plan = currentPlan();
-        if (!plan) return t('network.tap.end');
-        return plan.check.ok ? `${note(plan)}${t('network.tap.build')}` : reasonText(plan.check.reason);
-      }
-      if (start < 0) {
-        const nearRoad = kind === 'path' && hover >= 0 && nearAnyRoad(hover);
-        return t(nearRoad ? 'network.start.path.road' : `network.start.${id}`);
-      }
-      const plan = currentPlan();
-      const status = plan && !plan.check.ok ? `${reasonText(plan.check.reason)} · ` : note(plan);
-      return status + t('network.end', { bend: bendName(bend) });
-    },
 
     overlay(kit) {
       let out = '';

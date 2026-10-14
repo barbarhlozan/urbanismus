@@ -116,12 +116,16 @@ export class Chronicle {
         : `The chronicle of ${world.name} was begun, on an empty map.`, 'town', false);
     }
 
-    world.events.on('structure:added', (s) => this.built(s));
-    world.events.on('structure:changed', (s) => this.changed(s));
-    world.events.on('structure:removed', (s) => this.removed(s));
+    // (while an undo or redo is put in, nothing is written: the history
+    // takes the step's own lines back or returns them, core/history.js)
+    const replay = () => world.history.applying;
+    world.events.on('structure:added', (s) => (replay() ? this.types.set(s.id, s.type) : this.built(s)));
+    world.events.on('structure:changed', (s) => (replay() ? this.types.set(s.id, s.type) : this.changed(s)));
+    world.events.on('structure:removed', (s) => (replay() ? this.types.delete(s.id) : this.removed(s)));
     world.events.on('world:renamed', (name) => this.write(`The town took the name ${name}.`));
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
       world.events.on(type, () => {
+        if (replay()) return;
         for (const kind of Object.keys(NETWORKS)) {
           if (!this.marked(`first:${kind}`) && this.hasNetwork(kind)) this.first(kind, NETWORKS[kind].replace('{town}', this.world.name));
         }

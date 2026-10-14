@@ -6,7 +6,6 @@
 // the variant that will be built.
 
 import { footprintCenter, newSeed, categoryOf, kindsOf, kindShown } from '../../structures/index.js';
-import { isTouch } from '../ui/device.js';
 import { keyOf } from '../ui/keys.js';
 import { UNLOCKS } from '../story/unlocks.js';
 import { t } from '../core/text.js';
@@ -72,18 +71,6 @@ export function createBuildTool({ world, camera }, defs) {
     snap(x, y) {
       const [cx, cy] = footprintCenter(def(), placed());
       return world.grid.nodeAt(x - cx, y - cy);
-    },
-
-    hint() {
-      const name = nameOf(def());
-      if (isTouch()) return t('build.tap', { name });
-      return [
-        t('build.click', { name }),
-        turnable() && `Tab: ${t('rotate').toLowerCase()}`,
-        `Space: ${t('another-look').toLowerCase()}`,
-        open().length > 1 && `Shift: ${t('size').toLowerCase()}`,
-        t('right-click.stop'),
-      ].filter(Boolean).join(' · ');
     },
 
     click(node) {
