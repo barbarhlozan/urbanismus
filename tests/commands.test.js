@@ -73,3 +73,12 @@ test('cmd.build refuses what does not fit and unknown names', () => {
   assert.throws(() => cmd.build('castle-in-the-air', 1, 1));
   assert.ok(cmd.types().includes('house'));
 });
+
+test('cmd.undo and cmd.redo take back and put back the last change', () => {
+  const { cmd, world } = kit();
+  cmd.road('road', [2, 5], [10, 5]);
+  assert.equal(cmd.undo().ok, true);
+  assert.equal(world.roads.edgeCount, 0);
+  assert.equal(cmd.redo().ok, true);
+  assert.equal(world.roads.edgeCount, 8);
+});

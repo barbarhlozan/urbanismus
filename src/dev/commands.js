@@ -131,7 +131,9 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
     road,
     tree,
     erase,
-    types: () => Object.keys(STRUCTURE_TYPES),
+    undo: () => world.history.undo(), // the player's last change (each cmd that builds or erases is one too)
+    redo: () => world.history.redo(),
+    types:() => Object.keys(STRUCTURE_TYPES),
     weather: (kind) => {
       if (kind === undefined) return world.weather.kind;
       weather.set(kind);
@@ -164,6 +166,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         "cmd.road('road' | 'lane' | 'path' | 'rail' | 'fence', [x, y], [x, y])",
         'cmd.tree(x, y)',
         'cmd.erase(x, y)           what the eraser would take there',
+        'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.seed()                the map seed',
         'cmd.save()                download the town as a file',
       ];

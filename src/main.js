@@ -445,6 +445,15 @@ attachInput(document.getElementById('input'), {
 });
 
 window.addEventListener('keydown', (e) => {
+  // ⌘Z / Ctrl+Z takes back the last change to the town, ⇧⌘Z / Ctrl+Y puts
+  // it back (core/history.js); in a text field, the field's own
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && /^[zy]$/i.test(e.key) && !e.target.closest?.('input, textarea')) {
+    e.preventDefault();
+    if (chronicleBook.open) return;
+    popup.hide(); // (its building may be gone)
+    world.history[e.shiftKey || e.key.toLowerCase() === 'y' ? 'redo' : 'undo']();
+    return;
+  }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   // the open book takes the keys (and nothing reaches the map behind it)
   if (chronicleBook.open) {
