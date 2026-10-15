@@ -189,8 +189,12 @@ const CONTROLS = {
   // button shows one or the other (styles.css)
   fullscreen: '<path class="fs-enter" d="M2.5 6 V2.5 H6 M10 2.5 H13.5 V6 M13.5 10 V13.5 H10 M6 13.5 H2.5 V10"/><path class="fs-exit" d="M6 2.5 V6 H2.5 M13.5 6 H10 V2.5 M10 13.5 V10 H13.5 M2.5 10 H6 V13.5"/>',
   // a folded map, and a plus: a new one
-  // a speech bubble: the language
-  language: '<path d="M2.5 3 H13.5 V10.5 H7.2 L4.4 13.2 V10.5 H2.5 Z M5 6.8 H11"/>',
+  // the flags on the language button, in pen: the Czech one (the wedge from the
+  // hoist, the line between the stripes, the lower stripe lightly hatched) and
+  // the Union Jack kept to what a pen carries at this size (outline, the cross
+  // as a band, the saltire's lines)
+  flagcs: '<path d="M1.5 3.6 L14.6 3.4 L14.4 12.6 L1.6 12.5 Z M1.6 3.6 L8.1 8 L1.6 12.4 M8.2 8 H14.5 M9.6 11.8 L11 9.2 M11.7 11.8 L13 9.3 M13.5 11.7 L14.1 10.4"/>',
+  flagen: '<path d="M1.5 3.2 L14.5 3.4 L14.4 12.7 L1.6 12.6 Z M7 3.3 V7 H1.6 M7 12.6 V9 H1.6 M9 3.4 V7 H14.5 M9 12.7 V9 H14.4 M1.7 3.4 L6.8 6.9 M14.4 3.5 L9.2 6.9 M1.7 12.5 L6.8 9.1 M14.3 12.6 L9.2 9.1"/>',
   newMap: '<path d="M1.5 4 L5 2.5 L8.5 4 L12 2.5 V8 M1.5 4 V12.5 L5 11 L8.5 12.5 M5 2.5 V11 M8.5 4 V12.5 M12.5 10 V15 M10 12.5 H15"/>',
 };
 

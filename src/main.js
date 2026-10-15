@@ -40,7 +40,7 @@ import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
 import { ColorMenu } from './ui/colorMenu.js';
 import { NewMapMenu } from './ui/newMapMenu.js';
-import { askLanguage, LanguageMenu } from './ui/languages.js';
+import { askLanguage } from './ui/languages.js';
 import { AssetsPage } from './ui/assetsPage.js';
 import { sketchFrames, HANDS } from './ui/sketchFrame.js';
 import { reveal } from './ui/motion.js';
@@ -49,7 +49,7 @@ import { exportCity, pickCity } from './ui/saveFile.js';
 import { createCommands } from './dev/commands.js';
 import { BUILD_FAMILIES, STRUCTURE_TYPES, kindShown } from '../structures/index.js';
 import { keyOf } from './ui/keys.js';
-import { loadText, t, reasonText, language, saveLanguage, needsLanguage } from './core/text.js';
+import { loadText, t, reasonText, language, saveLanguage, needsLanguage, LANGUAGES } from './core/text.js';
 
 applyTheme();
 // the words for everything on screen (text/*.txt), before any of it is built
@@ -225,10 +225,10 @@ const actions = {
   import: () => importCity(),
   fullscreen: () => toggleFullscreen(),
   chronicle: () => { if (UNLOCKS.allowsControl('chronicle')) chronicleBook.toggle(); },
-  language: () => { languageMenu.toggle(); if (languageMenu.open) hud.buildMenu.makeRoom(); },
+  language: () => switchLanguage(Object.keys(LANGUAGES).find((code) => code !== language())),
 };
 
-// Another language (picked in the Language menu or on the opening cover):
+// Another language (the Menu's language button, or picked on the opening cover):
 // everything on screen was written in the old one, so the town is saved
 // straight away and the game loads again (behind the opening cover).
 function switchLanguage(code) {
@@ -336,7 +336,7 @@ const followUnlocks = () => {
   for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act], .photo-corner, .hud .chron')) {
     btn.classList.toggle('locked', !UNLOCKS.allowsControl(btn.dataset.act ?? 'chronicle'));
   }
-  const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu, language: languageMenu };
+  const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu };
   for (const [id, panel] of Object.entries(panels)) {
     if (panel?.open && !UNLOCKS.allowsControl(id)) (panel.hide ? panel.hide() : panel.toggle(false));
   }
@@ -373,7 +373,6 @@ story.onScheme = () => colorMenu.refresh();
 const debugPanel = new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
 const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"]'));
 const assetsPage = new AssetsPage(uiRoot);
-const languageMenu = new LanguageMenu(uiRoot, uiRoot.querySelector('[data-act="language"]'), { onPick: switchLanguage });
 const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMap"]'), { onCreate: newMap, onExport: () => exportCity(world) });
 UNLOCKS.onChange(followUnlocks); // (once the panels it closes exist)
 followUnlocks();

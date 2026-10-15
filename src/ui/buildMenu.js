@@ -60,10 +60,10 @@ const OPTION = {
   'bend-diagonal': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 12.5 L8 7 H13.5"/><circle cx="2.5" cy="12.5" r="1.1"/></svg>',
   'bend-straight': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 12.5 H8 L13.5 7"/><circle cx="2.5" cy="12.5" r="1.1"/></svg>',
   'another-look': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 2.5 H13.5 V13.5 H2.5 Z"/><circle cx="5.5" cy="5.5" r="0.9"/><circle cx="10.5" cy="10.5" r="0.9"/><circle cx="8" cy="8" r="0.9"/></svg>',
-  // the contour lines: a hill's two rings, an open line further down
   // taking a step back, and putting it back: a hooked arrow each way
   undo: '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M5.8 3.6 L2.9 6.7 L6 9.6 M3 6.7 H9.4 C11.9 6.7 13.4 8.4 13.2 10.6 C13 12.2 11.9 13.1 10.4 13.2"/></svg>',
   redo: '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M10.2 3.6 L13.1 6.7 L10 9.6 M13 6.7 H6.6 C4.1 6.7 2.6 8.4 2.8 10.6 C3 12.2 4.1 13.1 5.6 13.2"/></svg>',
+  // the contour lines: a hill's two rings, an open line further down
   terrain: '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M3.4 8.6 C3.1 5.9 6.2 4.4 9.1 4.8 C12 5.2 13.3 7.4 12.5 9.2 C11.6 11.1 7.4 11.5 5.2 10.6 C4.2 10.2 3.5 9.5 3.4 8.6 Z M6.4 8.1 C6.5 7 7.8 6.6 8.9 6.9 C10 7.2 10.2 8.2 9.5 8.8 C8.7 9.4 6.6 9.2 6.4 8.1 Z M1.2 11.2 C2.6 13.6 6.6 14.1 9.6 13.6 C12.2 13.2 14.2 12 14.8 10.4"/></svg>',
 };
 

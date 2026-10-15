@@ -4,8 +4,8 @@
 // camera: photo mode, one tap away. It shows as pressed while photo mode
 // is on; its options, like any tool's, are in the Build menu's dock, where
 // Zpět and Znovu (undo, redo) stand too.
-// Terrain sits in the Build menu, under Erase; the controls keep what's
-// set now and then (colours, files, language…).
+// Terrain is an option in the dock too (tools/terrain.js); the controls
+// keep what's set now and then (colours, files, language…).
 // The name can be edited in place; the book beside it opens the chronicle.
 // The controls fold into their menu button: they start folded and open,
 // on a wide screen, as a line of words along the top edge, left of the
@@ -27,8 +27,12 @@ const MENU_ICON = `<svg class="icon menu-icon" viewBox="0 0 16 16" aria-hidden="
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 // a button in the controls: its drawing and its name (control.<act>), also
 // on hover for when the name is hidden (narrow screens)
-const control = (act, title = t(`control.${act}`), label = title) =>
-  `<button data-act="${act}" title="${title}">${controlIcon(act)}<span class="label">${label}</span></button>`;
+const control = (act, title = t(`control.${act}`), label = title, icon = act) =>
+  `<button data-act="${act}" title="${title}" aria-label="${title}">${controlIcon(icon)}<span class="label">${label}</span></button>`;
+
+// The language button names the language it switches to (not the one in use),
+// with that language's flag.
+const otherLanguage = () => Object.keys(LANGUAGES).find((code) => code !== language());
 
 export class Hud {
   constructor(root, { world, tools, chronicle, actions }) {
@@ -45,7 +49,7 @@ export class Hud {
         ${control('import')}
         ${control('newMap')}
         ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
-        ${control('language', `${t('control.language')}: ${LANGUAGES[language()]}`, LANGUAGES[language()])}
+        ${control('language', `${t('control.language')}: ${LANGUAGES[otherLanguage()]}`, LANGUAGES[otherLanguage()], `flag${otherLanguage()}`)}
         <span class="imprint">${CONFIG.app.name} v${CONFIG.app.version} · ${CONFIG.app.author}</span>
         <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
       </div>
