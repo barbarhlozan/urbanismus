@@ -62,12 +62,12 @@ control.debug
   en: Debug
 
 control.export
-  cs: Export
-  en: Export
+  cs: Uložit do souboru
+  en: Save to a file
 
 control.import
-  cs: Import
-  en: Import
+  cs: Otevřít ze souboru
+  en: Open from a file
 
 control.newMap
   cs: Nová mapa

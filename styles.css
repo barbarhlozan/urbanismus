@@ -545,7 +545,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   background: none;
   color: var(--fg);
 }
-/* pointed at, and open (Colours, Language): as the Build menu's tiles –
+/* pointed at, and open (Colours): as the Build menu's tiles –
    a light wash of ink, then filled */
 #ui .controls button:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
 #ui .controls button.on { background: var(--fg); color: var(--bg); }
@@ -591,6 +591,8 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   .controls .imprint { order: 98; align-self: center; padding: 0 9px 0 4px; }
   #ui .controls button { padding: 4px 9px; }
   .controls button .ctl-icon, .controls button[data-act="colors"] .swatches { display: none; }
+  /* except the language button's flag, after its word */
+  .controls button[data-act="language"] .ctl-icon { display: inline; order: 1; }
 }
 
 /* the camera: photo mode, alone in the bottom-right corner (hud.js) – below
@@ -1197,14 +1199,6 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 }
 #ui .color-panel .scheme:hover, #ui .color-panel .scheme.on { background: var(--fg); color: var(--bg); }
 #ui .color-panel .scheme.on::after { content: "✓"; margin-left: auto; }
-/* the Language menu (ui/languages.js): the Colours panel's box, narrow, no
-   heading, just each language in its own name, the one in use ticked;
-   placed by the script under its button */
-.lang-panel { width: auto; }
-#ui .lang-panel .lang { display: flex; align-items: center; gap: 14px; width: 100%; padding: 7px 12px; text-align: left; white-space: nowrap; }
-#ui .lang-panel .lang:hover, #ui .lang-panel .lang[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
-#ui .lang-panel .lang[aria-pressed="true"]::after { content: "✓"; margin-left: auto; }
-body.touch #ui .lang-panel .lang { min-height: 40px; }
 .color-panel .custom-fields { padding: 4px 10px 8px 10px; border-top: var(--line) dashed var(--detail); }
 .color-panel .custom-fields label { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
 .color-panel .field-name { flex: 1; color: var(--detail); }
