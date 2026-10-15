@@ -26,6 +26,13 @@ with a **Size** button (**Shift**). While a tool is in hand, it sits in the dock
 bottom edge with its options (size, rotate, another look, bend…) beside it and an **×** to
 put it down.
 
+**Zpět** (Undo) takes back your last change to the town – a building, a road, a demolition, a
+whole click's worth – and **Znovu** (Redo) puts it back. Both stand in the dock, **Zpět**
+whenever there is something to take back (also with nothing in hand, so a change can be undone
+after you put the tool down; on a computer then in a small dock of its own) and **Znovu** right
+after an undo, until you change something else. **⌘Z** / **Ctrl+Z** and **⇧⌘Z** / **Ctrl+Y**
+do the same. If something now stands in the way of a step, it says so and the step is dropped.
+
 Shortcuts come in two steps that follow the Build menu: the **number row** opens a group
 (**1** Doprava, **2** Bydlení, **3** Občanská vybavenost, **4** Výroba, **5** Prostranství,
 **6** Památky – the numbers are on the tabs), and the **letter rows** pick a tool in the

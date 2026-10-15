@@ -294,6 +294,23 @@ build.drop
   cs: Odložit
   en: Put it down
 
+# Take back the last change / put it back (in the dock; ⌘Z, ⇧⌘Z)
+undo
+  cs: Zpět
+  en: Undo
+
+redo
+  cs: Znovu
+  en: Redo
+
+undo.refused
+  cs: Nejde vzít zpět
+  en: Can't be taken back
+
+redo.refused
+  cs: Nejde udělat znovu
+  en: Can't be done again
+
 group.transport
   cs: Doprava
   en: Transport

@@ -6,6 +6,12 @@
 // name with its options (size, rotate, another look…) beside it and an × to
 // put it down. The dock serves photo mode the same way (the camera, its
 // lens, Take, Move), though its button is the camera in the corner (hud.js).
+// Zpět (Undo) stands in the dock beside the rest, and Znovu (Redo) next to
+// it right after an undo (historyOffer.js decides when): with a tool in hand
+// before its ×, with nothing in hand beside the Build button – on a wide
+// screen alone in a small dock, with no Build button, since the rail is
+// enough there. Each is a word with a small hooked arrow; they run the
+// same code as ⌘Z (main.js takeBack).
 // An option that's a setting (Terrain, the contour lines: tools/terrain.js)
 // shows pressed in the dock while on.
 //
@@ -29,6 +35,7 @@
 
 import { CATEGORIES } from '../../structures/index.js';
 import { toolIcon } from './icons.js';
+import { historyOffer } from './historyOffer.js';
 import { isNarrow, isWide } from './device.js';
 import { keyLabel, GROUP_KEYS, slotKey } from './keys.js';
 import { corner, drawer, fadeIn, cascade } from './motion.js';
@@ -53,13 +60,17 @@ const OPTION = {
   'bend-diagonal': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 12.5 L8 7 H13.5"/><circle cx="2.5" cy="12.5" r="1.1"/></svg>',
   'bend-straight': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 12.5 H8 L13.5 7"/><circle cx="2.5" cy="12.5" r="1.1"/></svg>',
   'another-look': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 2.5 H13.5 V13.5 H2.5 Z"/><circle cx="5.5" cy="5.5" r="0.9"/><circle cx="10.5" cy="10.5" r="0.9"/><circle cx="8" cy="8" r="0.9"/></svg>',
+  // taking a step back, and putting it back: a hooked arrow each way
+  undo: '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M5.8 3.6 L2.9 6.7 L6 9.6 M3 6.7 H9.4 C11.9 6.7 13.4 8.4 13.2 10.6 C13 12.2 11.9 13.1 10.4 13.2"/></svg>',
+  redo: '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M10.2 3.6 L13.1 6.7 L10 9.6 M13 6.7 H6.6 C4.1 6.7 2.6 8.4 2.8 10.6 C3 12.2 4.1 13.1 5.6 13.2"/></svg>',
   // the contour lines: a hill's two rings, an open line further down
   terrain: '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M3.4 8.6 C3.1 5.9 6.2 4.4 9.1 4.8 C12 5.2 13.3 7.4 12.5 9.2 C11.6 11.1 7.4 11.5 5.2 10.6 C4.2 10.2 3.5 9.5 3.4 8.6 Z M6.4 8.1 C6.5 7 7.8 6.6 8.9 6.9 C10 7.2 10.2 8.2 9.5 8.8 C8.7 9.4 6.6 9.2 6.4 8.1 Z M1.2 11.2 C2.6 13.6 6.6 14.1 9.6 13.6 C12.2 13.2 14.2 12 14.8 10.4"/></svg>',
 };
 
 export class BuildMenu {
-  constructor(root, tools, actions = {}) {
+  constructor(root, tools, actions = {}, history = null) {
     this.tools = tools;
+    this.history = history;
     const shown = tools.list().filter((t) => t.toolbar !== false);
     this.groups = CATEGORIES.filter((c) => shown.some((t) => t.group === c.id));
     let saved = null;
@@ -99,6 +110,10 @@ export class BuildMenu {
       <div class="bm-dock">
         <button class="bm-toggle" aria-label="${t('build.open')}"><span class="bm-held"></span><span class="bm-label">${t('build')}</span></button>
         <span class="bm-opts"></span>
+        <span class="bm-history">
+          <button data-act="undo" hidden title="${t('undo')}" aria-label="${t('undo')}">${OPTION.undo}<span>${t('undo')}</span></button>
+          <button data-act="redo" hidden title="${t('redo')}" aria-label="${t('redo')}">${OPTION.redo}<span>${t('redo')}</span></button>
+        </span>
         <button class="bm-drop" title="${t('build.drop')} (Esc)" aria-label="${t('build.drop')}">×<span class="key">Esc</span></button>
       </div>`;
     root.appendChild(this.el);
@@ -108,6 +123,8 @@ export class BuildMenu {
     this.heldEl = this.el.querySelector('.bm-held');
     this.labelEl = this.el.querySelector('.bm-label');
     this.optsEl = this.el.querySelector('.bm-opts');
+    this.undoEl = this.el.querySelector('[data-act="undo"]');
+    this.redoEl = this.el.querySelector('[data-act="redo"]');
     this.captionEl = this.el.querySelector('.bm-caption');
     this.titleEl = this.el.querySelector('.bm-title');
     this.bodyEl = this.el.querySelector('.bm-body');
@@ -146,7 +163,11 @@ export class BuildMenu {
       tools.use(id);
     });
 
+    this.showHistory();
+    history?.onChange(() => this.showHistory());
+
     tools.onChange((tool) => {
+      this.showHistory();
       if (tool.group) this.openGroup(tool.group, false);
       for (const b of this.el.querySelectorAll('.bm-tool')) b.classList.toggle('active', b.dataset.tool === tool.id);
       // (photo mode isn't in the menu, but it's held in the dock all the same)
@@ -283,6 +304,14 @@ export class BuildMenu {
   // rail, where the drawer is: the drawer folds to make room for it.
   makeRoom() {
     if (this.rail && !this.folded) this.fold(true, false);
+  }
+
+  // Zpět and Znovu as far as there is something to take back or put back.
+  showHistory() {
+    const offer = this.history ? historyOffer(this.history, this.tools.active?.id) : { undo: false, redo: false };
+    this.undoEl.hidden = !offer.undo;
+    this.redoEl.hidden = !offer.redo;
+    this.el.classList.toggle('has-history', offer.undo || offer.redo);
   }
 
   // The options of the tool in hand, shown in the dock while the panel is
