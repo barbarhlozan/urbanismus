@@ -2,16 +2,14 @@
 // border and a caption, with a button to save it as a PNG. While it's out,
 // photo mode rests: the map, its keys and the camera's controls wait until
 // the print is put away (main.js, through onToggle; styles.css
-// body.print-open).
+// body.print-open). It is pasted into the chronicle too (main.js,
+// ui/prints.js).
 
 import { sketchFrame } from './sketchFrame.js';
 import { t } from '../core/text.js';
+import { printImage } from './prints.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-// computed styles copied onto each element for the PNG (the page's CSS does
-// not reach an SVG drawn into a canvas)
-const PROPS = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'opacity', 'fill-opacity', 'stroke-opacity', 'display', 'visibility', 'vector-effect'];
 
 export class PhotoPrint {
   constructor(root, { onToggle = () => {} } = {}) {
@@ -50,37 +48,19 @@ export class PhotoPrint {
     return !this.el.classList.contains('hidden');
   }
 
+  // The <svg> of the photo shown.
+  get photo() {
+    return this.el.querySelector('svg.photo');
+  }
+
   async save() {
-    const src = this.el.querySelector('svg.photo');
+    const src = this.photo;
     if (!src) return;
-    const copy = src.cloneNode(true);
-    const from = [src, ...src.querySelectorAll('*')];
-    const to = [copy, ...copy.querySelectorAll('*')];
-    from.forEach((el, i) => {
-      const cs = getComputedStyle(el);
-      to[i].setAttribute('style', PROPS.map((p) => `${p}:${cs.getPropertyValue(p)}`).join(';'));
-    });
-    const [w, h] = [Number(src.getAttribute('width')), Number(src.getAttribute('height'))];
-    const scale = 3;
-    copy.setAttribute('width', w * scale);
-    copy.setAttribute('height', h * scale);
-    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)], { type: 'image/svg+xml' }));
-    try {
-      const img = new Image();
-      img.src = url;
-      await img.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = w * scale;
-      canvas.height = h * scale;
-      canvas.getContext('2d').drawImage(img, 0, 0);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${this.caption.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').toLowerCase() || 'photo'}.png`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+    const blob = await printImage(src, { scale: 3, type: 'image/png' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${this.caption.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').toLowerCase() || 'photo'}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 }

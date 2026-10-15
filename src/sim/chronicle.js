@@ -8,8 +8,11 @@
 //
 // Each entry is { day, text, kind }: `day` counts the chronicle's days
 // (config.chronicle.day game seconds each) from the town's start; `kind` is
-// 'town' or 'story'. world.chronicle.marks lists what has had its line
-// already ('first:park', 'residents:100'…), so nothing is written twice.
+// 'town', 'story' or 'photo' (a photo pasted in: `print` names its picture,
+// ui/prints.js, `text` is its caption). world.chronicle.marks lists what
+// has had its line already ('first:park', 'residents:100'…), so nothing is
+// written twice; world.chronicle.seen counts the entries read, so the book
+// can mark the rest (and the button wears a dot while there are any).
 
 import { STRUCTURE_TYPES, matches } from '../../structures/index.js';
 
@@ -100,7 +103,7 @@ export class Chronicle {
     // (marks of a size, as old saves have them – 'first:apartments-wide' – are
     // marks of the thing)
     this.data.marks = [...new Set(this.data.marks.map((m) => m.replace(/^first:(.+)$/, (k, t) => (STRUCTURE_TYPES[t] ? `first:${firstOf(t)}` : k))))];
-    this.unread = false;
+    this.data.seen ??= this.entries.length;
 
     // a town without a chronicle yet (new, or saved before there were
     // chronicles): what's already there counts as written
@@ -141,15 +144,35 @@ export class Chronicle {
     return this.data.entries;
   }
 
+  // Something written since the book was last read (an undo may have taken
+  // the lines back again).
+  get unread() {
+    return this.entries.length > this.data.seen;
+  }
+
+  // Everything so far read (the book was opened).
+  read() {
+    this.data.seen = this.entries.length;
+  }
+
   day() {
     return Math.floor((this.world.time ?? 0) / this.config.day) + 1;
   }
 
   // A line in the chronicle (`notify`: tell the book there's something new).
   write(text, kind = 'town', notify = true) {
-    this.entries.push({ day: this.day(), text, kind });
-    if (notify) this.unread = true;
-    this.world.events.emit('chronicle:added', this.entries[this.entries.length - 1]);
+    this.add({ day: this.day(), text, kind }, notify);
+  }
+
+  // A photo pasted in: its print's id (ui/prints.js) and caption.
+  photo(print, caption) {
+    this.add({ day: this.day(), text: caption, kind: 'photo', print });
+  }
+
+  add(entry, notify = true) {
+    this.entries.push(entry);
+    if (!notify) this.data.seen = this.entries.length;
+    this.world.events.emit('chronicle:added', entry);
   }
 
   marked(key) {

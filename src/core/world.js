@@ -1158,6 +1158,10 @@ export class World {
     world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [] };
     const marks = data.chronicle?.marks ?? [];
     world.chronicle = { entries: data.chronicle?.entries ?? [], marks: (data.version ?? 1) < 4 ? upgradeMarks(marks) : marks };
+    // how many of the entries have been read, and the book's tab last open
+    // (older saves: everything read, the book at its chronicle)
+    world.chronicle.seen = data.chronicle?.seen ?? world.chronicle.entries.length;
+    if (data.chronicle?.tab) world.chronicle.tab = data.chronicle.tab;
     return world;
   }
 }

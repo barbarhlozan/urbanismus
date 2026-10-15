@@ -67,11 +67,14 @@ test('a number in words takes its noun\'s gender and form', () => {
   assert.equal(t('stat.jobs.n', { n: 1 }), 'jedno pracovní místo');
   assert.equal(t('stat.jobs.n', { n: 2 }), 'dvě pracovní místa');
   assert.equal(t('ledger.kind.pub', { n: 3 }), 'tři hospody');
-  assert.equal(t('ledger.kind.school', { n: 1 }), 'jedna škola');
-  assert.equal(t('ledger.home.house', { n: 12 }), 'dvanáct domů');
+  assert.equal(t('ledger.kind.school', { n: 1 }), 'škola'); // (one: the thing alone)
+  assert.equal(t('ledger.kind.church', { n: 12 }), 'dvanáct kostelů');
+  assert.equal(t('ledger.homes.n', { n: 2 }), 'dva');
+  assert.equal(t('ledger.work.n', { n: 2 }), 'dvě');
   setLanguage('en');
   assert.equal(t('stat.residents.n', { n: 42 }), 'forty-two residents');
-  assert.equal(t('ledger.kind.church', { n: 1 }), 'one church');
+  assert.equal(t('ledger.kind.church', { n: 1 }), 'church');
+  assert.equal(t('ledger.kind.church', { n: 3 }), 'three churches');
 });
 
 test('numbers fill in, in the right form', () => {

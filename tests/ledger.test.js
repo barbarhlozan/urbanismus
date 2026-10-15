@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { flatWorld, road } from './helpers.js';
 import { addText, setLanguage, FILES } from '../src/core/text.js';
-import { tally, ledgerLines, ledgerTitle, ledgerHTML, settlementOf } from '../src/ui/ledger.js';
+import { tally, ledgerLines, ledgerHas, ledgerTitle, ledgerHTML, settlementOf } from '../src/ui/ledger.js';
 import { Chronicle } from '../src/sim/chronicle.js';
 import { CONFIG } from '../src/config.js';
 
@@ -28,25 +28,22 @@ test('counts what is served, and what stands', () => {
   const n = tally(town());
   assert.equal(n.residents, 12);
   assert.equal(n.jobs, 2 + 2 + 2);
-  assert.deepEqual(n.homes, [['house', 4]]);
+  assert.equal(n.homes, 4);
   assert.deepEqual(n.has, [['church', 1], ['pub', 2]]);
-  assert.equal(n.cutoff, 1);
 });
 
 test('the lines, in words, in Czech and in English', () => {
   const n = tally(town());
   setLanguage('cs');
   assert.deepEqual(ledgerLines(n), [
-    ['Lidé', 'dvanáct obyvatel'],
-    ['Domy', 'čtyři domy'],
-    ['Práce', 'šest pracovních míst'],
-    ['V obci', 'jeden kostel, dvě hospody'],
-    ['Bez cesty', 'jedna stavba'],
+    ['Lidé', 'dvanáct'],
+    ['Domy', 'čtyři'],
+    ['Práce', 'šest'],
   ]);
+  assert.deepEqual(ledgerHas(n), ['kostel', 'dvě hospody']);
   setLanguage('en');
-  assert.deepEqual(ledgerLines(n).map(([, text]) => text), [
-    'twelve residents', 'four houses', 'six jobs', 'one church, two pubs', 'one building',
-  ]);
+  assert.deepEqual(ledgerLines(n).map(([, text]) => text), ['twelve', 'four', 'six']);
+  assert.deepEqual(ledgerHas(n), ['church', 'two pubs']);
 });
 
 test('noughts are left out, unless they are the news', () => {
@@ -58,7 +55,7 @@ test('noughts are left out, unless they are the news', () => {
   w.placeStructure('house', w.grid.index(3, 6));
   const lines = ledgerLines(tally(w));
   assert.deepEqual(lines.find(([r]) => r === 'Práce'), ['Práce', 'zatím tu není kde pracovat']);
-  assert.ok(!lines.some(([r]) => r === 'Bez cesty' || r === 'V obci'));
+  assert.deepEqual(ledgerHas(tally(w)), []);
   setLanguage('en');
 });
 
@@ -80,7 +77,7 @@ test('the heading names the place by its size, never twice', () => {
 test('writing the ledger does not mark the chronicle unread', () => {
   const w = town();
   const c = new Chronicle(w, CONFIG);
-  c.unread = false;
+  c.read();
   const entries = c.entries.length;
   const html = ledgerHTML(w, c.day());
   assert.match(html, /ledger-title/);

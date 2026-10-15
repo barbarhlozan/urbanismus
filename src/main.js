@@ -36,6 +36,8 @@ import { createPhotoTool } from './tools/photo.js';
 import { contoursSetting } from './tools/terrain.js';
 import { takePhoto } from './render/photo.js';
 import { PhotoPrint } from './ui/photoPrint.js';
+import { printImage, putPrint, newPrintId, subjectOf, clearPrints } from './ui/prints.js';
+import { nameOf } from './ui/names.js';
 import { Popup } from './ui/popup.js';
 import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
@@ -47,7 +49,7 @@ import { sketchFrames, HANDS } from './ui/sketchFrame.js';
 import { penMarks } from './ui/penMarks.js';
 import { reveal } from './ui/motion.js';
 import { attachInput } from './ui/input.js';
-import { exportCity, pickCity } from './ui/saveFile.js';
+import { exportCity, pickCity, putPrints } from './ui/saveFile.js';
 import { createCommands } from './dev/commands.js';
 import { BUILD_FAMILIES, STRUCTURE_TYPES, kindShown } from '../structures/index.js';
 import { keyOf } from './ui/keys.js';
@@ -217,11 +219,27 @@ const photoPrint = new PhotoPrint(uiRoot, {
 });
 tools.register(createPhotoTool(ctx, {
   shoot: (shot) => {
-    photoPrint.show(takePhoto(renderer, shot), world.name);
+    // captioned with the one building that stands out in it, if one does
+    const subject = subjectOf(world, shot);
+    const caption = subject ? nameOf(subject) : world.name;
+    photoPrint.show(takePhoto(renderer, shot), caption);
     world.story.vars.photos_taken = (world.story.vars.photos_taken ?? 0) + 1;
-    chronicle.first('photo', `Someone took a photograph of ${world.name}.`);
+    pasteIn(photoPrint.photo, caption);
   },
 }));
+
+// Every photo goes into the chronicle: its print kept (ui/prints.js), then
+// its entry written, so the book never shows an entry before its picture.
+async function pasteIn(svg, caption) {
+  const id = newPrintId();
+  try {
+    const blob = await printImage(svg);
+    if (blob) await putPrint(id, blob);
+  } catch (err) {
+    console.warn('The print could not be kept.', err);
+  }
+  chronicle.photo(id, caption);
+}
 
 const actions = {
   debug: () => { debugPanel.toggle(); if (debugPanel.open) hud.buildMenu.makeRoom(); },
@@ -290,7 +308,7 @@ function explainHomeScreen() {
 }
 
 // Discard this city and start over with the New map menu's settings.
-function newMap(settings) {
+async function newMap(settings) {
   world.events.off('*', scheduleSave);
   clearTimeout(saveTimer);
   try {
@@ -299,6 +317,7 @@ function newMap(settings) {
   } catch {
     // storage unavailable: the reload rolls a map of its own
   }
+  await clearPrints(); // (the old town's photos go with it)
   location.reload();
 }
 
@@ -320,7 +339,7 @@ async function importCity() {
     { label: t('import.replace'), note: t('import.replace.note'), action: () => replaceCity(city) },
     { label: t('cancel'), action: () => {} },
   ]);
-  function replaceCity(city) {
+  async function replaceCity(city) {
     world.events.off('*', scheduleSave);
     clearTimeout(saveTimer);
     try {
@@ -329,6 +348,7 @@ async function importCity() {
       world.events.on('*', scheduleSave);
       return say(t('import.failed'), [{ label: t('import.storage'), info: true }]);
     }
+    await putPrints(city);
     location.reload();
   }
 }
