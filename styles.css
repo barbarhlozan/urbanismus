@@ -727,12 +727,12 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
   position: absolute;
   right: 13px;
   bottom: 9px;
-  font-size: 18px;
-  animation: dlg-nudge 1.2s ease-in-out infinite;
+  width: 10px;
+  height: 16px;
+  overflow: visible;
 }
+.dlg-more path { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
 .dialogue.typing .dlg-more, .dialogue.choosing .dlg-more { visibility: hidden; }
-@keyframes dlg-nudge { 50% { transform: translateX(3px); } }
-@media (prefers-reduced-motion: reduce) { .dlg-more { animation: none; } }
 .dlg-choices:empty { display: none; }
 .dlg-choices { border-top: var(--line) solid var(--fg); padding: 4px 0; }
 #ui .dlg-choices button {
@@ -963,7 +963,7 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
    its own name, the browser's guess in ink; the cover takes clicks then */
 .intro.asking { pointer-events: auto; }
 .intro-langs { display: flex; gap: 10px; margin-top: 22px; animation: intro-langs 400ms ease-out both; }
-.intro-langs .lang { font: 17px var(--ui-font); color: var(--detail); background: none; border: none; padding: 10px 12px; min-height: 44px; cursor: pointer; border-radius: var(--radius); transition: color 150ms, opacity 250ms; }
+.intro-langs .lang { font: 17px var(--ui-font); color: var(--detail); background: none; border: none; padding: 10px 12px; min-height: 44px; cursor: pointer; transition: color 150ms, opacity 250ms; }
 .intro-langs .lang[aria-pressed="true"] { color: var(--main); }
 .intro-langs.picked { pointer-events: none; }
 .intro-langs.picked .lang:not([aria-pressed="true"]) { opacity: 0; }
@@ -1043,7 +1043,7 @@ body.loading #ui { visibility: hidden; }
 /* Erase and Terrain: along the bottom, one bar high, side by side, a
    drawing and its name in each */
 .bm-loose { display: flex; border-top: var(--line) solid var(--fg); }
-#ui .bm-loose > button { flex: 1 1 auto; min-width: 0; position: relative; display: flex; align-items: center; flex-direction: row; justify-content: center; gap: 5px; height: var(--bar-h); padding: 0 4px; border-radius: 0; }
+#ui .bm-loose > button { flex: 1 1 auto; min-width: 0; position: relative; display: flex; align-items: center; flex-direction: row; justify-content: center; gap: 5px; height: var(--bar-h); padding: 0 4px; }
 #ui .bm-loose > button + button { border-left: var(--line) solid var(--fg); }
 .bm-loose .bm-icon { width: calc(var(--bar-h) - 14px); height: calc(var(--bar-h) - 14px); flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
 .bm-loose .bm-icon .ctl-icon { width: 16px; height: 16px; }
@@ -1096,6 +1096,8 @@ body.loading #ui { visibility: hidden; }
 .bm-opts .key, .bm-drop .key { font-size: 8px; color: var(--detail); font-weight: 400; letter-spacing: 0.02em; }
 body.touch .bm-opts .opt-icon, body.touch .bm-history .opt-icon { width: 18px; height: 18px; }
 body.touch .bm-history button { min-height: 44px; }
+/* each of the dock's buttons a finger wide */
+body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 44px; }
 
 /* the rail's title (below), not used over the dock */
 .bm-rail, .bm-title { display: none; }
@@ -1266,7 +1268,10 @@ body.touch .bm-history button { min-height: 44px; }
   .color-panel { top: calc(62px + var(--safe-t)); right: calc(8px + var(--safe-r)); }
   .color-panel .hex { font-size: 16px; width: 80px; } /* 16px: no zoom-in on focus in iOS */
 }
-body.touch #ui .color-panel .scheme { min-height: 40px; }
+/* a finger's room: every row and field 44px high */
+body.touch #ui .color-panel .scheme, body.touch .color-panel .custom-fields label { min-height: 44px; }
+body.touch .color-panel input[type="color"] { width: 36px; height: 28px; }
+body.touch .color-panel .hex { min-height: 36px; }
 
 /* ---------- New map menu (src/ui/newMapMenu.js) ---------- */
 
@@ -1320,7 +1325,7 @@ body.touch #ui .color-panel .scheme { min-height: 40px; }
   -webkit-user-select: text;
 }
 .newmap-panel .name-field:focus { border-bottom-color: var(--fg); }
-#ui .newmap-panel .dice { display: flex; align-items: center; padding: 4px; border-radius: 3px; }
+#ui .newmap-panel .dice { display: flex; align-items: center; padding: 4px; }
 #ui .newmap-panel .dice svg { width: 18px; height: 18px; }
 /* a setting: its drawing and name, the slider, what it's set to */
 .newmap-panel .newmap-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
@@ -1328,7 +1333,10 @@ body.touch #ui .color-panel .scheme { min-height: 40px; }
 .newmap-panel .newmap-row .ctl-icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--fg); }
 .newmap-panel .newmap-row .ctl-icon path { stroke-width: calc(1.1px * var(--stroke, 1)); fill: none; }
 .newmap-panel .slot { flex: 1; min-width: 0; }
-.newmap-panel .value { flex: 0 0 44px; text-align: right; font-weight: 700; transform-origin: right center; }
+.newmap-panel .value { flex: 0 0 44px; position: relative; text-align: right; font-weight: 700; }
+/* a value just picked, underlined for a moment (motion.js bump) */
+.newmap-panel .value .bump { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.newmap-panel .value .bump path { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
 /* hills, lakes and forests: a picture (landscapePreview.js) over their
    sliders, each with just its drawing (the words in its tooltip) */
 .newmap-panel .newmap-row.pictured .field-name { flex: 0 0 auto; }

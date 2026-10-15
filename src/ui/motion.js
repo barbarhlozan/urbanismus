@@ -1,13 +1,16 @@
 // UI motion, all in one place so everything moves alike – a little playful,
 // like paper on a desk. Panels land like a card tossed down: a slight tilt,
 // a slide that slows to a stop (paper doesn't bounce), their rows following
-// one by one and the pen frame drawn round. They go out quicker, lifting a
-// touch before they drop, the frame rubbed out. Folding boxes slide to
-// their new size. A pressed button grows a little and settles back.
+// one by one and the pen frame drawn round. They go out quicker, gathering
+// speed as they go, the frame rubbed out. Folding boxes slide to their new
+// size. A pressed button grows a little and settles back. Nothing
+// overshoots, bounces or moves on its own once it has settled.
 //
 // Panels are hidden with the .hidden class (display: none), so an exit
 // has to play before the class goes on: reveal() does both. With the
 // device's "reduce motion" setting on, everything just appears and goes.
+
+import { sketchLine, seedOf } from '../render/sketch.js';
 
 export const MOTION = {
   in: 340,     // ms: things arriving (most of it is the settling)
@@ -18,7 +21,7 @@ export const MOTION = {
   pressScale: 1.04, // how much a pressed button grows
   easeIn: 'cubic-bezier(0.2, 0.7, 0.3, 1)',      // arrives fast, settles
   land: 'cubic-bezier(0.15, 0.8, 0.25, 1)',      // arrives, slows to a stop, never past it
-  easeOut: 'cubic-bezier(0.4, -0.45, 0.75, 0.4)', // lifts a little, then goes
+  easeOut: 'cubic-bezier(0.4, 0, 1, 1)',          // goes, gathering speed (no pull back first)
 };
 
 // a small tilt, different each time, as if set down by hand
@@ -97,14 +100,34 @@ function follow(rows) {
   ));
 }
 
-// A little hop: a number that just changed, a value that was picked.
+// A pen line drawn on along its length, once (its path has pathLength 1).
+export function drawOn(path, duration = MOTION.in * 0.8) {
+  if (still() || !path) return;
+  path.animate([{ strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }], { duration, easing: MOTION.easeIn });
+}
+
+// A value that was just picked (New map): the pen underlines it, and the
+// line fades. The value itself stays put.
+let bumps = 0;
 export function bump(el) {
-  if (still() || !el) return;
-  el.animate([
-    { transform: 'none' },
-    { transform: 'translateY(-3px) scale(1.25)', offset: 0.35 },
-    { transform: 'none' },
-  ], { duration: 420, easing: 'cubic-bezier(0.3, 0.7, 0.4, 1)' });
+  if (still() || !el?.firstChild) return;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const text = range.getBoundingClientRect(), box = el.getBoundingClientRect();
+  if (!text.width) return;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'bump');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('pathLength', '1');
+  const x = text.left - box.left, y = text.bottom - box.top + 1.5;
+  path.setAttribute('d', sketchLine([x - 1, y], [x + text.width + 1, y + 0.5], seedOf(++bumps, 7), { over: 2, bow: 1 }));
+  svg.appendChild(path);
+  el.querySelector(':scope > .bump')?.remove();
+  el.appendChild(svg);
+  drawOn(path, 220);
+  svg.animate([{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }], { duration: 1200, fill: 'forwards' }).finished
+    .then(() => svg.remove(), () => {});
 }
 
 // A button pressed (by pointer or key, see penMarks.js): it grows a
