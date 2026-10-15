@@ -49,7 +49,7 @@ import { exportCity, pickCity } from './ui/saveFile.js';
 import { createCommands } from './dev/commands.js';
 import { BUILD_FAMILIES, STRUCTURE_TYPES, kindShown } from '../structures/index.js';
 import { keyOf } from './ui/keys.js';
-import { loadText, t, language, saveLanguage, needsLanguage } from './core/text.js';
+import { loadText, t, reasonText, language, saveLanguage, needsLanguage } from './core/text.js';
 
 applyTheme();
 // the words for everything on screen (text/*.txt), before any of it is built
@@ -219,6 +219,8 @@ const actions = {
   assets: () => assetsPage.toggle(),
   newMap: () => newMapMenu.toggle(),
   photo: () => tools.use(tools.active?.id === 'photo' ? 'inspect' : 'photo'),
+  undo: () => takeBack('undo'),
+  redo: () => takeBack('redo'),
   export: () => exportCity(world),
   import: () => importCity(),
   fullscreen: () => toggleFullscreen(),
@@ -434,6 +436,20 @@ function pickUp() {
   tools.use(tool.id, params);
 }
 
+// Take back the last change, or put it back (⌘Z, ⇧⌘Z and the dock's Zpět
+// and Znovu all come here). A step that can't be done, because something
+// now stands in the way, says why in a small menu beside the dock, as the
+// import's failure does.
+function takeBack(which) {
+  if (chronicleBook.open) return;
+  popup.hide(); // (its building may be gone)
+  if (!world.history[which === 'undo' ? 'canUndo' : 'canRedo']) return;
+  const result = world.history[which]();
+  if (result.ok) return;
+  const dock = uiRoot.querySelector('.bm-dock').getBoundingClientRect();
+  popup.show(innerWidth / 2, innerHeight, t(`${which}.refused`), [{ label: reasonText(result.reason), info: true }], null, dock.width ? dock : null);
+}
+
 attachInput(document.getElementById('input'), {
   camera,
   onPointer: (x, y) => tools.pointer(x, y),
@@ -453,8 +469,7 @@ window.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && !e.altKey && /^[zy]$/i.test(e.key) && !e.target.closest?.('input, textarea')) {
     e.preventDefault();
     if (chronicleBook.open) return;
-    popup.hide(); // (its building may be gone)
-    world.history[e.shiftKey || e.key.toLowerCase() === 'y' ? 'redo' : 'undo']();
+    takeBack(e.shiftKey || e.key.toLowerCase() === 'y' ? 'redo' : 'undo');
     return;
   }
   if (e.metaKey || e.ctrlKey || e.altKey) return;

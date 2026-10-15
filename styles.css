@@ -1036,7 +1036,7 @@ body.loading #ui { visibility: hidden; }
 .bm-opts { display: none; }
 .build-menu.has-tool .bm-opts { display: flex; }
 /* the options, each with its key under it (not on touch screens) */
-#ui .bm-opts button, #ui .bm-drop {
+#ui .bm-opts button, #ui .bm-history button, #ui .bm-drop {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1049,17 +1049,22 @@ body.loading #ui { visibility: hidden; }
   border-left: var(--line) solid var(--fg);
   white-space: nowrap;
 }
-#ui .bm-opts button:hover, #ui .bm-drop:hover { background: var(--fg); color: var(--bg); }
+#ui .bm-opts button:hover, #ui .bm-history button:hover, #ui .bm-drop:hover { background: var(--fg); color: var(--bg); }
 /* a setting that's on (Terrain): pressed, as the menu's tabs */
 #ui .bm-opts button.on { background: var(--fg); color: var(--bg); }
 #ui .bm-opts button.on .key { color: inherit; opacity: 0.7; }
-.bm-opts .opt-icon { width: 15px; height: 15px; }
-.bm-opts .opt-icon path, .bm-opts .opt-icon circle { stroke-width: 1.1 !important; fill: none !important; }
+.bm-opts .opt-icon, .bm-history .opt-icon { width: 15px; height: 15px; }
+.bm-opts .opt-icon path, .bm-opts .opt-icon circle, .bm-history .opt-icon path { stroke-width: 1.1 !important; fill: none !important; }
+/* Zpět and Znovu: a word with its hooked arrow, in the options' style */
+.bm-history { display: flex; }
+#ui .bm-history button { flex-direction: row; gap: 5px; font-size: 11px; font-weight: 600; }
+#ui .bm-history button[hidden] { display: none; }
 #ui .bm-drop { display: none; font-size: 16px; }
 #ui .build-menu.has-tool .bm-drop { display: flex; }
 .bm-opts .key, .bm-drop .key { font-size: 8px; color: var(--detail); font-weight: 400; letter-spacing: 0.02em; }
 #ui .bm-opts button:hover .key, #ui .bm-drop:hover .key { color: inherit; opacity: 0.7; }
-body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
+body.touch .bm-opts .opt-icon, body.touch .bm-history .opt-icon { width: 18px; height: 18px; }
+body.touch .bm-history button { min-height: 44px; }
 
 /* the rail's title (below), not used over the dock */
 .bm-rail, .bm-title { display: none; }
@@ -1129,7 +1134,10 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
    (the drawer folds for them: BuildMenu.makeRoom) */
 #ui:has(.build-menu.rail) .color-panel,
 #ui:has(.build-menu.rail) .debug-panel { right: calc(20px + var(--safe-r) + var(--bar-h) + 2 * var(--line) + 8px); }
-#ui .build-menu.rail.has-tool > .bm-dock { display: flex; }
+#ui .build-menu.rail.has-tool > .bm-dock,
+#ui .build-menu.rail.has-history > .bm-dock { display: flex; }
+/* with nothing in hand the dock holds only Zpět and Znovu */
+#ui .build-menu.rail:not(.has-tool) .bm-toggle { display: none; }
 
 
 /* icons: the map's line style at a small size */
@@ -1413,6 +1421,7 @@ body.touch .controls button { min-height: 44px; }
 body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 body.touch .bm-tool:hover:not(.active),
 body.touch .bm-tab:hover:not(.on),
+body.touch .bm-history button:hover:not(.on),
 body.touch .bm-toggle:hover { background: var(--bg) !important; color: var(--fg) !important; }
 body.touch .controls button:hover:not(.on) { background: none !important; color: var(--fg) !important; }
 
@@ -1445,7 +1454,7 @@ body.touch .controls button:hover:not(.on) { background: none !important; color:
   .bm-dock { max-width: 100%; }
   .build-menu.has-tool .bm-label { display: none; }
   #ui .build-menu.has-tool .bm-toggle { padding: 0 4px; }
-  #ui .bm-opts button, #ui .bm-drop { padding: 0 8px; }
+  #ui .bm-opts button, #ui .bm-history button, #ui .bm-drop { padding: 0 8px; }
   .bm-panel { width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); }
   /* Erase, Terrain: half a phone each – room for the names (the keys go:
      a phone has none) */

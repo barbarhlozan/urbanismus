@@ -2,7 +2,8 @@
 // controls (top-right), the Build menu (bottom centre, or a rail on the
 // right; see buildMenu.js) and, alone in the bottom-right corner, the
 // camera: photo mode, one tap away. It shows as pressed while photo mode
-// is on; its options, like any tool's, are in the Build menu's dock.
+// is on; its options, like any tool's, are in the Build menu's dock, where
+// Zpět and Znovu (undo, redo) stand too.
 // Terrain sits in the Build menu, under Erase; the controls keep what's
 // set now and then (colours, files, language…).
 // The name can be edited in place; the book beside it opens the chronicle.
@@ -111,7 +112,7 @@ export class Hud {
       if (!controlsEl.contains(e.target)) fold(true);
     }, true);
 
-    this.buildMenu = new BuildMenu(root, tools, actions);
+    this.buildMenu = new BuildMenu(root, tools, actions, world.history);
   }
 
   update() {
