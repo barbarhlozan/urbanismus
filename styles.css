@@ -545,13 +545,9 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   background: none;
   color: var(--fg);
 }
-/* pointed at, and open (Colours): as the Build menu's tiles –
-   a light wash of ink, then filled */
-#ui .controls button:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
-#ui .controls button.on { background: var(--fg); color: var(--bg); }
+/* pointed at: underlined; open (Colours, New map): ringed (penMarks.js) */
 .controls .ctl-icon { color: var(--detail); }
-.controls button.on .ctl-icon { color: inherit; }
-/* the list: each row the list's full width, so the wash fills it */
+/* the list: each row the list's full width */
 #ui .controls button:not(.menu-toggle) { align-self: stretch; justify-content: flex-end; }
 
 /* the imprint, last in the menu: app name, version, author, small and quiet
@@ -613,12 +609,9 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   border: var(--line) solid var(--fg);
   border-radius: var(--radius);
 }
-#ui .photo-corner:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
-#ui .photo-corner.on { background: var(--fg); color: var(--bg); }
 .photo-corner .camera-icon path { stroke-width: calc(1.25px * var(--stroke, 1)); }
 .bm-held .camera-icon path { stroke-width: calc(1.1px * var(--stroke, 1)); }
 #ui .photo-corner.locked { display: none; }
-body.touch #ui .photo-corner:hover:not(.on) { background: var(--bg); }
 
 
 .popup {
@@ -661,7 +654,6 @@ body.touch #ui .photo-corner:hover:not(.on) { background: var(--bg); }
   line-height: 1;
   border-left: var(--line) solid var(--fg);
 }
-#ui .close:hover { background: var(--fg) !important; color: var(--bg) !important; }
 body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .popup button {
   display: flex;
@@ -671,11 +663,8 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
   padding: 8px 12px;
   text-align: left;
 }
-.popup button:hover:not(:disabled) { background: var(--fg) !important; color: var(--bg) !important; }
 .popup button:disabled { cursor: default; }
-.popup button:disabled .label { text-decoration: line-through; }
 .popup .unavailable, .popup button:disabled:not(.info):not(.heading) .label { color: var(--detail); }
-.popup .info .label { text-decoration: none !important; }
 .popup .note { font-size: 10px; color: var(--detail); }
 .popup { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); display: flex; flex-direction: column; }
 .popup-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
@@ -755,8 +744,6 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
   font-size: 13.5px;
 }
 .dlg-n { color: var(--detail); font-variant-numeric: tabular-nums; }
-#ui .dlg-choices button:hover, #ui .dlg-choices button.focus { background: var(--fg); color: var(--bg); }
-#ui .dlg-choices button:hover .dlg-n, #ui .dlg-choices button.focus .dlg-n { color: var(--bg); }
 
 /* ---------- Chronicle (src/ui/chronicleBook.js) ---------- */
 
@@ -977,7 +964,7 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .intro.asking { pointer-events: auto; }
 .intro-langs { display: flex; gap: 10px; margin-top: 22px; animation: intro-langs 400ms ease-out both; }
 .intro-langs .lang { font: 17px var(--ui-font); color: var(--detail); background: none; border: none; padding: 10px 12px; min-height: 44px; cursor: pointer; border-radius: var(--radius); transition: color 150ms, opacity 250ms; }
-.intro-langs .lang:hover, .intro-langs .lang:focus-visible, .intro-langs .lang[aria-pressed="true"] { color: var(--main); }
+.intro-langs .lang[aria-pressed="true"] { color: var(--main); }
 .intro-langs.picked { pointer-events: none; }
 .intro-langs.picked .lang:not([aria-pressed="true"]) { opacity: 0; }
 @keyframes intro-langs { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -1031,12 +1018,7 @@ body.loading #ui { visibility: hidden; }
 .bm-tabs { flex: 1; display: flex; }
 #ui .bm-tab { flex: 1; display: flex; align-items: center; justify-content: center; padding: 0; border-right: var(--line) solid var(--fg); position: relative; }
 .bm-tab .key { position: absolute; top: 2px; right: 4px; font-size: 9px; line-height: 1; color: var(--detail); }
-#ui .bm-tab.on .key { color: inherit; opacity: 0.7; }
 #ui .bm-tab .icon { width: calc(var(--bar-h) - 10px); height: calc(var(--bar-h) - 10px); }
-#ui .bm-tab:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
-#ui .bm-tab.on { background: var(--fg); color: var(--bg); }
-#ui .bm-tab.on .icon polygon, #ui .bm-tab.on .icon circle, #ui .bm-tab.on .icon .filled { fill: var(--fg); }
-#ui .bm-tab.on .icon .i-rail-dash { stroke: var(--fg); }
 #ui .bm-head .bm-fold { border-left: none; }
 .bm-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 6px; }
 .bm-caption { padding: 7px 4px 4px; font-size: 10px; color: var(--detail); letter-spacing: 0.04em; }
@@ -1052,12 +1034,9 @@ body.loading #ui { visibility: hidden; }
   justify-content: center;
   gap: 2px;
   padding: 4px 2px;
-  border-radius: 3px;
   text-align: center;
   min-width: 0;
 }
-#ui .bm-tool:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
-#ui .bm-tool.active { background: var(--fg); color: var(--bg); }
 .bm-tool .bm-icon { width: calc(var(--tile) - 34px); height: calc(var(--tile) - 34px); flex: 0 0 auto; display: flex; }
 .bm-tool .bm-name { font-size: 10px; line-height: 1.1; max-width: 100%; overflow-wrap: anywhere; }
 .bm-tool .key { position: absolute; top: 3px; right: 5px; font-size: 9px; color: var(--detail); white-space: nowrap; }
@@ -1066,8 +1045,6 @@ body.loading #ui { visibility: hidden; }
 .bm-loose { display: flex; border-top: var(--line) solid var(--fg); }
 #ui .bm-loose > button { flex: 1 1 auto; min-width: 0; position: relative; display: flex; align-items: center; flex-direction: row; justify-content: center; gap: 5px; height: var(--bar-h); padding: 0 4px; border-radius: 0; }
 #ui .bm-loose > button + button { border-left: var(--line) solid var(--fg); }
-#ui .bm-loose > button:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
-#ui .bm-loose > button.on { background: var(--fg); color: var(--bg); }
 .bm-loose .bm-icon { width: calc(var(--bar-h) - 14px); height: calc(var(--bar-h) - 14px); flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
 .bm-loose .bm-icon .ctl-icon { width: 16px; height: 16px; }
 .bm-loose .bm-icon .ctl-icon path, .bm-loose .bm-icon .ctl-icon circle { stroke-width: 1.1 !important; fill: none !important; }
@@ -1086,14 +1063,11 @@ body.loading #ui { visibility: hidden; }
   font-size: 12px;
   font-weight: 600;
 }
-#ui .bm-toggle:hover { background: var(--fg); color: var(--bg); }
 .bm-toggle::before { content: "+"; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
 .build-menu.has-tool .bm-toggle::before { display: none; }
 #ui .build-menu.has-tool .bm-toggle { padding: 0 12px 0 6px; }
 .bm-held { display: none; width: calc(var(--bar-h) - 6px); height: calc(var(--bar-h) - 6px); }
 .build-menu.has-tool .bm-held { display: flex; }
-#ui .bm-toggle:hover .icon polygon, #ui .bm-toggle:hover .icon circle, #ui .bm-toggle:hover .icon .filled { fill: var(--fg); }
-#ui .bm-toggle:hover .icon .i-rail-dash { stroke: var(--fg); }
 .bm-opts { display: none; }
 .build-menu.has-tool .bm-opts { display: flex; }
 /* the options, each with its key under it (not on touch screens) */
@@ -1110,10 +1084,7 @@ body.loading #ui { visibility: hidden; }
   border-left: var(--line) solid var(--fg);
   white-space: nowrap;
 }
-#ui .bm-opts button:hover, #ui .bm-history button:hover, #ui .bm-drop:hover { background: var(--fg); color: var(--bg); }
-/* a setting that's on (Terrain): pressed, as the menu's tabs */
-#ui .bm-opts button.on { background: var(--fg); color: var(--bg); }
-#ui .bm-opts button.on .key { color: inherit; opacity: 0.7; }
+/* a setting (Terrain): a small box in the corner, crossed while on (penMarks.js) */
 .bm-opts .opt-icon, .bm-history .opt-icon { width: 15px; height: 15px; }
 .bm-opts .opt-icon path, .bm-opts .opt-icon circle, .bm-history .opt-icon path { stroke-width: 1.1 !important; fill: none !important; }
 /* Zpět and Znovu: a word with its hooked arrow, in the options' style */
@@ -1123,7 +1094,6 @@ body.loading #ui { visibility: hidden; }
 #ui .bm-drop { display: none; font-size: 16px; }
 #ui .build-menu.has-tool .bm-drop { display: flex; }
 .bm-opts .key, .bm-drop .key { font-size: 8px; color: var(--detail); font-weight: 400; letter-spacing: 0.02em; }
-#ui .bm-opts button:hover .key, #ui .bm-drop:hover .key { color: inherit; opacity: 0.7; }
 body.touch .bm-opts .opt-icon, body.touch .bm-history .opt-icon { width: 18px; height: 18px; }
 body.touch .bm-history button { min-height: 44px; }
 
@@ -1209,7 +1179,6 @@ body.touch .bm-history button { min-height: 44px; }
 .icon .gnd { stroke-width: calc(0.5px * var(--stroke, 1)); }
 .icon .glyph { stroke-width: calc(0.6px * var(--stroke, 1)); }
 .icon .d2 { display: none; }
-.bm-tool.active .icon polygon, .bm-tool.active .icon circle, .bm-tool.active .icon .filled { fill: var(--fg); }
 .icon .i-road { stroke-width: calc(2.4px * var(--stroke, 1)); }
 .icon .i-lane { stroke-width: calc(1.5px * var(--stroke, 1)); }
 .icon .i-path { stroke-width: calc(1.2px * var(--stroke, 1)); stroke-dasharray: calc(3px * var(--stroke, 1)) calc(2.5px * var(--stroke, 1)); stroke-linecap: butt; }
@@ -1217,8 +1186,6 @@ body.touch .bm-history button { min-height: 44px; }
 .icon .i-rail { stroke-width: calc(3.6px * var(--stroke, 1)); stroke-linecap: butt; stroke-linejoin: round; }
 /* dashes in the colour behind the icon, as .rail-dash on the map */
 .icon .i-rail-dash { stroke: var(--bg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-dasharray: calc(3.5px * var(--stroke, 1)) calc(3.5px * var(--stroke, 1)); stroke-linecap: butt; stroke-linejoin: round; }
-#ui .bm-tool:hover .icon .i-rail-dash { stroke: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
-#ui .bm-tool.active .icon .i-rail-dash { stroke: var(--fg); }
 .icon .i-eraser { stroke-width: calc(1.4px * var(--stroke, 1)); stroke-linejoin: round; }
 .icon .i-smudge { stroke-width: calc(1.2px * var(--stroke, 1)); stroke-dasharray: calc(2px * var(--stroke, 1)) calc(2px * var(--stroke, 1)); }
 
@@ -1264,8 +1231,8 @@ body.touch .bm-history button { min-height: 44px; }
   padding: 6px 10px;
   text-align: left;
 }
-#ui .color-panel .scheme:hover, #ui .color-panel .scheme.on { background: var(--fg); color: var(--bg); }
-#ui .color-panel .scheme.on::after { content: "✓"; margin-left: auto; }
+/* the scheme in use: ticked at the right (penMarks.js) */
+#ui .color-panel .scheme { padding-right: 34px; }
 .color-panel .custom-fields { padding: 4px 10px 8px 10px; border-top: var(--line) dashed var(--detail); }
 .color-panel .custom-fields label { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
 .color-panel .field-name { flex: 1; color: var(--detail); }
@@ -1300,7 +1267,6 @@ body.touch .bm-history button { min-height: 44px; }
   .color-panel .hex { font-size: 16px; width: 80px; } /* 16px: no zoom-in on focus in iOS */
 }
 body.touch #ui .color-panel .scheme { min-height: 40px; }
-body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); color: var(--fg); }
 
 /* ---------- New map menu (src/ui/newMapMenu.js) ---------- */
 
@@ -1356,7 +1322,6 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 .newmap-panel .name-field:focus { border-bottom-color: var(--fg); }
 #ui .newmap-panel .dice { display: flex; align-items: center; padding: 4px; border-radius: 3px; }
 #ui .newmap-panel .dice svg { width: 18px; height: 18px; }
-#ui .newmap-panel .dice:hover { background: var(--fg); color: var(--bg); }
 /* a setting: its drawing and name, the slider, what it's set to */
 .newmap-panel .newmap-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
 .newmap-panel .newmap-row .field-name { flex: 0 0 76px; display: flex; align-items: center; gap: 7px; color: var(--detail); }
@@ -1420,12 +1385,10 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 .newmap-confirm p { margin: 0; padding: 14px 14px 12px; }
 #ui .newmap-confirm button { display: block; width: 100%; padding: 10px 14px; text-align: left; border-top: var(--line) solid var(--fg); }
 #ui .newmap-confirm .export-go { font-weight: 700; }
-#ui .newmap-confirm button:hover { background: var(--fg); color: var(--bg); }
 body.touch #ui .newmap-confirm button { min-height: 44px; }
 .newmap-panel .newmap-foot { display: flex; border-top: var(--line) solid var(--fg); }
 #ui .newmap-panel .newmap-foot button { flex: 1; padding: 9px 0; }
 #ui .newmap-panel .newmap-foot .create { font-weight: 700; border-left: var(--line) solid var(--fg); }
-#ui .newmap-panel .newmap-foot button:hover { background: var(--fg); color: var(--bg); }
 @media (max-width: 640px) {
   .newmap-panel .name-field { font-size: 18px; } /* (16px+: no zoom-in on focus in iOS) */
 }
@@ -1450,10 +1413,30 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 .pm { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 4; }
 .pm path { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
 .pm-rel { position: relative; }
+/* each mark shows only in its state; the line under a word is drawn on
+   from the left */
+.pm :is(.pm-crop, .pm-u, .pm-ring, .pm-tick, .pm-x, .pm-held, .pm-strike) { display: none; }
+.pm .pm-u { display: inline; stroke-dasharray: 1 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset 140ms cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0s 140ms; }
+.pm .pm-held { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
+.pm .pm-strike { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+.pm :is(.pm-box, .pm-x) { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+/* pointed at (only where there's a pointer), or picked with the arrow keys */
+body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
+#ui .dlg-choices button.focus > .pm .pm-u { stroke-dashoffset: 0; opacity: 1; transition-delay: 0s; }
+/* chosen: ringed */
+#ui :is(.bm-tab.on, .bm-tool.active, .photo-corner.on, .controls button.on) > .pm .pm-ring { display: inline; }
+/* the line of words picked: ticked */
+#ui .scheme.on > .pm .pm-tick { display: inline; }
+/* a setting: its box, crossed while on */
+#ui .bm-opts [aria-pressed="true"] > .pm .pm-x { display: inline; }
+/* the tool in hand: its name boxed in the thick pen */
+#ui .build-menu.has-tool .bm-toggle > .pm .pm-held { display: inline; }
+/* can't be done here: struck through */
+#ui .popup button:disabled:not(.info):not(.heading) > .pm .pm-strike { display: inline; }
 /* keyboard focus: crop marks at the corners, in place of the browser's ring */
-.pm-crop { display: none; }
 .pm-host:focus-visible { outline: none; }
 .pm-host:focus-visible > .pm .pm-crop { display: inline; }
+@media (prefers-reduced-motion: reduce) { .pm .pm-u { transition: none; } }
 
 /* ---------- Sketched frames (src/ui/sketchFrame.js) ---------- */
 
@@ -1481,11 +1464,6 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 body.touch .build-menu .key { display: none; }
 body.touch .controls button { min-height: 44px; }
 body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
-body.touch .bm-tool:hover:not(.active),
-body.touch .bm-tab:hover:not(.on),
-body.touch .bm-history button:hover:not(.on),
-body.touch .bm-toggle:hover { background: var(--bg) !important; color: var(--fg) !important; }
-body.touch .controls button:hover:not(.on) { background: none !important; color: var(--fg) !important; }
 
 /* ---------- Narrow screens (phones) ---------- */
 
@@ -1621,9 +1599,6 @@ body.touch .controls button:hover:not(.on) { background: none !important; color:
 }
 
 
-/* secondary text on highlighted rows / buttons takes the row's text colour */
-#ui .bm-tool.active .key { color: inherit; opacity: 0.7; }
-
 /* the menu's keys stay out of sight until the pointer is on their tile or
    tab (or it has keyboard focus): the menu reads as a menu, not a keyboard
    chart, and the title still names the key. The options of the tool in
@@ -1659,7 +1634,6 @@ body.touch .controls button:hover:not(.on) { background: none !important; color:
 .photo-caption { font-size: 13px; text-align: center; padding: 2px 0; }
 .photo-buttons { display: flex; justify-content: center; gap: 8px; }
 .photo-buttons button { padding: 6px 14px; border: var(--line) solid var(--fg); }
-.photo-buttons button:hover { background: var(--fg) !important; color: var(--bg) !important; }
 
 svg.photo .photo-sky { fill: var(--bg); }
 svg.photo .photo-ground { fill: var(--bg); stroke: none; }

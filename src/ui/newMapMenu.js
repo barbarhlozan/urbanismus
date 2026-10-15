@@ -207,6 +207,7 @@ export class NewMapMenu {
     reveal(this.scrim, open, { fade: true });
     reveal(this.el, open, { from: [0, 10], rows: '.newmap-name, .newmap-scene, .newmap-row' });
     this.button.classList.toggle('on', open);
+    this.button.setAttribute('aria-expanded', String(open));
     if (open) {
       this.rollName();
       this.refresh();

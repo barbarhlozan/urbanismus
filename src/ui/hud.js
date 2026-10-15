@@ -1,7 +1,7 @@
 // Screen furniture: the town's name and its chronicle book (top-left),
 // controls (top-right), the Build menu (bottom centre, or a rail on the
 // right; see buildMenu.js) and, alone in the bottom-right corner, the
-// camera: photo mode, one tap away. It shows as pressed while photo mode
+// camera: photo mode, one tap away. It's ringed in pen while photo mode
 // is on; its options, like any tool's, are in the Build menu's dock, where
 // Zpět and Znovu (undo, redo) stand too.
 // Terrain is an option in the dock too (tools/terrain.js); the controls

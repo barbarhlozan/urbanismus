@@ -13,7 +13,9 @@
 // enough there. Each is a word with a small hooked arrow; they run the
 // same code as ⌘Z (main.js takeBack).
 // An option that's a setting (Terrain, the contour lines: tools/terrain.js)
-// shows pressed in the dock while on.
+// has a small box in the dock, crossed while it's on; the tool in hand has
+// its name boxed in the thick pen, the chosen tab and tile are ringed
+// (penMarks.js).
 //
 // Keys (ui/keys.js): the number row opens a group, the letter rows pick a
 // tool in the open group, its tiles in reading order – the keys shown on
@@ -169,7 +171,10 @@ export class BuildMenu {
     tools.onChange((tool) => {
       this.showHistory();
       if (tool.group) this.openGroup(tool.group, false);
-      for (const b of this.el.querySelectorAll('.bm-tool')) b.classList.toggle('active', b.dataset.tool === tool.id);
+      for (const b of this.el.querySelectorAll('.bm-tool')) {
+        b.classList.toggle('active', b.dataset.tool === tool.id);
+        b.setAttribute('aria-pressed', String(b.dataset.tool === tool.id));
+      }
       // (photo mode isn't in the menu, but it's held in the dock all the same)
       const picked = tool.id !== tools.defaultId;
       this.heldEl.innerHTML = picked ? toolIcon(tool) : '';
