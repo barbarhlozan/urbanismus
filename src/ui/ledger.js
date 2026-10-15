@@ -114,13 +114,15 @@ export function tally(world) {
   };
 }
 
-// The heading: "Ves Lipnice", or the name alone when it says so itself
-// (Nová Ves) or the settlement word is done without.
+// The heading: "Ves Lipnice", or the name alone when the settlement word
+// is done without, or the name already holds one of them (Nová Ves, České
+// Město – "Ves České Město" would read wrong).
 export function ledgerTitle(name, residents) {
   const kind = settlementOf(residents);
   if (!kind) return name;
-  const word = t(`ledger.settlement.${kind}`, { town: '' }).trim().toLowerCase();
-  if (new RegExp(`(^|\\s)${word}(\\s|$)`, 'i').test(name)) return name;
+  const words = SETTLEMENTS.map((s) => t(`ledger.settlement.${s.id}`, { town: '' }).trim().toLowerCase());
+  const own = name.toLowerCase().split(/\s+/);
+  if (words.some((w) => own.includes(w))) return name;
   return t(`ledger.settlement.${kind}`, { town: name });
 }
 

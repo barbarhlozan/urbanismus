@@ -904,20 +904,16 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 }
 .ledger-margin path { stroke: var(--detail); }
 .ledger-line {
+  display: flex;
   margin: 0;
-  padding-left: var(--margin);
-  text-indent: calc(var(--margin) * -1);
   break-inside: avoid;
 }
 .ledger-rubric {
-  display: inline-block;
-  width: var(--margin);
-  text-indent: 0;
+  flex: 0 0 var(--margin);
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--detail);
-  vertical-align: top;
 }
 .ledger-text { font-style: italic; }
 

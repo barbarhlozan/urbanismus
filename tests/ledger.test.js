@@ -71,6 +71,7 @@ test('the heading names the place by its size, never twice', () => {
   setLanguage('cs');
   assert.equal(ledgerTitle('Lipnice', 120), 'Ves Lipnice');
   assert.equal(ledgerTitle('Nová Ves', 120), 'Nová Ves');
+  assert.equal(ledgerTitle('České Město', 120), 'České Město');
   assert.equal(ledgerTitle('Lipnice', 3000), 'Město Lipnice');
   setLanguage('en');
   assert.equal(ledgerTitle('Lipnice', 10), 'The hamlet of Lipnice');

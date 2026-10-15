@@ -709,7 +709,7 @@ ledger.no-work
 
 ledger.has
   cs: V obci
-  en: In the town
+  en: In town
 
 ledger.cutoff
   cs: Bez cesty
