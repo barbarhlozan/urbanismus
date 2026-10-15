@@ -1,12 +1,15 @@
 // Small line drawings for the Build menu. Buildings are drawn with their own
 // draw() through the same Painter as the map (with a fixed seed), so the
 // icons always match what gets built; lines and the eraser are hand drawn.
+// Photo mode's camera (cameraIcon) is drawn by the pen of the UI frames
+// (render/sketch.js), stroke by stroke.
 
 import { Camera } from '../render/camera.js';
 import { Painter } from '../render/painter.js';
 import { vehicleSVG } from '../render/vehicles.js';
 import { drawSeed, footprintOffsets } from '../../structures/index.js';
 import { sampleSitePaths } from '../roads/siteWalks.js';
+import { sketchLine, sketchRect, sketchEllipse } from '../render/sketch.js';
 
 const ICON_SEED = 12345;
 const PAD = 3;
@@ -115,8 +118,32 @@ const LINES = {
 
 export function toolIcon(tool) {
   if (tool.defs) return structureIcon(tool.defs[0]);
+  if (tool.id === 'photo') return cameraIcon();
   const art = LINES[tool.id];
   return art ? `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">${art}</svg>` : '<svg class="icon" viewBox="0 0 32 32"></svg>';
+}
+
+// Photo mode's camera: a Meopta Flexaret, the Czechoslovak twin-lens reflex
+// of the 1950s – an upright box seen from the front, the viewing lens over
+// the taking lens, the finder hood folded on top, the winding knob at its
+// side and the focusing lever under the lower lens. A few pen strokes on a
+// 32×32 box, the same every time (fixed seeds).
+let camera = null;
+export function cameraIcon() {
+  if (camera) return camera;
+  const o = { k: 0.3 };
+  const d = [
+    sketchRect(9, 7.5, 14, 20.5, 31, { k: 0.3, over: 1.4, bow: 1 }),     // the body
+    sketchLine([10, 7.5], [11.4, 4], 32, o) + sketchLine([11.4, 4], [20.6, 4], 33, o) + sketchLine([20.6, 4], [22, 7.5], 34, o), // the hood
+    sketchEllipse(16, 12.4, 3.3, 3.3, 35, o),                              // viewing lens
+    sketchEllipse(16, 21.6, 4, 4, 36, o),                                  // taking lens
+    sketchEllipse(16, 21.6, 1.5, 1.5, 37, o),
+    sketchLine([13.6, 16.9], [18.4, 16.9], 38, o),                         // the name plate
+    sketchLine([23, 9.4], [25, 9.4], 39, o) + sketchLine([25, 9.4], [25, 13], 40, o) + sketchLine([25, 13], [23, 13], 41, o), // the knob
+    sketchLine([18.6, 26.2], [22.4, 29.4], 42, o),                         // focusing lever
+  ].join('');
+  camera = `<svg class="icon camera-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="${d}"/></svg>`;
+  return camera;
 }
 
 // Little pen drawings for the HUD's numbers, on a 16×16 box.

@@ -22,8 +22,9 @@ again (or close its group, or **Esc**) to put it down. The **–** folds the men
 Build button; picking a tool folds it too, out of the way, and it comes back when you put the
 tool down. Things that come in more than one size (a house and a wide one, the three
 workshops, the Národní výbor's offices and towers, station / stop, town hall…) are one tool
-with a **Size** button (**Shift**). While a tool is in hand, its options (size, rotate,
-another look, bend…) are buttons above the bottom edge.
+with a **Size** button (**Shift**). While a tool is in hand, it sits in the dock at the
+bottom edge with its options (size, rotate, another look, bend…) beside it and an **×** to
+put it down.
 
 Shortcuts come in two steps that follow the Build menu: the **number row** opens a group
 (**1** Doprava, **2** Bydlení, **3** Občanská vybavenost, **4** Výroba, **5** Prostranství,
@@ -73,9 +74,10 @@ a Czech or German layout.
 - **Památky** (**6**): chapel, church, town hall (**Shift** switches small, medium, large),
   memorial, castle, tower, stadium
 - **Backspace** – erase
-- **P** – photo: click where to stand, aim with the pointer, click to take a picture of the
-  town from street level (**Shift** lens: 28 / 42 / 80 mm);
-  it opens as a print you can save as a PNG
+- **P** or the **camera** in the bottom-right corner (a Flexaret) – photo mode: click where
+  to stand, aim with the pointer, click to take a picture of the town from street level;
+  its options are in the dock: **Lens** (**Shift**: 28 mm to start, then 42 and 80 mm),
+  **Move**, and on a phone **Take the photo**. It opens as a print you can save as a PNG
 - **Esc / right-click** – back to select; **right-click** with nothing in hand picks up
   what's under the pointer (same building, size and rotation, or the road / railway /
   footpath) to build more of it
