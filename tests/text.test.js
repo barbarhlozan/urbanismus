@@ -43,7 +43,7 @@ test('every t(…) in the code has its word', () => {
   const made = [
     ...['road', 'lane', 'path', 'rail'].flatMap((id) => [`tool.${id}`, `tool.${id}.blurb`, `network.stop.${id}`]),
     ...['transport', 'housing', 'work', 'amenities', 'spaces', 'heritage'].map((id) => `group.${id}`),
-    ...['photo', 'terrain', 'assets', 'debug', 'export', 'import', 'newMap'].flatMap((a) => [`control.${a}`]),
+    ...['photo', 'assets', 'debug', 'export', 'import', 'newMap'].flatMap((a) => [`control.${a}`]),
     ...['residents', 'jobs'].map((k) => `stat.${k}.n`),
     'inspect.clear.tree',
   ];

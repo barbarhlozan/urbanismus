@@ -4,8 +4,10 @@
 // and tools without a group (Erase) along the bottom. It folds away to the
 // dock: a Build button, or, while a tool is in hand, that tool's drawing and
 // name with its options (size, rotate, another look…) beside it and an × to
-// put it down. Beside Erase, two of the map's own buttons: Photo (photo
-// mode) and Terrain (the contour lines), run as the controls' actions.
+// put it down. The dock serves photo mode the same way (the camera, its
+// lens, Take, Move), though its button is the camera in the corner (hud.js).
+// An option that's a setting (Terrain, the contour lines: tools/terrain.js)
+// shows pressed in the dock while on.
 //
 // Keys (ui/keys.js): the number row opens a group, the letter rows pick a
 // tool in the open group, its tiles in reading order – the keys shown on
@@ -17,16 +19,16 @@
 // On narrow screens it starts folded and stays so.
 //
 // On a wide screen (device.js isWide) it's laid out differently: the tabs
-// stand in a rail along the right edge, under the top bar, with Erase,
-// Photo and Terrain in a box of their own below them, and the panel is a
-// drawer of tiles opening to the rail's left;
+// stand in a rail along the right edge, under the top bar, with Erase in a
+// box of its own below them, and the panel is a drawer of tiles opening to
+// the rail's left;
 // a tab opens its group, or folds the drawer if it's the one showing. The
 // dock keeps the middle of the bottom edge, there only while a tool is in
 // hand. Picking a tool folds the drawer, and it stays folded when the tool
 // is put down: the rail is enough to come back.
 
 import { CATEGORIES } from '../../structures/index.js';
-import { toolIcon, controlIcon } from './icons.js';
+import { toolIcon } from './icons.js';
 import { isNarrow, isWide } from './device.js';
 import { keyLabel, GROUP_KEYS, slotKey } from './keys.js';
 import { corner, drawer, fadeIn, cascade } from './motion.js';
@@ -51,6 +53,8 @@ const OPTION = {
   'bend-diagonal': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 12.5 L8 7 H13.5"/><circle cx="2.5" cy="12.5" r="1.1"/></svg>',
   'bend-straight': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 12.5 H8 L13.5 7"/><circle cx="2.5" cy="12.5" r="1.1"/></svg>',
   'another-look': '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M2.5 2.5 H13.5 V13.5 H2.5 Z"/><circle cx="5.5" cy="5.5" r="0.9"/><circle cx="10.5" cy="10.5" r="0.9"/><circle cx="8" cy="8" r="0.9"/></svg>',
+  // the contour lines: a hill's two rings, an open line further down
+  terrain: '<svg class="icon opt-icon" viewBox="0 0 16 16"><path d="M3.4 8.6 C3.1 5.9 6.2 4.4 9.1 4.8 C12 5.2 13.3 7.4 12.5 9.2 C11.6 11.1 7.4 11.5 5.2 10.6 C4.2 10.2 3.5 9.5 3.4 8.6 Z M6.4 8.1 C6.5 7 7.8 6.6 8.9 6.9 C10 7.2 10.2 8.2 9.5 8.8 C8.7 9.4 6.6 9.2 6.4 8.1 Z M1.2 11.2 C2.6 13.6 6.6 14.1 9.6 13.6 C12.2 13.2 14.2 12 14.8 10.4"/></svg>',
 };
 
 export class BuildMenu {
@@ -67,14 +71,6 @@ export class BuildMenu {
         <span class="bm-icon">${toolIcon(t)}</span>
         <span class="bm-name">${esc(t.label)}</span>
         <span class="key">${esc(t.hotkey ? keyLabel(t.hotkey) : '')}</span>
-      </button>`;
-    // Photo and Terrain: the map's own, run as actions (main.js), their
-    // state shown by .on (set there)
-    const act = (id, key = '') => `
-      <button class="bm-act" data-act="${id}" ${key ? `title="${esc(t(`control.${id}`))} (${keyLabel(key)})"` : ''}>
-        <span class="bm-icon">${controlIcon(id)}</span>
-        <span class="bm-name">${esc(t(`control.${id}`))}</span>
-        <span class="key">${key ? esc(keyLabel(key)) : ''}</span>
       </button>`;
     const tabIcon = (c) => {
       const t = tools.list().find((x) => x.id === TAB_ICON[c.id]) ?? shown.find((x) => x.group === c.id);
@@ -98,7 +94,7 @@ export class BuildMenu {
           ${this.groups.map((c) => `
             <div class="bm-tools hidden" data-group="${c.id}">${shown.filter((t) => t.group === c.id).map(tile).join('')}</div>`).join('')}
         </div>
-        <div class="bm-loose">${shown.filter((t) => !t.group).map(tile).join('')}${act('photo', 'p')}${act('terrain')}</div>
+        <div class="bm-loose">${shown.filter((t) => !t.group).map(tile).join('')}</div>
       </div>
       <div class="bm-dock">
         <button class="bm-toggle" aria-label="${t('build.open')}"><span class="bm-held"></span><span class="bm-label">${t('build')}</span></button>
@@ -153,13 +149,14 @@ export class BuildMenu {
     tools.onChange((tool) => {
       if (tool.group) this.openGroup(tool.group, false);
       for (const b of this.el.querySelectorAll('.bm-tool')) b.classList.toggle('active', b.dataset.tool === tool.id);
-      const picked = tool.id !== tools.defaultId && tool.toolbar !== false;
+      // (photo mode isn't in the menu, but it's held in the dock all the same)
+      const picked = tool.id !== tools.defaultId;
       this.heldEl.innerHTML = picked ? toolIcon(tool) : '';
       this.labelEl.textContent = picked ? tool.label : t('build');
       this.el.classList.toggle('has-tool', picked);
       this.optsKey = null;
-      // out of the way while building (or taking photos: their options bar
-      // sits just above), back when done (unless it was folded before);
+      // out of the way while building or taking photos (their options are
+      // in the dock), back when done (unless it was folded before);
       // the rail's drawer stays folded when the tool is put down
       const busy = tool.id !== tools.defaultId;
       if (this.rail) {
@@ -289,20 +286,21 @@ export class BuildMenu {
   }
 
   // The options of the tool in hand, shown in the dock while the panel is
-  // folded (the HUD's bar at the bottom shows them otherwise). Returns
-  // whether it took them. `actions` are ToolManager.actions(); the last one
-  // is the way to put the tool down, which is the dock's ×.
+  // folded (they wait there while it's open over it). Returns whether it
+  // took them. `actions` are ToolManager.actions(); the last one is the way
+  // to put the tool down, which is the dock's ×.
   dock(actions) {
     if ((!this.folded && !this.rail) || !this.el.classList.contains('has-tool')) return false;
     const opts = actions.slice(0, -1);
-    const key = opts.map((a) => a.label).join('|');
+    const key = opts.map((a) => `${a.label}${a.on ? '+' : ''}`).join('|');
     if (key !== this.optsKey) {
       this.optsKey = key;
       this.optsEl.innerHTML = opts.map((a, i) => {
         const [name, value] = a.label.split(': ');
         const body = OPTION[a.icon] ?? esc(value ?? name);
         const title = `${name}${value ? `: ${value}` : ''}${a.key ? ` (${a.key})` : ''}`;
-        return `<button data-opt="${i}" title="${esc(title)}" aria-label="${esc(title)}">${body}${a.key ? `<span class="key">${esc(a.key)}</span>` : ''}</button>`;
+        const on = a.on != null ? ` aria-pressed="${a.on}"${a.on ? ' class="on"' : ''}` : '';
+        return `<button data-opt="${i}"${on} title="${esc(title)}" aria-label="${esc(title)}">${body}${a.key ? `<span class="key">${esc(a.key)}</span>` : ''}</button>`;
       }).join('');
       this.dockEl.querySelector('.bm-drop').title = `${actions.at(-1)?.label ?? t('done')} (Esc)`;
     }

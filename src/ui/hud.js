@@ -1,8 +1,10 @@
 // Screen furniture: the town's name and its chronicle book (top-left),
-// controls (top-right) and the Build menu (bottom centre, see buildMenu.js)
-// with photo mode's options just above it.
-// Photo and Terrain sit in the Build menu, under Erase; the controls keep
-// what's set now and then (colours, files, language…).
+// controls (top-right), the Build menu (bottom centre, or a rail on the
+// right; see buildMenu.js) and, alone in the bottom-right corner, the
+// camera: photo mode, one tap away. It shows as pressed while photo mode
+// is on; its options, like any tool's, are in the Build menu's dock.
+// Terrain sits in the Build menu, under Erase; the controls keep what's
+// set now and then (colours, files, language…).
 // The name can be edited in place; the book beside it opens the chronicle.
 // The controls fold into their menu button: they start folded and open,
 // on a wide screen, as a line of words along the top edge, left of the
@@ -13,7 +15,7 @@
 // app's name, version and author, small and quiet like a printer's line.
 
 import { BuildMenu } from './buildMenu.js';
-import { statIcon, controlIcon } from './icons.js';
+import { statIcon, controlIcon, cameraIcon } from './icons.js';
 import { resize, shrink } from './motion.js';
 import { CONFIG } from '../config.js';
 import { t, language, LANGUAGES } from '../core/text.js';
@@ -46,9 +48,7 @@ export class Hud {
         <span class="imprint">${CONFIG.app.name} v${CONFIG.app.version} · ${CONFIG.app.author}</span>
         <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
       </div>
-      <div class="bottom">
-        <div class="actions hidden"></div>
-      </div>`);
+      <button class="photo-corner" data-act="photo" title="${t('control.photo')} (P)" aria-label="${t('control.photo')}" aria-pressed="false">${cameraIcon()}</button>`);
 
     this.chronEl = root.querySelector('.hud .chron');
     this.chronEl.addEventListener('click', () => actions.chronicle());
@@ -77,20 +77,14 @@ export class Hud {
     nameEl.addEventListener('focus', () => nameEl.select());
     showName();
 
-    this.actionsEl = root.querySelector('.actions');
-    this.actionsEl.addEventListener('click', (e) => {
-      const i = e.target.closest('button')?.dataset.i;
-      if (i != null) {
-        tools.runAction(Number(i));
-        this.lastActions = null;
-      }
+    // the camera: picks up photo mode, or puts it down (main.js)
+    this.cameraEl = root.querySelector('.photo-corner');
+    this.cameraEl.addEventListener('click', () => actions.photo());
+    tools.onChange((tool) => {
+      const on = tool.id === 'photo';
+      this.cameraEl.classList.toggle('on', on);
+      this.cameraEl.setAttribute('aria-pressed', String(on));
     });
-
-    // let other panels (event log) sit above the bottom bar, whatever its height
-    const bottomEl = root.querySelector('.bottom');
-    new ResizeObserver(() => {
-      document.documentElement.style.setProperty('--bottom-h', `${bottomEl.offsetHeight}px`);
-    }).observe(bottomEl);
 
     const controlsEl = root.querySelector('.controls');
     const menuBtn = controlsEl.querySelector('.menu-toggle');
@@ -124,17 +118,7 @@ export class Hud {
     // a dot on the book while there's something new in it
     const unread = !!this.chronicle?.unread;
     if (unread !== this.unread) this.chronEl.classList.toggle('new', (this.unread = unread));
-    // a Build menu tool's options sit beside it in the folded menu's dock;
-    // anything else's (photo mode), or with the menu open, in the bar here
-    let actions = this.tools.actions();
-    if (this.buildMenu.dock(actions)) actions = [];
-    const actionsKey = actions.map((a) => a.label).join('|');
-    if (actionsKey !== this.lastActions) {
-      this.lastActions = actionsKey;
-      this.actionsEl.classList.toggle('hidden', !actions.length);
-      this.actionsEl.innerHTML = actions
-        .map((a, i) => `<button data-i="${i}">${a.key ? `<span class="key">${a.key}</span>` : ''}${a.label}</button>`)
-        .join('');
-    }
+    // the options of the tool in hand (photo mode's too): in the dock
+    this.buildMenu.dock(this.tools.actions());
   }
 }

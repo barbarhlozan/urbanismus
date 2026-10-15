@@ -2,17 +2,20 @@
 // the sizes of the same thing (park / large park…) share a tool, S switches
 // between them. The pointer grabs the middle of the footprint; Tab rotates,
 // Space goes to the next kind of it (def.kinds, in their order; a
-// structure of one kind just gets another look). The preview shows exactly
-// the variant that will be built.
+// structure of one kind just gets another look); Terrain shows the contour
+// lines (tools/terrain.js). The preview shows exactly the variant that will
+// be built.
 
 import { footprintCenter, newSeed, categoryOf, kindsOf, kindShown } from '../../structures/index.js';
 import { keyOf } from '../ui/keys.js';
 import { UNLOCKS } from '../story/unlocks.js';
 import { t } from '../core/text.js';
+import { terrainOption } from './terrain.js';
 import { nameOf, blurbOf, sizeOf } from '../ui/names.js';
 
 
-export function createBuildTool({ world, camera }, defs) {
+export function createBuildTool(ctx, defs) {
+  const { world, camera } = ctx;
   let variant = 0;
   // quarter turns from facing the viewer (Tab): buildings come facing
   // whoever's looking, whichever way the view is turned
@@ -91,6 +94,7 @@ export function createBuildTool({ world, camera }, defs) {
       ...(open().length > 1 ? [{ label: `${t('size')}: ${sizeOf(def())}`, key: 'Shift', run: resize }] : []),
       ...(turnable() ? [{ label: t('rotate'), icon: 'rotate', key: 'Tab', run: rotate }] : []),
       { label: t('another-look'), icon: 'another-look', key: 'Space', run: reroll },
+      ...terrainOption(ctx),
     ],
 
     overlay(kit, hover) {
