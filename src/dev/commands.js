@@ -6,10 +6,11 @@ import { exportCity } from '../ui/saveFile.js';
 import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { planRoute } from '../roads/routing.js';
 import { eraseTarget } from '../tools/erase.js';
+import { ROAD_MARK } from '../render/roadMarks.js';
 
 const STEP = 0.5; // simulated seconds per step while jumping
 
-export function createCommands({ world, config, clock, weather, agents, trains, boats, deer, livestock, growth, story, annotations, unlocks, save = exportCity }) {
+export function createCommands({ world, config, clock, weather, agents, trains, boats, deer, livestock, growth, story, annotations, unlocks, renderer = null, save = exportCity }) {
   // What `cmd.spawn(name)` can make; each returns something truthy if it did.
   const SPAWN = {
     deer: () => deer.launch(),
@@ -151,6 +152,14 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
     },
     log: (n = 20) => annotations.lines.slice(0, n), // what the systems reported, newest first
     seed: () => world.seed,
+    // the hand of the road marks on buildings nothing reaches (render/roadMarks.js)
+    roadMark(style) {
+      if (style === undefined) return ROAD_MARK.style;
+      if (!ROAD_MARK.styles.includes(style)) throw new Error(`cmd.roadMark: one of ${ROAD_MARK.styles.join(', ')}`);
+      if (renderer) renderer.setRoadMark(style);
+      else ROAD_MARK.style = style;
+      return style;
+    },
     save: () => save(world), // downloads the town as a file: a backup outside the page
     help() {
       const lines = [
@@ -167,6 +176,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         'cmd.tree(x, y)',
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
+        `cmd.roadMark(${ROAD_MARK.styles.map((k) => `'${k}'`).join(' | ')})   now: '${ROAD_MARK.style}'`,
         'cmd.seed()                the map seed',
         'cmd.save()                download the town as a file',
       ];
