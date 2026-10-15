@@ -195,7 +195,7 @@ function draw(el) {
     set('tick', sketchLine([x, y], [x + 4, y + 5], s, { over: 0.5 }) + sketchLine([x + 4, y + 5], [x + 13, y - 7], s + 1, { over: 1.5, bow: 1.5 }));
   }
   if (el.matches(SETTING)) {
-    const z = 7, x = 4, y = 4;
+    const z = 7, x = 6, y = 6; // (clear of the dock's frame along the edge)
     set('box', sketchBox(x, y, z, z, s, { over: 1.2, waver: 0.4, slip: 0.5 }));
     set('x', sketchLine([x - 1, y - 1], [x + z + 1.5, y + z + 1], s, { over: 0.8 }) + sketchLine([x + z + 1, y - 1.5], [x - 1, y + z + 1], s + 3, { over: 0.8 }));
   }

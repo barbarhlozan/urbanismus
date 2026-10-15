@@ -14,7 +14,8 @@
 // being written shows all of it first. Choices: click, or ↑ ↓ and Enter.
 // The town carries on behind it.
 
-import { reveal, cascade } from './motion.js';
+import { reveal, cascade, drawOn } from './motion.js';
+import { sketchLine, seedOf } from '../render/sketch.js';
 import { sketchFrame } from './sketchFrame.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -31,12 +32,16 @@ export class Dialogue {
       <div class="dlg-speaker"></div>
       <div class="dlg-text"></div>
       <div class="dlg-choices"></div>
-      <div class="dlg-more" aria-hidden="true">›</div>`;
+      <svg class="dlg-more" viewBox="0 0 10 16" aria-hidden="true"><path pathLength="1"/></svg>`;
     root.appendChild(this.el);
     sketchFrame(this.el);
     this.speakerEl = this.el.querySelector('.dlg-speaker');
     this.textEl = this.el.querySelector('.dlg-text');
     this.choicesEl = this.el.querySelector('.dlg-choices');
+    // › once the line is all written, to go on: two pen strokes, drawn on
+    // when it shows and then still
+    this.moreEl = this.el.querySelector('.dlg-more path');
+    this.moreEl.setAttribute('d', sketchLine([2, 2.5], [8, 8], seedOf(3, 41), { over: 0.6, bow: 0.6 }) + sketchLine([8, 8], [2.5, 13.5], seedOf(4, 41), { over: 0.6, bow: 0.6 }));
     this.pending = null; // { kind: 'say' | 'choose', resolve }
     this.typer = null;
 
@@ -144,6 +149,7 @@ export class Dialogue {
     if (instant || !this.typing || matchMedia('(prefers-reduced-motion: reduce)').matches) {
       this.textEl.textContent = text;
       this.el.classList.remove('typing');
+      drawOn(this.moreEl, 240);
       return;
     }
     // the whole line is laid out at once (the box doesn't grow as it's
@@ -165,8 +171,10 @@ export class Dialogue {
   stopTyping() {
     if (this.typer) cancelAnimationFrame(this.typer);
     this.typer = null;
-    if (this.el.classList.contains('typing') && this.full != null) this.textEl.textContent = this.full;
+    if (!this.el.classList.contains('typing')) return;
+    if (this.full != null) this.textEl.textContent = this.full;
     this.el.classList.remove('typing');
+    drawOn(this.moreEl, 240);
   }
 
   next() {
