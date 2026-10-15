@@ -49,10 +49,6 @@ controls.unfold
   cs: Ukázat nabídku
   en: Show the menu
 
-control.terrain
-  cs: Terén
-  en: Terrain
-
 control.colors
   cs: Barvy
   en: Colours
@@ -427,6 +423,12 @@ rotate
 another-look
   cs: Jiná podoba
   en: Another look
+
+# the contour lines, beside the options of a tool that changes the town;
+# they stay on until switched off
+terrain
+  cs: Terén
+  en: Terrain
 
 # photographs: the camera in the bottom-right corner, and photo mode's
 # name and options in the dock while it's in hand

@@ -1032,6 +1032,9 @@ body.loading #ui { visibility: hidden; }
   white-space: nowrap;
 }
 #ui .bm-opts button:hover, #ui .bm-drop:hover { background: var(--fg); color: var(--bg); }
+/* a setting that's on (Terrain): pressed, as the menu's tabs */
+#ui .bm-opts button.on { background: var(--fg); color: var(--bg); }
+#ui .bm-opts button.on .key { color: inherit; opacity: 0.7; }
 .bm-opts .opt-icon { width: 15px; height: 15px; }
 .bm-opts .opt-icon path, .bm-opts .opt-icon circle { stroke-width: 1.1 !important; fill: none !important; }
 #ui .bm-drop { display: none; font-size: 16px; }

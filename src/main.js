@@ -193,7 +193,9 @@ const story = new Storyteller({ world, agents, trains, dialogue, chronicle, conf
 
 const tools = new ToolManager(world.grid, 'inspect');
 tools.allowed = (tool) => UNLOCKS.allowsTool(tool);
-const ctx = { world, camera, tools, popup, growth, renderer, config: CONFIG };
+// (contours: the Terrain option the town-changing tools offer, tools/terrain.js)
+const contours = { on: () => renderer.contours, toggle: () => setContours(!renderer.contours) };
+const ctx = { world, camera, tools, popup, growth, renderer, contours, config: CONFIG };
 tools.register(createInspectTool(ctx));
 tools.register(createNetworkTool(ctx, { kind: 'road', group: 'transport' }));
 tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, group: 'transport' }));
@@ -213,7 +215,6 @@ tools.register(createPhotoTool(ctx, {
 
 const actions = {
   debug: () => { debugPanel.toggle(); if (debugPanel.open) hud.buildMenu.makeRoom(); },
-  terrain: () => setContours(!renderer.contours),
   colors: () => { colorMenu.toggle(); if (colorMenu.open) hud.buildMenu.makeRoom(); },
   assets: () => assetsPage.toggle(),
   newMap: () => newMapMenu.toggle(),
@@ -380,12 +381,12 @@ sketchFrames(uiRoot, '.hud', HANDS.steady);
 sketchFrames(uiRoot, '.controls, .photo-corner, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
 sketchFrames(uiRoot, '.popup', HANDS.loose);
 
-// Terrain contour lines: off unless switched on (remembered in this browser).
-
+// Terrain contour lines: off unless switched on with the Terrain option of
+// a tool in hand (tools/terrain.js), then on until switched off, whatever
+// is in hand (remembered in this browser).
 const CONTOURS_KEY = 'urbanismus.contours';
 function setContours(on) {
   renderer.setContours(on);
-  uiRoot.querySelector('[data-act="terrain"]').classList.toggle('on', on);
   try {
     localStorage.setItem(CONTOURS_KEY, on ? '1' : '0');
   } catch {

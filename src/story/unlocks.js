@@ -61,7 +61,8 @@ const NETWORKS = {
   rail: ['railway', 'railways', 'rail', 'rails'],
   fence: ['fence', 'fences', 'pasture', 'pastures'],
 };
-// The buttons at the top (data-act -> names that mean it). `all` leaves
+// The buttons at the top (data-act -> names that mean it), and Terrain,
+// the contour lines offered in the dock (tools/terrain.js). `all` leaves
 // them be; `controls` is all of them.
 const CONTROLS = {
   chronicle: ['chronicle', 'book'],
