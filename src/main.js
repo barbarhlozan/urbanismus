@@ -43,6 +43,7 @@ import { NewMapMenu } from './ui/newMapMenu.js';
 import { askLanguage } from './ui/languages.js';
 import { AssetsPage } from './ui/assetsPage.js';
 import { sketchFrames, HANDS } from './ui/sketchFrame.js';
+import { penMarks } from './ui/penMarks.js';
 import { reveal } from './ui/motion.js';
 import { attachInput } from './ui/input.js';
 import { exportCity, pickCity } from './ui/saveFile.js';
@@ -381,6 +382,9 @@ followUnlocks();
 sketchFrames(uiRoot, '.hud', HANDS.steady);
 sketchFrames(uiRoot, '.controls, .photo-corner, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
 sketchFrames(uiRoot, '.popup', HANDS.loose);
+// what a control is doing drawn on it in the pen: pressed, in keyboard focus
+penMarks(uiRoot);
+penMarks(document.getElementById('intro'));
 
 // Terrain contour lines: off unless switched on with the Terrain option of
 // a tool in hand (tools/terrain.js), then on until switched off, whatever

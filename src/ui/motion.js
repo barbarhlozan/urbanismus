@@ -3,7 +3,7 @@
 // a slide that slows to a stop (paper doesn't bounce), their rows following
 // one by one and the pen frame drawn round. They go out quicker, lifting a
 // touch before they drop, the frame rubbed out. Folding boxes slide to
-// their new size.
+// their new size. A pressed button grows a little and settles back.
 //
 // Panels are hidden with the .hidden class (display: none), so an exit
 // has to play before the class goes on: reveal() does both. With the
@@ -14,6 +14,8 @@ export const MOTION = {
   out: 150,    // ms: leaving is quicker, so closing never feels like waiting
   resize: 300, // ms: folding and unfolding
   stagger: 22, // ms between one row and the next
+  press: 240,  // ms: a press, out and back
+  pressScale: 1.04, // how much a pressed button grows
   easeIn: 'cubic-bezier(0.2, 0.7, 0.3, 1)',      // arrives fast, settles
   land: 'cubic-bezier(0.15, 0.8, 0.25, 1)',      // arrives, slows to a stop, never past it
   easeOut: 'cubic-bezier(0.4, -0.45, 0.75, 0.4)', // lifts a little, then goes
@@ -103,6 +105,18 @@ export function bump(el) {
     { transform: 'translateY(-3px) scale(1.25)', offset: 0.35 },
     { transform: 'none' },
   ], { duration: 420, easing: 'cubic-bezier(0.3, 0.7, 0.4, 1)' });
+}
+
+// A button pressed (by pointer or key, see penMarks.js): it grows a
+// little at once and settles back to its size, slowing to a stop – never
+// past it. (Not by CSS :active, which a quick tap is over before it shows.)
+export function press(el) {
+  if (still() || !el) return;
+  el.animate([
+    { transform: 'none' },
+    { transform: `scale(${MOTION.pressScale})`, offset: 0.2 },
+    { transform: 'none' },
+  ], { duration: MOTION.press, easing: 'ease-out', composite: 'add' });
 }
 
 // Change something that alters a box's size (fold rows away, open a

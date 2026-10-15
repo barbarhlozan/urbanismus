@@ -12,6 +12,10 @@
 // Not every box in the same hand (HANDS): the town's panel is drawn
 // steadily, a menu that comes and goes quickly and loosely, the rest in
 // between – one even system for everything would look generated.
+//
+// A framed button (the camera in the corner) has its frame drawn afresh,
+// with a new seed, when it's pressed (el.resketch, called by penMarks.js);
+// otherwise a frame keeps its strokes and is only refitted to a new size.
 
 import { sketchBox, seedOf } from '../render/sketch.js';
 
@@ -29,7 +33,7 @@ export const HANDS = {
 let count = 0;
 
 export function sketchFrame(el, hand = {}) {
-  const seed = seedOf(++count, 17);
+  let seed = seedOf(++count, 17);
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'sk-frame');
   svg.setAttribute('aria-hidden', 'true');
@@ -53,6 +57,10 @@ export function sketchFrame(el, hand = {}) {
     if (svg.parentNode !== el) el.appendChild(svg);
   };
   attach();
+  el.resketch = () => {
+    seed = seedOf(++count, 17);
+    draw();
+  };
   new ResizeObserver(draw).observe(el);
   new MutationObserver(attach).observe(el, { childList: true });
   draw();

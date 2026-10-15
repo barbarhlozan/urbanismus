@@ -978,7 +978,6 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .intro-langs { display: flex; gap: 10px; margin-top: 22px; animation: intro-langs 400ms ease-out both; }
 .intro-langs .lang { font: 17px var(--ui-font); color: var(--detail); background: none; border: none; padding: 10px 12px; min-height: 44px; cursor: pointer; border-radius: var(--radius); transition: color 150ms, opacity 250ms; }
 .intro-langs .lang:hover, .intro-langs .lang:focus-visible, .intro-langs .lang[aria-pressed="true"] { color: var(--main); }
-.intro-langs .lang:focus-visible { outline: var(--line) dashed var(--main); outline-offset: 2px; }
 .intro-langs.picked { pointer-events: none; }
 .intro-langs.picked .lang:not([aria-pressed="true"]) { opacity: 0; }
 @keyframes intro-langs { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -1421,7 +1420,7 @@ body.touch #ui .color-panel .scheme:hover:not(.on) { background: var(--bg); colo
 .newmap-confirm p { margin: 0; padding: 14px 14px 12px; }
 #ui .newmap-confirm button { display: block; width: 100%; padding: 10px 14px; text-align: left; border-top: var(--line) solid var(--fg); }
 #ui .newmap-confirm .export-go { font-weight: 700; }
-#ui .newmap-confirm button:hover, #ui .newmap-confirm button:focus-visible { background: var(--fg); color: var(--bg); outline: none; }
+#ui .newmap-confirm button:hover { background: var(--fg); color: var(--bg); }
 body.touch #ui .newmap-confirm button { min-height: 44px; }
 .newmap-panel .newmap-foot { display: flex; border-top: var(--line) solid var(--fg); }
 #ui .newmap-panel .newmap-foot button { flex: 1; padding: 9px 0; }
@@ -1442,10 +1441,19 @@ body.touch #ui .newmap-confirm button { min-height: 44px; }
 .sk-slider:hover .sk-knob path, .sk-slider:focus-visible .sk-knob path { fill: var(--fg); }
 body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a finger */
 
-/* buttons give a little when pressed, and come back */
-#ui button { transition: transform 0.12s ease-out, opacity 0.1s; } /* (opacity: the controls' fold, above) */
-#ui button:active:not(:disabled) { transform: scale(0.93); transition-duration: 0.06s; }
-@media (prefers-reduced-motion: reduce) { #ui button:active { transform: none; } }
+#ui button { transition: opacity 0.1s; } /* (the controls' fold, above) */
+
+/* ---------- Pen marks (src/ui/penMarks.js) ---------- */
+
+/* each control's marks, drawn over it in the pen and running past its
+   edge; a pressed control grows a little and settles back (motion.js press) */
+.pm { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 4; }
+.pm path { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
+.pm-rel { position: relative; }
+/* keyboard focus: crop marks at the corners, in place of the browser's ring */
+.pm-crop { display: none; }
+.pm-host:focus-visible { outline: none; }
+.pm-host:focus-visible > .pm .pm-crop { display: inline; }
 
 /* ---------- Sketched frames (src/ui/sketchFrame.js) ---------- */
 
