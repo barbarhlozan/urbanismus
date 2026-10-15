@@ -857,6 +857,70 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
   .chron-pages { padding: 14px 16px 4px; }
 }
 
+/* ---------- The ledger page, at the back of the chronicle (src/ui/ledger.js) ----------
+   A page of its own, on the ruling like the rest: the heading pen-underlined
+   twice, then the lines with their rubrics left of a ruled margin. */
+
+.chron-ledger { break-before: column; break-inside: avoid; }
+.ledger-title {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: var(--rule);
+}
+.ledger-underline {
+  position: absolute;
+  left: -4px;
+  bottom: -5px;
+  width: calc(100% + 10px);
+  height: 6px;
+  overflow: visible;
+}
+.ledger-underline path, .ledger-margin path {
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 1;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.ledger-asof {
+  margin: 0 0 var(--rule);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--detail);
+}
+.ledger-lines { position: relative; --margin: 88px; }
+.ledger-margin {
+  position: absolute;
+  left: calc(var(--margin) - 9px);
+  top: -6px;
+  bottom: -2px;
+  width: 4px;
+  height: calc(100% + 8px);
+  overflow: visible;
+}
+.ledger-margin path { stroke: var(--detail); }
+.ledger-line {
+  margin: 0;
+  padding-left: var(--margin);
+  text-indent: calc(var(--margin) * -1);
+  break-inside: avoid;
+}
+.ledger-rubric {
+  display: inline-block;
+  width: var(--margin);
+  text-indent: 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--detail);
+  vertical-align: top;
+}
+.ledger-text { font-style: italic; }
+
 /* the book by the town's name, with a dot while there's something new in it */
 #ui .hud .chron { position: relative; }
 .hud .chron .stat-icon { width: 15px; height: 15px; }

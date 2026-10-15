@@ -43,6 +43,17 @@ import.buildings
   en: {n} building | {n} buildings             # 1 | more
 ```
 
+To write the number out in words ("čtyři obyvatelé", as the Building card
+and the chronicle's ledger page do), put the noun's gender after a colon –
+`{n:m}`, `{n:f}`, `{n:n}` (masculine, feminine, neuter: one and two follow
+it in Czech) – and in English `{n:w}`:
+
+```
+stat.residents.n
+  cs: {n:m} obyvatel | {n:m} obyvatelé | {n:m} obyvatel
+  en: {n:w} resident | {n:w} residents
+```
+
 ## A new language
 
 Add it to `LANGUAGES` in `src/core/text.js` (and its plural forms to

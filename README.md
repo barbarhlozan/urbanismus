@@ -167,6 +167,13 @@ every first (the first road, the first panel block, the railway arriving), every
 passing round numbers, a new name, and whatever the story writes in it (`chronicle:` lines).
 A dot on the book means there's something new in it. **← →** turn the pages.
 
+The book opens on its last page, the **ledger**: the town as it stands today, written out by
+hand as a municipal register would have it – a rubric in the ruled margin, the numbers in words
+("šedesát čtyři obyvatel", "jeden kostel, dvě hospody"): the people, the homes, the work, what
+stands in the town, and what no road reaches. Noughts are left out unless they are the news.
+It is counted afresh each time (`src/ui/ledger.js`), never saved, and never marks the book as new.
+The Building card writes its numbers in words too (`src/core/numberWords.js`).
+
 ## Tests
 
 ```
@@ -174,7 +181,7 @@ node --test tests/*.test.js
 ```
 
 No installs needed (Node 22 or newer). They cover the story script, park entrances and walkways,
-bridges, and the chronicle, on small made-up towns (`tests/helpers.js`).
+bridges, the chronicle and its ledger, numbers in words, on small made-up towns (`tests/helpers.js`).
 
 ## Where things live
 
