@@ -80,6 +80,7 @@ export class ColorMenu {
   toggle(open = !this.open) {
     reveal(this.el, open, { rows: '.scheme, .custom-fields' });
     this.button.classList.toggle('on', open);
+    this.button.setAttribute('aria-expanded', String(open));
     if (open) this.refresh();
   }
 
@@ -88,6 +89,7 @@ export class ColorMenu {
   refresh(editing = null) {
     for (const b of this.el.querySelectorAll('.scheme')) {
       b.classList.toggle('on', b.dataset.choice === String(schemeChoice));
+      b.setAttribute('aria-pressed', String(b.dataset.choice === String(schemeChoice)));
     }
     for (const i of this.el.querySelectorAll('[data-choice="custom"] i')) i.style.background = CUSTOM[i.dataset.c];
     for (const input of this.el.querySelectorAll('.custom-fields input')) {
