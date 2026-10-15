@@ -133,7 +133,7 @@
 #
 # The buttons at the top (`all` leaves them be)
 #   chronicle            the book by the town's name (it keeps writing while hidden)
-#   photo                photo mode (and its key)
+#   photo                photo mode: the camera in the corner (and its key)
 #   terrain              contour lines
 #   colors               the Colors menu
 #   assets               (Shift+\, not a button)

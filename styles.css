@@ -40,13 +40,13 @@
   --cell: calc(var(--bar-h) - 2px);
   --tile: calc(2 * var(--cell));
   --bm-w: var(--panel-w/2);
+  --cam: calc(var(--bar-h) + 14px); /* the camera in the corner, square */
   --ui-font: "Basteleur", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* notches and home indicators on phones */
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
-  --bottom-h: 100px; /* height of the bottom bar, kept up to date by the HUD */
 }
 
 html, body {
@@ -575,34 +575,30 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
   .controls button .ctl-icon, .controls button[data-act="colors"] .swatches { display: none; }
 }
 
-.bottom {
+/* the camera: photo mode, alone in the bottom-right corner (hud.js) – below
+   the Build menu's rail on a wide screen, right of its dock otherwise; a
+   pen drawing in a pen frame, inked in while photo mode is on */
+#ui .photo-corner {
   position: fixed;
-  /* above the Build menu's dock, which has the middle of the bottom edge */
-  bottom: calc(20px + var(--bar-h) + 2 * var(--line) + 12px + var(--safe-b));
-  left: calc(16px + var(--safe-l));
-  right: calc(16px + var(--safe-r));
+  right: calc(20px + var(--safe-r));
+  bottom: calc(20px + var(--safe-b));
+  z-index: 4; /* (under the Build menu's panel, should it open over it) */
+  width: var(--cam);
+  height: var(--cam);
+  padding: 5px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  pointer-events: none;
-}
-
-.actions {
-  pointer-events: auto;
-  display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  max-width: 100%;
+  background: var(--bg);
   border: var(--line) solid var(--fg);
   border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--bg);
 }
-.actions button { padding: 7px 12px; border-left: var(--line) solid var(--fg) !important; }
-.actions button:first-child { border-left: none !important; }
-.actions button:hover { background: var(--fg) !important; color: var(--bg) !important; }
-.actions button .key { font-size: 10px; margin-right: 6px; color: var(--detail); }
+#ui .photo-corner:hover { background: color-mix(in srgb, var(--fg) 15%, var(--bg)); }
+#ui .photo-corner.on { background: var(--fg); color: var(--bg); }
+.photo-corner .camera-icon path { stroke-width: calc(1.25px * var(--stroke, 1)); }
+.bm-held .camera-icon path { stroke-width: calc(1.1px * var(--stroke, 1)); }
+#ui .photo-corner.locked { display: none; }
+body.touch #ui .photo-corner:hover:not(.on) { background: var(--bg); }
 
 
 .popup {
@@ -986,8 +982,8 @@ body.loading #ui { visibility: hidden; }
 .bm-tool .bm-icon { width: calc(var(--tile) - 34px); height: calc(var(--tile) - 34px); flex: 0 0 auto; display: flex; }
 .bm-tool .bm-name { font-size: 10px; line-height: 1.1; max-width: 100%; overflow-wrap: anywhere; }
 .bm-tool .key { position: absolute; top: 3px; right: 5px; font-size: 9px; color: var(--detail); white-space: nowrap; }
-/* Erase, Photo and Terrain: along the bottom, one bar high, a third each,
-   a drawing and its name side by side */
+/* Erase and Terrain: along the bottom, one bar high, side by side, a
+   drawing and its name in each */
 .bm-loose { display: flex; border-top: var(--line) solid var(--fg); }
 #ui .bm-loose > button { flex: 1 1 auto; min-width: 0; position: relative; display: flex; align-items: center; flex-direction: row; justify-content: center; gap: 5px; height: var(--bar-h); padding: 0 4px; border-radius: 0; }
 #ui .bm-loose > button + button { border-left: var(--line) solid var(--fg); }
@@ -1049,7 +1045,7 @@ body.touch .bm-opts .opt-icon { width: 18px; height: 18px; }
 
 /* ---------- Build menu on a wide screen: a rail along the right edge ---------- */
 
-/* buildMenu.js moves the tabs, and Erase, Photo and Terrain, into the two
+/* buildMenu.js moves the tabs, and Erase and Terrain, into the two
    boxes of .bm-rail, columns of cells under the top bar, a gap between;
    the panel is a drawer of tiles to its left, two across, as tall as
    its group; the dock keeps the bottom edge, there only while a tool is
@@ -1375,7 +1371,7 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 /* (no clipping to the box: the strokes run out past its edge; the motion
    helpers clip for themselves while a box folds) */
 #ui .sketched { overflow: visible; }
-.bm-panel, .bm-dock, .bm-rail-box, .actions { position: relative; }
+.bm-panel, .bm-dock, .bm-rail-box { position: relative; }
 .sk-frame {
   position: absolute;
   top: calc(-1 * var(--line));
@@ -1391,16 +1387,13 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 /* ---------- Touch ---------- */
 
 /* no keyboard: hide the key labels, give buttons finger-sized hit areas */
-body.touch .build-menu .key,
-body.touch .actions button .key { display: none; }
-body.touch .actions button,
+body.touch .build-menu .key { display: none; }
 body.touch .controls button { min-height: 44px; }
 body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 body.touch .bm-tool:hover:not(.active),
 body.touch .bm-tab:hover:not(.on),
 body.touch .bm-toggle:hover { background: var(--bg) !important; color: var(--fg) !important; }
 body.touch .controls button:hover:not(.on) { background: none !important; color: var(--fg) !important; }
-body.touch .actions button:hover { background: var(--bg) !important; color: var(--fg) !important; }
 
 /* ---------- Narrow screens (phones) ---------- */
 
@@ -1422,21 +1415,21 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
   }
   .hud .name { font-size: 16px; }
 
-  .bottom {
-    left: calc(8px + var(--safe-l));
-    right: calc(8px + var(--safe-r));
-    bottom: calc(10px + var(--safe-b));
-    gap: 10px;
-  }
-  /* the tool actions sit above the folded Build menu */
-  .bottom { bottom: calc(10px + var(--bar-h) + 2 * var(--line) + 10px + var(--safe-b)); }
   .build-menu { bottom: calc(10px + var(--safe-b)); }
+  #ui .photo-corner { right: calc(8px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); }
+  /* with a tool in hand the dock grows: it keeps to the room left of the
+     camera, in its middle, the tool shown by its drawing alone (no room
+     for names) */
+  .build-menu.folded.has-tool:not(.folding) { left: calc(8px + var(--safe-l)); right: calc(8px + var(--cam) + 8px + var(--safe-r)); transform: none; }
+  .bm-dock { max-width: 100%; }
+  .build-menu.has-tool .bm-label { display: none; }
+  #ui .build-menu.has-tool .bm-toggle { padding: 0 4px; }
+  #ui .bm-opts button, #ui .bm-drop { padding: 0 8px; }
   .bm-panel { width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); }
-  /* Erase, Photo, Terrain: a third of a phone each – room for the names
-     (the keys go: a phone has none) */
+  /* Erase, Terrain: half a phone each – room for the names (the keys go:
+     a phone has none) */
   .bm-loose .key { display: none; }
   #ui .bm-loose > button { padding: 0 4px; gap: 4px; justify-content: center; }
-  .actions button { flex: 1 1 auto; }
 
   .dialogue {
     left: calc(8px + var(--safe-l));
@@ -1537,8 +1530,7 @@ body.touch .actions button:hover { background: var(--bg) !important; color: var(
 
 
 /* secondary text on highlighted rows / buttons takes the row's text colour */
-#ui .bm-tool.active .key,
-.actions button:hover .key { color: inherit; opacity: 0.7; }
+#ui .bm-tool.active .key { color: inherit; opacity: 0.7; }
 
 /* the menu's keys stay out of sight until the pointer is on their tile or
    tab (or it has keyboard focus): the menu reads as a menu, not a keyboard
