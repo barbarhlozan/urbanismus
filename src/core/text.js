@@ -14,8 +14,13 @@
 //   t('hud.cutoff', { n: 3 })          {n} filled in; with 'a | b | c' the
 //                                      plural form for n (cs: 1 | 2–4 | 5+,
 //                                      en: 1 | more)
+//   t('stat.jobs.n', { n: 8 })         {n:n} written as "osm" (in words, the
+//                                      Czech noun's gender after the colon:
+//                                      m, f, n; core/numberWords.js)
 //   reasonText('Too steep')            a reason something can't be built
 //                                      (world.js, routing.js), as reason.too-steep
+
+import { numberWords } from './numberWords.js';
 
 export const LANGUAGES = { cs: 'Čeština', en: 'English' };
 export const FALLBACK = 'en';
@@ -126,7 +131,11 @@ export function t(key, vars) {
     const kind = new Intl.PluralRules(used).select(vars.n);
     text = forms[order.indexOf(kind)] ?? forms.at(-1);
   }
-  return text.replace(/\{(\w+)\}/g, (all, name) => (name in vars ? String(vars[name]) : all));
+  // {n:f}: the number in words, with the noun's gender (m, f, n) for Czech
+  return text.replace(/\{(\w+)(?::(\w+))?\}/g, (all, name, gender) => {
+    if (!(name in vars)) return all;
+    return gender ? numberWords(vars[name], used, gender) : String(vars[name]);
+  });
 }
 
 // world.js and the routing give their reasons in English, as they always

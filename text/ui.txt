@@ -30,14 +30,16 @@ hud.chronicle
   cs: Kronika
   en: Chronicle
 
-# a building's numbers counted in words in its card ("4 obyvatelé")
+# a building's numbers, and the town's on the ledger page, written out in
+# words ("čtyři obyvatelé"): {n:m} is the number in words for a masculine
+# noun, {n:f} feminine, {n:n} neuter; in English {n:w}
 stat.residents.n
-  cs: {n} obyvatel | {n} obyvatelé | {n} obyvatel
-  en: {n} resident | {n} residents
+  cs: {n:m} obyvatel | {n:m} obyvatelé | {n:m} obyvatel
+  en: {n:w} resident | {n:w} residents
 
 stat.jobs.n
-  cs: {n} pracovní místo | {n} pracovní místa | {n} pracovních míst
-  en: {n} job | {n} jobs
+  cs: {n:n} pracovní místo | {n:n} pracovní místa | {n:n} pracovních míst
+  en: {n:w} job | {n:w} jobs
 
 # ---------- The buttons (top right) ----------
 
@@ -663,6 +665,207 @@ chronicle.back
 chronicle.next
   cs: Obrátit list
   en: Turn the page
+
+# ---------- The ledger page (at the back of the chronicle) ----------
+# the town today, as a hand-kept register has it: a rubric in the margin,
+# the numbers in words (the {n:…} as with stat.residents.n above)
+
+# the heading, by how many live there (src/ui/ledger.js SETTLEMENTS)
+ledger.settlement.hamlet
+  cs: Osada {town}
+  en: The hamlet of {town}
+
+ledger.settlement.village
+  cs: Ves {town}
+  en: The village of {town}
+
+ledger.settlement.town
+  cs: Město {town}
+  en: The town of {town}
+
+ledger.asof
+  cs: Stav ke dni {day}
+  en: As it stands on day {day}
+
+ledger.people
+  cs: Lidé
+  en: People
+
+ledger.nobody
+  cs: zatím tu nikdo nebydlí
+  en: nobody lives here yet
+
+ledger.homes
+  cs: Domy
+  en: Homes
+
+ledger.work
+  cs: Práce
+  en: Work
+
+ledger.no-work
+  cs: zatím tu není kde pracovat
+  en: there is nowhere to work here yet
+
+ledger.has
+  cs: V obci
+  en: In town
+
+ledger.cutoff
+  cs: Bez cesty
+  en: No road
+
+ledger.cutoff.n
+  cs: {n:f} stavba | {n:f} stavby | {n:f} staveb
+  en: {n:w} building | {n:w} buildings
+
+ledger.home.house
+  cs: {n:m} dům | {n:m} domy | {n:m} domů
+  en: {n:w} house | {n:w} houses
+
+ledger.home.apartments
+  cs: {n:m} činžovní dům | {n:m} činžovní domy | {n:m} činžovních domů
+  en: {n:w} tenement house | {n:w} tenement houses
+
+ledger.home.block
+  cs: {n:m} panelový dům | {n:m} panelové domy | {n:m} panelových domů
+  en: {n:w} panel block | {n:w} panel blocks
+
+ledger.kind.church
+  cs: {n:m} kostel | {n:m} kostely | {n:m} kostelů
+  en: {n:w} church | {n:w} churches
+
+ledger.kind.chapel
+  cs: {n:f} kaple | {n:f} kaple | {n:f} kaplí
+  en: {n:w} chapel | {n:w} chapels
+
+ledger.kind.town-hall
+  cs: {n:f} radnice | {n:f} radnice | {n:f} radnic
+  en: {n:w} town hall | {n:w} town halls
+
+ledger.kind.office
+  cs: {n:f} budova národního výboru | {n:f} budovy národního výboru | {n:f} budov národního výboru
+  en: {n:w} building of the National Committee | {n:w} buildings of the National Committee
+
+ledger.kind.school
+  cs: {n:f} škola | {n:f} školy | {n:f} škol
+  en: {n:w} school | {n:w} schools
+
+ledger.kind.post-office
+  cs: {n:f} pošta | {n:f} pošty | {n:f} pošt
+  en: {n:w} post office | {n:w} post offices
+
+ledger.kind.health-centre
+  cs: {n:n} zdravotní středisko | {n:n} zdravotní střediska | {n:n} zdravotních středisek
+  en: {n:w} health centre | {n:w} health centres
+
+ledger.kind.clinic
+  cs: {n:f} poliklinika | {n:f} polikliniky | {n:f} poliklinik
+  en: {n:w} polyclinic | {n:w} polyclinics
+
+ledger.kind.hospital
+  cs: {n:f} nemocnice | {n:f} nemocnice | {n:f} nemocnic
+  en: {n:w} hospital | {n:w} hospitals
+
+ledger.kind.fire
+  cs: {n:f} hasičská zbrojnice | {n:f} hasičské zbrojnice | {n:f} hasičských zbrojnic
+  en: {n:w} fire house | {n:w} fire houses
+
+ledger.kind.police
+  cs: {n:n} oddělení VB | {n:n} oddělení VB | {n:n} oddělení VB
+  en: {n:w} VB post | {n:w} VB posts
+
+ledger.kind.pub
+  cs: {n:f} hospoda | {n:f} hospody | {n:f} hospod
+  en: {n:w} pub | {n:w} pubs
+
+ledger.kind.shop
+  cs: {n:f} prodejna Jednoty | {n:f} prodejny Jednoty | {n:f} prodejen Jednoty
+  en: {n:w} Jednota shop | {n:w} Jednota shops
+
+ledger.kind.store
+  cs: {n:m} obchodní dům | {n:m} obchodní domy | {n:m} obchodních domů
+  en: {n:w} department store | {n:w} department stores
+
+ledger.kind.hotel
+  cs: {n:m} hotel | {n:m} hotely | {n:m} hotelů
+  en: {n:w} hotel | {n:w} hotels
+
+ledger.kind.culture-house
+  cs: {n:m} kulturní dům | {n:m} kulturní domy | {n:m} kulturních domů
+  en: {n:w} house of culture | {n:w} houses of culture
+
+ledger.kind.pool
+  cs: {n:n} koupaliště | {n:n} koupaliště | {n:n} koupališť
+  en: {n:w} swimming pool | {n:w} swimming pools
+
+ledger.kind.cemetery
+  cs: {n:m} hřbitov | {n:m} hřbitovy | {n:m} hřbitovů
+  en: {n:w} cemetery | {n:w} cemeteries
+
+ledger.kind.station
+  cs: {n:n} nádraží | {n:n} nádraží | {n:n} nádraží
+  en: {n:w} station | {n:w} stations
+
+ledger.kind.halt
+  cs: {n:f} železniční zastávka | {n:f} železniční zastávky | {n:f} železničních zastávek
+  en: {n:w} railway halt | {n:w} railway halts
+
+ledger.kind.bus-station
+  cs: {n:n} autobusové nádraží | {n:n} autobusová nádraží | {n:n} autobusových nádraží
+  en: {n:w} bus station | {n:w} bus stations
+
+ledger.kind.bus-stop
+  cs: {n:f} zastávka ČSAD | {n:f} zastávky ČSAD | {n:f} zastávek ČSAD
+  en: {n:w} ČSAD bus stop | {n:w} ČSAD bus stops
+
+ledger.kind.benzina
+  cs: {n:f} benzinová pumpa | {n:f} benzinové pumpy | {n:f} benzinových pump
+  en: {n:w} petrol pump | {n:w} petrol pumps
+
+ledger.kind.works
+  cs: {n:m} závod | {n:m} závody | {n:m} závodů
+  en: {n:w} works | {n:w} works
+
+ledger.kind.jzd
+  cs: {n:n} JZD | {n:n} JZD | {n:n} JZD
+  en: {n:w} JZD | {n:w} JZDs
+
+ledger.kind.state-farm
+  cs: {n:m} státní statek | {n:m} státní statky | {n:m} státních statků
+  en: {n:w} state farm | {n:w} state farms
+
+ledger.kind.farmstead
+  cs: {n:m} statek | {n:m} statky | {n:m} statků
+  en: {n:w} farmstead | {n:w} farmsteads
+
+ledger.kind.smallholding
+  cs: {n:n} hospodářství | {n:n} hospodářství | {n:n} hospodářství
+  en: {n:w} smallholding | {n:w} smallholdings
+
+ledger.kind.park
+  cs: {n:m} park | {n:m} parky | {n:m} parků
+  en: {n:w} park | {n:w} parks
+
+ledger.kind.square
+  cs: {n:n} náměstí | {n:n} náměstí | {n:n} náměstí
+  en: {n:w} square | {n:w} squares
+
+ledger.kind.memorial
+  cs: {n:m} pomník | {n:m} pomníky | {n:m} pomníků
+  en: {n:w} memorial | {n:w} memorials
+
+ledger.kind.castle
+  cs: {n:m} hrad | {n:m} hrady | {n:m} hradů
+  en: {n:w} castle | {n:w} castles
+
+ledger.kind.tv-tower
+  cs: {n:m} vysílač | {n:m} vysílače | {n:m} vysílačů
+  en: {n:w} transmitter | {n:w} transmitters
+
+ledger.kind.stadium
+  cs: {n:m} stadion | {n:m} stadiony | {n:m} stadionů
+  en: {n:w} stadium | {n:w} stadiums
 
 # ---------- The catalogue ----------
 

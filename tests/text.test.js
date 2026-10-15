@@ -25,7 +25,7 @@ const sources = (dir) => readdirSync(join(ROOT, dir)).flatMap((name) => {
 });
 
 test('every word in every language, with the same blanks', () => {
-  const blanks = (s) => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort().join();
+  const blanks = (s) => [...new Set([...s.matchAll(/\{(\w+)(?::\w+)?\}/g)].map((m) => m[1]))].sort().join();
   for (const [key, words] of all) {
     for (const lang of Object.keys(LANGUAGES)) assert.ok(words[lang], `${key} has ${lang}`);
     assert.equal(blanks(words.cs), blanks(words.en), `${key}: same {…} in both`);
@@ -58,6 +58,20 @@ test('everything that can be built has its name, words and sizes', () => {
     const size = def.size ?? (def.footprint?.length > 1 ? 'Large' : 'Small');
     assert.ok(all.has(`size.${normalName(size)}`), `${def.id}: size.${normalName(size)}`);
   }
+});
+
+test('a number in words takes its noun\'s gender and form', () => {
+  setLanguage('cs');
+  assert.equal(t('stat.residents.n', { n: 4 }), 'čtyři obyvatelé');
+  assert.equal(t('stat.residents.n', { n: 42 }), 'čtyřicet dva obyvatel');
+  assert.equal(t('stat.jobs.n', { n: 1 }), 'jedno pracovní místo');
+  assert.equal(t('stat.jobs.n', { n: 2 }), 'dvě pracovní místa');
+  assert.equal(t('ledger.kind.pub', { n: 3 }), 'tři hospody');
+  assert.equal(t('ledger.kind.school', { n: 1 }), 'jedna škola');
+  assert.equal(t('ledger.home.house', { n: 12 }), 'dvanáct domů');
+  setLanguage('en');
+  assert.equal(t('stat.residents.n', { n: 42 }), 'forty-two residents');
+  assert.equal(t('ledger.kind.church', { n: 1 }), 'one church');
 });
 
 test('numbers fill in, in the right form', () => {

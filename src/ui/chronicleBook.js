@@ -5,11 +5,23 @@
 //
 // The pages are CSS columns of a fixed height: the text runs on from one
 // page into the next by itself, and turning a page scrolls the columns.
+//
+// After the last day's lines, on a page of its own, the ledger: the town as
+// it stands today, its numbers written out in words (ui/ledger.js). The
+// book opens on it. It is counted afresh whenever the book is opened, and
+// while it's open, a moment after the town changes; it is no entry of the
+// chronicle, so a changed number never marks the book as unread.
 
 import { reveal } from './motion.js';
 import { sketchFrame } from './sketchFrame.js';
 import { isNarrow } from './device.js';
 import { t } from '../core/text.js';
+import { ledgerHTML } from './ledger.js';
+
+// while the book is open, the ledger is written again this long (ms) after
+// the town last changed, so a road being drawn isn't recounted every dot
+const LEDGER_DELAY = 400;
+const CHANGES = /^(structure|roads|paths|rails):|^world:renamed$/;
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -46,6 +58,11 @@ export class ChronicleBook {
     this.backdrop.addEventListener('click', () => this.hide());
     world.events.on('chronicle:added', () => {
       if (this.open) this.render(true);
+    });
+    world.events.on('*', (type) => {
+      if (!this.open || !CHANGES.test(type)) return;
+      clearTimeout(this.ledgerTimer);
+      this.ledgerTimer = setTimeout(() => this.writeLedger(), LEDGER_DELAY);
     });
     addEventListener('resize', () => {
       if (this.open) this.render(true);
@@ -100,13 +117,30 @@ export class ChronicleBook {
       }
       html.push(`<p class="chron-entry ${e.kind === 'story' ? 'story' : ''}">${esc(e.text)}</p>`);
     }
+    this.ledgerHTML = this.ledger();
+    html.push(`<section class="chron-ledger">${this.ledgerHTML}</section>`);
     this.flowEl.innerHTML = html.join('');
+    this.ledgerEl = this.flowEl.querySelector('.chron-ledger');
     this.el.classList.toggle('single', isNarrow());
     // two pages at a time: an odd last page gets a blank one beside it, so
     // the last spread lines up with the others
     const { count, per } = this.pages();
     if (per === 2 && count % 2) this.flowEl.insertAdjacentHTML('beforeend', '<div class="chron-blank"></div>');
     if (toEnd) this.spread = Infinity;
+    this.turn(0);
+  }
+
+  ledger() {
+    return ledgerHTML(this.world, this.chronicle.day());
+  }
+
+  // The ledger written again in place, on the page that shows (the count
+  // of pages rechecked, should it have run longer).
+  writeLedger() {
+    if (!this.open || !this.ledgerEl) return;
+    const html = this.ledger();
+    if (html === this.ledgerHTML) return;
+    this.ledgerEl.innerHTML = this.ledgerHTML = html;
     this.turn(0);
   }
 

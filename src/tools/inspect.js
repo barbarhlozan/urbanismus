@@ -66,11 +66,12 @@ function screenBox({ world, camera }, node) {
   return { left, top, right, bottom };
 }
 
-// The building at a glance: what it is and its numbers in words, as in the
-// town's panel ("8 jobs"), and a warning when nothing reaches it.
+// The building at a glance: what it is and its numbers written out in
+// words, as on the chronicle's ledger page ("osm pracovních míst"), and a
+// warning when nothing reaches it.
 function summary(def, served) {
   const stats = Object.entries(def.stats ?? {}).map(([k, v]) =>
-    `<span class="stat words">${esc(t(`stat.${k}.n`, { n: v })).replace(String(v), `<b>${v}</b>`)}</span>`);
+    `<span class="stat words">${esc(t(`stat.${k}.n`, { n: v }))}</span>`);
   let html = `<div class="bi-row"><span class="bi-kind">${esc(blurbOf(def) || nameOf(def))}</span>${stats.join('')}</div>`;
   if (!served) {
     html += `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${t(def.access === 'any' ? 'inspect.needs.any' : 'inspect.needs.road')}</span></div>`;
