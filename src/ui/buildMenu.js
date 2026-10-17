@@ -6,15 +6,17 @@
 // name with its options (size, rotate, another look…) beside it and an × to
 // put it down. The dock serves photo mode the same way (the camera, its
 // lens, Take, Move), though its button is the camera in the corner (hud.js).
-// Zpět (Undo) stands in the dock beside the rest, and Znovu (Redo) next to
-// it right after an undo (historyOffer.js decides when): with a tool in hand
-// before its ×, with nothing in hand beside the Build button – on a wide
-// screen alone in a small dock, with no Build button, since the rail is
-// enough there. Each is a word with a small hooked arrow; they run the
-// same code as ⌘Z (main.js takeBack).
-// An option that's a setting (Terrain, the contour lines: tools/terrain.js)
-// has a small box in the dock, crossed while it's on; the tool in hand has
-// its name boxed in the thick pen, the chosen tab and tile are ringed
+// Beside Erase, in the same box of loose things, stand Terrain (the contour
+// lines, a setting: tools/terrain.js), Zpět (Undo) and, right after an undo,
+// Znovu (Redo), each a small drawing with its name. Terrain has a small box
+// in its corner, crossed while it's on (penMarks.js); Zpět is struck through
+// while there is nothing to take back (historyOffer.js decides what is
+// offered); Terrain and the history are left out in photo mode. They run the
+// same code as ⌘Z (main.js takeBack). On a narrow screen the box is the
+// panel's bottom row with Erase and Terrain only, the panel being folded
+// most of the time: Zpět and Znovu stand in the dock there instead, beside
+// the Build button or before the × of the tool in hand. The tool in hand
+// has its name boxed in the thick pen, the chosen tab and tile are ringed
 // (penMarks.js).
 //
 // Keys (ui/keys.js): the number row opens a group, the letter rows pick a
@@ -85,6 +87,12 @@ export class BuildMenu {
         <span class="bm-name">${esc(t.label)}</span>
         <span class="key">${esc(t.hotkey ? keyLabel(t.hotkey) : '')}</span>
       </button>`;
+    // Terrain, Zpět and Znovu beside Erase: a drawing and its name
+    const act = (name, icon, label, attrs = '', more = '') => `
+      <button class="bm-act ${more}" data-act="${name}" ${attrs} title="${esc(label)}" aria-label="${esc(label)}">
+        <span class="bm-icon">${OPTION[icon]}</span>
+        <span class="bm-name">${esc(label)}</span>
+      </button>`;
     const tabIcon = (c) => {
       const t = tools.list().find((x) => x.id === TAB_ICON[c.id]) ?? shown.find((x) => x.group === c.id);
       return t ? toolIcon(t) : '';
@@ -107,7 +115,11 @@ export class BuildMenu {
           ${this.groups.map((c) => `
             <div class="bm-tools hidden" data-group="${c.id}">${shown.filter((t) => t.group === c.id).map(tile).join('')}</div>`).join('')}
         </div>
-        <div class="bm-loose">${shown.filter((t) => !t.group).map(tile).join('')}</div>
+        <div class="bm-loose">${shown.filter((t) => !t.group).map(tile).join('')}
+          ${act('terrain', 'terrain', t('terrain'), 'aria-pressed="false"')}
+          ${act('undo', 'undo', t('undo'), 'disabled', 'bm-hist')}
+          ${act('redo', 'redo', t('redo'), 'hidden', 'bm-hist')}
+        </div>
       </div>
       <div class="bm-dock">
         <button class="bm-toggle" aria-label="${t('build.open')}"><span class="bm-held"></span><span class="bm-label">${t('build')}</span></button>
@@ -125,8 +137,11 @@ export class BuildMenu {
     this.heldEl = this.el.querySelector('.bm-held');
     this.labelEl = this.el.querySelector('.bm-label');
     this.optsEl = this.el.querySelector('.bm-opts');
-    this.undoEl = this.el.querySelector('[data-act="undo"]');
-    this.redoEl = this.el.querySelector('[data-act="redo"]');
+    this.undoEl = this.el.querySelector('.bm-dock [data-act="undo"]');
+    this.redoEl = this.el.querySelector('.bm-dock [data-act="redo"]');
+    this.terrainEl = this.el.querySelector('.bm-loose [data-act="terrain"]');
+    this.looseUndoEl = this.el.querySelector('.bm-loose [data-act="undo"]');
+    this.looseRedoEl = this.el.querySelector('.bm-loose [data-act="redo"]');
     this.captionEl = this.el.querySelector('.bm-caption');
     this.titleEl = this.el.querySelector('.bm-title');
     this.bodyEl = this.el.querySelector('.bm-body');
@@ -311,12 +326,23 @@ export class BuildMenu {
     if (this.rail && !this.folded) this.fold(true, false);
   }
 
-  // Zpět and Znovu as far as there is something to take back or put back.
+  // Zpět and Znovu as far as there is something to take back or put back:
+  // in the dock (a narrow screen), and in the box beside Erase (a wide one),
+  // where Zpět stays, struck through, when there is nothing to take back.
   showHistory() {
     const offer = this.history ? historyOffer(this.history, this.tools.active?.id) : { undo: false, redo: false };
+    const photo = this.tools.active?.id === 'photo';
     this.undoEl.hidden = !offer.undo;
     this.redoEl.hidden = !offer.redo;
-    this.el.classList.toggle('has-history', offer.undo || offer.redo);
+    this.looseUndoEl.hidden = photo;
+    this.looseUndoEl.disabled = !offer.undo;
+    this.looseRedoEl.hidden = !offer.redo;
+    this.terrainEl.hidden = photo;
+  }
+
+  // The Terrain button shows whether the contour lines are on.
+  showTerrain(on) {
+    this.terrainEl.setAttribute('aria-pressed', String(on));
   }
 
   // The options of the tool in hand, shown in the dock while the panel is

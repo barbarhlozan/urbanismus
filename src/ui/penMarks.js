@@ -18,11 +18,12 @@
 //                    is open)
 //   picked line      a tick at the right of the line of words picked (a
 //                    colour scheme)
-//   setting          a small box in the corner, crossed while it's on (an
-//                    option of the tool in hand that's a setting: Terrain)
+//   setting          a small box in the corner, crossed while it's on
+//                    (Terrain, beside Erase)
 //   in hand          the name of the tool in hand boxed in the thick pen,
 //                    a little askew, each tool at its own angle
-//   can't            struck through
+//   can't            struck through (a popup's choice, Zpět with nothing
+//                    to take back)
 //   keyboard focus   crop marks at the four corners, as a printer marks
 //                    where a sheet is cut (only on :focus-visible, so a
 //                    click doesn't leave them)
@@ -45,9 +46,9 @@ const CELLS = '.close, .bm-tab, .bm-tool, .bm-act, .bm-toggle, .bm-opts button, 
 // what can be chosen, by the mark it gets (styles.css shows it)
 const RINGED = '.bm-tab, .bm-tool, .photo-corner, .controls button';
 const TICKED = '.scheme';
-const SETTING = '.bm-opts button[aria-pressed]';
+const SETTING = '.bm-opts button[aria-pressed], .bm-act[aria-pressed]';
 const HELD = '.bm-toggle';
-const STRUCK = '.popup button';
+const STRUCK = '.popup button, .bm-act';
 // not part of the word that's underlined (a key, a value, a number)
 const ASIDE = '.pm, .key, .note, .dlg-n';
 const OUT = 3;  // px the crop marks stand off a control…

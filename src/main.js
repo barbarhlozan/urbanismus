@@ -33,6 +33,7 @@ import { createNetworkTool } from './tools/network.js';
 import { createBuildTool } from './tools/build.js';
 import { createBulldozeTool } from './tools/bulldoze.js';
 import { createPhotoTool } from './tools/photo.js';
+import { contoursSetting } from './tools/terrain.js';
 import { takePhoto } from './render/photo.js';
 import { PhotoPrint } from './ui/photoPrint.js';
 import { Popup } from './ui/popup.js';
@@ -194,9 +195,10 @@ const story = new Storyteller({ world, agents, trains, dialogue, chronicle, conf
 
 const tools = new ToolManager(world.grid, 'inspect');
 tools.allowed = (tool) => UNLOCKS.allowsTool(tool);
-// (contours: the Terrain option the town-changing tools offer, tools/terrain.js)
-const contours = { on: () => renderer.contours, toggle: () => setContours(!renderer.contours) };
-const ctx = { world, camera, tools, popup, growth, renderer, contours, config: CONFIG };
+// (contours: the Terrain button beside Erase, tools/terrain.js; the button is
+// told whenever it changes)
+const contours = contoursSetting({ renderer, fallback: STYLE.contours, changed: (on) => hud.buildMenu.showTerrain(on) });
+const ctx = { world, camera, tools, popup, growth, renderer, config: CONFIG };
 tools.register(createInspectTool(ctx));
 tools.register(createNetworkTool(ctx, { kind: 'road', group: 'transport' }));
 tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, group: 'transport' }));
@@ -220,6 +222,7 @@ const actions = {
   assets: () => assetsPage.toggle(),
   newMap: () => newMapMenu.toggle(),
   photo: () => tools.use(tools.active?.id === 'photo' ? 'inspect' : 'photo'),
+  terrain: () => contours.toggle(),
   undo: () => takeBack('undo'),
   redo: () => takeBack('redo'),
   export: () => exportCity(world),
@@ -334,7 +337,7 @@ const followUnlocks = () => {
   // cars, trucks and buses: off the map if locked, and the car parks follow
   agents.followVehicles();
   renderer.dirty.add('parked');
-  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act], .photo-corner, .hud .chron')) {
+  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act="terrain"], .photo-corner, .hud .chron')) {
     btn.classList.toggle('locked', !UNLOCKS.allowsControl(btn.dataset.act ?? 'chronicle'));
   }
   const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu };
@@ -386,25 +389,10 @@ sketchFrames(uiRoot, '.popup', HANDS.loose);
 penMarks(uiRoot);
 penMarks(document.getElementById('intro'));
 
-// Terrain contour lines: off unless switched on with the Terrain option of
-// a tool in hand (tools/terrain.js), then on until switched off, whatever
-// is in hand (remembered in this browser).
-const CONTOURS_KEY = 'urbanismus.contours';
-function setContours(on) {
-  renderer.setContours(on);
-  try {
-    localStorage.setItem(CONTOURS_KEY, on ? '1' : '0');
-  } catch {
-    // storage unavailable: the choice just won't be remembered
-  }
-}
-let savedContours = null;
-try {
-  savedContours = localStorage.getItem(CONTOURS_KEY);
-} catch {
-  // storage unavailable
-}
-setContours(savedContours === null ? STYLE.contours : savedContours === '1');
+// Terrain contour lines: off unless switched on with the Terrain button beside
+// Erase (tools/terrain.js), then on until switched off, whatever is in hand
+// (remembered in this browser).
+contours.start();
 // The dots around the pointer (OverlayKit.nearDots): only while building,
 // Select and Photo show the bare map; only those the tool can use (with a
 // structure in hand, those the type it's on could have).

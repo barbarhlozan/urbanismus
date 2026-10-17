@@ -3,12 +3,10 @@
 // toggle with Tab). If anything blocks it, nothing is built. After a
 // successful build the next segment starts from the end point, so lines can
 // be chained. Roads come as two tools: roads and single-track lanes
-// (`lane`); drawing one over the other converts it. Terrain shows the
-// contour lines meanwhile (tools/terrain.js).
+// (`lane`); drawing one over the other converts it.
 
 import { planRoute, validateRoute, BEND } from '../roads/routing.js';
 import { t } from '../core/text.js';
-import { terrainOption } from './terrain.js';
 
 // options: { kind, id (default: kind), lane (roads: build lanes), group (Build menu group), fineGrid, curve (config key), hoverRadius }
 // Its words are tool.<id>, tool.<id>.blurb and network.*.<id> (text/ui.txt).
@@ -89,7 +87,7 @@ export function createNetworkTool(ctx, options) {
 
     actions: () => [{
       label: `${t('bend')}: ${bendName(bend)}`, icon: bend === BEND.DIAGONAL_FIRST ? 'bend-diagonal' : 'bend-straight', key: 'Tab', run: flip,
-    }, ...terrainOption(ctx)],
+    }],
     cancelLabel: () => t(start >= 0 ? `network.stop.${id}` : 'done'),
 
     overlay(kit) {

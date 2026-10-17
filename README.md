@@ -27,10 +27,11 @@ bottom edge with its options (size, rotate, another look, bend…) beside it and
 put it down.
 
 **Zpět** (Undo) takes back your last change to the town – a building, a road, a demolition, a
-whole click's worth – and **Znovu** (Redo) puts it back. Both stand in the dock, **Zpět**
-whenever there is something to take back (also with nothing in hand, so a change can be undone
-after you put the tool down; on a computer then in a small dock of its own) and **Znovu** right
-after an undo, until you change something else. **⌘Z** / **Ctrl+Z** and **⇧⌘Z** / **Ctrl+Y**
+whole click's worth – and **Znovu** (Redo) puts it back. On a computer both stand in the box
+under the Build rail, beside Erase and Terrain: **Zpět** always, struck through while there is
+nothing to take back, and **Znovu** right after an undo, until you change something else. On a
+phone they stand in the dock, **Zpět** beside the Build button (or before the × of the tool in
+hand) and **Znovu** after an undo. Neither is shown in photo mode. **⌘Z** / **Ctrl+Z** and **⇧⌘Z** / **Ctrl+Y**
 do the same. If something now stands in the way of a step, it says so and the step is dropped.
 
 Shortcuts come in two steps that follow the Build menu: the **number row** opens a group
@@ -90,9 +91,9 @@ a Czech or German layout.
   footpath) to build more of it
 - **Middle click** – same as **Tab** (rotate what you're placing, flip a line's bend)
 - **Drag / wheel** – pan / zoom
-- **Terrain** – contour lines: an option in the dock beside the options of the tool in hand
-  (building, roads and other lines, Erase); once on they stay on whatever's in hand, until
-  switched off there (off by default, they are the most expensive thing to draw)
+- **Terrain** – contour lines: a button beside Erase (under the Build rail on a computer, in
+  the panel's bottom row on a phone), crossed while on; once on they stay on whatever's in
+  hand, until switched off there (off by default, they are the most expensive thing to draw)
 
 On a phone it's all taps: tap once to preview, tap again to confirm. The Build menu starts
 folded there and folds again once you pick a tool.

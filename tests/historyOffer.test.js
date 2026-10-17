@@ -1,4 +1,4 @@
-// When the dock offers Zpět and Znovu (ui/historyOffer.js).
+// When Zpět and Znovu are offered (ui/historyOffer.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { historyOffer } from '../src/ui/historyOffer.js';

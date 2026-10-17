@@ -1,10 +1,10 @@
 // Removes whatever is under the pointer: building, then footpath, then a
 // street's sidewalks, then road, then railway, then fence, then trees. Snaps to the dense grid so footpaths between buildings can be hit.
-// Its one option is Terrain, the contour lines (tools/terrain.js).
+// It has no options of its own; it stands in the Build menu's box of loose
+// things, with Terrain and Zpět beside it (ui/buildMenu.js).
 
 import { t } from '../core/text.js';
 import { eraseTarget } from './erase.js';
-import { terrainOption } from './terrain.js';
 
 export function createBulldozeTool(ctx) {
   const { world, renderer } = ctx;
@@ -18,8 +18,6 @@ export function createBulldozeTool(ctx) {
     hotkey: 'backspace', // (the letter rows pick build tools, see ui/keys.js)
     blurb: t('tool.erase.blurb'),
     touchConfirm: true,
-
-    actions: () => terrainOption(ctx),
 
     snap(x, y) {
       point = [x, y];
