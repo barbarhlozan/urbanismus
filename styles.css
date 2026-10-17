@@ -1046,11 +1046,14 @@ body.loading #ui { visibility: hidden; }
 #ui .bm-loose > button { flex: 1 1 auto; min-width: 0; position: relative; display: flex; align-items: center; flex-direction: row; justify-content: center; gap: 5px; height: var(--bar-h); padding: 0 4px; }
 #ui .bm-loose > button + button { border-left: var(--line) solid var(--fg); }
 .bm-loose .bm-icon { width: calc(var(--bar-h) - 14px); height: calc(var(--bar-h) - 14px); flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
-.bm-loose .bm-icon .ctl-icon { width: 16px; height: 16px; }
-.bm-loose .bm-icon .ctl-icon path, .bm-loose .bm-icon .ctl-icon circle { stroke-width: 1.1 !important; fill: none !important; }
+.bm-loose .bm-icon :is(.ctl-icon, .opt-icon) { width: 16px; height: 16px; }
+.bm-loose .bm-icon :is(.ctl-icon, .opt-icon) :is(path, circle) { stroke-width: 1.1 !important; fill: none !important; }
 .bm-loose .bm-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bm-loose .key { display: none; } /* (in the tooltip, as on the tiles) */
-#ui .bm-loose button.locked { display: none; }
+#ui .bm-loose button:is(.locked, [hidden]) { display: none; }
+#ui .bm-loose button:disabled { cursor: default; color: var(--detail); }
+/* Zpět and Znovu are in the dock on a narrow screen */
+#ui .build-menu:not(.rail) .bm-loose .bm-hist { display: none; }
 
 /* folded: the dock – "+ Build", or the tool in hand with its options and an
    × – as high as the top bar, its buttons a cell wide like the bar's */
@@ -1167,9 +1170,10 @@ body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 4
    (the drawer folds for them: BuildMenu.makeRoom) */
 #ui:has(.build-menu.rail) .color-panel,
 #ui:has(.build-menu.rail) .debug-panel { right: calc(20px + var(--safe-r) + var(--bar-h) + 2 * var(--line) + 8px); }
-#ui .build-menu.rail.has-tool > .bm-dock,
-#ui .build-menu.rail.has-history > .bm-dock { display: flex; }
-/* with nothing in hand the dock holds only Zpět and Znovu */
+#ui .build-menu.rail.has-tool > .bm-dock { display: flex; }
+/* (there the dock keeps only the tool in hand: Terrain and Zpět are beside Erase) */
+#ui .build-menu.rail .bm-history { display: none; }
+/* with nothing in hand there is no dock: Zpět and Znovu stand beside Erase */
 #ui .build-menu.rail:not(.has-tool) .bm-toggle { display: none; }
 
 
@@ -1436,11 +1440,12 @@ body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
 /* the line of words picked: ticked */
 #ui .scheme.on > .pm .pm-tick { display: inline; }
 /* a setting: its box, crossed while on */
-#ui .bm-opts [aria-pressed="true"] > .pm .pm-x { display: inline; }
+#ui :is(.bm-opts, .bm-loose) [aria-pressed="true"] > .pm .pm-x { display: inline; }
 /* the tool in hand: its name boxed in the thick pen */
 #ui .build-menu.has-tool .bm-toggle > .pm .pm-held { display: inline; }
 /* can't be done here: struck through */
-#ui .popup button:disabled:not(.info):not(.heading) > .pm .pm-strike { display: inline; }
+#ui .popup button:disabled:not(.info):not(.heading) > .pm .pm-strike,
+#ui .bm-loose button:disabled > .pm .pm-strike { display: inline; }
 /* keyboard focus: crop marks at the corners, in place of the browser's ring */
 .pm-host:focus-visible { outline: none; }
 .pm-host:focus-visible > .pm .pm-crop { display: inline; }
