@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { flatWorld, road } from './helpers.js';
 import { Chronicle } from '../src/sim/chronicle.js';
+import { World } from '../src/core/world.js';
 import { CONFIG } from '../src/config.js';
 
 const texts = (c) => c.entries.map((e) => e.text);
@@ -101,4 +102,17 @@ test('it is kept with the town', () => {
   c.write('Grandma told of the mill.', 'story');
   const json = JSON.parse(JSON.stringify(w.toJSON()));
   assert.deepEqual(json.chronicle.entries.at(-1), { day: 1, text: 'Grandma told of the mill.', kind: 'story' });
+});
+
+test('what has been read is kept, and photos are entries too', () => {
+  const w = flatWorld();
+  const c = new Chronicle(w, CONFIG);
+  assert.equal(c.unread, false); // (its first line, "begun", is no news)
+  c.photo('p1', 'Kostel');
+  assert.equal(c.unread, true);
+  assert.deepEqual(c.entries.at(-1), { day: c.day(), text: 'Kostel', kind: 'photo', print: 'p1' });
+  c.read();
+  assert.equal(c.unread, false);
+  const again = World.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
+  assert.equal(again.chronicle.seen, c.entries.length);
 });

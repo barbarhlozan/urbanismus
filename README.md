@@ -162,17 +162,26 @@ How to write it, and everything a rule can count, is in [`story/README.md`](stor
 Each branch is told once per town. What has been told is kept with the town. Click the window,
 or press **Enter**, to go on.
 
-The **book** beside the town's name opens the town's **chronicle**: the houses (each of the
-first ten, with where it stands – by the church, by the river – then round numbers of them),
-every first (the first road, the first panel block, the railway arriving), every landmark, the residents
-passing round numbers, a new name, and whatever the story writes in it (`chronicle:` lines).
-A dot on the book means there's something new in it. **← →** turn the pages.
+The **book** beside the town's name opens the town's **chronicle**. Three thumb tabs on its
+edge (along the top on a phone) open its parts:
 
-The book opens on its last page, the **ledger**: the town as it stands today, written out by
-hand as a municipal register would have it – a rubric in the ruled margin, the numbers in words
-("šedesát čtyři obyvatel", "jeden kostel, dvě hospody"): the people, the homes, the work, what
-stands in the town, and what no road reaches. Noughts are left out unless they are the news.
-It is counted afresh each time (`src/ui/ledger.js`), never saved, and never marks the book as new.
+- **Kronika** – the houses (each of the first ten, with where it stands – by the church, by the
+  river – then round numbers of them), every first (the first road, the first panel block, the
+  railway arriving), every landmark, the residents passing round numbers, a new name, whatever
+  the story writes in it (`chronicle:` lines, set as paragraphs), and every photo taken, pasted
+  in with corner mounts under its day. A ribbon lies in the newest pages.
+- **Fotografie** – the photos again, two to a page. Each is captioned with the one building that
+  stands out in it, or the village's name. The prints are kept in the browser's IndexedDB, apart
+  from the save (`src/ui/prints.js`); a downloaded city carries them along.
+- **Stav obce** – the ledger: the town as it stands today, written out by hand as a municipal
+  register would have it – a rubric in the ruled margin and the number in words ("Lidé –
+  šedesát", "Domy – padesát šest", "Práce – sedm"), then what stands in the village, one thing
+  a line ("dva kostely", "škola"). Noughts are left out unless they are the news. It is counted
+  afresh each time (`src/ui/ledger.js`) and never saved.
+
+The book opens on the tab last open, or on the newest pages of Kronika when something was
+written since it was last read; a dot on the book says so, and a pencil stroke in the margin
+marks what is new. **← →** turn the pages; the page numbers stand in the outer corners.
 The Building card writes its numbers in words too (`src/core/numberWords.js`).
 
 ## Tests

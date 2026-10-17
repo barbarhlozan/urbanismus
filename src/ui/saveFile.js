@@ -10,19 +10,29 @@
 //
 // A bare World.toJSON() (e.g. the autosave copied out of the browser) is
 // taken too.
+//
+// The photos pasted into the chronicle are kept apart from the save
+// (ui/prints.js): the file carries them along as `prints` ({ id: data URL }),
+// and the World pickCity() gives has them as `world.prints`, for whoever
+// puts the city in to keep (putPrints).
 
 import { CONFIG } from '../config.js';
 import { World } from '../core/world.js';
 import { t } from '../core/text.js';
+import { printsOf, putPrint, clearPrints } from './prints.js';
 
 const FORMAT = 'urbanismus-city';
 
-export function exportCity(world) {
+export async function exportCity(world) {
+  const ids = world.chronicle.entries.filter((e) => e.kind === 'photo').map((e) => e.print);
+  const prints = {};
+  for (const [id, blob] of await printsOf(ids)) prints[id] = await dataURL(blob);
   const file = {
     format: FORMAT,
     app: `${CONFIG.app.name} ${CONFIG.app.version}`,
     exported: new Date().toISOString(),
     world: world.toJSON(),
+    prints,
   };
   const blob = new Blob([JSON.stringify(file)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -57,15 +67,38 @@ function readCity(text) {
   } catch {
     throw new Error(t('import.not-city'));
   }
+  const prints = data?.format === FORMAT ? data.prints ?? {} : {};
   if (data?.format === FORMAT) data = data.world;
   if (!Number.isInteger(data?.width) || !Array.isArray(data.structures) || !data.terrain) {
     throw new Error(t('import.not-city'));
   }
   try {
-    return World.fromJSON(data);
+    const world = World.fromJSON(data);
+    world.prints = prints;
+    return world;
   } catch (err) {
     throw new Error(/newer version/.test(err.message)
       ? t('import.newer')
       : t('import.damaged'));
   }
 }
+
+// The prints a picked city brought (world.prints) put in place of the ones
+// kept now.
+export async function putPrints(world) {
+  await clearPrints();
+  for (const [id, url] of Object.entries(world.prints ?? {})) {
+    try {
+      await putPrint(id, await (await fetch(url)).blob());
+    } catch {
+      // a damaged picture: its page shows an empty mount
+    }
+  }
+}
+
+const dataURL = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(reader.error);
+  reader.readAsDataURL(blob);
+});
