@@ -1638,6 +1638,10 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
   gap: 8px;
 }
 .photo-frame { border: var(--line) solid var(--fg); line-height: 0; }
+/* while the print is out, photo mode rests: its dock goes, and the camera
+   in the corner can't be pressed until the print is put away */
+body.print-open #ui .build-menu .bm-dock { visibility: hidden; }
+body.print-open #ui .photo-corner { pointer-events: none; opacity: 0.4; }
 .photo-print svg.photo { width: 100%; height: auto; display: block; }
 .photo-caption { font-size: 13px; text-align: center; padding: 2px 0; }
 .photo-buttons { display: flex; justify-content: center; gap: 8px; }

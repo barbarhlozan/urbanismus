@@ -205,7 +205,14 @@ tools.register(createNetworkTool(ctx, { kind: 'rail', fineGrid: true, group: 'tr
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createNetworkTool(ctx, { kind: 'fence', fineGrid: true, group: 'farming' }));
 tools.register(createBulldozeTool(ctx));
-const photoPrint = new PhotoPrint(uiRoot);
+// while a print is out, photo mode rests (see the input below): no menu
+// left open on the map, the dock and the camera put by
+const photoPrint = new PhotoPrint(uiRoot, {
+  onToggle: (open) => {
+    if (open) popup.hide();
+    document.body.classList.toggle('print-open', open);
+  },
+});
 tools.register(createPhotoTool(ctx, {
   shoot: (shot) => {
     photoPrint.show(takePhoto(renderer, shot), world.name);
@@ -453,17 +460,20 @@ function takeBack(which) {
   popup.show(innerWidth / 2, innerHeight, t(`${which}.refused`), [{ label: reasonText(result.reason), info: true }], null, dock.width ? dock : null);
 }
 
+// (with a photo's print out, the map takes no clicks: the photographer
+// stays where they stood and looks where they looked, until it's put away)
 attachInput(document.getElementById('input'), {
   camera,
-  onPointer: (x, y) => tools.pointer(x, y),
-  onClick: (e) => tools.click(e),
+  onPointer: (x, y) => { if (!photoPrint.open) tools.pointer(x, y); },
+  onClick: (e) => { if (!photoPrint.open) tools.click(e); },
   onCancel: () => {
+    if (photoPrint.open) return photoPrint.hide();
     if (popup.open) return popup.hide();
     if (tools.active?.id === tools.defaultId) return pickUp();
     tools.cancel();
   },
   // middle click works like Tab: rotate what's being placed, flip a line's bend
-  onMiddle: () => tools.key({ key: 'Tab', preventDefault() {} }),
+  onMiddle: () => { if (!photoPrint.open) tools.key({ key: 'Tab', preventDefault() {} }); },
 });
 
 window.addEventListener('keydown', (e) => {
@@ -485,9 +495,13 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
+  // a photo's print out: Esc puts it away, the other keys wait
+  if (photoPrint.open) {
+    if (e.key === 'Escape') photoPrint.hide();
+    return;
+  }
   if (e.key === 'Escape') {
-    if (photoPrint.open) photoPrint.hide();
-    else if (popup.open) popup.hide();
+    if (popup.open) popup.hide();
     // nothing in hand: Esc folds the open Build menu away
     else if (tools.active?.id === tools.defaultId && !hud.buildMenu.folded) hud.buildMenu.fold(true);
     else tools.cancel();
@@ -627,7 +641,7 @@ function loop(now) {
     deer.update(simDt);
     livestock.update(simDt);
     growth.update(simDt);
-    renderer.frame((dots ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open ? null : tools.point, tools.active?.id));
+    renderer.frame((dots ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
     const sky = weather.sky();
     cloudShadows.frame(simDt, camera, sky.cover);
     rain.frame(simDt, camera, sky.rain);

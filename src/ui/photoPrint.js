@@ -1,5 +1,8 @@
 // A photo from photo mode (render/photo.js), shown as a print with a white
-// border and a caption, with a button to save it as a PNG.
+// border and a caption, with a button to save it as a PNG. While it's out,
+// photo mode rests: the map, its keys and the camera's controls wait until
+// the print is put away (main.js, through onToggle; styles.css
+// body.print-open).
 
 import { sketchFrame } from './sketchFrame.js';
 import { t } from '../core/text.js';
@@ -11,7 +14,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const PROPS = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'opacity', 'fill-opacity', 'stroke-opacity', 'display', 'visibility', 'vector-effect'];
 
 export class PhotoPrint {
-  constructor(root) {
+  constructor(root, { onToggle = () => {} } = {}) {
+    this.onToggle = onToggle;
     this.el = document.createElement('div');
     this.el.className = 'photo-print hidden';
     root.appendChild(this.el);
@@ -33,10 +37,13 @@ export class PhotoPrint {
         <button data-act="close">${t('close')}</button>
       </div>`;
     this.el.classList.remove('hidden');
+    this.onToggle(true);
   }
 
   hide() {
+    if (!this.open) return;
     this.el.classList.add('hidden');
+    this.onToggle(false);
   }
 
   get open() {
