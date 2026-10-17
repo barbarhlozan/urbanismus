@@ -18,8 +18,8 @@
 //                    is open)
 //   picked line      a tick at the right of the line of words picked (a
 //                    colour scheme)
-//   setting          a small box in the corner, crossed while it's on (an
-//                    Terrain, beside Erase)
+//   setting          a small box in the corner, crossed while it's on
+//                    (Terrain, beside Erase)
 //   in hand          the name of the tool in hand boxed in the thick pen,
 //                    a little askew, each tool at its own angle
 //   can't            struck through (a popup's choice, Zpět with nothing
