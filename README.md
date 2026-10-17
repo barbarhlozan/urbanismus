@@ -81,7 +81,7 @@ a Czech or German layout.
 - **Památky** (**6**): chapel, church, town hall (**Shift** switches small, medium, large),
   memorial, castle, tower, stadium
 - **Backspace** – erase
-- **P** or the **camera** in the bottom-right corner (a Flexaret) – photo mode: click where
+- **P** or the **camera** in the bottom-right corner – photo mode: click where
   to stand, aim with the pointer, click to take a picture of the town from street level;
   its options are in the dock: **Lens** (**Shift**: 28 mm to start, then 42 and 80 mm),
   **Move**, and on a phone **Take the photo**. It opens as a print you can save as a PNG
