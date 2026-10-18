@@ -1570,6 +1570,11 @@ body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
 #ui :is(.bm-opts, .bm-loose) [aria-pressed="true"] > .pm .pm-x { display: inline; }
 /* the tool in hand: its name boxed in the thick pen */
 #ui .build-menu.has-tool .bm-toggle > .pm .pm-held { display: inline; }
+/* …but an action leading the dock (photo mode's Take a picture) is a word
+   like the options beside it, not a tool held */
+#ui .build-menu.has-lead .bm-toggle > .pm .pm-held { display: none; }
+.build-menu.has-lead .bm-held { display: none; }
+#ui .build-menu.has-lead .bm-toggle { padding: 0 14px; font-weight: normal; }
 /* can't be done here: struck through */
 #ui .popup button:disabled:not(.info):not(.heading) > .pm .pm-strike,
 #ui .bm-loose button:disabled > .pm .pm-strike { display: inline; }
@@ -1631,7 +1636,7 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
      for names) */
   .build-menu.folded.has-tool:not(.folding) { left: calc(8px + var(--safe-l)); right: calc(8px + var(--safe-r)); transform: none; }
   .bm-dock { max-width: 100%; }
-  .build-menu.has-tool .bm-label { display: none; }
+  .build-menu.has-tool:not(.has-lead) .bm-label { display: none; }
   #ui .build-menu.has-tool .bm-toggle { padding: 0 4px; }
   #ui .bm-opts button, #ui .bm-history button, #ui .bm-drop { padding: 0 8px; }
   .bm-panel { width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); }

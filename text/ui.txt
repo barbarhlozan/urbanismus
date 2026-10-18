@@ -458,7 +458,7 @@ control.photo
 
 photo.take
   cs: Vyfotit
-  en: Take the photo
+  en: Take a picture
 
 photo.lens
   cs: Objektiv

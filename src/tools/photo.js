@@ -55,7 +55,7 @@ export function createPhotoTool({ world }, { shoot }) {
     click(node, e) {
       if (!point) return;
       if (!spot) return place(point);
-      // a tap only aims (Take photo shoots); a click aims and shoots at once
+      // a tap only aims (the dock's Take a picture, or Enter, shoots); a click aims and shoots at once
       if (e?.pointerType && e.pointerType !== 'mouse') {
         if (Math.hypot(point[0] - spot[0], point[1] - spot[1]) > 1e-3) aim = point;
         return;
@@ -77,8 +77,11 @@ export function createPhotoTool({ world }, { shoot }) {
       return true;
     },
 
+    // the dock's first cell, in place of the tool's drawing and name: what
+    // it's for, in words, and pressing it takes the picture (BuildMenu)
+    lead: { label: t('photo.take'), run: take },
+
     actions: () => [
-      ...(aim ? [{ label: t('photo.take'), key: 'Enter', run: take }] : []),
       { label: `${t('photo.lens')}: ${LENSES[lens].label}`, key: 'Shift', run: cycleLens },
       ...(spot ? [{ label: t('photo.move'), run: () => place(null) }] : []),
     ],

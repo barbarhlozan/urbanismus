@@ -7,8 +7,10 @@
 // camera (photo mode, also P). It folds away to the dock: a Build button,
 // or, while a tool is in hand, that tool's drawing and name with its
 // options (size, rotate, another look…) beside it and an × to put it down.
-// The dock serves photo mode the same way (the camera, its lens, Take,
-// Move). Terrain has a small box in its corner, crossed while it's on
+// The dock serves photo mode too, but leads with what it's for instead of
+// the tool's drawing and name: Vyfotit (Take a picture) in plain words,
+// not boxed, pressing it takes the picture (the tool's `lead`); then the
+// lens and Move. Terrain has a small box in its corner, crossed while it's on
 // (penMarks.js); Zpět is struck through while there is nothing to take
 // back (historyOffer.js decides what is offered); Terrain and the history
 // are left out in photo mode, while the camera stays, boxed, to put it
@@ -172,7 +174,7 @@ export class BuildMenu {
       if (!btn) return;
       if (btn.classList.contains('bm-fold')) return this.fold(true);
       if (btn.dataset.act) return actions[btn.dataset.act]?.();
-      if (btn.classList.contains('bm-toggle')) return this.fold(false);
+      if (btn.classList.contains('bm-toggle')) return tools.active?.lead ? tools.active.lead.run() : this.fold(false);
       if (btn.classList.contains('bm-drop')) return tools.use(tools.defaultId);
       if (btn.dataset.opt != null) {
         tools.runAction(Number(btn.dataset.opt));
@@ -207,8 +209,10 @@ export class BuildMenu {
       const picked = tool.id !== tools.defaultId;
       this.cameraEl.classList.toggle('on', tool.id === 'photo');
       this.cameraEl.setAttribute('aria-pressed', String(tool.id === 'photo'));
-      this.heldEl.innerHTML = picked ? toolIcon(tool) : '';
-      this.labelEl.textContent = picked ? tool.label : t('build');
+      this.heldEl.innerHTML = picked && !tool.lead ? toolIcon(tool) : '';
+      this.labelEl.textContent = tool.lead?.label ?? (picked ? tool.label : t('build'));
+      this.el.classList.toggle('has-lead', !!tool.lead);
+      this.toggleEl.setAttribute('aria-label', tool.lead?.label ?? t('build.open'));
       this.el.classList.toggle('has-tool', picked);
       this.optsKey = null;
       // out of the way while building or taking photos (their options are
