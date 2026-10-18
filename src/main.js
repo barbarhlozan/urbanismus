@@ -15,6 +15,7 @@ import { World } from './core/world.js';
 import { generateWorld } from './terrain/generate.js';
 import { Camera } from './render/camera.js';
 import { Renderer } from './render/renderer.js';
+import { sunAt } from './render/shadows.js';
 import { OverlayKit } from './render/overlay.js';
 import { AgentSystem } from './sim/agents.js';
 import { GrowthSystem } from './sim/growth.js';
@@ -142,6 +143,7 @@ const cloudShadows = new CloudShadows(document.getElementById('cloud-shadows'), 
 // the shadows follow the sun (styles.css --sun), and a grey sky
 // shades the whole map (#gloom) and, a little less, the UI's paper (--gloom)
 const objectsSvg = document.getElementById('objects');
+const groundSvg = document.getElementById('ground'); // (the hills' shadows, render/hillShadows.js)
 const gloomEl = document.getElementById('gloom');
 // As the weather turns these go over gradually (WeatherSystem.sky), but in
 // steps – each new --sun repaints the whole map – and the CSS eases between.
@@ -152,7 +154,7 @@ const showSun = ({ sun, gloom }) => {
   gloom = Math.round(gloom * 50) / 50;
   if (sun !== sunFor) {
     sunFor = sun;
-    for (const el of [svg, objectsSvg]) el.style.setProperty('--sun', sun);
+    for (const el of [groundSvg, svg, objectsSvg]) el.style.setProperty('--sun', sun);
   }
   if (gloom !== gloomFor) {
     gloomFor = gloom;
@@ -163,6 +165,7 @@ const showSun = ({ sun, gloom }) => {
 agents.trains = trains;
 trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
 const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, boats, deer, livestock, parking, config: CONFIG });
+renderer.setSun(sunAt(world.time)); // (the sun as the day has it, before the map is first drawn)
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);
 const annotations = new Annotations({ world, camera, clock, heights: () => renderer.contours });
@@ -648,6 +651,7 @@ function loop(now) {
     cloudShadows.frame(simDt, camera, sky.cover);
     rain.frame(simDt, camera, sky.rain);
     showSun(sky);
+    renderer.setSun(sunAt(world.time)); // (the sun steps through the day, shadows.js DAY)
     renderer.setMist(mistRisen(world.weather, world.time, CONFIG.weather.mist));
     // the wind eases to the weather's (already gradual, but cmd.weather()
     // may jump it)

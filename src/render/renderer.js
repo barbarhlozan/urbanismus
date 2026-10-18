@@ -86,7 +86,8 @@ import { STEEP_LINES, steepLines } from './steep.js';
 import { carMark, personMark } from './marks.js';
 import { mergeRuns, placeInOrder, isoSort } from './order.js';
 import { Camera } from './camera.js';
-import { SUN, sunFor, shadowSVG } from './shadows.js';
+import { SUN, DAY, sunFor, shadowSVG } from './shadows.js';
+import { HILL_SHADOWS, hillShade, hillShadowLines } from './hillShadows.js';
 import { findForests, forestSVG } from './forest.js';
 import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
 
@@ -703,7 +704,31 @@ export class Renderer {
   }
 
   renderTerrain() {
-    this.layers.terrain.innerHTML = (this.contours ? this.renderContours() : this.renderSteep()) + this.renderBrows() + this.renderWater();
+    this.layers.terrain.innerHTML = this.renderHillShadows() + (this.contours ? this.renderContours() : this.renderSteep()) + this.renderBrows() + this.renderWater();
+  }
+
+  // The shadows the hills cast (hillShadows.js): the shade worked out once
+  // per sun and relief, its hatching for each turn of the view (the last
+  // few kept, as the brows').
+  renderHillShadows() {
+    const { camera, world } = this;
+    if (!HILL_SHADOWS.on || !SUN.on || !SUN.hatch || this.contours) return '';
+    const m = 1.2; // (as the contours)
+    const box = [-m, -m, world.grid.width - 1 + m, world.grid.height - 1 + m];
+    const key = `${SUN.azimuth}|${SUN.length}|${SUN.hatch.angle}|${SUN.hatch.gap}`;
+    const relief = world.relief();
+    if (this.hills?.key !== key || this.hills.relief !== relief || this.hills.lift !== camera.lift) {
+      this.hills = { key, relief, lift: camera.lift, shade: hillShade(this.groundHeight(), box, sunFor(camera)), views: new Map() };
+    }
+    let view = this.hills.views.get(camera.angle);
+    if (view == null) {
+      const [near, far] = hillShadowLines(this.hills.shade, box, sunFor(camera), camera.angle, this.wetAt());
+      const paths = (lines, cls) => chunked(lines, CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
+      view = paths(near, 'hill-shadow') + paths(far, 'hill-shadow ht1');
+      if (this.hills.views.size >= 6) this.hills.views.delete(this.hills.views.keys().next().value);
+      this.hills.views.set(camera.angle, view);
+    }
+    return view;
   }
 
   // What the camera sees of the ground, the brows (brows.js) and the rock
@@ -1838,8 +1863,10 @@ export class Renderer {
           this.rebuildOrder = null;
         }
       } else if (e.bandStale) {
-        // back where it was drawn before it was redrawn
-        e.stale = e.bandStale = false;
+        // back where it was drawn before it was redrawn (unless the sun
+        // has moved since, setSun)
+        e.bandStale = false;
+        e.stale = !!e.sunStale;
       }
     }
   }
@@ -1993,7 +2020,7 @@ export class Renderer {
         for (const g of [entry.g, entry.lg]) g.classList.remove(entry.hide);
         entry.hide = '';
       }
-      entry.stale = entry.bandStale = false;
+      entry.stale = entry.bandStale = entry.sunStale = false;
       this.cull([entry]);
       if (this.born.has(key) && !entry.shown) this.born.delete(key); // out of sight: no pen
       if (this.born.has(key)) {
@@ -2197,6 +2224,29 @@ export class Renderer {
 
   shadowSVG(shade, band) {
     return shade ? this.atDetail(shadowSVG(shade, sunFor(this.camera)), band) : '';
+  }
+
+  // The sun steps to position i of the day (DAY.positions): what it lights
+  // is drawn anew – the walls turned away from it, the shadows, the trees'
+  // shaded sides, the hills' shadows. The objects in sight go by the
+  // rebuild budget, a few each frame (frame), as for a new level of
+  // detail; the rest once they come into sight (stale, cull()). Not
+  // mid-turn (the turn's views are drawn for the sun as it was): false if
+  // put off, to try again.
+  setSun(i) {
+    if (i == null || i === this.sunPos) return true;
+    if (this.turning || this.bare) return false;
+    [SUN.azimuth, SUN.length] = DAY.positions[i];
+    this.sunPos = i;
+    for (const e of this.objs.values()) {
+      e.views?.clear(); // (drawn for the old sun)
+      e.stale = e.sunStale = true;
+      if (e.shown !== false) this.rebuildQueue.add(e.key);
+    }
+    this.rebuildOrder = null;
+    this.dirty.add('terrain');
+    this.dirty.add('forest');
+    return true;
   }
 
   // Every object's shadow drawn again from its feet, with SUN as it is

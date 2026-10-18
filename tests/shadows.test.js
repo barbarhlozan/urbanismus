@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SUN, groundDir, sunFor, castStrips, castShapes, hatchRuns, shadowPaths, wallStrokes, strokeShare, tierOf } from '../src/render/shadows.js';
+import { SUN, DAY, groundDir, sunFor, sunAt, screenLight, castStrips, castShapes, hatchRuns, shadowPaths, wallStrokes, strokeShare, tierOf } from '../src/render/shadows.js';
 
 // the sun casting along +x
 const sun = (over = {}) => ({ ...SUN, ...over, cast: [SUN.length, 0] });
@@ -13,6 +13,33 @@ test('screen directions map onto the ground and back with the view', () => {
   const [rx, ry] = groundDir(90, Math.PI / 2);
   assert.ok(Math.abs(rx * x + ry * y) < 1e-9);
   assert.equal(sunFor({ angle: 0 }).cast.length, 2);
+});
+
+test('the sun stands over the world, not the screen', () => {
+  // the same shadows on the ground whichever way the view is turned
+  const a = sunFor({ angle: 0 }), b = sunFor({ angle: 1.1 });
+  assert.deepEqual(a.cast, b.cast);
+  const [x, y] = sunFor({ angle: 0 }, { ...SUN, azimuth: 0, length: 2 }).cast;
+  assert.ok(Math.abs(x - 2) < 1e-9 && Math.abs(y) < 1e-9);
+  // and so on screen they turn with the view: half round, the light
+  // comes from the other side
+  const turn = (t) => ({ angle: t, toView: (px, py) => [px * Math.cos(t) - py * Math.sin(t), px * Math.sin(t) + py * Math.cos(t)] });
+  const [u0, v0] = screenLight(turn(0)), [u1, v1] = screenLight(turn(Math.PI));
+  assert.ok(Math.abs(u0 + u1) < 1e-9 && Math.abs(v0 + v1) < 1e-9);
+});
+
+test('the day steps the sun through its positions, morning to evening', () => {
+  const n = DAY.positions.length;
+  assert.equal(sunAt(0), 0);
+  assert.equal(sunAt(DAY.day - 1), n - 1);
+  assert.equal(sunAt(DAY.day / 2), Math.floor(n / 2));
+  assert.equal(sunAt(DAY.day * 3 + 1), 0); // the next morning
+  assert.equal(sunAt(5, { ...DAY, on: false }), null);
+  // midday is SUN's own, and the shadows are longest at either end
+  assert.deepEqual(DAY.positions[Math.floor(n / 2)], [SUN.azimuth, SUN.length]);
+  const lengths = DAY.positions.map(([, l]) => l);
+  assert.equal(Math.max(...lengths), lengths[0]);
+  assert.equal(Math.max(...lengths), lengths[n - 1]);
 });
 
 // a unit box's four walls, outward normals, 1 high

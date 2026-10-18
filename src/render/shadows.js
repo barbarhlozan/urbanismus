@@ -8,9 +8,8 @@
 //             (Painter.feet: ends, height, outward normal); each foot turned
 //             away from the sun casts the strip between it and its own foot
 //             shifted along the sun, and the strips together make the
-//             shadow. The renderer keeps an object's feet and redraws only
-//             the hatching from them (shadowSVG), so a sun that moves later
-//             on needs no repainting of buildings. Trees cast theirs from
+//             shadow. The renderer keeps an object's feet, so its hatching
+//             alone can be drawn again from them (shadowSVG). Trees cast theirs from
 //             the shapes they leave (Painter.casts, castShapes): a crown's
 //             round shadow, a spruce's pointed one, and a line from the
 //             trunk. The lines lie on one grid over the whole ground, each
@@ -33,10 +32,11 @@ const r2 = (n) => Math.round(n * 100) / 100;
 
 // The sun and the pen:
 //   on       draw shadows at all
-//   fall     the way shadows fall on screen, in degrees clockwise from
-//            screen right (90 = straight down). Fixed to the screen, as an
-//            illustrator keeps the light over one shoulder: rotating the
-//            view keeps shadows falling the same way on screen
+//   azimuth  the way shadows fall on the ground, in degrees from the
+//            world's x axis towards its y axis (90: along y, which at the
+//            first view is down the screen and to the left). Fixed to the
+//            world, so turning the view turns the shadows with the town;
+//            the day moves it (DAY, sunAt)
 //   length   a shadow's length on the ground per unit of height (1 = 45° sun)
 //   low      walls lower than this (kerbs, benches, paving) get neither mark
 // hatch, on the ground (null: none):
@@ -57,7 +57,7 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //   pen      as for the hatch
 export const SUN = {
   on: true,
-  fall: 150,
+  azimuth: 90,
   length: 1,
   low: 0.08,
   hatch: { angle: 120, gap: 0.04, wave: 0.008, ragged: 0.02, pen: 2 },
@@ -89,11 +89,44 @@ export function groundDir(deg, angle = 0) {
   return [wx / l, wy / l];
 }
 
-// The sun for a camera: `cast` is the ground shift per unit of height.
+// The sun for a camera: `cast` is the ground shift per unit of height, in
+// world axes (the same in every view); `angle` the camera's turn, for the
+// hatching, which lies the same way on screen in every view.
 export function sunFor(camera, sun = SUN) {
-  const angle = camera.angle ?? 0;
-  const [fx, fy] = groundDir(sun.fall, angle);
-  return { ...sun, angle, cast: [fx * sun.length, fy * sun.length] };
+  const a = (sun.azimuth * Math.PI) / 180;
+  return { ...sun, angle: camera.angle ?? 0, cast: [Math.cos(a) * sun.length, Math.sin(a) * sun.length] };
+}
+
+// Where the light comes from on screen, for a camera: a unit direction
+// [right, up] towards the sun, opposite to the way the shadows fall there
+// (the trees' glyphs are shaded by it, features/trees.js). The iso camera
+// draws view axes (rx, ry) at screen ((rx - ry)·cos30, (rx + ry)·½).
+export function screenLight(camera, sun = SUN) {
+  const a = (sun.azimuth * Math.PI) / 180;
+  const [rx, ry] = camera.toView ? camera.toView(Math.cos(a), Math.sin(a)) : [Math.cos(a), Math.sin(a)];
+  const sx = (rx - ry) * COS30, sy = (rx + ry) / 2, l = Math.hypot(sx, sy) || 1;
+  return [-sx / l, sy / l];
+}
+
+// The sun through a day: its positions from morning to evening, each as
+// [azimuth, length] (as SUN's), and how long a day lasts (`day`, simulated
+// seconds). It rests at each position for an equal share of the day and
+// then steps to the next – each step draws the map anew – and after the
+// evening comes the next morning. The middle position is midday, SUN's
+// own; the shadows swing round it by a right angle and more each way, and
+// grow long as the sun sinks.
+export const DAY = {
+  on: true,
+  day: 1200,
+  positions: [[170, 2.2], [150, 1.7], [130, 1.35], [110, 1.1], [90, 1], [70, 1.1], [50, 1.35], [30, 1.7], [10, 2.2]],
+};
+
+// The position (an index into DAY.positions) the sun stands at, at world
+// time t; null with the day off.
+export function sunAt(t, day = DAY) {
+  if (!day.on || !day.positions.length) return null;
+  const n = day.positions.length, f = (((t % day.day) + day.day) % day.day) / day.day;
+  return Math.min(n - 1, Math.floor(f * n));
 }
 
 // How far a wall with outward world normal n (unit, horizontal) is turned
@@ -242,16 +275,25 @@ export function shadowPaths({ feet = [], casts = [], project }, sun, angle = 0) 
   for (const [k, a, b] of hatchRuns([...castStrips(feet, sun), ...polys], u, v, h.gap)) {
     const t0 = a + h.ragged * hash(k, a), t1 = b - h.ragged * hash(b, k);
     if (t1 - t0 < h.gap) continue;
-    const n = Math.max(1, Math.ceil((t1 - t0) / step));
-    const pts = [];
-    for (let i = 0; i <= n; i++) {
-      const t = t0 + ((t1 - t0) * i) / n;
-      const c = k * h.gap + h.wave * (0.6 * Math.sin(t * 2.3 + k * 1.7) + 0.4 * Math.sin(t * 6.1 - k * 0.9));
-      pts.push(project(u[0] * t + v[0] * c, u[1] * t + v[1] * c));
-    }
+    const pts = hatchLine(k, t0, t1, u, v, h, step).map(([x, y]) => project(x, y));
     d[tierOf(k)] += `M${pts.map(([x, y]) => `${r2(x)} ${r2(y)}`).join('L')}`;
   }
   return d;
+}
+
+// Line k of the ground's hatching (u along the lines, v across, h =
+// SUN.hatch) from t0 to t1 along it, as world points `step` apart, straying
+// to the sides by a wave that depends only on where it is – so wherever it
+// is drawn, by a building's shadow or a hill's, it is the same line.
+export function hatchLine(k, t0, t1, u, v, h, step = 0.12) {
+  const n = Math.max(1, Math.ceil((t1 - t0) / step));
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const t = t0 + ((t1 - t0) * i) / n;
+    const c = k * h.gap + h.wave * (0.6 * Math.sin(t * 2.3 + k * 1.7) + 0.4 * Math.sin(t * 6.1 - k * 0.9));
+    pts.push([u[0] * t + v[0] * c, u[1] * t + v[1] * c]);
+  }
+  return pts;
 }
 
 // An object's cast shadow as SVG markup (Renderer.atDetail thins it out by

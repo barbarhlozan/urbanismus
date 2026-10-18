@@ -28,7 +28,7 @@
 // the ground (Painter.cast, render/shadows.js castShapes): a round one
 // from a broadleaf or a shrub, a pointed one from a spruce.
 
-import { SUN } from '../src/render/shadows.js';
+import { SUN, screenLight } from '../src/render/shadows.js';
 
 export const TREE_KINDS = ['spruce', 'sapling', 'spreading'];
 
@@ -362,7 +362,7 @@ function sketchSpruce(g, x, y, H, simple) {
   g.shape(x, y, 0, fill, { smooth: true, cls: 'tree crown' });
   g.strokes(x, y, 0, [pen], { cls: 'crown-line' });
   // short hanging tier strokes inside, on the side away from the light
-  const dir = BALL_LIGHT[0] > 0 ? -1 : 1, marks = [];
+  const dir = ballLight(g.camera)[0] > 0 ? -1 : 1, marks = [];
   for (let i = simple ? 1 : g.int(2, 3); i > 0; i--) {
     const t = g.range(0.12, 0.6), w = width(t), v = crown0 + t * ch;
     const u0 = dir * w * g.range(0.1, 0.25), u1 = dir * w * g.range(0.55, 0.75);
@@ -385,7 +385,7 @@ function raggedCrown(g, at, a0, a1, simple) {
 // light, as a sketcher marks the lobes in shade – small arcs with a bump or
 // two, or on a poplar short zigzags up and down.
 function innerCurls(g, at, a0, a1, ragged, simple) {
-  const shadeAt = Math.atan2(-BALL_LIGHT[0], -BALL_LIGHT[1]);
+  const light = ballLight(g.camera), shadeAt = Math.atan2(-light[0], -light[1]);
   const out = [];
   for (let i = simple ? 1 : g.int(2, 3); i > 0; i--) {
     const mid = shadeAt + g.range(-0.7, 0.7), span = ragged ? g.range(0.25, 0.4) : g.range(0.5, 0.9);
@@ -436,21 +436,21 @@ function grassTicks(g, x, y, H) {
 
 // ----- the pen's work on a crown -----
 
-// Towards the light, in a glyph's own units (u right, v up): opposite to
-// where the buildings' shadows fall (SUN.fall, degrees clockwise from
-// screen right – fixed to the screen, so the same in every view).
-const LIGHT = (() => {
-  const a = (SUN.fall * Math.PI) / 180;
-  return [-Math.cos(a), Math.sin(a)];
-})();
-
-// The light on a round crown: LIGHT tipped up, as the sun stands high – so
-// a crown is lit on top as well as on the sunny side, and its underside is
-// in shade.
-const BALL_LIGHT = (() => {
-  const [u, v] = [LIGHT[0], LIGHT[1] + 0.9], n = Math.hypot(u, v);
-  return [u / n, v / n];
-})();
+// The light on a round crown, in a glyph's own units (u right, v up):
+// towards the sun on screen (screenLight: opposite to where the shadows
+// fall in this view) tipped up, as the sun stands high – so a crown is lit
+// on top as well as on the sunny side, and its underside is in shade.
+// Worked out once per view and sun.
+let lit = null;
+function ballLight(camera) {
+  const key = `${camera.angle ?? 0}|${SUN.azimuth}`;
+  if (lit?.key !== key) {
+    const [u0, v0] = screenLight(camera);
+    const [u, v] = [u0, v0 + 0.9], n = Math.hypot(u, v);
+    lit = { key, at: [u / n, v / n] };
+  }
+  return lit.at;
+}
 
 // A short stroke on the ground at a tree's foot, a little aslant, as each
 // building stands on one (LOOK.ground in painter.js); far out it goes.

@@ -7,7 +7,7 @@ import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { planRoute } from '../roads/routing.js';
 import { eraseTarget } from '../tools/erase.js';
 import { ROAD_MARK } from '../render/roadMarks.js';
-import { SUN } from '../render/shadows.js';
+import { SUN, DAY, sunAt } from '../render/shadows.js';
 
 const STEP = 0.5; // simulated seconds per step while jumping
 
@@ -164,6 +164,22 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
       if (Object.keys(over).length) renderer?.invalidate();
       return structuredClone(SUN);
     },
+    // the sun through the day (DAY in render/shadows.js): a number holds it
+    // at that position (0 morning … the last evening), nothing lets the
+    // day go on; { day } sets how long a day lasts (simulated seconds)
+    day(at, over = {}) {
+      if (at && typeof at === 'object') [at, over] = [undefined, at];
+      Object.assign(DAY, over);
+      if (at == null) {
+        DAY.on = true;
+        renderer?.setSun(sunAt(world.time));
+      } else {
+        if (!(at >= 0 && at < DAY.positions.length)) throw new Error(`cmd.day: a position 0…${DAY.positions.length - 1}`);
+        DAY.on = false;
+        renderer?.setSun(Math.round(at));
+      }
+      return { on: DAY.on, at: renderer?.sunPos, day: DAY.day, positions: DAY.positions.length };
+    },
     // the hand of the road marks on buildings nothing reaches (render/roadMarks.js)
     roadMark(style) {
       if (style === undefined) return ROAD_MARK.style;
@@ -189,6 +205,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',
+        'cmd.day(n) / cmd.day()   hold the sun at position n of the day / let the day go on; cmd.day({ day: 120 }) a shorter day',
         `cmd.roadMark(${ROAD_MARK.styles.map((k) => `'${k}'`).join(' | ')})   now: '${ROAD_MARK.style}'`,
         'cmd.seed()                the map seed',
         'cmd.save()                download the town as a file',

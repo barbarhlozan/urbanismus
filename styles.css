@@ -264,17 +264,21 @@ html, body {
    on the ground, hatched, and hatching on the walls turned from the sun –
    in the secondary ink, the cast shadow behind the drawing; each with the
    pen SUN names (p1…p5, the map's five pens). --sun: how much the sun
-   shows, from the weather (config.weather.sun, set on #world and #objects
+   shows, from the weather (config.weather.sun, set on #ground, #world and #objects
    by main.js, on a photo by photo.js); under a grey sky they fade almost
    away */
 @property --sun { syntax: '<number>'; inherits: true; initial-value: 1; }
-#world, #objects { transition: --sun 4s; }
+#ground, #world, #objects { transition: --sun 4s; }
 .shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
 .layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-opacity: var(--sun); }
 :is(.shadow, .layer-objects .wall-shade).p1 { stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
 :is(.shadow, .layer-objects .wall-shade).p3 { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 :is(.shadow, .layer-objects .wall-shade).p4 { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
 :is(.shadow, .layer-objects .wall-shade).p5 { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
+/* the hills' shadows (render/hillShadows.js): the same lines, fewer and finer;
+   further out only every other of them */
+.hill-shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
+:is(.lod-1, .lod-2) .hill-shadow.ht1 { display: none; }
 /* screen-facing line drawings (trees, see features/trees.js) */
 /* woods far out, one shape each (render/forest.js): as a tree's crown */
 .layer-forest .forest { fill: var(--bg); stroke: none; fill-rule: evenodd; }
