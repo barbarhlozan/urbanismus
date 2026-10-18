@@ -49,8 +49,9 @@ const TICKED = '.scheme';
 const SETTING = '.bm-opts button[aria-pressed], .bm-act[aria-pressed]';
 const HELD = '.bm-toggle';
 const STRUCK = '.popup button, .bm-act';
-// not part of the word that's underlined (a key, a value, a number)
-const ASIDE = '.pm, .key, .note, .dlg-n';
+// not part of the word that's underlined (a key, a value, a number, a Menu
+// item's name written beside its drawing)
+const ASIDE = '.pm, .key, .note, .dlg-n, .controls .label';
 const OUT = 3;  // px the crop marks stand off a control…
 const IN = -3;  // …or inside a cell, or a box that would clip them
 const ARM = 6;  // px: each arm of a crop mark

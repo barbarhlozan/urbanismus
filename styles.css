@@ -518,77 +518,110 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .icon.stat-icon path { stroke-width: 1.1 !important; }
 .icon.stat-icon circle { stroke-width: 1.1 !important; }
 
-/* controls: a menu mark in the corner opening into a list of what's set
-   now and then, each named (src/ui/hud.js) – no box and no rules, words on
-   the paper, underlined under the pointer */
+/* the Menu: a menu mark in the corner opening into what's set now and then,
+   each a drawing alone (src/ui/hud.js, icons/menu/) – no box and no rules,
+   drawings on the paper, underlined under the pointer, and named in a small
+   word beside them while pointed at or held */
 .controls {
   position: fixed;
   top: calc(16px + var(--safe-t));
   right: calc(20px + var(--safe-r));
-  width: 170px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  padding-bottom: 6px;
+  padding: 0 4px 6px;
   background: var(--bg);
   z-index: 22;
 }
-.controls.folded { background: none; padding-bottom: 0; }
+.controls.folded { background: none; padding: 0; }
 #ui .controls button {
+  position: relative;
   flex: 0 0 auto;
-  min-height: 28px;
-  padding: 4px 2px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 4px 7px;
+  justify-content: center;
   white-space: nowrap;
   font-size: 12px;
   border: none !important;
   background: none;
   color: var(--fg);
+  -webkit-touch-callout: none;
+  user-select: none;
 }
-/* pointed at: underlined; open (Colours, New map): ringed (penMarks.js) */
-.controls .ctl-icon { color: var(--detail); }
-/* the list: each row the list's full width */
+/* pointed at: underlined; open (Colours): ringed (penMarks.js) */
+.controls .menu-art { flex: 0 0 22px; width: 22px; height: 22px; color: var(--fg); }
+/* a drawing read from its file: the pen's own weight, never filled; one
+   left from icons.js keeps that file's lighter line */
+.controls .menu-art .from-file * { fill: none !important; stroke: currentColor; stroke-width: calc(1.25px * var(--stroke, 1)) !important; stroke-linecap: round; stroke-linejoin: round; }
+.controls .menu-art :not(.from-file) > :is(path, circle) { fill: none !important; stroke-width: 1.1 !important; }
+/* the groups: Colours | save, open, a new map | the screen, the language –
+   a wider gap before each, not an even row */
+#ui .controls [data-act="export"] { margin-top: 7px; }
+#ui .controls [data-act="fullscreen"] { margin-top: 5px; }
+
+/* the column: each row the column's full width, its drawing at the right */
 #ui .controls button:not(.menu-toggle) { align-self: stretch; justify-content: flex-end; }
+
+/* each drawing's name: hidden until the pointer is on it (or a finger has
+   rested on it), then written small beside it on the paper – below it in
+   the line along the top, out left of the frame in the column */
+.controls .label {
+  display: none;
+  position: absolute;
+  right: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 1px 5px 2px;
+  background: var(--bg);
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--fg);
+  pointer-events: none;
+}
+body:not(.touch) .controls button:hover > .label, .controls button.telling > .label { display: block; }
 
 /* the imprint, last in the menu: app name, version, author, small and quiet
    as a printer's line – not a button */
 .controls .imprint {
   align-self: flex-end;
-  padding: 6px 2px 2px;
+  padding: 8px 2px 2px;
   font-size: 10px;
+  line-height: 1.35;
+  text-align: right;
   color: var(--detail);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+/* (in the column: the name and version over the author) */
+.controls .imprint span { display: block; }
 
-/* (#ui: over the .close look) the mark stays put as the list opens */
-#ui .controls .menu-toggle { order: -1; align-self: flex-end; min-height: var(--bar-h); width: var(--bar-h); padding: 0; justify-content: center; }
+/* (#ui: over the .close look) the mark stays put as the menu opens */
+#ui .controls .menu-toggle { order: -1; align-self: flex-end; min-height: var(--bar-h); width: var(--bar-h); min-width: 0; padding: 0; margin-right: -4px; justify-content: center; }
+.controls.folded .menu-toggle { margin-right: 0 !important; }
 .controls .menu-icon { width: 14px; height: 14px; }
 .controls .menu-icon path { stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; }
 .controls .menu-icon .bars, .controls.folded .menu-icon .cross { display: none; }
 .controls.folded .menu-icon .bars { display: inline; }
-.controls.folded { width: auto; }
 .controls.folded:not(.folding) button:not(.menu-toggle), .controls.folded:not(.folding) .imprint { display: none; }
 /* folding away (motion.js shrink): the buttons stay until the bar has shrunk, fading */
 .controls.folding button:not(.menu-toggle), .controls.folding .imprint { opacity: 0; transition: opacity 100ms; }
 /* the pen frame (main.js sketchFrames) only round the open menu, not the
    mark alone */
 .controls.folded .sk-frame, .controls.folding .sk-frame { display: none; }
-/* the list: its words clear of the frame on both sides (the mark stays put) */
-@media (max-width: 1024px) {
-  #ui .controls button:not(.menu-toggle) { padding-left: 12px; padding-right: 12px; }
-  .controls .imprint { padding: 6px 12px 2px; }
-}
-/* a wide screen: the words in a line along the top edge, left of the menu
-   mark, kept above the Build menu's rail; the names alone, no drawings */
+/* a wide screen: the drawings in a line along the top edge, left of the
+   menu mark, kept above the Build menu's rail; each name below its drawing */
 @media (min-width: 1025px) {
-  .controls { flex-direction: row; align-items: center; width: auto; padding: 0 0 0 8px; }
-  #ui .controls .menu-toggle { order: 99; align-self: center; }
-  .controls .imprint { order: 98; align-self: center; padding: 0 9px 0 4px; }
-  #ui .controls button { padding: 4px 9px; }
-  .controls button .ctl-icon, .controls button[data-act="colors"] .swatches { display: none; }
-  /* except the language button's flag, after its word */
-  .controls button[data-act="language"] .ctl-icon { display: inline; order: 1; }
+  .controls { flex-direction: row; align-items: center; padding: 0 0 0 8px; }
+  #ui .controls .menu-toggle { order: 99; align-self: center; margin-right: 0; }
+  .controls .imprint { order: 98; align-self: center; padding: 0 9px 0 10px; }
+  .controls .imprint span { display: inline; }
+  .controls .imprint span + span::before { content: "· "; }
+  #ui .controls button:not(.menu-toggle) { margin-top: 0; align-self: center; justify-content: center; }
+  #ui .controls [data-act="export"] { margin-left: 9px; }
+  #ui .controls [data-act="fullscreen"] { margin-left: 6px; }
+  .controls .label { right: auto; left: 50%; top: calc(100% + 9px); transform: translateX(-50%); }
 }
 
 /* the camera: photo mode, alone in the bottom-right corner (hud.js) – below
@@ -1305,14 +1338,10 @@ body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 4
 
 /* ---------- Colors menu (src/ui/colorMenu.js) ---------- */
 
-/* three dots in a scheme's colors: on the Colors button and each menu row */
+/* three dots in a scheme's colors, on each of its rows */
 .swatches { display: inline-flex; gap: 3px; vertical-align: middle; }
 .swatches i { width: 8px; height: 8px; border-radius: 50%; border: var(--line) solid currentColor; box-sizing: border-box; }
-/* each row: its drawing, then its name */
-.controls button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; }
-.controls button[data-act="colors"]::after { content: attr(data-label); }
-.controls .ctl-icon { flex: 0 0 15px; width: 15px; height: 15px; }
-.controls .ctl-icon path, .controls .ctl-icon circle { stroke-width: 1.1 !important; fill: none !important; }
+/* full screen: going in, or coming back (menuIcons.js) */
 .controls [data-act="fullscreen"] .fs-exit, .controls [data-act="fullscreen"].full .fs-enter { display: none; }
 .controls [data-act="fullscreen"].full .fs-exit { display: inline; }
 .controls button[hidden] { display: none !important; }
@@ -1583,7 +1612,7 @@ body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
 
 /* no keyboard: hide the key labels, give buttons finger-sized hit areas */
 body.touch .build-menu .key { display: none; }
-body.touch .controls button { min-height: 44px; }
+body.touch #ui .controls button:not(.menu-toggle) { min-height: 44px; min-width: 44px; }
 body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 
 /* ---------- Narrow screens (phones) ---------- */
@@ -1591,7 +1620,7 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 @media (max-width: 640px) {
   #ui { font-size: 11px; }
 
-  /* controls: closer to the corner, rows a finger tall */
+  /* the Menu: closer to the corner, rows a finger tall */
   .controls { top: calc(8px + var(--safe-t)); right: calc(8px + var(--safe-r)); }
   .controls button { min-height: 40px; }
   #ui .controls.folded .menu-toggle { width: auto; padding: 0 10px; }

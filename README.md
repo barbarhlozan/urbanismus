@@ -34,6 +34,13 @@ phone they stand in the dock, **Zpět** beside the Build button (or before the �
 hand) and **Znovu** after an undo. Neither is shown in photo mode. **⌘Z** / **Ctrl+Z** and **⇧⌘Z** / **Ctrl+Y**
 do the same. If something now stands in the way of a step, it says so and the step is dropped.
 
+The **≡** at the top right opens the Menu: Colours, Save to a file, Open from a file, New map,
+Full screen and the other language, each a small drawing. Point at one (or, on a phone, hold
+a finger on it) and its name is written beside it; on a computer they stand in a line along the
+top edge, on a phone in a column down from the ≡. The drawings are SVG files of their own in
+`icons/menu/` (its README says how to draw one), read when the game starts: replace a file to
+change a drawing.
+
 Shortcuts come in two steps that follow the Build menu: the **number row** opens a group
 (**1** Doprava, **2** Bydlení, **3** Občanská vybavenost, **4** Výroba, **5** Prostranství,
 **6** Památky – the numbers are on the tabs), and the **letter rows** pick a tool in the

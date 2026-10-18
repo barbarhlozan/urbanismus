@@ -1,22 +1,28 @@
 // Screen furniture: the town's name and its chronicle book (top-left),
-// controls (top-right), the Build menu (bottom centre, or a rail on the
+// the Menu (top-right), the Build menu (bottom centre, or a rail on the
 // right; see buildMenu.js) and, alone in the bottom-right corner, the
 // camera: photo mode, one tap away. It's ringed in pen while photo mode
 // is on; its options, like any tool's, are in the Build menu's dock.
 // Terrain and Zpět / Znovu (undo, redo) stand in the Build menu too, beside
-// Erase (tools/terrain.js); the controls keep what's set now and then
+// Erase (tools/terrain.js); the Menu keeps what's set now and then
 // (colours, files, language…).
 // The name can be edited in place; the book beside it opens the chronicle.
-// The controls fold into their menu button: they start folded and open,
-// on a wide screen, as a line of words along the top edge, left of the
-// button (clear of the Build menu's rail below); narrower, as a list of
-// named rows down from it – either way in a pen-drawn frame like the other
-// boxes (main.js sketchFrames), only while open. They fold again once one
-// is used or on a click elsewhere. Last in them stands the imprint, the
+// The Menu folds into its ≡ button: it starts folded and opens, on a wide
+// screen, as a line of drawings along the top edge, left of the button
+// (clear of the Build menu's rail below); narrower, as a column of them
+// down from it – either way in a pen-drawn frame like the other boxes
+// (main.js sketchFrames), only while open. It folds again once one is used
+// or on a click elsewhere. Each item is a drawing alone, read from its own
+// file in icons/menu/ (menuIcons.js); its name is its title and, written
+// small in the pen beside it, shows while the pointer is on it or, on a
+// touch screen, after a long press, which then doesn't press it. The
+// drawings stand in groups: Colours, then the files (save, open, a new
+// map), then the screen and the language. Last stands the imprint, the
 // app's name, version and author, small and quiet like a printer's line.
 
 import { BuildMenu } from './buildMenu.js';
-import { statIcon, controlIcon, cameraIcon } from './icons.js';
+import { statIcon, cameraIcon } from './icons.js';
+import { menuIcon } from './menuIcons.js';
 import { resize, shrink } from './motion.js';
 import { CONFIG } from '../config.js';
 import { t, language, LANGUAGES } from '../core/text.js';
@@ -25,10 +31,15 @@ const MENU_ICON = `<svg class="icon menu-icon" viewBox="0 0 16 16" aria-hidden="
   <path class="bars" d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><path class="cross" d="M4 4l8 8M12 4l-8 8"/></svg>`;
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
-// a button in the controls: its drawing and its name (control.<act>), also
-// on hover for when the name is hidden (narrow screens)
+// a button in the Menu: its drawing, and its name (control.<act>) as its
+// title and as the word written beside it while pointed at or held
 const control = (act, title = t(`control.${act}`), label = title, icon = act) =>
-  `<button data-act="${act}" title="${title}" aria-label="${title}">${controlIcon(icon)}<span class="label">${label}</span></button>`;
+  `<button data-act="${act}" title="${title}" aria-label="${title}">${menuIcon(icon)}<span class="label" aria-hidden="true">${label}</span></button>`;
+
+// ms a finger rests on a Menu drawing before its name is written beside it,
+// and how long the name then stays
+const LONG_PRESS = 450;
+const TOLD = 1600;
 
 // The language button names the language it switches to (not the one in use),
 // with that language's flag.
@@ -44,13 +55,13 @@ export class Hud {
         <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="${t('town.name')}"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close chron" title="${t('hud.chronicle')}">${statIcon('book')}</button></div>
       </div>
       <div class="controls">
-        <button data-act="colors" title="${t('control.colors')}" data-label="${t('control.colors')}"></button>
+        ${control('colors')}
         ${control('export')}
         ${control('import')}
         ${control('newMap')}
         ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
         ${control('language', `${t('control.language')}: ${LANGUAGES[otherLanguage()]}`, LANGUAGES[otherLanguage()], `flag${otherLanguage()}`)}
-        <span class="imprint">${CONFIG.app.name} v${CONFIG.app.version} · ${CONFIG.app.author}</span>
+        <span class="imprint"><span>${CONFIG.app.name} v${CONFIG.app.version}</span> <span>${CONFIG.app.author}</span></span>
         <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
       </div>
       <button class="photo-corner" data-act="photo" title="${t('control.photo')} (P)" aria-label="${t('control.photo')}" aria-pressed="false">${cameraIcon()}</button>`);
@@ -114,6 +125,31 @@ export class Hud {
     });
     document.addEventListener('pointerdown', (e) => {
       if (!controlsEl.contains(e.target)) fold(true);
+    }, true);
+
+    // a finger held on a drawing: its name is written beside it a while,
+    // and lifting the finger then doesn't press it
+    let timer = 0, told = null, unsay = 0;
+    controlsEl.addEventListener('pointerdown', (e) => {
+      const btn = e.target.closest('button[data-act]');
+      clearTimeout(timer);
+      told = null;
+      if (e.pointerType !== 'touch' || !btn) return;
+      timer = setTimeout(() => {
+        told = btn;
+        for (const b of controlsEl.querySelectorAll('.telling')) b.classList.remove('telling');
+        btn.classList.add('telling');
+        clearTimeout(unsay);
+        unsay = setTimeout(() => btn.classList.remove('telling'), TOLD);
+      }, LONG_PRESS);
+    });
+    for (const type of ['pointerup', 'pointercancel', 'pointerleave']) controlsEl.addEventListener(type, () => clearTimeout(timer));
+    controlsEl.addEventListener('contextmenu', (e) => e.preventDefault()); // (a long press on Android)
+    controlsEl.addEventListener('click', (e) => {
+      if (told && e.target.closest('button') === told) {
+        told = null;
+        e.stopImmediatePropagation();
+      }
     }, true);
 
     this.buildMenu = new BuildMenu(root, tools, actions, world.history);

@@ -1,6 +1,7 @@
-// The Colors menu: a small panel under the controls (opened with the Colors
-// button) listing the color schemes, plus the player's own custom scheme with
-// a picker and a hex field for each of its three colors (see theme.js).
+// The Colors menu: a small panel under the Menu (opened with its Colours
+// drawing, an ink pot – hud.js) listing the color schemes, plus the
+// player's own custom scheme with a picker and a hex field for each of its
+// three colors (see theme.js).
 // Editing a custom color switches to the custom scheme.
 
 import { SCHEMES, CUSTOM, COLOR_NAMES, applyTheme, setCustomColor, normalizeHex, schemeChoice } from '../theme.js';
@@ -22,7 +23,6 @@ const swatches = (s) => `<span class="swatches">${COLOR_NAMES.map((n) => `<i dat
 export class ColorMenu {
   constructor(root, button) {
     this.button = button;
-    button.innerHTML = `<span class="swatches">${COLOR_NAMES.map((n) => `<i style="background:var(--${n})"></i>`).join('')}</span>`;
 
     this.el = document.createElement('div');
     this.el.className = 'color-panel hidden';
