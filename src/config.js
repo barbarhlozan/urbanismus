@@ -45,6 +45,18 @@ export const CONFIG = {
     // with it (Renderer.atDetail), from the middle of the window out, for at
     // most about this many ms each frame.
     rebuildBudget: 6,
+    // While the view turns, the buildings and trees in sight not yet drawn
+    // at the step of the turn it has reached are drawn, the furthest behind
+    // first, for at most about `turnBudget` ms each frame (Renderer.
+    // turnFrame). While it rests, their drawings `turnAhead` steps either
+    // way are made ready, for at most `prepareBudget` ms each frame
+    // (Renderer.prepareTurn).
+    turnBudget: 12,
+    turnAhead: 12,
+    prepareBudget: 8,
+    // ...and the meadow's chunks in sight drawn at the angle it has reached,
+    // for at most this many ms each frame
+    turnMeadow: 4,
     // Further out than `zoom` a wood is drawn as one shape (render/forest.js):
     // trees within `link` of one another, at least `minTrees` of them. Its
     // outline runs about reach / 2 out from the outer trees, found in

@@ -149,9 +149,10 @@ test('turning keeps the ground under the pivot in place, and turns back', () => 
   assert.ok(Math.abs(camera.angle - 0) < 1e-9 || Math.abs(camera.angle - Math.PI * 2) < 1e-9);
 });
 
-test('a turn let go coasts to a stop, the way it went', () => {
+test('a turn let go coasts to a stop, the way it went, on a step of the turn', () => {
   const camera = new Camera(new Grid(40, 40), { tile: 34 });
   camera.setViewport(800, 600);
+  camera.angle = 0.013; // (between steps)
   camera.letGo([400, 300], 2);
   let last = 0, steps = 0;
   while (camera.spin && steps++ < 1000) {
@@ -159,11 +160,18 @@ test('a turn let go coasts to a stop, the way it went', () => {
     camera.coast(1 / 60);
     const moved = camera.angle - before;
     assert.ok(moved > 0, 'never turns back');
-    if (last) assert.ok(moved < last, 'slows down');
+    // (slower every frame, but for the last hair of the way)
+    if (last && camera.spin) assert.ok(moved < last, 'slows down');
     last = moved;
   }
-  assert.ok(steps < 120, 'stops within two seconds');
+  assert.ok(steps < 150, `stops within two and a half seconds (${steps})`);
   assert.ok(camera.angle > 0.3 && camera.angle < 0.6, `${camera.angle}`);
+  assert.notEqual(camera.step(), null, 'rests on a step');
+  // let go without a flick, it settles on the nearest step
+  camera.angle = 3 * Camera.STEP + 0.004;
+  camera.letGo([400, 300], 0);
+  while (camera.spin) camera.coast(1 / 60);
+  assert.equal(camera.step(), 3);
 });
 
 // Two buildings, one just behind the other along a grid line, stay in that
