@@ -227,6 +227,13 @@ const actions = {
   assets: () => assetsPage.toggle(),
   newMap: () => newMapMenu.toggle(),
   photo: () => tools.use(tools.active?.id === 'photo' ? 'inspect' : 'photo'),
+  // the north arrow: the view turns back, north up, the shorter way round
+  // about the middle of the screen, slowing to a stop as a turn let go does
+  northUp: () => {
+    const a = camera.angle;
+    const left = a > Math.PI ? Math.PI * 2 - a : -a;
+    if (Math.abs(left) > 1e-6) camera.spin = { at: [viewport[0] / 2, viewport[1] / 2], left };
+  },
   terrain: () => contours.toggle(),
   undo: () => takeBack('undo'),
   redo: () => takeBack('redo'),
@@ -333,7 +340,7 @@ async function importCity() {
   }
 }
 
-const hud = new Hud(uiRoot, { world, tools, chronicle, actions });
+const hud = new Hud(uiRoot, { world, camera, tools, chronicle, actions });
 const chronicleBook = new ChronicleBook(uiRoot, { world, chronicle });
 // something locked or unlocked: the Build menu and the buttons at the top
 // follow, a tool in hand that may no longer be used is put down, and a panel

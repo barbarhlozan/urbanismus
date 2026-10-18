@@ -18,6 +18,9 @@
 // drawings stand in groups: Colours, then the files (save, open, a new
 // map), then the screen and the language. Last stands the imprint, the
 // app's name, version and author, small and quiet like a printer's line.
+// In the bottom-left corner, as in a map's margin, the north arrow: drawn by
+// pen, it points where the map's north lies on screen as the view is
+// turned, and a click on it turns the view back, north up.
 
 import { BuildMenu } from './buildMenu.js';
 import { statIcon, menuIcon } from './icons.js';
@@ -25,6 +28,25 @@ import { drawing } from './uiIcons.js';
 import { resize, shrink } from './motion.js';
 import { CONFIG } from '../config.js';
 import { t, language, LANGUAGES } from '../core/text.js';
+import { sketchLine } from '../render/sketch.js';
+
+// The north arrow, pen-drawn: a needle pointing where the map's north (-y)
+// lies on screen at the view's turn, half its head filled, the letter
+// beyond it. 40px square; the same strokes each time (fixed seeds), only
+// turned.
+function northArrow(camera) {
+  const [x0, y0] = camera.project(camera.cx, camera.cy, 0);
+  const [x1, y1] = camera.project(camera.cx, camera.cy - 1, 0);
+  const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+  const [ux, uy] = [(x1 - x0) / len, (y1 - y0) / len];
+  const at = (k, side = 0) => [20 + ux * k - uy * side, 20 + uy * k + ux * side];
+  const head = at(9), tail = at(-11), barb = at(2, 3.5), back = at(2, -3.5);
+  const p = (pt) => pt.map((n) => Math.round(n * 10) / 10).join(' ');
+  return `<svg class="north" viewBox="0 0 40 40" aria-hidden="true">
+    <path class="needle" d="${sketchLine(tail, head, 7, { over: 1 })}${sketchLine(head, barb, 8)}${sketchLine(head, back, 9)}"/>
+    <path class="half" d="M${p(head)}L${p(barb)}L${p(at(0))}Z"/>
+    <text x="${at(16)[0].toFixed(1)}" y="${(at(16)[1] + 3.5).toFixed(1)}" text-anchor="middle">${t('north')}</text></svg>`;
+}
 
 // The Menu button's drawing: ≡ while it's folded, a cross while it's open
 // (styles.css shows one), icons/ui/menu.svg and menu-close.svg. The two
@@ -52,7 +74,7 @@ const TOLD = 1600;
 const otherLanguage = () => Object.keys(LANGUAGES).find((code) => code !== language());
 
 export class Hud {
-  constructor(root, { world, tools, chronicle, actions }) {
+  constructor(root, { world, camera, tools, chronicle, actions }) {
     this.chronicle = chronicle;
     this.tools = tools;
 
@@ -69,7 +91,11 @@ export class Hud {
         ${control('language', `${t('control.language')}: ${LANGUAGES[otherLanguage()]}`, LANGUAGES[otherLanguage()], `flag${otherLanguage()}`)}
         <span class="imprint"><span>${CONFIG.app.name} v${CONFIG.app.version}</span> <span>${CONFIG.app.author}</span></span>
         <button class="close menu-toggle" aria-expanded="true">${menuButtonIcon()}</button>
-      </div>`);
+      </div>
+      <button class="north-box" title="${t('north.up')}" aria-label="${t('north.up')}"><span class="north-art"></span></button>`);
+    this.camera = camera;
+    this.northEl = root.querySelector('.north-box .north-art');
+    root.querySelector('.north-box').addEventListener('click', () => actions.northUp());
 
     this.chronEl = root.querySelector('.hud .chron');
     this.chronEl.addEventListener('click', () => actions.chronicle());
@@ -152,6 +178,13 @@ export class Hud {
   }
 
   update() {
+    // the north arrow follows the view as it's turned (redrawn by the half
+    // degree, not every frame)
+    const turn = Math.round((this.camera.angle * 360) / Math.PI);
+    if (turn !== this.northTurn) {
+      this.northTurn = turn;
+      this.northEl.innerHTML = northArrow(this.camera);
+    }
     // a dot on the book while there's something new in it
     const unread = !!this.chronicle?.unread;
     if (unread !== this.unread) this.chronEl.classList.toggle('new', (this.unread = unread));

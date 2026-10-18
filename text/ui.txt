@@ -469,6 +469,16 @@ photo.save
   cs: Uložit PNG
   en: Save PNG
 
+# ---------- The north arrow (bottom left) ----------
+
+north
+  cs: S
+  en: N
+
+north.up
+  cs: Sever nahoru
+  en: North up
+
 # ---------- Clicking something on the map ----------
 
 inspect.needs.any
