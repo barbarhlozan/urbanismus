@@ -13,7 +13,6 @@
 
 import { contours } from '../terrain/elevation.js';
 import { mulberry32 } from '../core/random.js';
-import { rotateQuarter } from '../core/grid.js';
 
 //   face    metres of rise per grid step from which the ground is a face
 //   rock    the rock mask (0–1) from which faces are drawn
@@ -61,7 +60,7 @@ export function rockLines(world, camera, height, box, hidden = () => false, opts
 
   // turned to the viewer: going back (against t), the ground rises up the
   // screen (brows.js: screen y = t / 2 - h * zScale)
-  const [bx, by] = rotateQuarter(-1, -1, -camera.rotation); // back, in world x/y (per unit of t: half of it each)
+  const [bx, by] = camera.toWorld(-1, -1); // back, in world x/y (per unit of t: half of it each)
   const shows = (x, y) => {
     const k = 0.04;
     const dh = height(x + (bx * k) / 2, y + (by * k) / 2) - height(x - (bx * k) / 2, y - (by * k) / 2);

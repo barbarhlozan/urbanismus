@@ -19,7 +19,6 @@
 //   bridgeLines(bridge, deck, facing)  [{ cls, line: [[x, y, z]…] }] its railings, piers, arches…
 //   hiddenUnder(bridges, deck, camera)  (x, y) -> is a ground point behind a deck on screen
 
-import { rotateQuarter } from '../core/grid.js';
 import { CONFIG } from '../config.js';
 
 export const BRIDGE = {
@@ -308,7 +307,7 @@ export function hiddenUnder(bridges, deck, camera) {
   if (!bridges.length) return () => false;
   const shift = (dz) => {
     const s = dz * camera.zScale;
-    return rotateQuarter(s, s, -camera.rotation);
+    return camera.toWorld(s, s);
   };
   return (x, y) => {
     for (const br of bridges) {

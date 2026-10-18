@@ -28,8 +28,6 @@
 // (rh1…rh3), so the map thins them out with the roofs, building by
 // building, as it zooms out.
 
-import { rotateQuarter } from './camera.js';
-
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -77,23 +75,25 @@ export const tierOf = (k) => (k % 8 === 0 ? 0 : k % 4 === 0 ? 1 : k % 2 === 0 ? 
 export const tierClass = (n, kind) => (n ? ` ${kind}${n}` : '');
 
 // A direction on screen (degrees clockwise from right) as a unit direction
-// on the ground, in world axes for a camera turned `rotation` quarters.
+// on the ground, in world axes for a camera turned `angle` radians.
 // The iso camera draws view axes (rx, ry) at screen ((rx - ry)·cos30,
 // (rx + ry)·½); this is the inverse, then turned back to the world.
-export function groundDir(deg, rotation = 0) {
+export function groundDir(deg, angle = 0) {
   const a = (deg * Math.PI) / 180;
   const cx = Math.cos(a), cy = Math.sin(a);
   const k = cx / (2 * COS30);
-  const [wx, wy] = rotateQuarter(cy + k, cy - k, -rotation);
+  const [rx, ry] = [cy + k, cy - k];
+  const c = Math.cos(angle), s = Math.sin(angle);
+  const [wx, wy] = [rx * c + ry * s, -rx * s + ry * c];
   const l = Math.hypot(wx, wy) || 1;
   return [wx / l, wy / l];
 }
 
 // The sun for a camera: `cast` is the ground shift per unit of height.
 export function sunFor(camera, sun = SUN) {
-  const rotation = camera.rotation ?? 0;
-  const [fx, fy] = groundDir(sun.fall, rotation);
-  return { ...sun, rotation, cast: [fx * sun.length, fy * sun.length] };
+  const angle = camera.angle ?? 0;
+  const [fx, fy] = groundDir(sun.fall, angle);
+  return { ...sun, angle, cast: [fx * sun.length, fy * sun.length] };
 }
 
 // How far a wall with outward world normal n (unit, horizontal) is turned
@@ -221,11 +221,11 @@ export function hatchRuns(polys, u, v, gap) {
 // the object's relief and warp. Each line is drawn through points a step
 // apart, so it follows the ground, and strays to the sides by a wave that
 // depends only on where it is, so two shadows' lines meet as one.
-export function shadowPaths({ feet = [], casts = [], project }, sun, rotation = 0) {
+export function shadowPaths({ feet = [], casts = [], project }, sun, angle = 0) {
   const d = ['', '', '', ''];
   const h = sun.hatch;
   if (!sun.on || !h) return d;
-  const u = groundDir(h.angle, rotation), v = [-u[1], u[0]];
+  const u = groundDir(h.angle, angle), v = [-u[1], u[0]];
   const step = 0.12;
   const { polys, lines } = castShapes(casts, sun);
   for (const [a, b] of lines) {
@@ -252,7 +252,7 @@ export function shadowPaths({ feet = [], casts = [], project }, sun, rotation = 
 // the tier classes).
 export function shadowSVG(shade, sun) {
   const pen = penClass(sun.hatch?.pen);
-  return shadowPaths(shade, sun, sun.rotation).map((d, t) => (d ? `<path d="${d}" class="shadow${pen}${tierClass(t, 'rh')}"/>` : '')).join('');
+  return shadowPaths(shade, sun, sun.angle).map((d, t) => (d ? `<path d="${d}" class="shadow${pen}${tierClass(t, 'rh')}"/>` : '')).join('');
 }
 
 // How many of a wall's strokes to draw (0..1), from how far it is turned

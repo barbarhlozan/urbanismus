@@ -75,14 +75,17 @@ export function placeInOrder(parent, els) {
 }
 
 // Painter's-algorithm order for objects with rectangular ground areas of any
-// size. A is behind B when A lies entirely on the far side of B along either
-// view axis. Only pairs that overlap on screen matter; the rest keep a rough
+// size, in the axes of the view's nearest quarter turn (Camera.quarter). A
+// is behind B when A lies entirely on the far side of B along either axis.
+// Only pairs that overlap on screen matter; the rest keep a rough
 // back-to-front order. Resolved with a depth-first topological sort.
-export function isoSort(items) {
+// `view` (Camera.quarterView): how the axes show, in depth and across the
+// screen, for a view turned past its quarter.
+export function isoSort(items, [[da, db], [sa, sb]] = [[1, 1], [1, -1]]) {
   for (const it of items) {
-    it.key = it.minX + it.maxX + it.minY + it.maxY;
-    it.left = it.minX - it.maxY;   // horizontal screen extent (in view units)
-    it.right = it.maxX - it.minY;
+    it.key = da * (it.minX + it.maxX) + db * (it.minY + it.maxY);
+    it.left = sa * it.minX + sb * it.maxY;   // horizontal screen extent (in view units)
+    it.right = sa * it.maxX + sb * it.minY;
     it.behind = [];
   }
   items.sort((a, b) => a.key - b.key);

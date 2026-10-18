@@ -164,11 +164,13 @@ function newellNormal(points) {
 // Everything else keeps its depth order: each step draws the farthest solid
 // whose solids behind are all drawn (so a roof stays after its walls, a
 // chimney after its roof). Pairs are found like isoSort in renderer.js, by a
-// sweep over the screen extents.
-function orderSolids(solids) {
+// sweep over the screen extents. The boxes are in the axes of the view's
+// nearest quarter turn; `across` is how far each axis runs across the
+// screen (Camera.quarterView: [1, -1] at no skew).
+function orderSolids(solids, [sa, sb] = [1, -1]) {
   const items = solids.map((s) => {
     const [x0, y0, x1, y1] = s.box ?? [0, 0, 0, 0];
-    return { s, x0, y0, x1, y1, left: x0 - y1, right: x1 - y0, behind: [], ahead: [], wait: 0 };
+    return { s, x0, y0, x1, y1, left: sa * x0 + sb * y1, right: sa * x1 + sb * y0, behind: [], ahead: [], wait: 0 };
   }).sort((a, b) => a.s.depth - b.s.depth);
   items.forEach((it, i) => { it.i = i; });
   // a is entirely on the far side of b along x or y (a single point that
@@ -465,7 +467,7 @@ export class Painter {
       const [vx, vy, vz] = this.camera.toEye(...this.current.at, this._liftAt());
       return (wx * vx + wy * vy + nz * vz) / (Math.hypot(vx, vy, vz) || 1);
     }
-    const [rx, ry] = rotateQuarter(wx, wy, this.camera.rotation);
+    const [rx, ry] = this.camera.toView(wx, wy);
     return rx + ry + nz / this.camera.zScale;
   }
 
@@ -584,14 +586,15 @@ export class Painter {
     return this;
   }
 
-  // View-axis bounding box of local ground points (null for a camera
-  // without view axes: the photo's perspective one sorts by its own depth).
+  // Bounding box of local ground points in the axes of the view's nearest
+  // quarter turn (Camera.quarter; null for a camera without them: the
+  // photo's perspective one sorts by its own depth).
   _viewBox(points) {
-    if (!this.camera.rotated) return null;
+    if (!this.camera.quarter) return null;
     let b = null;
     for (const [x, y] of points) {
       const [wx, wy] = this._world(x, y, 0);
-      const [rx, ry] = this.camera.rotated(wx, wy);
+      const [rx, ry] = this.camera.quarter(wx, wy);
       if (!b) b = [rx, ry, rx, ry];
       else { b[0] = Math.min(b[0], rx); b[1] = Math.min(b[1], ry); b[2] = Math.max(b[2], rx); b[3] = Math.max(b[3], ry); }
     }
@@ -1284,7 +1287,7 @@ export class Painter {
   }
 
   toSVG() {
-    return orderSolids(this.solids).map((s) => (s.sway
+    return orderSolids(this.solids, this.camera.quarterView?.()[1]).map((s) => (s.sway
       ? `<g class="sway" data-foot="${r2(s.sway[0])} ${r2(s.sway[1])}">${s.parts.join('')}</g>`
       : s.parts.join('') + (s.late?.join('') ?? ''))).join('');
   }

@@ -5,10 +5,9 @@
 //               the crossing is closed the lights flash in turn – three
 //               short lines out of the lit one (flashSVG)
 // Drawn like the vehicles (vehicles.js): on the map an SVG snippet per
-// heading, kind and camera rotation, cached, put on the canvas by the
+// heading on screen and kind, cached, put on the canvas by the
 // renderer; through any view for the photo camera (signSVGIn, photo.js).
 
-import { rotateQuarter } from '../core/grid.js';
 import { VEHICLES } from './vehicles.js';
 
 // Where a sign stands from the crossing: `along` the road, `aside` to its
@@ -66,15 +65,14 @@ export function litLight(t) {
 }
 
 // The map's isometric view, around the sign's foot in scene px (as in
-// vehicles.js). Views take world offsets from the foot:
+// vehicles.js), unturned: a sign is drawn at its heading on screen, its
+// heading on the ground plus the view's turn, so one drawing serves every
+// view that shows it the same way. Views take offsets from the foot:
 //   project(o) -> [x, y] on screen, facing(n, o) -> is a surface seen
 function isoView(camera) {
   return {
-    project([wx, wy, wz]) {
-      const [rx, ry] = rotateQuarter(wx, wy, camera.rotation);
-      return [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile - wz * camera.zScale * camera.tile];
-    },
-    facing: (n) => camera.facing(n),
+    project: ([wx, wy, wz]) => [(wx - wy) * COS30 * camera.tile, (wx + wy) * 0.5 * camera.tile - wz * camera.zScale * camera.tile],
+    facing: ([nx, ny, nz]) => nx + ny + nz / camera.zScale > 1e-9,
   };
 }
 
@@ -100,18 +98,19 @@ const snap = (angle) => {
   const n = VEHICLES.headings;
   return ((((Math.round((angle / (Math.PI * 2)) * n) % n) + n) % n) / n) * Math.PI * 2;
 };
-const camKey = (camera) => `${camera.rotation}|${camera.tile}|${camera.zScale}`;
+const camKey = (camera) => `${camera.tile}|${camera.zScale}`;
 
-// The sign's inner SVG around its foot on the map (cached per heading).
+// The sign's inner SVG around its foot on the map (cached per heading on
+// screen).
 export function signSVG(camera, angle, kind) {
-  const a = snap(angle);
+  const a = snap(angle + camera.angle);
   return cached(`s|${kind}|${a}|${camKey(camera)}`, () => signSVGIn(isoView(camera), a, kind));
 }
 
 // Three short lines out of light `which` (0: the one on the sign's left, 1:
 // right) of a road sign, or '' when its front doesn't show.
 export function flashSVG(camera, angle, which) {
-  const a = snap(angle);
+  const a = snap(angle + camera.angle);
   return cached(`f|${which}|${a}|${camKey(camera)}`, () => flashSVGIn(isoView(camera), a, which));
 }
 

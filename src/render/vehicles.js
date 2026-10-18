@@ -22,12 +22,11 @@
 //   panes   window profiles [[x, z]…] on the near side
 //
 // Projecting every car every frame would cost too much, so a drawing is
-// made once per model, heading (snapped to VEHICLES.headings directions),
-// camera rotation and hand (VEHICLES.hands slightly different jitters, so
+// made once per model, heading on screen (its heading on the ground plus
+// the view's turn, snapped to VEHICLES.headings directions) and hand (VEHICLES.hands slightly different jitters, so
 // no two cars in a row look stamped) and cached as SVG. Per frame a car
 // only moves, and swaps its drawing when it turns into another direction.
 
-import { rotateQuarter } from '../core/grid.js';
 import { mulberry32 } from '../core/random.js';
 
 export const VEHICLES = {
@@ -279,13 +278,16 @@ export function headingIndex(angle) {
 
 const cache = new Map();
 
-// Inner SVG for one model, drawn around the origin (its ground point), in
-// scene px for `camera`. Cached.
+// Inner SVG for one model heading `heading` (a VEHICLES.headings index, on
+// the ground), drawn around the origin (its ground point), in scene px for
+// `camera`. Cached by its heading on screen.
 export function vehicleSVG(camera, name, heading, hand) {
-  const key = `${name}|${heading}|${hand}|${camera.rotation}|${camera.tile}|${camera.zScale}`;
+  const n = VEHICLES.headings;
+  const seen = headingIndex((heading / n) * Math.PI * 2 + camera.angle);
+  const key = `${name}|${seen}|${hand}|${camera.tile}|${camera.zScale}`;
   let svg = cache.get(key);
   if (svg === undefined) {
-    svg = draw(isoView(camera), model(name), (heading / VEHICLES.headings) * Math.PI * 2, hand);
+    svg = draw(isoView(camera), model(name), (seen / n) * Math.PI * 2, hand);
     cache.set(key, svg);
   }
   return svg;
@@ -304,18 +306,13 @@ export function vehicleSVGIn(view, name, angle, hand) {
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
 
-// The map's isometric view, around the origin in scene px.
+// The map's isometric view, unturned (headings are taken on screen), around
+// the origin in scene px.
 function isoView(camera) {
   return {
-    project([wx, wy, wz]) {
-      const [rx, ry] = rotateQuarter(wx, wy, camera.rotation);
-      return [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile - wz * camera.zScale * camera.tile];
-    },
-    facing: (n) => camera.facing(n),
-    depth([wx, wy]) {
-      const [rx, ry] = rotateQuarter(wx, wy, camera.rotation);
-      return rx + ry;
-    },
+    project: ([wx, wy, wz]) => [(wx - wy) * COS30 * camera.tile, (wx + wy) * 0.5 * camera.tile - wz * camera.zScale * camera.tile],
+    facing: ([nx, ny, nz]) => nx + ny + nz / camera.zScale > 1e-9,
+    depth: ([wx, wy]) => wx + wy,
   };
 }
 

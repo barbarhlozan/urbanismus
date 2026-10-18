@@ -36,6 +36,12 @@ export class PerspectiveCamera {
     this.zScale = 1;
   }
 
+  // No turn of its own: world directions are its view directions (for the
+  // painters' iso fallbacks).
+  toView(x, y) {
+    return [x, y];
+  }
+
   // Distance in front of the eye (along the view) of a world point.
   ahead(x, y) {
     return (x - this.ex) * this.fx + (y - this.ey) * this.fy;

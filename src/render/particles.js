@@ -307,7 +307,7 @@ export class ParticleCanvas {
     const dpr = devicePixelRatio || 1;
     const W = innerWidth, H = innerHeight;
     const w = Math.round(W * dpr), h = Math.round(H * dpr);
-    const view = `${camera.zoom} ${camera.panX} ${camera.panY} ${camera.rotation} ${w} ${h}`;
+    const view = `${camera.zoom} ${camera.panX} ${camera.panY} ${camera.angle} ${w} ${h}`;
     const now = performance.now();
     if (view === this.view && now - this.at < 1000 / draw.fps - 2) return;
     this.view = view;

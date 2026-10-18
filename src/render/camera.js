@@ -3,8 +3,11 @@
 // zoom as a single transform, so panning never re-renders, see
 // Renderer.placeView).
 //
-// The view can rotate in 90° steps. All depth ordering and back-face culling
-// goes through depth() and facing(), so it stays correct in every rotation.
+// The view turns freely: `angle` (radians) turns the world about the middle
+// of the map before the isometric projection. `rotation` is the nearest
+// quarter turn, which new buildings face (facingViewer) and in whose axes
+// solids are put in order (quarter(), skew). All depth ordering and back-face
+// culling goes through depth() and facing(), so it stays correct at any angle.
 
 const COS30 = Math.cos(Math.PI / 6);
 const SIN30 = 0.5;
@@ -20,13 +23,71 @@ export class Camera {
     this.zoom = zoom;
     this.minZoom = minZoom;
     this.maxZoom = maxZoom;
-    this.rotation = 0;
+    this.angle = 0;
+    this.spin = null; // a turn let go, coasting to a stop: { at: [px, py], v: radians per second }
     this.panX = 0;
     this.panY = 0;
     this.cx = (grid.width - 1) / 2;
     this.cy = (grid.height - 1) / 2;
     this.warp = null; // optional (x, y) -> [x, y] distortion (render/warp.js)
     this.lift = null; // optional (x, y) -> extra height, the terrain relief (render/warp.js)
+  }
+
+  // The view's turn in radians. At a quarter turn the sine and cosine are
+  // exact, so the four classic views draw just as they always have.
+  get angle() {
+    return this._angle;
+  }
+
+  set angle(a) {
+    const turn = Math.PI * 2;
+    this._angle = ((a % turn) + turn) % turn;
+    const q = this._angle / (Math.PI / 2);
+    const r = Math.round(q);
+    if (Math.abs(q - r) < 1e-9) {
+      this._angle = (r % 4) * (Math.PI / 2);
+      [this._cos, this._sin] = [[1, 0], [0, 1], [-1, 0], [0, -1]][r % 4];
+    } else {
+      [this._cos, this._sin] = [Math.cos(this._angle), Math.sin(this._angle)];
+    }
+    this._quarter = r % 4;
+    // what is left over past that quarter, -45° to 45°
+    const skew = this._angle - this._quarter * (Math.PI / 2);
+    this.skew = skew > Math.PI ? skew - turn : skew;
+  }
+
+  // The nearest quarter turn, 0..3.
+  get rotation() {
+    return this._quarter;
+  }
+
+  set rotation(r) {
+    this.angle = (r * Math.PI) / 2;
+  }
+
+  // A world direction (or an offset from the middle) in view axes, and back.
+  toView(x, y) {
+    return [x * this._cos - y * this._sin, x * this._sin + y * this._cos];
+  }
+
+  toWorld(rx, ry) {
+    return [rx * this._cos + ry * this._sin, -rx * this._sin + ry * this._cos];
+  }
+
+  // A world position in the axes of the nearest quarter turn. Ground areas
+  // square to the grid stay square in them, and at any angle both axes lead
+  // towards the viewer (skew is at most 45° either way): one area entirely
+  // on the far side of another along either axis is behind it. The painter's
+  // order works in these (order.js, Painter).
+  quarter(x, y) {
+    return rotateQuarter(x - this.cx, y - this.cy, this._quarter);
+  }
+
+  // How a box in quarter() axes shows: [depth, screen x] per unit of each
+  // axis, as [[da, db], [sa, sb]] (at no skew [[1, 1], [1, -1]]).
+  quarterView() {
+    const c = Math.cos(this.skew), s = Math.sin(this.skew);
+    return [[c + s, c - s], [c - s, -(c + s)]];
   }
 
   // `at` (optional, world [x, y]): move the point by the relief and warp
@@ -42,7 +103,7 @@ export class Camera {
       x += wx - ax;
       y += wy - ay;
     }
-    const [rx, ry] = rotateQuarter(x - this.cx, y - this.cy, this.rotation);
+    const [rx, ry] = this.toView(x - this.cx, y - this.cy);
     return [
       (rx - ry) * COS30 * this.tile,
       (rx + ry) * SIN30 * this.tile - z * this.zScale * this.tile,
@@ -51,24 +112,25 @@ export class Camera {
 
   // World position in view-aligned axes (both grow towards the viewer).
   rotated(x, y) {
-    return rotateQuarter(x - this.cx, y - this.cy, this.rotation);
+    return this.toView(x - this.cx, y - this.cy);
   }
 
   // The structure rotation that turns a building's front (local -y) to the
-  // viewer – towards the bottom left of the screen – in this view.
+  // viewer – towards the bottom left of the screen – in the nearest quarter
+  // turn of this view.
   facingViewer() {
     return (1 - this.rotation + 4) % 4;
   }
 
   // Larger = closer to the viewer = drawn later.
   depth(x, y) {
-    const [rx, ry] = rotateQuarter(x - this.cx, y - this.cy, this.rotation);
+    const [rx, ry] = this.toView(x - this.cx, y - this.cy);
     return rx + ry;
   }
 
   // Is a surface with world-space normal n visible?
   facing([nx, ny, nz]) {
-    const [rx, ry] = rotateQuarter(nx, ny, this.rotation);
+    const [rx, ry] = this.toView(nx, ny);
     return rx + ry + nz / this.zScale > 1e-9;
   }
 
@@ -82,8 +144,8 @@ export class Camera {
   unproject(sx, sy) {
     const q = this.unprojectFlat(sx, sy);
     if (!this.warp && !this.lift) return q;
-    const d = rotateQuarter(1, 1, -this.rotation);  // away from the viewer: +1 px down the screen per tile px
-    const e = rotateQuarter(1, -1, -this.rotation); // across: 2 cos30 tile px sideways
+    const d = this.toWorld(1, 1);  // away from the viewer: +1 px down the screen per tile px
+    const e = this.toWorld(1, -1); // across: 2 cos30 tile px sideways
     const [lo, hi] = this.lift?.range ?? [0, 0];
     const pad = this.warp ? 1 : 0.05;
     const from = hi * this.zScale + pad, to = lo * this.zScale - pad;
@@ -113,7 +175,7 @@ export class Camera {
   unprojectFlat(sx, sy) {
     const a = sx / (COS30 * this.tile);
     const b = sy / (SIN30 * this.tile);
-    const [dx, dy] = rotateQuarter((a + b) / 2, (b - a) / 2, -this.rotation);
+    const [dx, dy] = this.toWorld((a + b) / 2, (b - a) / 2);
     return [dx + this.cx, dy + this.cy];
   }
 
@@ -142,12 +204,32 @@ export class Camera {
     this.keepInBounds();
   }
 
-  // Rotate the view around whatever is currently at the centre of the screen.
-  rotate(dir, vw, vh) {
-    const [sx, sy] = this.clientToScene(vw / 2, vh / 2);
-    const [wx, wy] = this.unproject(sx, sy);
-    this.rotation = (this.rotation + dir + 4) % 4;
-    this.centerOn(wx, wy, vw, vh);
+  // Turn the view by `da` radians around the ground under the screen point
+  // (px, py), which stays where it is.
+  turnAt(px, py, da) {
+    const [wx, wy] = this.unprojectFlat(...this.clientToScene(px, py));
+    this.angle += da;
+    const [rx, ry] = this.toView(wx - this.cx, wy - this.cy);
+    this.panX = px - (rx - ry) * COS30 * this.tile * this.zoom;
+    this.panY = py - (rx + ry) * SIN30 * this.tile * this.zoom;
+    this.keepInBounds();
+  }
+
+  // Let a turn go at `v` radians per second around the screen point `at`:
+  // it carries on a little, slowing to a stop (coast).
+  letGo(at, v) {
+    const { min, max } = Camera.SPIN;
+    this.spin = Math.abs(v) > min ? { at, v: Math.sign(v) * Math.min(max, Math.abs(v)) } : null;
+  }
+
+  // One frame of a coasting turn (`dt` seconds): it slows evenly, as a
+  // turntable left to itself, and lands without coming back.
+  coast(dt) {
+    if (!this.spin) return;
+    const { at, v } = this.spin;
+    this.turnAt(...at, v * dt);
+    this.spin.v = v * Math.exp(-dt / Camera.SPIN.ease);
+    if (Math.abs(this.spin.v) < Camera.SPIN.min) this.spin = null;
   }
 
   // ---- keeping the map in view ----
@@ -181,7 +263,7 @@ export class Camera {
   setMiddle(x, y) {
     const [vw, vh] = this.viewport;
     const a = (x - this.cx), b = (y - this.cy);
-    const [rx, ry] = rotateQuarter(a, b, this.rotation);
+    const [rx, ry] = this.toView(a, b);
     this.panX = vw / 2 - (rx - ry) * COS30 * this.tile * this.zoom;
     this.panY = vh / 2 - (rx + ry) * SIN30 * this.tile * this.zoom;
   }
@@ -230,3 +312,11 @@ export class Camera {
 
 Camera.FREE = 0.1;  // of the screen's shorter side: paper past the edge before the drag gets heavier
 Camera.EASE = 0.12; // ...and how much further it slows to a stop
+// Turning the view: radians per px of a right-button drag across the
+// screen; a twist of two fingers turns it as far as they turn, once they
+// have turned `dead` radians (so a pinch doesn't turn the map by the way).
+// A turn let go carries on, slowing over `ease` seconds, and stops below
+// `min` radians per second; a flick sets it going at most `max` (so it
+// carries on a quarter turn at the most).
+Camera.TURN = { px: 0.005, dead: 0.12 };
+Camera.SPIN = { ease: 0.22, min: 0.05, max: 6 };
