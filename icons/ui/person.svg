@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+  <!-- A resident: one of the town's people as the map draws them (render/people.js) – a round head on a box of a body, on two stub legs -->
+  <circle cx="8.1" cy="3.9" r="1.9"/>
+  <path d="M5.3 6.9 L10.9 6.7 L11.5 12.4 L4.8 12.5 Z"/>
+  <path d="M6.6 12.5 V14.6 M9.7 12.4 V14.5"/>
+</svg>

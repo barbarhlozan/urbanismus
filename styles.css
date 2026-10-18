@@ -470,8 +470,9 @@ html, body {
 
 .hud {
   position: fixed;
-  width: var(--panel-w);
-  max-width: var(--panel-w);
+  /* as wide as the town's name (and the book beside it), no wider */
+  width: max-content;
+  max-width: min(var(--panel-w), calc(100vw - 120px - var(--safe-l) - var(--safe-r)));
   box-sizing: border-box;
   top: calc(16px + var(--safe-t));
   left: calc(20px + var(--safe-l));
@@ -516,6 +517,8 @@ body.touch { --bar-h: 44px; }
   -webkit-user-select: text;
 }
 .hud .name:focus { border-bottom-color: var(--detail); }
+/* the input has no width of its own: the sizer's text sets the box's */
+.hud input.name { width: 0; min-width: 100%; }
 .hud .name-label .stat-icon { flex: 0 0 13px; width: 13px; height: 13px; color: var(--detail); opacity: 0; transition: opacity 0.15s; }
 .hud .name-label:hover .stat-icon, .hud .name:focus + .stat-icon { opacity: 1; }
 body.touch .hud .name-label .stat-icon { opacity: 1; }
@@ -634,7 +637,9 @@ body:not(.touch) .controls button:hover > .label, .controls button.telling > .la
 
 .popup {
   position: fixed;
-  width: var(--bm-w); /* as wide as the Build menu: the two read as one set */
+  width: max-content; /* as wide as what's in it, no wider */
+  min-width: 160px;
+  max-width: 300px;
   box-sizing: border-box;
   background: var(--bg);
   border: var(--line) solid var(--fg);
@@ -686,9 +691,12 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .popup .note { font-size: 10px; color: var(--detail); }
 /* drawings in a row (the Building card's look and surroundings), each a
    square you can press, named on pointing at it */
-.popup-icons { display: flex; gap: 4px; padding: 2px 8px 6px; }
-#ui .popup button.popup-icon { width: auto; padding: 8px; justify-content: center; }
-.popup-icon .icon { width: 24px; height: 24px; display: block; fill: none; stroke: currentColor; stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.popup-icons { display: flex; align-items: center; gap: 2px; padding: 2px 6px 4px; }
+#ui .popup button.popup-icon { width: auto; padding: 6px; justify-content: center; }
+.popup-badge { margin-left: auto; padding: 0 6px 0 14px; }
+.bi-people { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; }
+.bi-people .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.popup-icon .icon { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .popup { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); display: flex; flex-direction: column; }
 .popup-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .popup.sheet {
@@ -1563,7 +1571,15 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 .pm .pm-u { display: inline; stroke-dasharray: 1 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset 140ms cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0s 140ms; }
 .pm .pm-held { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
 .pm .pm-strike { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
-.pm :is(.pm-box, .pm-x, .pm-chosen) { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+.pm :is(.pm-box, .pm-x) { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+/* chosen: hatched like a roof, in the detail colour, under the control's
+   drawing and word; the word gets a halo of paper so it reads clear */
+.pm .pm-chosen { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+#ui :is(.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab) > .pm { z-index: 0; }
+#ui :is(.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab) > :not(.pm) { position: relative; z-index: 1; }
+#ui :is(.bm-tab.on, .bm-tool.active, .bm-camera.on, .controls button.on, .chron-tab.on) > :not(.pm) {
+  text-shadow: 0 0 2px var(--bg), 0 0 2px var(--bg), 0 0 3px var(--bg);
+}
 /* pointed at (only where there's a pointer), or picked with the arrow keys */
 body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
 #ui .dlg-choices button.focus > .pm .pm-u { stroke-dashoffset: 0; opacity: 1; transition-delay: 0s; }

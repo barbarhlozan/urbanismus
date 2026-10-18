@@ -1,5 +1,6 @@
-// Default tool: click a building to get its card – what it is, another
-// look, its surroundings, and Zbourat. Roads, railways, paths, fences and
+// Default tool: click a building to get its card – its name, and a row of
+// drawings: another look, its surroundings, Zbourat (an eraser), and at the
+// end how many live there, a number by a little figure. Roads, railways, paths, fences and
 // trees open nothing: Erase takes them away (and ⌘Z brings them back).
 // Building new things is done from the Build menu.
 
@@ -8,14 +9,16 @@ import { YARDS, YARD_STYLES } from '../../structures/yards.js';
 import { statIcon } from '../ui/icons.js';
 import { iconSvg } from '../ui/uiIcons.js';
 import { t, hasText } from '../core/text.js';
-import { nameOf, blurbOf } from '../ui/names.js';
+import { nameOf } from '../ui/names.js';
 
 // names of the surroundings (yard.<id>), else their own
 const yardName = (id) => (hasText(`yard.${id}`) ? t(`yard.${id}`) : YARDS[id].name);
 
-// stand-ins for the card's two drawings, icons/ui/another-look.svg and
-// icons/ui/yard.svg (uiIcons.js)
+// stand-ins for the card's drawings, its files in icons/ui/ (uiIcons.js):
+// another-look, yard, erase and person
 const ANOTHER_LOOK = '<path d="M2.5 2.5 H13.5 V13.5 H2.5 Z"/><circle cx="5.5" cy="5.5" r="0.9"/><circle cx="10.5" cy="10.5" r="0.9"/><circle cx="8" cy="8" r="0.9"/>';
+const ERASE = '<path d="M6 22 L20.1 7.9 L26.5 14.3 L12.4 28.4 Z M10.9 17.1 L17.3 23.5"/><path d="M16 29 H28" stroke-dasharray="2 2"/>';
+const PERSON = '<circle cx="8.1" cy="3.9" r="1.9"/><path d="M5.3 6.9 L10.9 6.7 L11.5 12.4 L4.8 12.5 Z"/><path d="M6.6 12.5 V14.6 M9.7 12.4 V14.5"/>';
 const YARD = '<path d="M1.5 13.6 C5 13.3 10 13.8 14.6 13.4"/><path d="M2.6 13.5 V8.6 L3.3 7.6 L4 8.6 V13.5 M6.2 13.5 V8.6 L6.9 7.6 L7.6 8.6 V13.5 M1.6 10 H8.8 M1.6 12 H8.8"/><path d="M9.6 13.4 C8.9 12 9.5 10.2 11 10.1 C11.2 8.4 13.6 8.2 14 9.9 C15.2 10.4 15.1 12.6 13.9 13.4"/>';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -62,24 +65,23 @@ function screenBox({ world, camera }, s) {
   return { left, top, right, bottom };
 }
 
-// The building at a glance: what it is and its numbers written out in
-// words, as on the chronicle's ledger page ("osm pracovních míst"), and a
-// warning when nothing reaches it.
-function summary(def, served) {
-  const stats = Object.entries(def.stats ?? {}).map(([k, v]) =>
-    `<span class="stat words">${esc(t(`stat.${k}.n`, { n: v }))}</span>`);
-  let html = `<div class="bi-row"><span class="bi-kind">${esc(blurbOf(def) || nameOf(def))}</span>${stats.join('')}</div>`;
-  if (!served) {
-    html += `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${t(def.access === 'any' ? 'inspect.needs.any' : 'inspect.needs.road')}</span></div>`;
-  }
-  return html;
+// The building at a glance, kept short: how many people live there, as a
+// number by one of the town's little figures (none for a building nobody
+// lives in), and a warning when nothing reaches it.
+function residents(def) {
+  const n = def.stats?.residents;
+  return n ? `<span class="bi-people" title="${esc(t('stat.residents.n', { n }))}">${n}${iconSvg('person', 'class="icon" aria-hidden="true"', PERSON)}</span>` : '';
+}
+function warning(def) {
+  return `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${t(def.access === 'any' ? 'inspect.needs.any' : 'inspect.needs.road')}</span></div>`;
 }
 
 function structureMenu({ world }, s) {
   const def = STRUCTURE_TYPES[s.type];
 
-  // what it is: to look at, not to click
-  const items = [{ block: summary(def, world.isServed(s)) }];
+  // a warning first, if nothing reaches it; then a row of drawings and,
+  // at its end, the people who live there
+  const items = world.isServed(s) ? [] : [{ block: warning(def) }];
 
   // how it looks, as two drawings side by side (each named on pointing at
   // it): its next kind, in the order Space goes through them while
@@ -112,7 +114,14 @@ function structureMenu({ world }, s) {
     });
   }
 
-  items.push({ section: '' }, { label: t('inspect.demolish'), action: () => world.removeStructure(s.id) });
+  // …and taking it down (⌘Z puts it back)
+  items.push({
+    icon: iconSvg('erase', 'class="icon" aria-hidden="true"', ERASE, '0 0 32 32'),
+    label: t('inspect.demolish'),
+    action: () => world.removeStructure(s.id),
+  });
+  const people = residents(def);
+  if (people) items.push({ badge: people });
 
   return { title: nameOf(def), items };
 }

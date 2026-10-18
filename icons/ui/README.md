@@ -57,6 +57,8 @@ drawing written in the code, the one each file was first exported from.
 | `terrain.svg` | Build menu, after Erase, before the camera: Terén / Terrain (the contour lines), a range of mountains |
 | `undo.svg` | Build menu, first in the row, before Erase, and the dock on a phone: Zpět / Undo, **⌘Z** |
 | `redo.svg` | Build menu, right after Zpět, and the dock on a phone: Znovu / Redo |
+| `erase.svg` | Building card: Zbourat / Demolish, last in the row of drawings (the Erase tool's eraser) |
+| `person.svg` | Building card: beside the number of people who live there (one of the town's people, as `src/render/people.js` draws them) |
 | `yard.svg` | Building card: Okolí / Surroundings, beside Jiná podoba (a fence and a shrub) |
 | `no-road.svg` | Building card: the warning that no road or path reaches it |
 | `dice.svg` | New map: Jiné jméno / Another name, beside the town's name |

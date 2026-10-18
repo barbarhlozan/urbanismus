@@ -115,8 +115,9 @@ folded there and folds again once you pick a tool.
 
 - Every building is built as what it is – a house, apartments, a panel block, a Jednota, a
   hospoda – and stays that way; to have something else there, take it down and build anew.
-  Clicking a building opens its card: what it is, another look and its surroundings (two
-  drawings), and Zbourat. Clicking a road, path, railway, fence or trees does nothing: Erase
+  Clicking a building opens its card: its name, a row of drawings – another look, its
+  surroundings, an eraser to take it down – and how many live there, a number by a little
+  figure. Clicking a road, path, railway, fence or trees does nothing: Erase
   removes them, and ⌘Z brings back what was removed.
 - Not everything needs a road. Homes, shops and offices, services, landmarks and the
   cemetery do fine with just a footpath within a dot and a half: their people walk or

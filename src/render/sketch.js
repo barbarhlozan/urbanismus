@@ -52,6 +52,28 @@ export function sketchRect(x, y, w, h, seed, { k = 1, over = 3, bow = 1.2 } = {}
   return [0, 1, 2, 3].map((i) => stroke(c[i], c[(i + 1) % 4], rnd, k, over, bow)).join('');
 }
 
+// Hatching over a box, as the roofs on the map are hatched: parallel
+// strokes rising to the right, `gap` apart, each one a pen stroke of its
+// own – stopping a little short of the edge or running a touch past it,
+// never quite parallel to the next.
+export function sketchHatch(x, y, w, h, seed, { gap = 5, k = 1 } = {}) {
+  const rnd = mulberry32(seed);
+  let d = '';
+  // lines x + y = c across the box, c from its top-left corner to its bottom-right
+  for (let c = gap * (0.3 + 0.4 * rnd()); c < w + h; c += gap * (0.85 + 0.3 * rnd())) {
+    // where the line enters (bottom or left edge) and leaves (top or right)
+    const a = c <= h ? [x, y + c] : [x + c - h, y + h];
+    const b = c <= w ? [x + c, y] : [x + w, y + c - w];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < 2) continue;
+    // a little short at either end (the overshoot in stroke() may give it back)
+    const ua = 0.6 * rnd() * k, ub = 0.6 * rnd() * k;
+    const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
+    d += stroke([a[0] + ux * ua, a[1] + uy * ua], [b[0] - ux * ub, b[1] - uy * ub], rnd, k, 0.8, 0.6);
+  }
+  return d;
+}
+
 // A box drawn freehand, for the UI's frames: like sketchRect, but each side
 // wavers along its length (a cubic, pulled a little either way at its
 // thirds), runs on further past the corners, starts and ends a little off

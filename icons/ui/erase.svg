@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Zbourat / Demolish: the Erase tool's eraser, tilted, with the smudge it leaves -->
+  <path d="M6 22 L20.1 7.9 L26.5 14.3 L12.4 28.4 Z M10.9 17.1 L17.3 23.5"/>
+  <path d="M16 29 H28" stroke-dasharray="2 2"/>
+</svg>

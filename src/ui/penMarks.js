@@ -13,10 +13,12 @@
 //   pressed          it grows a little and settles back (motion.js press),
 //                    and its marks – and its own pen frame, if it has one –
 //                    are drawn afresh
-//   chosen           boxed: a box drawn in the thin pen round the edge of
-//                    the control, filling round it (a tab, a tile, the
-//                    camera, a Menu word whose panel is open), just inside
-//                    a cell packed against its neighbours
+//   chosen           hatched, as the roofs on the map are: thin strokes
+//                    across the control in the detail colour (a tab, a
+//                    tile, the camera, a Menu word whose panel is open),
+//                    just inside a cell packed against its neighbours; its
+//                    drawing and word stay over the hatching, the word
+//                    haloed in the paper's colour as a name on a map is
 //   picked line      a tick at the right of the line of words picked (a
 //                    colour scheme)
 //   setting          a small box in the corner, crossed while it's on
@@ -35,7 +37,7 @@
 //
 // penMarks(root) marks every control under root, and the ones added later.
 
-import { sketchLine, sketchBox, seedOf } from '../render/sketch.js';
+import { sketchLine, sketchBox, sketchHatch, seedOf } from '../render/sketch.js';
 import { press } from './motion.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -194,11 +196,10 @@ function draw(el) {
   }
 
   if (el.matches(CHOSEN)) {
-    // a box round its edge, in the thin pen and squarer than the tool in
-    // hand's: on the edge (clear of the pen frame round a row of them),
-    // just inside a cell, so it keeps off the next one
-    const i = cell || clipped(el) ? 2.5 : 0;
-    set('chosen', sketchBox(i, i, w - 2 * i, h - 2 * i, s + 7, { over: 2.5, waver: 0.8, slip: 0.6 }));
+    // hatched over its whole face: just inside a cell, so it keeps off the
+    // next one and the pen frame round a row of them
+    const i = cell || clipped(el) ? 3 : 1;
+    set('chosen', sketchHatch(i, i, w - 2 * i, h - 2 * i, s + 7));
   }
   if (el.matches(TICKED)) {
     const x = w - 24, y = h / 2;
