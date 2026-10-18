@@ -37,9 +37,10 @@ do the same. If something now stands in the way of a step, it says so and the st
 The **≡** at the top right opens the Menu: Colours, Save to a file, Open from a file, New map,
 Full screen and the other language, each a small drawing. Point at one (or, on a phone, hold
 a finger on it) and its name is written beside it; on a computer they stand in a line along the
-top edge, on a phone in a column down from the ≡. The drawings are SVG files of their own in
-`icons/menu/` (its README says how to draw one), read when the game starts: replace a file to
-change a drawing.
+top edge, on a phone in a column down from the ≡. These drawings, and the UI's others (the ≡
+itself, the camera, the chronicle book, the tool options, the New map settings…), are SVG files
+of their own in `icons/ui/`, read when the game starts: replace a file to change a drawing. Its
+README says how to draw one and lists them all, and `icons/ui/index.html` shows them side by side.
 
 Shortcuts come in two steps that follow the Build menu: the **number row** opens a group
 (**1** Doprava, **2** Bydlení, **3** Občanská vybavenost, **4** Výroba, **5** Prostranství,

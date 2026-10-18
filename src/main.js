@@ -44,7 +44,7 @@ import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
 import { ColorMenu } from './ui/colorMenu.js';
 import { NewMapMenu } from './ui/newMapMenu.js';
 import { askLanguage } from './ui/languages.js';
-import { loadMenuIcons } from './ui/menuIcons.js';
+import { loadIcons } from './ui/uiIcons.js';
 import { AssetsPage } from './ui/assetsPage.js';
 import { sketchFrames, HANDS } from './ui/sketchFrame.js';
 import { penMarks } from './ui/penMarks.js';
@@ -57,9 +57,9 @@ import { keyOf } from './ui/keys.js';
 import { loadText, t, reasonText, language, saveLanguage, needsLanguage, LANGUAGES } from './core/text.js';
 
 applyTheme();
-// the words for everything on screen (text/*.txt) and the Menu's drawings
-// (icons/menu/), before any of it is built
-await Promise.all([loadText(), loadMenuIcons()]);
+// the words for everything on screen (text/*.txt) and the UI's drawings
+// (icons/ui/), before any of it is built
+await Promise.all([loadText(), loadIcons()]);
 
 // ---------- world ----------
 
