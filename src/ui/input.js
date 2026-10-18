@@ -44,9 +44,10 @@ export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle
     turning.v = turning.v ? turning.v * 0.5 + v * 0.5 : v;
     Object.assign(turning, { t, acc: 0 });
   };
-  // ...and letting it go: it coasts on only if it was still turning just now
+  // ...and letting it go: it coasts on if it was still turning just now,
+  // and settles on a step of the turn either way (Camera.letGo)
   const letGo = (turning, at, t) => {
-    if (turning?.last && t - turning.last < 80) camera.letGo(at, turning.v);
+    if (turning?.t) camera.letGo(at, turning.last && t - turning.last < 80 ? turning.v : 0);
   };
   const middle = () => [innerWidth / 2, innerHeight / 2];
 

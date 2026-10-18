@@ -85,6 +85,7 @@ import { rockLines, ROCK_LOOK } from './rocks.js';
 import { STEEP_LINES, steepLines } from './steep.js';
 import { carMark, personMark } from './marks.js';
 import { mergeRuns, placeInOrder, isoSort } from './order.js';
+import { Camera } from './camera.js';
 import { SUN, sunFor, shadowSVG } from './shadows.js';
 import { findForests, forestSVG } from './forest.js';
 import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
@@ -112,6 +113,18 @@ const NEAR = 64;
 // threshold (Renderer.bandOf), so one resting on it doesn't switch to and fro.
 const BAND_HOLD = 0.02;
 const OVERSCAN = 0.25;
+// While the view turns (Renderer.turnFrame): the layers turned as a sheet
+// of paper, drawn anew once it rests, and the lines on the ground drawn at
+// the turning angle every frame. Buildings, trees and lamps go their own way.
+const SHEET = ['forest', 'mist'];
+const LINES = ['roads', 'paths', 'rails', 'fences', 'notes'];
+// The steps of a whole turn (Camera.STEP); the views an object keeps of
+// the steps it has been drawn at, at most (Renderer.swapIn); and ms the
+// view must rest before those either side are made ready (prepareTurn).
+const STEPS = Math.round((Math.PI * 2) / Camera.STEP);
+const VIEWS = 40;
+const PREPARE_REST = 400;
+const SETTLE_FADE = 260; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
 // An object's place among the others in when its detail changes
@@ -235,6 +248,7 @@ export class Renderer {
     this.buildOrder = new Map(); // network layer -> Map dot -> its place in the last build, for the pen
 
     this.dirty = new Set();
+    this.viewOnly = new Set(); // objects to redraw only for a new view of the same town (land)
     this.parkedEls = new Map(); // structure id -> { g, html }, its parked cars
     this.parkedDirty = new Set(); // structure ids whose cars changed
     this.invalidate();
@@ -385,9 +399,10 @@ export class Renderer {
     }
     this.updateLod(this.drawn.zoom);
     for (const ink of Object.values(this.ink)) if (ink.busy) ink.tick();
-    // mid-turn the map as drawn is turned as a whole (placeView): what
-    // changes meanwhile waits until the view rests and all is drawn anew
-    if (this.cssTop == null) {
+    // mid-turn the map is drawn by turnFrame: what else changes meanwhile
+    // waits until the view rests
+    if (this.turning) this.turnFrame();
+    else {
       for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
       this.dirty.clear();
       if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
@@ -412,8 +427,11 @@ export class Renderer {
         const n = this.objsDirty.size;
         this.renderObjects();
         if (batch) this.rebuildCost += ((performance.now() - t0) / n - this.rebuildCost) * 0.3;
+        this.viewOnly.clear();
+        this.preparedAt = null;
       }
       if (this.objsPlace) this.placeObjects();
+      this.prepareTurn();
     }
     if (this.ghosts.size) this.reapGhosts();
     if (this.showAgents) {
@@ -565,22 +583,30 @@ export class Renderer {
       for (let cy = 0; cy * c < height; cy++) for (let cx = 0; cx * c < width; cx++) keys.add(`${cx},${cy}`);
     }
     const ground = meadowGround(world, this.config);
-    const project = (x, y) => this.project(x, y);
-    for (const key of keys) {
-      const [cx, cy] = key.split(',').map(Number);
-      if (cx < 0 || cy < 0 || cx * c >= width || cy * c >= height) continue;
-      let chunk = this.meadow.get(key);
-      if (!chunk) {
-        chunk = { g: this.layers.meadow.appendChild(document.createElementNS(SVGNS, 'g')), svg: null, shown: true };
-        this.meadow.set(key, chunk);
-      }
-      const svg = chunkSVG(world, ground, cx * c, cy * c, project, camera.tile);
-      if (svg !== chunk.svg) chunk.g.innerHTML = chunk.svg = svg;
-      const x0 = cx * c - 0.5, y0 = cy * c - 0.5, x1 = x0 + c, y1 = y0 + c;
-      chunk.box = this.sceneBox([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], 0, 0.3);
-    }
+    for (const key of keys) this.drawChunk(key, ground);
     this.meadowDirty.clear();
     this.cullMeadow();
+  }
+
+  // One chunk of the meadow ('cx,cy'), at the camera's angle as it is.
+  drawChunk(key, ground) {
+    const { world, camera } = this;
+    const { width, height } = world.grid;
+    const c = MEADOW.chunk;
+    const [cx, cy] = key.split(',').map(Number);
+    if (cx < 0 || cy < 0 || cx * c >= width || cy * c >= height) return;
+    let chunk = this.meadow.get(key);
+    if (!chunk) {
+      chunk = { g: this.layers.meadow.appendChild(document.createElementNS(SVGNS, 'g')), svg: null, shown: true };
+      this.meadow.set(key, chunk);
+    }
+    const svg = chunkSVG(world, ground, cx * c, cy * c, (x, y) => this.project(x, y), camera.tile);
+    if (svg !== chunk.svg) chunk.g.innerHTML = chunk.svg = svg;
+    if (chunk.turned) chunk.g.removeAttribute('transform');
+    chunk.turned = false;
+    chunk.angle = camera.angle;
+    const x0 = cx * c - 0.5, y0 = cy * c - 0.5, x1 = x0 + c, y1 = y0 + c;
+    chunk.box = this.sceneBox([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], 0, 0.3);
   }
 
   // Hide the meadow chunks outside the drawn view (as cull() does objects).
@@ -1222,25 +1248,22 @@ export class Renderer {
       this.movedAt = now;
     }
     const d = this.drawn;
-    let css = '', cssTop = null;
+    let css = '';
     if (!d || d.view !== view) {
       const k = d ? cam.zoom / d.zoom : 1;
       const tx = d ? cam.panX - k * d.panX : 0, ty = d ? cam.panY - k * d.panY : 0;
       const { ox, oy } = this;
       const covered = tx - k * ox <= 0 && ty - k * oy <= 0 && tx + k * (W + ox) >= W && ty + k * (H + oy) >= H;
-      // turning: the drawing turns as a sheet of paper until the view rests
-      // (a bare corner of paper may show meanwhile), then it is drawn anew
+      // turning: drawn at the angle it has reached every frame (turnFrame),
+      // while panning and zooming move the drawing as ever (a bare corner of
+      // paper may show meanwhile); once the view rests, what is left is
+      // drawn anew (land)
       const turned = d && d.angle !== cam.angle;
       if (d && (covered || turned) && this.deferView && now - this.movedAt < VIEW_SETTLE) {
         css = `translate(${tx}px, ${ty}px) scale(${k})`;
-        // (the buildings and trees stand up meanwhile: standUp)
-        if (turned) [css, cssTop] = [this.turnCSS(d, k), css];
-        if (turned) this.standUp(d);
+        if (turned && !this.turning) this.startTurn();
       } else {
-        if (turned) {
-          this.sitDown();
-          this.invalidate();
-        }
+        if (this.turning || turned) this.land();
         this.drawn = { view, zoom: cam.zoom, panX: cam.panX, panY: cam.panY, angle: cam.angle };
         const t = `translate(${cam.panX + ox} ${cam.panY + oy}) scale(${cam.zoom})`;
         for (const scene of this.scenes) scene.setAttribute('transform', t);
@@ -1251,75 +1274,318 @@ export class Renderer {
         this.cullMeadow();
       }
     }
-    if (css !== this.css || cssTop !== this.cssTop) {
-      // the hover marks are drawn for the camera as it is: they would turn
-      // twice over, so they wait for the turn to end
-      this.layers.overlay.style.visibility = cssTop !== null ? 'hidden' : '';
-      [this.css, this.cssTop] = [css, cssTop];
+    if (css !== this.css) {
+      this.css = css;
       // on the wrappers, not the SVGs: a transform on an <svg> itself
       // makes the browser lay it out again
-      this.wrappers[0].style.transform = css;
-      this.wrappers[1].style.transform = cssTop ?? css;
+      for (const w of this.wrappers) w.style.transform = css;
     }
   }
 
-  // The ground of the map as drawn (`d`, at d.angle) turned to where the
-  // camera is now, in scene px: about the middle of the map (the scene's
-  // origin), as in Camera.project, without the relief. [[a, b], [c, d]].
-  turnMatrix(d) {
-    const c = COS30, a = this.camera.angle - d.angle, cos = Math.cos(a), sin = Math.sin(a);
+  // The ground drawn at angle `from` turned to angle `to`, in scene px:
+  // about the middle of the map (the scene's origin), as in Camera.project,
+  // without the relief. As an SVG transform.
+  // (`css`: as a CSS transform, about the same point)
+  sheet(from, to, css = false) {
+    const c = COS30, a = to - from, cos = Math.cos(a), sin = Math.sin(a);
     // scene px -> view axes (the projection undone) -> turned -> scene px
     const inv = [[0.5 / c, 1], [-0.5 / c, 1]];
     const turn = [[cos, -sin], [sin, cos]];
     const proj = [[c, -c], [0.5, 0.5]];
     const mul = (p, q) => [0, 1].map((i) => [0, 1].map((j) => p[i][0] * q[0][j] + p[i][1] * q[1][j]));
-    return mul(proj, mul(turn, inv));
+    const m = mul(proj, mul(turn, inv));
+    const sep = css ? ', ' : ' ';
+    return `matrix(${[m[0][0], m[1][0], m[0][1], m[1][1], 0, 0].join(sep)})`;
   }
 
-  // The CSS transform that turns the map as drawn as a sheet of paper to
-  // where the camera has turned it, scaled by `k` (hills lean with the sheet
-  // until it is drawn again).
-  turnCSS(d, k) {
+  // Where the middle of an object's ground shows at angle `a`, in scene px
+  // (flat: the relief raises it the same at any angle).
+  footAt(e, a) {
     const cam = this.camera;
-    const m = this.turnMatrix(d).map((row) => row.map((v) => v * k));
-    const tx = cam.panX - (m[0][0] * d.panX + m[0][1] * d.panY);
-    const ty = cam.panY - (m[1][0] * d.panX + m[1][1] * d.panY);
-    return `matrix(${m[0][0]}, ${m[1][0]}, ${m[0][1]}, ${m[1][1]}, ${tx}, ${ty})`;
+    if (!e.mid) {
+      const pts = e.at.points;
+      const mid = [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
+      e.mid = cam.warp ? cam.warp(...mid) : mid;
+    }
+    const x = e.mid[0] - cam.cx, y = e.mid[1] - cam.cy;
+    const rx = x * Math.cos(a) - y * Math.sin(a), ry = x * Math.sin(a) + y * Math.cos(a);
+    return [(rx - ry) * COS30 * cam.tile, (rx + ry) * 0.5 * cam.tile];
   }
 
-  // While the view turns, buildings and trees (#objects, only moved and
-  // scaled with the camera) keep standing up as drawn: each slides to where
-  // the turned ground takes the middle of its own ground, and the mist and
-  // the road marks over them turn with the ground. Out of order where they
-  // pass each other, until the turn ends and all is drawn again (sitDown).
-  standUp(d) {
-    const m = this.turnMatrix(d);
-    const turn = `matrix(${m[0][0]} ${m[1][0]} ${m[0][1]} ${m[1][1]} 0 0)`;
-    for (const l of ['mist', 'notes']) this.layers[l].setAttribute('transform', turn);
-    this.standing ??= new Set();
-    for (const e of [...this.objs.values(), ...this.ghosts.values()]) {
-      if (e.shown === false || !e.at?.points?.length) continue;
-      // (cached: where the middle of its ground was drawn)
-      if (e.footAngle !== d.angle) {
-        const pts = e.at.points;
-        const x = pts.reduce((s, p) => s + p[0], 0) / pts.length, y = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-        const cam = this.camera, a = d.angle, cx = x - cam.cx, cy = y - cam.cy;
-        const rx = cx * Math.cos(a) - cy * Math.sin(a), ry = cx * Math.sin(a) + cy * Math.cos(a);
-        e.foot = [(rx - ry) * COS30 * cam.tile, (rx + ry) * 0.5 * cam.tile];
-        e.footAngle = d.angle;
+  // The view starts turning: the hover marks (drawn for the camera as it
+  // is) wait for it to end, and what is being erased goes at once.
+  startTurn() {
+    this.turning = true;
+    this.layers.overlay.style.visibility = 'hidden';
+    this.reapGhosts(true);
+  }
+
+  // One frame of a turn, at the angle the camera has reached. The ground
+  // (SHEET) turns as a sheet of paper, exact on flat ground; the roads,
+  // paths, railways, fences and parked cars on it are drawn at this angle.
+  // Buildings, trees and lamps are drawn at the step of the turn (Camera.STEP)
+  // nearest it, each with its garden and shadow: from the drawings each
+  // keeps for the steps it has been drawn at (views, made ready while the
+  // view rests: prepareTurn), or drawn now, as many as config.render.
+  // turnBudget allows – buildings first, those furthest behind first. Each
+  // slides the last hair to where it stands at this very angle; one not
+  // drawn yet slides round upright as last drawn, until its turn.
+  turnFrame() {
+    const cam = this.camera, a = cam.angle, t0 = performance.now();
+    const k = Math.round(a / Camera.STEP) % STEPS;
+    const turn = this.sheet(this.drawn.angle, a);
+    for (const l of SHEET) this.layers[l].setAttribute('transform', turn);
+    // the terrain, the largest of them, turned whole on the GPU: its <svg>
+    // about the middle of the map as drawn (the scene's origin)
+    const { ground } = this, d = this.drawn;
+    ground.style.transformOrigin = `${d.panX + this.ox}px ${d.panY + this.oy}px`;
+    ground.style.transform = this.sheet(d.angle, a, true);
+    ground.style.willChange = 'transform';
+    if (this.linesAngle !== a) {
+      this.roadLines = null; // drawn for the old view
+      for (const l of LINES) {
+        this.ink[l]?.clearErasing();
+        this[`render${l[0].toUpperCase()}${l.slice(1)}`]();
       }
-      const [sx, sy] = e.foot;
-      const dx = m[0][0] * sx + m[0][1] * sy - sx, dy = m[1][0] * sx + m[1][1] * sy - sy;
-      e.g.setAttribute('transform', `translate(${r2(dx)} ${r2(dy)})`);
-      this.standing.add(e.g);
+      this.renderParked();
+      this.linesAngle = a;
+    }
+    // (changed meanwhile: its views are old, and it is drawn anew once at rest)
+    for (const key of this.objsDirty) this.objs.get(key)?.views?.clear();
+    // every object where it stands at this angle: what is in sight
+    for (const e of this.objs.values()) {
+      if (!e.at || e.placedAt === a) continue;
+      Object.assign(e, this.placeOf(e.at));
+      e.placedAt = a;
+    }
+    this.cull();
+    const due = [];
+    for (const e of this.objs.values()) {
+      if (e.shown === false || e.k === k) continue;
+      const view = !this.objsDirty.has(e.key) && e.views?.get(k);
+      if (view) this.swapIn(e, view);
+      else due.push(e);
+    }
+    const behind = (e) => {
+      if (e.k == null) return Infinity;
+      const d = Math.abs(e.k - k) % STEPS;
+      return Math.min(d, STEPS - d) * (e.key[0] === 's' ? 4 : 1);
+    };
+    due.sort((p, q) => behind(q) - behind(p));
+    // (the meadow's share kept back)
+    const { turnBudget, turnMeadow } = this.config.render, budget = turnBudget - turnMeadow;
+    // let go, it is coasting to the step it will rest on: everything in
+    // sight is made ready there, buildings first, so it rests on what it
+    // shows as it comes in
+    const rest = cam.spin ? ((Math.round((a + cam.spin.left) / Camera.STEP) % STEPS) + STEPS) % STEPS : null;
+    if (rest !== null && rest !== k) {
+      this.turnRest = rest;
+      for (const kind of ['s', 'f', 'k']) {
+        for (const e of this.objs.values()) {
+          if (e.key[0] !== kind || e.shown === false || e.k === rest || e.views?.has(rest)) continue;
+          if (performance.now() - t0 > budget) break;
+          const view = this.buildView(e, rest);
+          if (!view) continue;
+          (e.views ??= new Map()).set(rest, view);
+          this.keepViews(e);
+        }
+      }
+    }
+    // (coasting, all of it goes to the step it rests on; the steps passed
+    // on the way are only seen for a moment)
+    for (const e of rest !== null && rest !== k ? [] : due) {
+      if (performance.now() - t0 > budget) break;
+      const view = this.buildView(e, k);
+      if (view) this.swapIn(e, view);
+    }
+    this.reorder(false);
+    // the meadow: each chunk in sight turned as a sheet from where it was
+    // drawn (its tufts lean a little meanwhile), and drawn at this angle,
+    // the furthest behind first, for config.render.turnMeadow ms
+    const chunks = [...this.meadow.entries()].filter(([, c]) => c.shown && c.angle !== a);
+    const off = (c) => Math.abs(Math.sin(((c.angle ?? this.drawn.angle) - a) / 2));
+    chunks.sort((p, q) => off(q[1]) - off(p[1]));
+    const m0 = performance.now();
+    let meadow = null;
+    for (const [key, c] of chunks) {
+      if (performance.now() - m0 > turnMeadow || performance.now() - t0 > turnBudget) {
+        c.g.setAttribute('transform', this.sheet(c.angle ?? this.drawn.angle, a));
+        c.turned = true;
+        continue;
+      }
+      this.drawChunk(key, (meadow ??= meadowGround(this.world, this.config)));
+    }
+    for (const e of this.objs.values()) {
+      const slide = e.shown !== false && e.angle !== undefined && e.angle !== a;
+      if (!slide && !e.slid) continue;
+      e.slid = slide;
+      let t = null;
+      if (slide) {
+        const [x0, y0] = this.footAt(e, e.angle), [x1, y1] = this.footAt(e, a);
+        t = `translate(${r2(x1 - x0)} ${r2(y1 - y0)})`;
+      }
+      for (const g of [e.g, e.lg, e.sg]) t ? g.setAttribute('transform', t) : g.removeAttribute('transform');
     }
   }
 
-  // The turn is over: everything back where it is drawn.
-  sitDown() {
-    for (const l of ['mist', 'notes']) this.layers[l].removeAttribute('transform');
-    for (const g of this.standing ?? []) g.removeAttribute('transform');
-    this.standing?.clear();
+  // An object's drawing at step `k` of the turn, its garden and shadow, as
+  // a view to keep (swapIn), drawn off the page; null if it is gone.
+  buildView(e, k) {
+    const cam = this.camera, live = cam.angle, id = Number(e.key.slice(1));
+    cam.angle = k * Camera.STEP;
+    try {
+      const built = e.key[0] === 's' ? this.buildStructure(this.world.structures.get(id))
+        : e.key[0] === 'f' ? this.buildFeature(this.world.features.get(id))
+          : this.buildStreet(e.key.slice(1));
+      if (!built) return null;
+      const [g, lg, sg] = [0, 1, 2].map(() => document.createElementNS(SVGNS, 'g'));
+      g.innerHTML = built.svg;
+      lg.innerHTML = built.ground;
+      sg.innerHTML = this.shadowSVG(built.shade, built.band);
+      return { k, angle: cam.angle, g, lg, sg, shade: built.shade, band: built.band, vents: built.vents?.length ? built.vents : null, ventsTurn: cam.angle, bounds: built.bounds, box: built.box, at: built.at };
+    } finally {
+      cam.angle = live;
+    }
+  }
+
+  // Put a view (buildView) in for the object's drawing, keeping the one it
+  // had, if drawn at a step, for when the turn comes back to it.
+  swapIn(e, view) {
+    e.views ??= new Map();
+    if (e.k != null && !e.views.has(e.k)) {
+      const { k, angle, g, lg, sg, shade, band, vents, ventsTurn, bounds, box, at } = e;
+      e.views.set(e.k, { k, angle, g, lg, sg, shade, band, vents, ventsTurn, bounds, box, at });
+    }
+    e.views.delete(view.k);
+    for (const n of ['g', 'lg', 'sg']) {
+      e[n].removeAttribute('transform');
+      e[n].parentNode?.replaceChild(view[n], e[n]);
+    }
+    Object.assign(e, view);
+    e.placedAt = view.angle;
+    e.mid = null;
+    e.slid = false;
+    this.keepViews(e);
+    if (this.mistLevel != null) this.coverMist(e);
+  }
+
+  // At most VIEWS kept for an object: those furthest from the step it shows
+  // go first (never the one a coasting turn will rest on).
+  keepViews(e) {
+    if (e.views.size <= VIEWS) return;
+    const far = (j) => (j === this.turnRest ? -1 : Math.min(Math.abs(j - e.k) % STEPS, STEPS - (Math.abs(j - e.k) % STEPS)));
+    const keys = [...e.views.keys()].sort((p, q) => far(q) - far(p));
+    for (const j of keys.slice(0, e.views.size - VIEWS)) e.views.delete(j);
+  }
+
+  // The painter's order of the objects as they now stand (isoSort): of all
+  // of them, or mid-turn (`all` false) of those in sight only, the others
+  // after them until the turn is over.
+  reorder(all = true) {
+    const live = [...this.objs.values(), ...this.ghosts.values()];
+    const sorted = all ? live : live.filter((e) => e.shown !== false);
+    const order = isoSort(sorted.map((e) => ({ ...e.bounds, entry: e })), this.camera.quarterView()).map((i) => i.entry);
+    placeInOrder(this.layers.objects, order.filter((e) => e.shown !== false).map((e) => e.g));
+    this.order = all ? order : order.concat(live.filter((e) => e.shown === false));
+    this.orderAngle = this.camera.angle;
+  }
+
+  // While the view rests on a step of the turn, the views of the steps
+  // either side (config.render.turnAhead each way, the nearest first,
+  // buildings first) are made ready for the objects in sight, for at most
+  // config.render.prepareBudget ms each frame, so a turn finds them drawn.
+  prepareTurn() {
+    const k = this.camera.step();
+    if (k == null || this.turning || this.objsAll || this.objsDirty.size || performance.now() - this.movedAt < PREPARE_REST) return;
+    if (this.preparedAt === k) return;
+    const { turnAhead, prepareBudget } = this.config.render;
+    const t0 = performance.now();
+    for (let d = 1; d <= turnAhead; d++) {
+      for (const kind of ['s', 'f', 'k']) {
+        for (const e of this.objs.values()) {
+          if (e.key[0] !== kind || e.shown === false || e.k !== k) continue;
+          for (const j of [(k + d) % STEPS, (k - d + STEPS) % STEPS]) {
+            if (e.views?.has(j)) continue;
+            if (performance.now() - t0 > prepareBudget) return;
+            const view = this.buildView(e, j);
+            if (!view) continue;
+            (e.views ??= new Map()).set(j, view);
+            this.keepViews(e);
+          }
+        }
+      }
+    }
+    this.preparedAt = k; // (all ready: nothing to look for until something changes)
+  }
+
+  // The turn is over: the sheet drawn anew at the angle it rests at, and
+  // whatever is still behind – from its views when it has one for this
+  // step (so what was shown last is what stays), or drawn anew.
+  land() {
+    this.turning = false;
+    this.turnRest = null;
+    const a = this.camera.angle, k = this.camera.step();
+    // the contours, water and brows as turned fade out over their drawing
+    // anew: on slopes the sheet can only come near it
+    const { ground } = this, terrain = this.layers.terrain;
+    if (ground.style.transform && drawEnabled()) {
+      const old = terrain.parentNode.insertBefore(terrain.cloneNode(true), terrain.nextSibling);
+      old.setAttribute('transform', this.sheet(this.drawn.angle, a));
+      old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SETTLE_FADE, easing: 'ease-out', fill: 'forwards' }).finished.then(() => old.remove(), () => old.remove());
+    }
+    Object.assign(ground.style, { transform: '', transformOrigin: '', willChange: '' });
+    this.dirty.add('terrain');
+    for (const l of SHEET) {
+      this.layers[l].removeAttribute('transform');
+      this.dirty.add(l);
+    }
+    if (this.linesAngle !== a) {
+      this.roadLines = null;
+      for (const l of LINES) {
+        this.ink[l]?.clearErasing();
+        this.dirty.add(l);
+      }
+      this.dirty.add('parked');
+    }
+    this.linesAngle = null;
+    for (const [key, c] of this.meadow) {
+      if (c.angle === a) continue;
+      if (c.turned) c.g.removeAttribute('transform');
+      c.turned = false;
+      this.meadowDirty.add(key);
+    }
+    for (const e of this.objs.values()) {
+      if (e.at && e.placedAt !== a) {
+        Object.assign(e, this.placeOf(e.at));
+        e.placedAt = a;
+      }
+      const view = e.angle !== a && k != null && !this.objsDirty.has(e.key) && e.views?.get(k);
+      if (view) this.swapIn(e, view);
+      else if (e.angle !== a) {
+        e.stale = true;
+        if (e.shown !== false && !this.objsDirty.has(e.key)) {
+          this.objsDirty.add(e.key);
+          this.viewOnly.add(e.key);
+          // not drawn here yet: drawn now, and what it showed fades out
+          // over it, where it showed it, rather than jumping
+          if (e.slid && drawEnabled()) {
+            for (const n of ['g', 'lg', 'sg']) {
+              const old = e[n];
+              if (!old.parentNode) continue;
+              e[n] = old.parentNode.insertBefore(document.createElementNS(SVGNS, 'g'), old);
+              old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SETTLE_FADE, easing: 'ease-out', fill: 'forwards' }).finished.then(() => old.remove(), () => old.remove());
+            }
+            e.slid = false;
+          }
+        }
+      }
+      if (e.slid) for (const g of [e.g, e.lg, e.sg]) g.removeAttribute('transform');
+      e.slid = false;
+    }
+    this.reorder();
+    this.preparedAt = null;
+    this.lastOverlay = null;
+    this.layers.overlay.style.visibility = '';
   }
 
   // Line widths for the zoom `z` (--stroke in styles.css): 1 / z rounded to
@@ -1501,6 +1767,7 @@ export class Renderer {
         if (!this.inView(box)) {
           if (['minX', 'maxX', 'minY', 'maxY'].some((k) => entry.bounds[k] !== bounds[k])) orderChanged = true;
           Object.assign(entry, { bounds, box, stale: true, bandStale: false });
+          if (!this.viewOnly.has(key)) entry.views?.clear(); // (drawn for another town or sun)
           this.cull([entry]);
           continue;
         }
@@ -1558,6 +1825,14 @@ export class Renderer {
       entry.bounds = b;
       entry.box = built.box;
       entry.at = built.at;
+      entry.mid = null;
+      entry.angle = entry.placedAt = this.camera.angle;
+      entry.stale = false;
+      // drawn anew for the same town: the views it keeps still hold
+      // (land); for a changed one they are old
+      if (!this.viewOnly.has(key)) entry.views?.clear();
+      entry.k = this.camera.step();
+      entry.slid = false;
       entry.band = built.band;
       entry.vents = built.vents?.length ? built.vents : null;
       entry.ventsTurn = this.camera.angle;
@@ -1774,7 +2049,10 @@ export class Renderer {
   // now – without repainting the objects (mark the layer dirty after a
   // change to SUN).
   renderShadows() {
-    for (const e of this.objs.values()) e.sg.innerHTML = this.shadowSVG(e.shade, e.band);
+    for (const e of this.objs.values()) {
+      e.sg.innerHTML = this.shadowSVG(e.shade, e.band);
+      e.views?.clear(); // (their shadows are for the old sun)
+    }
   }
 
   paintStructure(s, camera = this.camera) {
@@ -2252,7 +2530,9 @@ export class Renderer {
       const show = !this.hiddenKinds.has(e.key?.[0]) && !this.inWoods(e) && (!e.box || !this.cullOn || this.inView(e.box));
       if (show === e.shown) continue;
       e.shown = show;
-      if (show && e.stale) this.objsDirty.add(e.key); // drawn for an old view: redraw (renderObjects)
+      this.preparedAt = null; // (another in sight to make ready for a turn)
+      // drawn for an old view: redraw (renderObjects; mid-turn turnFrame does)
+      if (show && e.stale && !this.turning) this.objsDirty.add(e.key);
       // out of sight is out of the page, not just hidden: the browser still
       // restyles hidden elements whenever the line widths change (--stroke)
       if (show) {
