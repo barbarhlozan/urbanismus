@@ -107,13 +107,13 @@
       const g = new Painter(cam, { x, y }, rotation, seed);
       g.rigid = [x, y];
       try { def.draw(g, { type, seed, id: items.length, node: 0, rotation }); } catch (e) { console.warn(type, e.message); return; }
-      items.push({ d: depth(x, y) + 0.5, kind: 'thing', x, y, body: g.toSVG(), svg: g.toGroundSVG() + shadowSVG({ feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+      items.push({ d: depth(x, y) + 0.5, kind: 'thing', x, y, body: g.toSVG(), svg: g.toGroundSVG() + shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sun) + g.toSVG() });
     }
     function tree(x, y, kind, h) {
       const g = new Painter(cam, { x, y }, 0, Math.floor(rnd() * 1e9));
       g.rigid = [x, y];
       drawTree(g, 0, 0, kind, h);
-      items.push({ d: depth(x, y), kind: 'thing', x, y, body: g.toSVG(), svg: shadowSVG({ feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+      items.push({ d: depth(x, y), kind: 'thing', x, y, body: g.toSVG(), svg: shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sun) + g.toSVG() });
     }
     // a line on the ground cut into short pieces, each at its own depth
     function groundLine(pts, cls, piece = 0.6) {

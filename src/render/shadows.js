@@ -113,13 +113,15 @@ export function hash(a, b) {
 
 // The strips the feet cast on the ground, each a parallelogram in world
 // points: a foot turned away from the sun and tall enough, and the same
-// foot shifted along the sun by its height.
+// foot shifted along the sun by the height its wall's top is level to (a
+// gable end casts the rest as a face, castShapes).
 export function castStrips(feet, sun) {
   const [sx, sy] = sun.cast;
   const out = [];
   for (const f of feet) {
     if (awayFrom(f.n, sun) <= 0 || f.h < sun.low) continue;
-    const [dx, dy] = [sx * f.h, sy * f.h];
+    const z = f.level ?? f.h;
+    const [dx, dy] = [sx * z, sy * z];
     out.push([f.a, f.b, [f.b[0] + dx, f.b[1] + dy], [f.a[0] + dx, f.a[1] + dy]]);
   }
   return out;
@@ -131,6 +133,8 @@ export function castStrips(feet, sun) {
 //                              z above the ground at `at`
 //   cone   { at, z0, z1, r }   a spruce's: r across at z0, a point at z1
 //   stem   { at, z }           a trunk up to z
+//   face   { pts }             a flat face off the ground: a roof plane, a
+//                              gable, a chimney's wall ([x, y, z] each)
 // as { polys (convex, for hatchRuns), lines (each a pen line) }.
 export function castShapes(casts = [], sun) {
   const [sx, sy] = sun.cast;
@@ -148,6 +152,8 @@ export function castShapes(casts = [], sun) {
       const [mx, my] = along(s.at, s.z0), tip = along(s.at, s.z1), n = 10;
       const ring = Array.from({ length: n }, (_, i) => [mx + Math.cos((i / n) * 2 * Math.PI) * s.r, my + Math.sin((i / n) * 2 * Math.PI) * s.r]);
       polys.push(hull([...ring, tip]));
+    } else if (s.kind === 'face') {
+      polys.push(hull(s.pts.map(([x, y, z]) => along([x, y], z))));
     } else if (s.kind === 'stem' && s.z > 0) {
       lines.push([s.at, along(s.at, s.z)]);
     }

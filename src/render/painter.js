@@ -614,7 +614,7 @@ export class Painter {
     this._ensure(...points[0]);
     this._spread(points);
     const n = newellNormal(points);
-    if (opts.shadow !== false) this._footOf(points, n);
+    if (opts.shadow !== false && !this._footOf(points, n)) this._castFace(points);
     if (!this._facing(n, points[0])) return this;
     this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
     if (opts.shadow !== false) this._shade(points, n);
@@ -659,15 +659,30 @@ export class Painter {
   }
 
   // Record where a wall stands on the ground (its foot: world ends, height,
-  // outward normal), for the shadow it casts (render/shadows.js).
+  // the height its top is level to, outward normal), for the shadow it
+  // casts (render/shadows.js). A wall whose top is not level (a gable end
+  // drawn as one face) casts the rest of itself as a face (_castFace).
+  // True if it stands on the ground, so it casts from its foot.
   _footOf(points, n) {
-    if (!this.casting) return;
+    if (!this.casting) return false;
     const w = this._wallNormal(n);
-    if (!w) return;
+    if (!w) return false;
     const low = points.filter((p) => p[2] <= ON_GROUND);
-    if (low.length !== 2) return;
-    const h = Math.max(...points.map((p) => p[2]));
-    this.feet.push({ a: this.toWorld(low[0][0], low[0][1]), b: this.toWorld(low[1][0], low[1][1]), h, n: w });
+    if (low.length !== 2) return false;
+    const tops = points.filter((p) => p[2] > ON_GROUND).map((p) => p[2]);
+    const h = Math.max(...tops), level = Math.min(...tops);
+    this.feet.push({ a: this.toWorld(low[0][0], low[0][1]), b: this.toWorld(low[1][0], low[1][1]), h, level, n: w });
+    if (h - level > ON_GROUND) this._castFace(points);
+    return true;
+  }
+
+  // A face above the ground – a roof plane, a gable, a chimney's or an
+  // upper storey's wall – casts its own outline along the sun
+  // (render/shadows.js castShapes); a wall standing on the ground casts
+  // from its foot instead (_footOf).
+  _castFace(points) {
+    if (!this.casting || Math.max(...points.map((p) => p[2])) < SUN.low) return;
+    this.casts.push({ kind: 'face', pts: points.map(([x, y, z]) => [...this.toWorld(x, y), z]) });
   }
 
   // A pitched roof plane: a face whose first edge is the eave, hatched with

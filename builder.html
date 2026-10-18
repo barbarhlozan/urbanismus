@@ -179,7 +179,7 @@
     function render(i) {
       const g = painter();
       STEPS[i].draw(g);
-      const shade = shadowSVG({ feet: g.feet, project: g.groundProjector() }, sunFor(cam));
+      const shade = shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sunFor(cam));
       return { shadows: shade, solids: g.toSVG() };
     }
 

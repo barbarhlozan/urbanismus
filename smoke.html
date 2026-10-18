@@ -55,13 +55,13 @@
       g.rigid = [x, y];
       DEF[type].draw(g, { type, seed, id: items.length, node: 0, rotation });
       vents.push(...g.vents);
-      items.push({ d: cam.depth(x, y) + 0.5, svg: g.toGroundSVG() + shadowSVG({ feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+      items.push({ d: cam.depth(x, y) + 0.5, svg: g.toGroundSVG() + shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sun) + g.toSVG() });
     }
     function tree(x, y, kind, h) {
       const g = new Painter(cam, { x, y }, 0, Math.floor(rnd() * 1e9));
       g.rigid = [x, y];
       drawTree(g, 0, 0, kind, h);
-      items.push({ d: cam.depth(x, y), svg: shadowSVG({ feet: g.feet, project: g.groundProjector() }, sun) + g.toSVG() });
+      items.push({ d: cam.depth(x, y), svg: shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sun) + g.toSVG() });
     }
     building('vytopna-medium', 3.4, 3.6, 1);
     building('house', 5.3, 4.5, 1);
