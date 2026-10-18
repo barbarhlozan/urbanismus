@@ -5,9 +5,9 @@
 // are; Esc (or Move) picks them up again. The lens starts wide, at 28mm
 // (Shift, or Lens in the dock, goes on to 42 and 80).
 //
-// It's picked up with the camera in the bottom-right corner (ui/hud.js) or
-// P; its options – Lens, Take, Move – and the × that puts it down are in
-// the Build menu's dock, as a building's are.
+// It's picked up with the camera at the end of the Build menu's bottom row
+// (ui/buildMenu.js) or P; its options – Lens, Take, Move – and the × that
+// puts it down are in the Build menu's dock, as a building's are.
 //
 // Touch has no hover to aim with: a tap places the photographer, a second
 // tap sets where they look (the cone stays there, tap again to turn), and
@@ -41,7 +41,7 @@ export function createPhotoTool({ world }, { shoot }) {
     id: 'photo',
     label: t('control.photo'),
     hotkey: 'p',
-    toolbar: false, // not in the Build menu: its button is the camera in the corner (hud.js)
+    toolbar: false, // not a tile: its button is the camera at the end of the Build menu's bottom row
 
     enter() {
       place(null);

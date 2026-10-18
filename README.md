@@ -16,7 +16,8 @@ Everything you can build is in the **Build** menu, bottom right, in the groups t
 the time used: Doprava (transport), Bydlení (housing), Výroba (industry, mines, farms),
 Občanská vybavenost (civic amenities: shops, pubs, offices, services, school, culture – none of
 it private, so there's no separate "business"), Prostranství (parks and squares) and Památky
-(landmarks), plus Erase. Every building is its own thing to build: nothing upgrades into
+(landmarks). Along its bottom (under the rail on a computer) stand, in this order, Zpět and
+Znovu (undo, redo), Erase, Terrain and the camera. Every building is its own thing to build: nothing upgrades into
 something else. Open a group to see its tools; click a tool to pick it up and click it
 again (or close its group, or **Esc**) to put it down. The **–** folds the menu into a single
 Build button; picking a tool folds it too, out of the way, and it comes back when you put the
@@ -28,7 +29,7 @@ put it down.
 
 **Zpět** (Undo) takes back your last change to the town – a building, a road, a demolition, a
 whole click's worth – and **Znovu** (Redo) puts it back. On a computer both stand in the box
-under the Build rail, beside Erase and Terrain: **Zpět** always, struck through while there is
+under the Build rail, first, before Erase: **Zpět** always, struck through while there is
 nothing to take back, and **Znovu** right after an undo, until you change something else. On a
 phone they stand in the dock, **Zpět** beside the Build button (or before the × of the tool in
 hand) and **Znovu** after an undo. Neither is shown in photo mode. **⌘Z** / **Ctrl+Z** and **⇧⌘Z** / **Ctrl+Y**
@@ -90,7 +91,7 @@ a Czech or German layout.
 - **Památky** (**6**): chapel, church, town hall (**Shift** switches small, medium, large),
   memorial, castle, tower, stadium
 - **Backspace** – erase
-- **P** or the **camera** in the bottom-right corner – photo mode: click where
+- **P** or the **camera**, last in the Build menu's bottom row – photo mode: click where
   to stand, aim with the pointer, click to take a picture of the town from street level;
   its options are in the dock: **Lens** (**Shift**: 28 mm to start, then 42 and 80 mm),
   **Move**, and on a phone **Take the photo**. It opens as a print you can save as a PNG
@@ -102,7 +103,7 @@ a Czech or German layout.
 - **Right-button drag** – turn the view, to any angle; let go mid-turn and it coasts on
   a little and settles. On a phone, twist two fingers. Buildings slide round upright
   while it turns and are drawn anew from the new side once it rests
-- **Terrain** – contour lines: a button beside Erase (under the Build rail on a computer, in
+- **Terrain** – contour lines: a button between Erase and the camera (under the Build rail on a computer, in
   the panel's bottom row on a phone), crossed while on; once on they stay on whatever's in
   hand, until switched off there (off by default, they are the most expensive thing to draw)
 
