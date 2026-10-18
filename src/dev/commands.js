@@ -7,6 +7,7 @@ import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { planRoute } from '../roads/routing.js';
 import { eraseTarget } from '../tools/erase.js';
 import { ROAD_MARK } from '../render/roadMarks.js';
+import { SUN } from '../render/shadows.js';
 
 const STEP = 0.5; // simulated seconds per step while jumping
 
@@ -152,6 +153,17 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
     },
     log: (n = 20) => annotations.lines.slice(0, n), // what the systems reported, newest first
     seed: () => world.seed,
+    // the sun and the pens of the shadows (SUN in render/shadows.js): the
+    // settings given are changed, e.g. { length: 1.5, hatch: { gap: 0.03,
+    // pen: 3 } }, and everything is drawn again with them
+    sun(over = {}) {
+      for (const [k, v] of Object.entries(over)) {
+        if (!(k in SUN)) throw new Error(`cmd.sun: no setting '${k}' (${Object.keys(SUN).join(', ')})`);
+        SUN[k] = v && typeof v === 'object' && SUN[k] ? { ...SUN[k], ...v } : v;
+      }
+      if (Object.keys(over).length) renderer?.invalidate();
+      return structuredClone(SUN);
+    },
     // the hand of the road marks on buildings nothing reaches (render/roadMarks.js)
     roadMark(style) {
       if (style === undefined) return ROAD_MARK.style;
@@ -176,6 +188,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         'cmd.tree(x, y)',
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
+        'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',
         `cmd.roadMark(${ROAD_MARK.styles.map((k) => `'${k}'`).join(' | ')})   now: '${ROAD_MARK.style}'`,
         'cmd.seed()                the map seed',
         'cmd.save()                download the town as a file',

@@ -24,12 +24,19 @@
 // (the light the buildings' shadows come from) give the volume, hidden
 // when zoomed far out, and a short stroke on the ground at the foot
 // (footStroke) stands each tree on the map, as each building stands on one.
+// Each leaves its crown's and trunk's shapes for the shadow it casts on
+// the ground (Painter.cast, render/shadows.js castShapes): a round one
+// from a broadleaf or a shrub, a pointed one from a spruce.
 
 import { SUN } from '../src/render/shadows.js';
 
 export const TREE_KINDS = ['spruce', 'sapling', 'spreading'];
 
 export const LEAFY = true;
+
+// A crown's width on the ground for its width in the drawing: a glyph's
+// units are the screen's, where a grid unit across shows a little shorter.
+const CROWN_ACROSS = 0.8;
 
 export function drawTree(g, x, y, kind, height, simple = false) {
   g.solid(x, y, 0);
@@ -87,6 +94,7 @@ export function drawShrub(g, x, y, height) {
     const at = (a, k) => [Math.sin(a) * rx * k, cy + Math.cos(a) * ry * k * (Math.cos(a) < 0 ? 0.8 : 1)];
     const gap = g.range(0.6, 0.9), a0 = -Math.PI + gap, a1 = Math.PI - gap;
     const { pen, fill } = loopCrown(g, at, a0, a1, rx, { lobes: [2, 3] }, false);
+    g.cast(x, y, { kind: 'crown', z: cy, r: rx * CROWN_ACROSS, rz: ry });
     // closed along the ground underneath, in a line that runs on a little
     const [s0, s1] = [fill[0], fill[fill.length - 1]], run = g.range(1.05, 1.2);
     pen.push([[s1[0], s1[1]], [s1[0] + (s0[0] - s1[0]) * run, Math.min(s0[1], s1[1]) * g.range(0.3, 0.7)]]);
@@ -219,6 +227,8 @@ function drawLeafy(g, x, y, kind, H, simple) {
 
   const { pen, fill } = key === 'poplar' ? raggedCrown(g, at, a0, a1, simple) : loopCrown(g, at, a0, a1, rx, p, simple);
 
+  g.cast(x, y, { kind: 'crown', z: cy, r: (side[0] + side[1]) / 2 * CROWN_ACROSS, rz: ry });
+  g.cast(x, y, { kind: 'stem', z: vb });
   footStroke(g, x, y, H);
   if (!simple && g.chance(0.5)) grassTicks(g, x, y, H);
   sketchTrunk(g, x, y, key, H, vb, ox, rx, simple);
@@ -344,6 +354,8 @@ function sketchSpruce(g, x, y, H, simple) {
     const i = g.int(2, pen.length - 3);
     pen = [...pen.slice(0, i), ...penLoop(g, pen[i], pen[i + 1], at(0, crown0 + ch * 0.4), W * g.range(0.15, 0.25)), ...pen.slice(i)];
   }
+  g.cast(x, y, { kind: 'cone', z0: crown0, z1: H, r: W * CROWN_ACROSS });
+  g.cast(x, y, { kind: 'stem', z: crown0 });
   footStroke(g, x, y, H);
   if (!simple && g.chance(0.4)) grassTicks(g, x, y, H);
   g.strokes(x, y, 0, [[at(0, 0), at(0, crown0 + ch * 0.3)]], { cls: 'trunk' });

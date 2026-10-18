@@ -1677,11 +1677,12 @@ export class Renderer {
     return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), band)), shade: this.shadeOf(painter), vents: painter.vents, ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top, anchor: painter.rigid }) };
   }
 
-  // An object's shadow (shadows.js): the feet of its
-  // walls, in world points, and how its ground projects – kept on the object's entry, so the shadow alone
-  // can be drawn again for another sun (renderShadows).
+  // An object's shadow (shadows.js): the feet of its walls and the other
+  // shapes it casts from, in world points, and how its ground projects –
+  // kept on the object's entry, so the shadow alone can be drawn again for
+  // another sun (renderShadows).
   shadeOf(painter) {
-    return painter.feet.length ? { feet: painter.feet, project: painter.groundProjector() } : null;
+    return painter.feet.length || painter.casts.length ? { feet: painter.feet, casts: painter.casts, project: painter.groundProjector() } : null;
   }
 
   shadowSVG(shade, band) {

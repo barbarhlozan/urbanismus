@@ -82,3 +82,18 @@ test('cmd.undo and cmd.redo take back and put back the last change', () => {
   assert.equal(cmd.redo().ok, true);
   assert.equal(world.roads.edgeCount, 8);
 });
+
+test('cmd.sun changes the shadow settings it is given and no others', async () => {
+  const { SUN } = await import('../src/render/shadows.js');
+  const before = structuredClone(SUN);
+  const { cmd } = kit();
+  try {
+    const now = cmd.sun({ length: 1.5, hatch: { pen: 3 } });
+    assert.equal(now.length, 1.5);
+    assert.equal(now.hatch.pen, 3);
+    assert.equal(now.hatch.gap, before.hatch.gap);
+    assert.throws(() => cmd.sun({ colour: 'red' }));
+  } finally {
+    Object.assign(SUN, before);
+  }
+});

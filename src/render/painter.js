@@ -84,7 +84,7 @@ import { color } from '../theme.js';
 import { mulberry32 } from '../core/random.js';
 import { MinHeap } from '../core/heap.js';
 import { siteWalks } from '../roads/siteWalks.js';
-import { SUN, sunFor, tierOf, tierClass, awayFrom, strokeShare, wallStrokes } from './shadows.js';
+import { SUN, sunFor, tierOf, tierClass, penClass, awayFrom, strokeShare, wallStrokes } from './shadows.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 // Photos (a perspective camera): roof hatching at most this many px apart
@@ -253,6 +253,7 @@ export class Painter {
     this._tc = 1;
     this._ts = 0;
     this.feet = [];       // walls' feet on the ground: { a, b, h, n } world, see render/shadows.js
+    this.casts = [];      // other shapes that cast a shadow (trees), world, see Painter.cast
     this.casting = true;  // false: draw no shadows (icons)
   }
 
@@ -642,7 +643,7 @@ export class Painter {
       d[tierOf(k)] += this._sketch([back(a), back(b)], false, 0.7).d;
     }
     d.forEach((path, t) => {
-      if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln wall-shade${tierClass(t, 'rh')}`)}/>`);
+      if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln wall-shade${penClass(SUN.strokes.pen)}${tierClass(t, 'rh')}`)}/>`);
     });
   }
 
@@ -1104,6 +1105,14 @@ export class Painter {
     return this.groundLine(pts, opts);
   }
 
+  // A shape standing at local (x, y) that casts a shadow on the ground:
+  // shape = { kind, … } as render/shadows.js castShapes takes, without
+  // `at` (heights from the ground, grid units).
+  cast(x, y, shape) {
+    if (this.casting) this.casts.push({ ...shape, at: this.toWorld(x, y) });
+    return this;
+  }
+
   // Local point -> world (x, y).
   toWorld(x, y) {
     const [wx, wy] = this._world(x, y, 0);
@@ -1159,6 +1168,7 @@ export class Painter {
   // Combine another painter's output (same camera) into this one.
   merge(other) {
     this.feet.push(...other.feet);
+    this.casts.push(...other.casts);
     this.top = Math.max(this.top, other.top + other.oz - this.oz);
     this.solids.push(...other.solids);
     this.ground.push(...other.ground);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SUN, groundDir, sunFor, castStrips, hatchRuns, shadowPaths, wallStrokes, strokeShare, tierOf } from '../src/render/shadows.js';
+import { SUN, groundDir, sunFor, castStrips, castShapes, hatchRuns, shadowPaths, wallStrokes, strokeShare, tierOf } from '../src/render/shadows.js';
 
 // the sun casting along +x
 const sun = (over = {}) => ({ ...SUN, ...over, cast: [SUN.length, 0] });
@@ -67,4 +67,22 @@ test('wall strokes: more the further a wall is turned, ragged and thinning out',
 
 test('density tiers: every 8th, 4th, other', () => {
   assert.deepEqual([-8, -4, -3, -2, 0, 1, 2, 4, 8].map(tierOf), [0, 1, 3, 2, 0, 3, 2, 1, 0]);
+});
+
+test('a tree casts its crown along the sun, and its trunk as a line', () => {
+  const s = sun();
+  const { polys, lines } = castShapes([
+    { kind: 'crown', at: [0, 0], z: 1, r: 0.2, rz: 0.3 },
+    { kind: 'cone', at: [5, 0], z0: 0.2, z1: 1.2, r: 0.15 },
+    { kind: 'stem', at: [0, 0], z: 0.7 },
+  ], s);
+  assert.equal(polys.length, 2);
+  const xs = (p) => p.map(([x]) => x);
+  // the crown's shadow lies round its middle shifted by its height along the sun
+  assert.ok(Math.abs((Math.max(...xs(polys[0])) + Math.min(...xs(polys[0]))) / 2 - SUN.length) < 1e-9);
+  // the spruce's reaches to its point's shadow
+  assert.ok(Math.abs(Math.max(...xs(polys[1])) - (5 + 1.2 * SUN.length)) < 1e-9);
+  assert.deepEqual(lines, [[[0, 0], [0.7 * SUN.length, 0]]]);
+  const d = shadowPaths({ casts: [{ kind: 'crown', at: [0, 0], z: 1, r: 0.2, rz: 0.3 }], project }, s).join('');
+  assert.ok(d.length > 0);
 });
