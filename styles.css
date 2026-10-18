@@ -1575,8 +1575,10 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 /* chosen: hatched like a roof, in the detail colour, under the control's
    drawing and word; the word gets a halo of paper so it reads clear */
 .pm .pm-chosen { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
-#ui :is(.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab) > .pm { z-index: 0; }
-#ui :is(.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab) > :not(.pm) { position: relative; z-index: 1; }
+/* (the marks go behind what's in the control, within the control's own
+   layer, so its drawing and word sit over the hatching) */
+#ui :is(.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab) { isolation: isolate; }
+#ui :is(.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab) > .pm { z-index: -1; }
 #ui :is(.bm-tab.on, .bm-tool.active, .bm-camera.on, .controls button.on, .chron-tab.on) > :not(.pm) {
   text-shadow: 0 0 2px var(--bg), 0 0 2px var(--bg), 0 0 3px var(--bg);
 }
