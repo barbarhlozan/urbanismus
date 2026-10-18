@@ -1520,12 +1520,24 @@ export class Renderer {
       const slide = e.shown !== false && e.angle !== undefined && e.angle !== a;
       if (!slide && !e.slid) continue;
       e.slid = slide;
-      let t = null;
+      e.slideT = '';
       if (slide) {
         const [x0, y0] = this.footAt(e, e.angle), [x1, y1] = this.footAt(e, a);
-        t = `translate(${r2(x1 - x0)} ${r2(y1 - y0)})`;
+        e.slideT = `translate(${r2(x1 - x0)} ${r2(y1 - y0)})`;
       }
-      for (const g of [e.g, e.lg, e.sg]) t ? g.setAttribute('transform', t) : g.removeAttribute('transform');
+      this.placeGroups(e);
+    }
+  }
+
+  // An object's groups where they show: moved by its slide mid-turn
+  // (turnFrame), and a forest clump's drawing leaning in the wind as well
+  // (swayTrees) – both in the one transform, so neither undoes the other.
+  placeGroups(e) {
+    const lean = e.sway?.[0]?.el === e.g ? e.sway[0].t : '';
+    for (const g of [e.g, e.lg, e.sg]) {
+      const t = [e.slideT, g === e.g ? lean : ''].filter(Boolean).join(' ');
+      if (t) g.setAttribute('transform', t);
+      else g.removeAttribute('transform');
     }
   }
 
@@ -1569,7 +1581,16 @@ export class Renderer {
     e.placedAt = view.angle;
     e.mid = null;
     e.slid = false;
+    e.slideT = '';
     e.hide = e.hidBare = ''; // (classes on the groups swapped out)
+    // a clump leaning in the wind leans as far in its new drawing, at once
+    const lean = e.sway?.[0]?.e ? e.sway[0].lean : 0;
+    if (lean) {
+      this.swayUnits(e);
+      const u = e.sway[0];
+      if (u) Object.assign(u, { lean, t: `matrix(1 0 ${lean} 1 ${r2(-lean * u.foot[1])} 0)` });
+      this.placeGroups(e);
+    }
     this.keepViews(e);
     if (this.mistLevel != null) this.coverMist(e);
   }
@@ -1687,7 +1708,10 @@ export class Renderer {
           }
         }
       }
-      if (e.slid) for (const g of [e.g, e.lg, e.sg]) g.removeAttribute('transform');
+      if (e.slid) {
+        e.slideT = '';
+        this.placeGroups(e);
+      }
       e.slid = false;
       if (e.hidBare) {
         for (const g of [e.g, e.lg]) g.classList.remove('bare');
@@ -2639,7 +2663,9 @@ export class Renderer {
       }
       if (k === u.lean) continue;
       u.lean = k;
-      if (k) u.el.setAttribute('transform', `matrix(1 0 ${k} 1 ${r2(-k * u.foot[1])} 0)`);
+      u.t = k ? `matrix(1 0 ${k} 1 ${r2(-k * u.foot[1])} 0)` : '';
+      if (u.e) this.placeGroups(u.e); // (a clump: with its slide, mid-turn)
+      else if (u.t) u.el.setAttribute('transform', u.t);
       else u.el.removeAttribute('transform');
     }
     this.swayIdle = !on;
@@ -2650,15 +2676,15 @@ export class Renderer {
   swayUnits(e) {
     e.swayAt = e.at;
     e.sway = [];
-    const unit = (el, foot) => {
+    const unit = (el, foot, whole) => {
       const h = Math.abs(Math.sin(foot[0] * 12.9898 + foot[1] * 78.233) * 43758.5453) % 1;
-      e.sway.push({ el, foot, h, ph: foot[0] * 0.03 + foot[1] * 0.05, lean: 0 });
+      e.sway.push({ el, foot, h, ph: foot[0] * 0.03 + foot[1] * 0.05, lean: 0, t: '', e: whole });
     };
     if (e.key[0] === 'f') {
       const f = this.world.features.get(Number(e.key.slice(1)));
       if (!f) return;
       const [nx, ny] = this.world.grid.xy(f.node);
-      unit(e.g, this.project(nx + f.ox, ny + f.oy));
+      unit(e.g, this.project(nx + f.ox, ny + f.oy), e);
     } else if (e.key[0] === 's') {
       for (const el of e.g.querySelectorAll('g.sway')) unit(el, el.dataset.foot.split(' ').map(Number));
     }
