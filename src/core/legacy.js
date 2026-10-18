@@ -70,6 +70,40 @@ const SPLIT = {
     { works: ['strojirna', 'halls'], heating: 'vytopna-large', chemical: 'cukrovar', grain: 'zzn-large', panel: 'panelarna', power: 'elektrarna', lime: 'vapenka' }],
 };
 
+// Parks before version 5, when one tool held looks that were different
+// places (a playground in the green, a sports ground in the meadow): old
+// type -> its kinds then, in order, and kind -> what it is now (a type, or
+// [type, kind]). A kind the player chose is in s.data.kind; otherwise the
+// seed picked it (the first random number of the drawing). The pavilion
+// park and the city park are gone: their looks went to the garden, the
+// green, the summer cinema.
+const REGROUPED = {
+  green: [['trees', 'trees', 'playground', 'memorial', 'pitch'],
+    { trees: 'green', memorial: 'green', playground: 'playground', pitch: 'pitch' }],
+  meadow: [['meadow', 'woods', 'playground', 'sports', 'forest'],
+    { meadow: ['meadow', 'meadow'], woods: ['meadow', 'woods'], playground: 'playground-large', sports: 'sports-ground', forest: 'forest-park' }],
+  'garden-park': [['garden', 'flowers', 'playground', 'kiosk'],
+    { garden: ['garden-park', 'garden'], flowers: ['garden-park', 'flowers'], playground: 'playground', kiosk: ['garden-park', 'garden'] }],
+  'pavilion-park': [['pavilion', 'bandstand', 'formal'],
+    { pavilion: 'green', bandstand: ['garden-park', 'flowers'], formal: ['garden-park', 'formal'] }],
+  'city-park': [['city', 'formal', 'spa', 'cinema'],
+    { city: 'pond-park', formal: 'garden-park-large', spa: ['meadow', 'avenue'], cinema: 'summer-cinema' }],
+};
+
+// A saved park of before version 5 as the tool its look belongs to now.
+export function regroup(s) {
+  const was = REGROUPED[s.type];
+  if (!was) return s;
+  const [kinds, to] = was;
+  const kind = kinds.includes(s.data?.kind) ? s.data.kind : kinds[Math.floor(mulberry32(drawSeed(s))() * kinds.length)];
+  const [type, look] = [].concat(to[kind]);
+  s.type = type;
+  s.data = { ...s.data };
+  if (look) s.data.kind = look;
+  else delete s.data.kind;
+  return s;
+}
+
 // A saved structure of a retired type as the one that replaced it.
 export function unretire(s) {
   const split = SPLIT[s.type];

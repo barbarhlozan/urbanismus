@@ -1,14 +1,14 @@
 // Squares: 1×1 and 2×2 paved public spaces, each kind its own thing to
-// build – a plaza, fountain squares, a monument square, a market square, a
-// grand square, and the modern kinds: a shopping precinct, a bus station, a
-// parade square with a tribune. Pedestrians like them. Reachable by road or
-// footpath.
+// build (its sizes one tool) – a plaza, a fountain square, a monument
+// square, a market square, and the modern kinds: a shopping precinct, a
+// parade square with a tribune. The ČSAD bus station is paved like them but
+// built from Doprava. Pedestrians like them. Reachable by road or footpath.
 // Paving fills g.site (up to the road, merging with neighbouring squares
 // and parks), without a border; trees and monuments stay near the middle.
 
 import {
   tree, bench, lamp, fountain, statue, paving, sculpture, planter, streetClock, phoneBooth,
-  newsKiosk, noticeboard, flagpole, star,
+  newsKiosk, noticeboard, flagpole, star, kindOf,
 } from './kit.js';
 
 const common = {
@@ -68,7 +68,7 @@ function tribune(g, x, y, w = 0.6) {
 
 // ----- 1×1 -----
 
-// Paving with two trees, now and then the bust of a poet or a teacher.
+// Paving with two trees.
 export const plaza = {
   ...common,
   id: 'plaza',
@@ -78,7 +78,6 @@ export const plaza = {
   draw(g) {
     pave(g, 0.14);
     for (const [x, y] of g.pick([[[-0.28, -0.28], [0.28, 0.28]], [[0.28, -0.28], [-0.28, 0.28]]])) tree(g, x, y, 1);
-    if (g.chance(0.4)) statue(g, 0, 0, 'bust'); // a poet or a teacher
   },
 };
 
@@ -118,17 +117,21 @@ export const precinct = {
   },
 };
 
-// A statue on a round base, a tree at each corner.
+// A statue on a round base, a tree at each corner: a poet, a teacher, a
+// worker.
 export const monumentSquare = {
   ...common,
   id: 'monument-square',
   name: 'Monument square',
   blurb: 'A statue among lindens',
+  size: 'Small',
   footprint: [[0, 0]],
-  draw(g) {
+  kinds: ['statue', 'bust'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
     pave(g, 0.14);
     g.groundCircle(0, 0, 0.2);
-    statue(g, 0, 0, null, 1.5);
+    statue(g, 0, 0, kind === 'bust' ? 'bust' : null, 1.5);
     for (const x of [-0.36, 0.36]) for (const y of [-0.36, 0.36]) tree(g, x, y, 0.9);
     lamp(g, -0.2, 0.05);
   },
@@ -153,9 +156,11 @@ export const marketSquare = {
   },
 };
 
-// Bus station: platforms with curved shelters, a clock, a kiosk.
+// ČSAD bus station: platforms with curved shelters, a clock, a kiosk.
+// Paved like a square, but in Doprava with the stations.
 export const busStation = {
   ...common,
+  category: 'transport',
   id: 'bus-station',
   name: 'Bus station',
   blurb: 'Platforms under curved shelters',
@@ -213,20 +218,23 @@ export const precinctLarge = {
   },
 };
 
-// The town's centrepiece in two rings of paving: an obelisk, an equestrian
-// statue or a statue group; trees along two sides, a kiosk.
+// The large monument square, the town's centrepiece in two rings of
+// paving: an obelisk, an equestrian statue or a statue group; trees along
+// two sides, a kiosk.
 export const grandSquare = {
   ...common,
   id: 'grand-square',
-  name: 'Grand square',
-  blurb: 'An obelisk or a statue in the middle',
+  name: 'Monument square',
+  blurb: 'A statue among lindens',
+  size: 'Large',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
-  draw(g) {
+  kinds: ['obelisk', 'equestrian', 'pair'],
+  draw(g, s) {
+    const centre = kindOf(g, s, this.kinds);
     const m = 0.5;
     pave(g, 0.16);
     g.groundCircle(m, m, 0.5);
     g.groundCircle(m, m, 0.3);
-    const centre = g.pick(['obelisk', 'equestrian', 'pair']);
     if (centre === 'obelisk') {
       g.box(m - 0.09, m - 0.09, 0, 0.18, 0.18, 0.08);
       g.box(m - 0.03, m - 0.03, 0.08, 0.06, 0.06, 0.35);

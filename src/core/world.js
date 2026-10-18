@@ -21,14 +21,14 @@ import { NetworkLayer } from '../roads/layer.js';
 import { validateRoute } from '../roads/routing.js';
 import { STRUCTURE_TYPES, footprintOffsets, newSeed } from '../../structures/index.js';
 import { mulberry32 } from './random.js';
-import { upgrade, upgradeMarks, unretire } from './legacy.js';
+import { upgrade, upgradeMarks, unretire, regroup } from './legacy.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { History } from './history.js';
 
 // grade(): how finely a segment's climb is measured along it (grid units)
 const GRADE_STEP = 0.2;
 
-export const SAVE_VERSION = 4; // 3: railways on the fine grid; 4: no building levels (legacy.js)
+export const SAVE_VERSION = 5; // 3: railways on the fine grid; 4: no building levels (legacy.js); 5: parks regrouped
 
 export class World {
   constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1 }) {
@@ -1136,6 +1136,7 @@ export class World {
       s.seed ??= Math.imul(s.id, 2654435761) >>> 0;
       s.data ??= {};
       if ((data.version ?? 1) < 4) upgrade(s); // buildings with levels: the structure each level is now
+      if ((data.version ?? 1) < 5) regroup(s); // parks: each look to the tool it belongs to now
       unretire(s); // buildings taken out of the game: what replaced them
       if (!STRUCTURE_TYPES[s.type]) continue;
       // Stations saved facing away from their track: turn them round.

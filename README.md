@@ -135,11 +135,11 @@ folded there and folds again once you pick a tool.
   war memorial, a castle) and the new one (a stadium or Sokol hall, and a TV
   tower or lookout, which only goes on a hilltop). A church sometimes appears by itself in a
   big enough neighbourhood without one.
-- **Občanská vybavenost** also has a house of culture and a cemetery. **Prostranství** lists
-  every kind of park and square on its own – a plaza, fountain squares, a monument square, a
-  market square, a grand square, a shopping precinct, a bus station, a parade square – and
-  parks have era layouts among their looks: a koupaliště, a summer cinema, a sports ground, a
-  forest park with a lookout.
+- **Občanská vybavenost** also has a house of culture and a cemetery. **Prostranství** has
+  each kind of park and square as its own tool, in its sizes (**Shift**) and looks (**Space**):
+  greenery, a playground, a sports ground, a garden, a forest park with a lookout, a park by a
+  pond, a summer cinema; a plaza, a fountain square, a monument square, a market square, a
+  shopping precinct, a parade square. The ČSAD bus station is in **Doprava**.
 - A park only gets walkways where people can come in: a footpath reaching it, a street
   (sidewalks) or lane along it, or a neighbouring park that has a way in. One way in runs to
   a loop, two curve into each other, more meet at a little plaza; with none it stays a plain

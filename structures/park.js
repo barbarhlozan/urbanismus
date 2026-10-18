@@ -1,11 +1,11 @@
-// Parks: 1×1 and 2×2. Mostly ground drawing (walkways, ponds)
-// plus trees, benches and park furniture: six kinds to build, each with a
-// few layouts
-// (picked by seed): plain greens, playgrounds, memorials, flower gardens,
-// bandstands, lime avenues, formal baroque parterres, a spa colonnade, and
-// from the 60s–80s a football pitch, a sports ground, a forest park with a
-// lookout tower, a koupaliště and a summer cinema. They are destinations for
-// strolls. Reachable by road or footpath.
+// Parks: 1×1 and 2×2. Mostly ground drawing (walkways, ponds) plus trees,
+// benches and park furniture. Each tool is one kind of place, its looks
+// stepped through with Space, its sizes with Shift: greenery (trees, a
+// meadow, woods, lime avenues), a playground, a sports ground (a kids'
+// pitch, a full football ground), a garden (flower beds, a formal baroque
+// parterre), and from the 60s–80s a forest park with a lookout tower, a
+// park round a pond and a summer cinema. They are destinations for strolls.
+// Reachable by road or footpath.
 // The park fills g.site (up to the road, merging with neighbouring parks).
 // There is no border: entrance gates, benches along the walkways and grass
 // tufts say "park".
@@ -18,9 +18,8 @@
 // g.site.paths.centre, which the walkways keep clear of.
 
 import {
-  tree, bush, bench, lamp, fountain, gate, tufts, hedgeAlong, statue,
-  playground, bandstand, flowerBed, obelisk, sculpture, kiosk, chessTable, colonnade, footbridge,
-  pitch, planter, FRAME, kindOf,
+  tree, bush, bench, lamp, fountain, gate, tufts, hedgeAlong,
+  playground, bandstand, flowerBed, obelisk, kiosk, footbridge, pitch, FRAME, kindOf,
 } from './kit.js';
 import { segmentDistance } from '../src/core/geom2d.js';
 import { offsetPolyline, keepRuns, measurePolyline, pointAt } from '../src/roads/geometry.js';
@@ -163,11 +162,6 @@ function pond(g, x, y, r, { island = false } = {}) {
   }
 }
 
-function pavilion(g, x, y) {
-  g.cylinder(x, y, 0, 0.08, 0.09, 8);
-  g.shape(x, y, 0.09, [[-0.1, 0], [0.1, 0], [0, 0.08]]);
-}
-
 // Scatter n trees in a rectangle, keeping clear of walkways and the given circles.
 function grove(g, n, x0, y0, x1, y1, avoid = [], kind = null) {
   for (let i = 0, tries = 0; i < n && tries < n * 8; tries++) {
@@ -212,13 +206,7 @@ function parterre(g, d, s) {
   }
 }
 
-function centrepiece(g, x, y) {
-  g.pick([() => obelisk(g, x, y), () => statue(g, x, y), () => sculpture(g, x, y), () => fountain(g, x, y, 0.07)])();
-}
-
-// ----- sports and leisure of the 60s–80s -----
-// Each fills one quadrant between the walkways, around its centre (qx, qy),
-// in a square about 2 * q across.
+// ----- leisure of the 60s–80s -----
 
 // Wooden lookout tower in a forest park: a braced timber frame, a roofed
 // platform on top.
@@ -247,36 +235,7 @@ function lookout(g, x, y, h = 0.65) {
   });
 }
 
-// Outdoor swimming pool (koupaliště) in the quadrant at (qx, qy), q wide
-// each way: the basin with lanes, a paddling pool, a concrete diving tower,
-// and a row of changing cabins behind.
-function pool(g, qx, qy, q) {
-  const x0 = qx - q * 0.8, x1 = qx + q * 0.8, y0 = qy - q * 0.35, y1 = qy + q * 0.55;
-  const basin = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-  g.groundPoly(basin, { fill: 'url(#hatch-water)' });
-  g.groundPoly(basin);
-  g.groundPoly([[x0 - 0.035, y0 - 0.035], [x1 + 0.035, y0 - 0.035], [x1 + 0.035, y1 + 0.035], [x0 - 0.035, y1 + 0.035]], { lod: 1 });
-  for (let i = 1; i < 4; i++) {
-    const y = y0 + ((y1 - y0) * i) / 4;
-    g.groundLine([[x0 + 0.03, y], [x1 - 0.03, y]], { dash: '2 2', lod: 2 });
-  }
-  // diving tower at the deep end
-  // (concrete, 1, 3 and 5 m boards over the water)
-  const tx = x1 - 0.045, ty = (y0 + y1) / 2;
-  g.box(tx, ty - 0.025, 0, 0.05, 0.05, 0.3);
-  for (const [z, reach] of [[0.08, 0.1], [0.19, 0.09], [0.3, 0.08]]) g.box(tx - reach, ty - 0.03, z, reach + 0.05, 0.06, 0.012);
-  g.detailed(2, () => g.line([[tx + 0.05, ty + 0.02, 0], [tx + 0.05, ty + 0.02, 0.3]]));
-  // paddling pool and cabins
-  g.groundCircle(x0 + 0.06, y0 - q * 0.3, 0.06, { fill: 'url(#hatch-water)' });
-  g.groundCircle(x0 + 0.06, y0 - q * 0.3, 0.06);
-  const cy = qy - q * 0.88;
-  g.roofed(qx - q * 0.3, cy, 0, q * 1.05, 0.09, 0.1, { h: 0.03 });
-  g.detailed(2, () => {
-    for (let x = qx - q * 0.26; x < qx + q * 0.7; x += 0.055) g.line([[x, cy, 0], [x, cy, 0.075], [x + 0.035, cy, 0.075], [x + 0.035, cy, 0]], { facing: [0, -1, 0] });
-  });
-}
-
-// Summer cinema (letní kino) in the quadrant at (qx, qy): the screen at the
+// Summer cinema (letní kino) in the quadrant at (qx, qy), q wide each way: the screen at the
 // back (+y), rows of benches curving towards it, the projection booth in
 // front of them.
 function cinema(g, qx, qy, q) {
@@ -308,161 +267,50 @@ const common = {
   sim: { destinations: [] },
 };
 
+// ----- greenery -----
+
+// Trees along the paths, a bench.
 export const green = {
   id: 'green',
   name: 'Green',
   blurb: 'Trees and paths',
+  size: 'Small',
   ...common,
   footprint: [[0, 0]],
   stats: {},
   agents: 0,
-  kinds: ['trees', 'trees', 'playground', 'memorial', 'pitch'],
-  draw(g, s) {
-    const kind = kindOf(g, s, this.kinds);
-    if (kind === 'pitch') {
-      // a kids' football pitch over the whole green: the walkways
-      // only come up to it (people just cross it); a bench and a
-      // tree at the side
-      pitch(g, -0.33, -0.21, 0.33, 0.21);
-      walkways(g, { under: inside(-0.33, -0.21, 0.33, 0.21) });
-      bench(g, 0, -0.32, true, -1);
-      tree(g, g.pick([-0.33, 0.33]), 0.33, 0.9);
-      grass(g, 4);
-      return;
-    }
+  draw(g) {
     walkways(g);
-    if (kind === 'playground') {
-      const [px, py] = freeSpot(g, quadrants(g, 0.23), 0.16);
-      playground(g, px, py, 0.16);
-      benches(g, 1);
-      grove(g, 2, -0.34, -0.34, 0.34, 0.34, [[px, py, 0.22]]);
-    } else if (kind === 'memorial') {
-      const [cx, cy] = g.site.paths.centre;
-      centrepiece(g, cx, cy);
-      grove(g, g.int(2, 4), -0.34, -0.34, 0.34, 0.34, [[cx, cy, 0.14]], 'spruce');
-      benches(g, 1);
-    } else {
-      benches(g, 1);
-      grove(g, g.int(2, 3), -0.32, -0.32, 0.32, 0.32);
-    }
+    benches(g, 1);
+    grove(g, g.int(2, 3), -0.32, -0.32, 0.32, 0.32);
     grass(g, 8);
   },
 };
 
-export const gardenPark = {
-  id: 'garden-park',
-  name: 'Garden park',
-  blurb: 'Flower beds and a kiosk',
-  ...common,
-  footprint: [[0, 0]],
-  stats: {},
-  agents: 0,
-  draw(g) {
-    walkways(g);
-    const kind = g.pick(['garden', 'flowers', 'playground', 'kiosk']);
-    const qs = quadrants(g, 0.24);
-    const [cx, cy] = g.site.paths.centre;
-    if (kind === 'flowers') {
-      for (const [x, y] of qs) if (clearance(g, x, y) > 0.08 + W) flowerBed(g, x, y, 0.08);
-      if (clearance(g, cx, cy) > 0.09 + W) g.groundCircle(cx, cy, 0.09, { lod: 1 });
-      benches(g, 3);
-      grass(g, 6);
-      return;
-    }
-    if (kind === 'playground') {
-      const [px, py] = freeSpot(g, qs, 0.18);
-      playground(g, px, py, 0.18);
-      benches(g, 2);
-      grove(g, 3, -0.34, -0.34, 0.34, 0.34, [[px, py, 0.24]]);
-    } else if (kind === 'kiosk') {
-      const [[kx, ky], [tx, ty]] = roomiest(g, qs);
-      kiosk(g, kx, ky);
-      chessTable(g, tx, ty);
-      benches(g, 2);
-      grove(g, 3, -0.34, -0.34, 0.34, 0.34, [[kx, ky, 0.12], [tx, ty, 0.1]]);
-    } else {
-      benches(g, 2);
-      grove(g, g.int(4, 5), -0.34, -0.34, 0.34, 0.34, [[cx, cy, 0.1]]);
-    }
-    grass(g, 10);
-  },
-};
-
-export const pavilionPark = {
-  id: 'pavilion-park',
-  name: 'Pavilion park',
-  blurb: 'A bandstand or a pavilion',
-  ...common,
-  footprint: [[0, 0]],
-  stats: {},
-  agents: 0,
-  draw(g) {
-    walkways(g);
-    const kind = g.pick(['pavilion', 'bandstand', 'formal']);
-    const [cx, cy] = g.site.paths.centre;
-    if (kind === 'formal') {
-      parterre(g, 0.24, 0.1);
-      fountain(g, cx, cy, 0.06);
-      benches(g, 2);
-      return;
-    }
-    // a pond in the roomiest corner, if it fits
-    const [ox, oy] = roomiest(g, quadrants(g, 0.21))[0];
-    const withPond = g.chance(0.5) && clearance(g, ox, oy) > 0.13 + W;
-    if (withPond) pond(g, ox, oy, 0.13);
-    if (kind === 'bandstand') {
-      bandstand(g, cx, cy, 0.1);
-      for (const [x, y] of quadrants(g, 0.24)) {
-        if (!(withPond && Math.hypot(x - ox, y - oy) < 0.1) && clearance(g, x, y) > 0.06 + W) flowerBed(g, x, y, 0.06);
-      }
-    } else {
-      pavilion(g, cx, cy); // in the middle
-    }
-    benches(g, 3);
-    grove(g, g.int(4, 6), -0.36, -0.36, 0.36, 0.36, [[cx, cy, 0.15], ...(withPond ? [[ox, oy, 0.17]] : [])]);
-    grass(g, 12);
-  },
-};
-
+// Grass with a few trees, a grove, or lime avenues along the walkways.
 export const meadow = {
   id: 'meadow',
-  name: 'Meadow',
-  blurb: 'Grass, woods, a sports ground',
+  name: 'Green',
+  blurb: 'Trees and paths',
+  size: 'Large',
   ...common,
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   stats: {},
   agents: 0,
-  kinds: ['meadow', 'woods', 'playground', 'sports', 'forest'],
+  kinds: ['meadow', 'woods', 'avenue'],
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
-    if (kind === 'sports') {
-      // sports ground: a full football pitch across the park (the
-      // walkways come up to it), benches along one touchline, a
-      // changing hut, trees in the corners
-      pitch(g, -0.28, 0.02, 1.28, 0.98);
-      walkways(g, { under: inside(-0.28, 0.02, 1.28, 0.98) });
-      for (const x of [0.15, 0.5, 0.85]) bench(g, x, -0.12, true, -1);
-      g.gable(1.05, -0.36, 0, 0.24, 0.14, 0.08, 0.06);
-      for (const [x, y] of [[-0.3, -0.25], [-0.3, 1.28], [1.3, 1.28]]) tree(g, x, y, 1.05);
-      grass(g, 10);
-      return;
-    }
     walkways(g);
     const [cx, cy] = g.site.paths.centre;
-    if (kind === 'woods') {
+    if (kind === 'avenue') {
+      // (no walkways to line: a row of lindens across the middle)
+      if (g.site.paths.lines.length) avenue(g);
+      else for (const x of [-0.2, 0.25, 0.75, 1.2]) tree(g, x, cy, 0.85, 'spreading');
+      walkLamps(g, 2);
+      benches(g, 4);
+    } else if (kind === 'woods') {
       benches(g, 2);
       grove(g, g.int(12, 16), -0.34, -0.34, 1.34, 1.34, [[cx, cy, 0.12]], g.chance(0.5) ? 'spruce' : null);
-    } else if (kind === 'forest') {
-      // forest park: dense woods with a wooden lookout tower in a clearing
-      const [lx, ly] = freeSpot(g, quadrants(g, 0.45), 0.16);
-      lookout(g, lx, ly);
-      benches(g, 2);
-      grove(g, g.int(14, 18), -0.34, -0.34, 1.34, 1.34, [[cx, cy, 0.12], [lx, ly, 0.16]], 'spruce');
-    } else if (kind === 'playground') {
-      const [px, py] = freeSpot(g, quadrants(g, 0.45), 0.24);
-      playground(g, px, py, 0.24);
-      benches(g, 3);
-      grove(g, g.int(5, 7), -0.3, -0.3, 1.3, 1.3, [[px, py, 0.3]]);
     } else {
       benches(g, 2);
       grove(g, g.int(5, 7), -0.3, -0.3, 1.3, 1.3, [[cx, cy, 0.25]]);
@@ -471,6 +319,176 @@ export const meadow = {
   },
 };
 
+// ----- playgrounds -----
+
+// Swings, a slide and a sandpit between the walkways, benches for the
+// mothers, trees round it.
+export const playgroundSmall = {
+  id: 'playground',
+  name: 'Playground',
+  blurb: 'Swings and a sandpit',
+  size: 'Small',
+  ...common,
+  footprint: [[0, 0]],
+  stats: {},
+  agents: 0,
+  draw(g) {
+    walkways(g);
+    const [px, py] = freeSpot(g, quadrants(g, 0.23), 0.17);
+    playground(g, px, py, 0.17);
+    benches(g, 2);
+    grove(g, 2, -0.34, -0.34, 0.34, 0.34, [[px, py, 0.23]]);
+    grass(g, 8);
+  },
+};
+
+export const playgroundLarge = {
+  id: 'playground-large',
+  name: 'Playground',
+  blurb: 'Swings and a sandpit',
+  size: 'Large',
+  ...common,
+  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  stats: {},
+  agents: 0,
+  draw(g) {
+    walkways(g);
+    const qs = quadrants(g, 0.45);
+    const [px, py] = freeSpot(g, qs, 0.24);
+    playground(g, px, py, 0.24);
+    // a second, smaller one for the little ones across from it
+    const [qx, qy] = roomiest(g, qs.filter(([x, y]) => Math.hypot(x - px, y - py) > 0.5))[0] ?? [px, py];
+    if (qx !== px || qy !== py) playground(g, qx, qy, 0.15);
+    benches(g, 4);
+    grove(g, g.int(5, 7), -0.3, -0.3, 1.3, 1.3, [[px, py, 0.3], [qx, qy, 0.2]]);
+    grass(g, 20);
+  },
+};
+
+// ----- sports grounds -----
+
+// A kids' football pitch over the whole dot: the walkways only come up to
+// it (people just cross it); a bench and a tree at the side.
+export const pitchSmall = {
+  id: 'pitch',
+  name: 'Sports ground',
+  blurb: 'A football pitch',
+  size: 'Small',
+  ...common,
+  footprint: [[0, 0]],
+  stats: {},
+  agents: 0,
+  draw(g) {
+    pitch(g, -0.33, -0.21, 0.33, 0.21);
+    walkways(g, { under: inside(-0.33, -0.21, 0.33, 0.21) });
+    bench(g, 0, -0.32, true, -1);
+    tree(g, g.pick([-0.33, 0.33]), 0.33, 0.9);
+    grass(g, 4);
+  },
+};
+
+// A full football pitch across the park (the walkways come up to it),
+// benches along one touchline, a changing hut, trees in the corners.
+export const sportsGround = {
+  id: 'sports-ground',
+  name: 'Sports ground',
+  blurb: 'A football pitch',
+  size: 'Large',
+  ...common,
+  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  stats: {},
+  agents: 0,
+  draw(g) {
+    pitch(g, -0.28, 0.02, 1.28, 0.98);
+    walkways(g, { under: inside(-0.28, 0.02, 1.28, 0.98) });
+    for (const x of [0.15, 0.5, 0.85]) bench(g, x, -0.12, true, -1);
+    g.gable(1.05, -0.36, 0, 0.24, 0.14, 0.08, 0.06);
+    for (const [x, y] of [[-0.3, -0.25], [-0.3, 1.28], [1.3, 1.28]]) tree(g, x, y, 1.05);
+    grass(g, 10);
+  },
+};
+
+// ----- gardens -----
+
+// Flower beds between the walkways, a garden of trees and shrubs, or a
+// small formal parterre round a fountain.
+export const gardenPark = {
+  id: 'garden-park',
+  name: 'Garden park',
+  blurb: 'Flower beds and parterres',
+  size: 'Small',
+  ...common,
+  footprint: [[0, 0]],
+  stats: {},
+  agents: 0,
+  kinds: ['flowers', 'garden', 'formal'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    walkways(g);
+    const [cx, cy] = g.site.paths.centre;
+    if (kind === 'formal') {
+      parterre(g, 0.24, 0.1);
+      fountain(g, cx, cy, 0.06);
+      benches(g, 2);
+      return;
+    }
+    if (kind === 'flowers') {
+      for (const [x, y] of quadrants(g, 0.24)) if (clearance(g, x, y) > 0.08 + W) flowerBed(g, x, y, 0.08);
+      if (clearance(g, cx, cy) > 0.09 + W) g.groundCircle(cx, cy, 0.09, { lod: 1 });
+      benches(g, 3);
+      grass(g, 6);
+      return;
+    }
+    benches(g, 2);
+    grove(g, g.int(4, 5), -0.34, -0.34, 0.34, 0.34, [[cx, cy, 0.1]]);
+    grass(g, 10);
+  },
+};
+
+// Baroque garden: hedged parterres, clipped conifers, an obelisk.
+export const gardenParkLarge = {
+  id: 'garden-park-large',
+  name: 'Garden park',
+  blurb: 'Flower beds and parterres',
+  size: 'Large',
+  ...common,
+  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  stats: {},
+  agents: 0,
+  draw(g) {
+    walkways(g);
+    const [mx, my] = g.site.paths.centre;
+    parterre(g, 0.42, 0.22);
+    obelisk(g, mx, my, 0.34);
+    for (const [x, y] of quadrants(g, 0.78)) tree(g, x, y, 1.1, 'spreading');
+    benches(g, 4);
+  },
+};
+
+// ----- leisure -----
+
+// Lesopark: dense woods with a wooden lookout tower in a clearing.
+export const forestPark = {
+  id: 'forest-park',
+  name: 'Forest park',
+  blurb: 'Woods and a lookout tower',
+  ...common,
+  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  stats: {},
+  agents: 0,
+  draw(g) {
+    walkways(g);
+    const [cx, cy] = g.site.paths.centre;
+    const [lx, ly] = freeSpot(g, quadrants(g, 0.45), 0.16);
+    lookout(g, lx, ly);
+    benches(g, 2);
+    grove(g, g.int(14, 18), -0.34, -0.34, 1.34, 1.34, [[cx, cy, 0.12], [lx, ly, 0.16]], 'spruce');
+    grass(g, 20);
+  },
+};
+
+// Walks round a pond at the back, with a little island and its tree, or a
+// footbridge across; now and then a kiosk by the way in.
 export const pondPark = {
   id: 'pond-park',
   name: 'Pond park',
@@ -479,34 +497,11 @@ export const pondPark = {
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   stats: {},
   agents: 0,
-  draw(g) {
+  kinds: ['island', 'bridge'],
+  draw(g, s) {
+    const island = kindOf(g, s, this.kinds) === 'island';
     walkways(g);
-    if (g.chance(0.3)) {
-      // koupaliště: the pool in the back quadrant, a sunbathing lawn with
-      // a kiosk in front, trees round the edge
-      const qs = roomiest(g, quadrants(g, 0.45));
-      const [[qx, qy], [kx, ky]] = qs;
-      pool(g, qx, qy, 0.38);
-      kiosk(g, kx, ky);
-      for (const [x, y] of qs.slice(1)) if (clearance(g, x + 0.15, y - 0.15) > 0.05 + W) planter(g, x + 0.15, y - 0.15);
-      benches(g, 2);
-      grove(g, g.int(5, 7), -0.32, -0.32, 1.32, 1.32, [[qx, qy, 0.5], [kx, ky, 0.12]]);
-      grass(g, 20);
-      return;
-    }
-    if (g.chance(0.35)) {
-      // lime avenues along the walkways, a playground and a kiosk between them
-      avenue(g);
-      const qs = roomiest(g, quadrants(g, 0.45));
-      playground(g, ...qs[0], 0.22);
-      kiosk(g, ...qs[1]);
-      chessTable(g, ...qs[2]);
-      benches(g, 4);
-      grass(g, 20);
-      return;
-    }
     const px = roomiest(g, [[0.05, 0.95], [0.95, 0.95]])[0][0];
-    const island = g.chance(0.5);
     pond(g, px, 0.95, 0.3, { island });
     if (!island) footbridge(g, [px - 0.33, 0.95], [px + 0.33, 0.95]);
     if (g.chance(0.5)) kiosk(g, 1 - px, 0.05);
@@ -516,59 +511,25 @@ export const pondPark = {
   },
 };
 
-export const cityPark = {
-  id: 'city-park',
-  name: 'City park',
-  blurb: 'Avenues, a spa or a summer cinema',
+// Park of culture and rest: a summer cinema in one quadrant, a bandstand
+// and a kiosk in others, lamps along the walkways.
+export const summerCinema = {
+  id: 'summer-cinema',
+  name: 'Summer cinema',
+  blurb: 'A screen under the trees',
   ...common,
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   stats: {},
   agents: 0,
   draw(g) {
     walkways(g);
-    const [mx, my] = g.site.paths.centre;
-    const kind = g.pick(['city', 'formal', 'spa', 'cinema']);
-    if (kind === 'cinema') {
-      // park of culture and rest: a summer cinema in one quadrant, a
-      // bandstand and a kiosk in others, lamps along the walkways
-      const [[qx, qy], [bx, by], [kx, ky]] = roomiest(g, quadrants(g, 0.45));
-      cinema(g, qx, qy, 0.4);
-      bandstand(g, bx, by, 0.1);
-      kiosk(g, kx, ky);
-      walkLamps(g, 2);
-      benches(g, 4);
-      grove(g, g.int(6, 8), -0.32, -0.32, 1.32, 1.32, [[qx, qy, 0.5], [bx, by, 0.16], [kx, ky, 0.12]]);
-      grass(g, 20);
-      return;
-    }
-    if (kind === 'formal') {
-      // baroque garden: hedged parterres, clipped conifers, an obelisk
-      parterre(g, 0.42, 0.22);
-      obelisk(g, mx, my, 0.34);
-      for (const [x, y] of quadrants(g, 0.78)) tree(g, x, y, 1.1, 'spreading');
-      benches(g, 4);
-      return;
-    }
-    if (kind === 'spa') {
-      // spa colonnade along the back, fountain and flower beds in front
-      colonnade(g, -0.2, 1.2, 1.15);
-      fountain(g, mx, my, 0.09);
-      for (const [x, y] of quadrants(g, 0.38)) if (clearance(g, x, y) > 0.1 + W) flowerBed(g, x, y, 0.1);
-      walkLamps(g, 2);
-      benches(g, 4);
-      grove(g, g.int(4, 6), -0.32, -0.32, 1.32, 0.9, [[mx, my, 0.25], ...quadrants(g, 0.38).map(([x, y]) => [x, y, 0.14])]);
-      grass(g, 15);
-      return;
-    }
-    fountain(g, mx, my, 0.08); // in the middle
-    // a pond and a bandstand (or pavilion) in two roomy corners
-    const [[ox, oy], [bx, by]] = roomiest(g, [[1.05, 0.05], [-0.05, 0.95], [0.05, 0.05], [0.95, 0.95]]);
-    pond(g, ox, oy, 0.22);
-    if (g.chance(0.5)) bandstand(g, bx, by, 0.12);
-    else pavilion(g, bx, by);
+    const [[qx, qy], [bx, by], [kx, ky]] = roomiest(g, quadrants(g, 0.45));
+    cinema(g, qx, qy, 0.4);
+    bandstand(g, bx, by, 0.1);
+    kiosk(g, kx, ky);
     walkLamps(g, 2);
     benches(g, 4);
-    grove(g, g.int(10, 13), -0.32, -0.32, 1.32, 1.32, [[mx, my, 0.25], [ox, oy, 0.32], [bx, by, 0.18]]);
-    grass(g, 30);
+    grove(g, g.int(6, 8), -0.32, -0.32, 1.32, 1.32, [[qx, qy, 0.5], [bx, by, 0.16], [kx, ky, 0.12]]);
+    grass(g, 20);
   },
 };

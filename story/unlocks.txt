@@ -16,7 +16,7 @@
 #
 # Build menu groups (by name or id)
 #   doprava, transport                Road, Lane, Footpath, Railway, the stations,
-#                                     Bus stop, Benzina
+#                                     Bus stop, Bus station, Benzina
 #   bydleni, housing                  House, Apartments, Block
 #   obcanska_vybavenost, amenities    shops, pubs, offices, services, school,
 #                                     House of culture, Swimming pool, Cemetery
@@ -57,6 +57,7 @@
 #   Doprava
 #     station            station, station_main, stop
 #     bus_stop           bus_stop
+#     bus_station        bus_station
 #     benzina            benzina
 #   Bydlení
 #     house              house, house_wide
@@ -108,19 +109,18 @@
 #     sts                sts, sts_large
 #     cukrovar           cukrovar
 #   Prostranství
-#     green              green
-#     garden_park        garden_park
-#     pavilion_park      pavilion_park
-#     meadow             meadow
+#     green              green, meadow
+#     playground         playground, playground_large
+#     sports_ground      pitch, sports_ground
+#     garden_park        garden_park, garden_park_large
+#     forest_park        forest_park
 #     pond_park          pond_park
-#     city_park          city_park
+#     summer_cinema      summer_cinema
 #     plaza              plaza
 #     fountain_square    fountain_square, fountain_square_large
-#     shopping_precinct  precinct, precinct_large
-#     monument_square    monument_square
+#     monument_square    monument_square, grand_square
 #     market_square      market_square
-#     bus_station        bus_station
-#     grand_square       grand_square
+#     shopping_precinct  precinct, precinct_large
 #     parade_square      parade_square
 #   Památky
 #     chapel             chapel

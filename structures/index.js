@@ -76,7 +76,7 @@ export const CATEGORIES = [
 // registry is these, in this order.
 export const BUILD_FAMILIES = [
   // Doprava
-  [station.station, station.main, station.stop], [busStop], [industry.benzina],
+  [station.station, station.main, station.stop], [busStop], [square.busStation], [industry.benzina],
   // Bydlení
   [housing.house, housing.houseWide], [housing.apartments, housing.apartmentsWide], [housing.block, housing.blockWide],
   // Občanská vybavenost
@@ -99,9 +99,10 @@ export const BUILD_FAMILIES = [
   [industry.mlekarna, industry.mlekarnaMedium], [industry.zzn, industry.zznLarge], [industry.sts, industry.stsLarge],
   [industry.cukrovar],
   // Prostranství
-  [park.green], [park.gardenPark], [park.pavilionPark], [park.meadow], [park.pondPark], [park.cityPark],
-  [square.plaza], [square.fountainSquare, square.fountainSquareLarge], [square.precinct, square.precinctLarge],
-  [square.monumentSquare], [square.marketSquare], [square.busStation], [square.grandSquare], [square.paradeSquare],
+  [park.green, park.meadow], [park.playgroundSmall, park.playgroundLarge], [park.pitchSmall, park.sportsGround],
+  [park.gardenPark, park.gardenParkLarge], [park.forestPark], [park.pondPark], [park.summerCinema],
+  [square.plaza], [square.fountainSquare, square.fountainSquareLarge], [square.monumentSquare, square.grandSquare],
+  [square.marketSquare], [square.precinct, square.precinctLarge], [square.paradeSquare],
   // Památky
   [heritage.chapel], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
   [heritage.castle, heritage.castleSmall], [landmarks.tvTower], [landmarks.stadium],

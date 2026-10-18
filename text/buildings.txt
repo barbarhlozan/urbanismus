@@ -88,6 +88,14 @@ bus_stop.blurb
   cs: Přístřešek u silnice
   en: A shelter by the road
 
+bus_station
+  cs: Autobusové nádraží ČSAD
+  en: ČSAD bus station
+
+bus_station.blurb
+  cs: Nástupiště pod obloukovými stříškami
+  en: Platforms under arched shelters
+
 benzina
   cs: Benzina
   en: Benzina
@@ -526,29 +534,37 @@ green.blurb
   cs: Stromy a cestičky
   en: Trees and little paths
 
+playground
+  cs: Dětské hřiště
+  en: Playground
+
+playground.blurb
+  cs: Houpačky a pískoviště
+  en: Swings and a sandpit
+
+sports_ground
+  cs: Hřiště
+  en: Sports ground
+
+sports_ground.blurb
+  cs: Fotbalové hřiště
+  en: A football pitch
+
 garden_park
   cs: Sady
   en: Gardens
 
 garden_park.blurb
-  cs: Záhony a stánek
-  en: Flower beds and a kiosk
+  cs: Záhony a francouzský park
+  en: Flower beds and a formal garden
 
-pavilion_park
-  cs: Park s altánem
-  en: Park with a pavilion
+forest_park
+  cs: Lesopark
+  en: Forest park
 
-pavilion_park.blurb
-  cs: Hudební altán nebo pavilon
-  en: A bandstand or a pavilion
-
-meadow
-  cs: Louka
-  en: Meadow
-
-meadow.blurb
-  cs: Tráva, háj a hřiště
-  en: Grass, a grove and a sports ground
+forest_park.blurb
+  cs: Les a dřevěná rozhledna
+  en: Woods and a wooden lookout tower
 
 pond_park
   cs: Park u rybníka
@@ -558,13 +574,13 @@ pond_park.blurb
   cs: Procházky kolem rybníka
   en: Walks round a pond
 
-city_park
-  cs: Městský park
-  en: Town park
+summer_cinema
+  cs: Letní kino
+  en: Summer cinema
 
-city_park.blurb
-  cs: Aleje, lázně nebo letní kino
-  en: Avenues, a spa or a summer cinema
+summer_cinema.blurb
+  cs: Plátno mezi stromy
+  en: A screen among the trees
 
 plaza
   cs: Plácek
@@ -605,22 +621,6 @@ market_square
 market_square.blurb
   cs: Stánky pod stromy
   en: Stalls under the trees
-
-bus_station
-  cs: Autobusové nádraží ČSAD
-  en: ČSAD bus station
-
-bus_station.blurb
-  cs: Nástupiště pod obloukovými stříškami
-  en: Platforms under arched shelters
-
-grand_square
-  cs: Hlavní náměstí
-  en: Main square
-
-grand_square.blurb
-  cs: Obelisk nebo socha uprostřed
-  en: An obelisk or a statue in the middle
 
 parade_square
   cs: Náměstí s tribunou
