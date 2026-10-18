@@ -700,10 +700,9 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .popup .note { font-size: 10px; color: var(--detail); }
 /* drawings in a row (the Building card's look and surroundings), each a
    square you can press, named on pointing at it */
-.popup-icons { display: flex; align-items: center; gap: 6px; padding: 6px 10px 12px; }
+.popup-icons { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 10px 12px; }
 #ui .popup button.popup-icon { width: auto; padding: 6px; justify-content: center; }
-.popup-badge { margin-left: auto; padding: 0 6px 0 18px; color: var(--detail); }
-.bi-people { display: inline-flex; align-items: center; gap: 3px; font-size: 14px; }
+.bi-people { display: inline-flex; align-items: center; gap: 3px; font-size: 14px; color: var(--detail); }
 .bi-people .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .popup-icon .icon { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .popup { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); display: flex; flex-direction: column; }

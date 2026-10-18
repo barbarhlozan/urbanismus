@@ -5,8 +5,7 @@
 // or { block } – ready-made HTML (escaped by whoever builds it), e.g. a summary
 // An item with an `icon` (ready-made SVG) is shown as that drawing alone,
 // its label only as its name on pointing at it; icons that follow one
-// another stand side by side in a row; a { badge } (ready-made HTML) right
-// after them ends that row, at its far side.
+// another stand side by side in a row, in the middle.
 // (unavailable: can't be done here – shown crossed out in the detail colour)
 // keepOpen items leave the menu open and rebuild it with `refresh()`
 // (passed to show), e.g. to cycle through options.
@@ -103,7 +102,6 @@ export class Popup {
       if (item.icon) {
         return `<button data-i="${i}" class="popup-icon" title="${esc(item.label)}" aria-label="${esc(item.label)}">${item.icon}</button>`;
       }
-      if (item.badge != null) return `<span class="popup-badge">${item.badge}</span>`;
       if (item.block != null) return `<div class="popup-block">${item.block}</div>`;
       if (item.section != null) return `<div class="popup-section">${esc(item.section)}</div>`;
       const disabled = item.disabled || item.info || !item.action;
@@ -114,7 +112,7 @@ export class Popup {
     });
     // a run of drawings: one row
     let body = '';
-    const inRow = (it) => it && (it.icon || it.badge != null);
+    const inRow = (it) => !!it?.icon;
     html.forEach((h, i) => {
       const row = inRow(items[i]);
       if (row && !inRow(items[i - 1])) body += '<div class="popup-icons">';

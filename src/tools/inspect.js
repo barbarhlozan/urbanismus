@@ -1,6 +1,6 @@
-// Default tool: click a building to get its card – its name, and a row of
-// drawings: another look, its surroundings, Zbourat (an eraser), and at the
-// end how many live there, a number by a little figure. Roads, railways, paths, fences and
+// Default tool: click a building to get its card – its name, how many live
+// there (a number by a little figure) under it, and a row of drawings in
+// the middle: another look, its surroundings, Zbourat (an eraser). Roads, railways, paths, fences and
 // trees open nothing: Erase takes them away (and ⌘Z brings them back).
 // Building new things is done from the Build menu.
 
@@ -83,9 +83,12 @@ function warning(def) {
 function structureMenu({ world }, s) {
   const def = STRUCTURE_TYPES[s.type];
 
-  // a warning first, if nothing reaches it; then a row of drawings and,
-  // at its end, the people who live there
-  const items = world.isServed(s) ? [] : [{ block: warning(def) }];
+  // under its name, how many live there and a warning if nothing reaches
+  // it; then a row of drawings
+  const people = residents(def);
+  const items = [];
+  if (people) items.push({ block: `<div class="bi-row">${people}</div>` });
+  if (!world.isServed(s)) items.push({ block: warning(def) });
 
   // how it looks, as two drawings side by side (each named on pointing at
   // it): its next kind, in the order Space goes through them while
@@ -124,8 +127,6 @@ function structureMenu({ world }, s) {
     label: t('inspect.demolish'),
     action: () => world.removeStructure(s.id),
   });
-  const people = residents(def);
-  if (people) items.push({ badge: people });
 
   return { title: nameOf(def), items };
 }
