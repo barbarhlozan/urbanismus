@@ -346,6 +346,8 @@ html, body {
 /* …and until one is redrawn for a new level, the detail it leaves out is
    hidden (Renderer.hideAhead) */
 .lv1 .d2, .lv2 .d1, .lv2 .d2 { display: none; }
+/* …and once a turn of the view has gone far enough (Renderer.goBare) */
+.bare .d2 { display: none; }
 
 /* Road marks (render/roadMarks.js): a pencil note at a building nothing
    reaches. Quiet always, in the detail pen; firmer while a build or road

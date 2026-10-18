@@ -103,7 +103,9 @@ a Czech or German layout.
 - **Right-button drag** – turn the view; let go and it coasts on a little and settles on
   the nearest 2° step. On a phone, twist two fingers. Buildings, their gardens and
   shadows, roads and trees are drawn from the side they face as it turns (each keeps its
-  drawings for the steps either side of where the view rests, made while it rests)
+  drawings for the steps either side of where the view rests, made while it rests). While it
+  turns they are drawn bare – no windows, sparse roof hatching – and once it rests the pen
+  draws their detail back in, from the middle of the screen out
 - **Terrain** – contour lines: a button between Erase and the camera (under the Build rail on a computer, in
   the panel's bottom row on a phone), crossed while on; once on they stay on whatever's in
   hand, until switched off there (off by default, they are the most expensive thing to draw)

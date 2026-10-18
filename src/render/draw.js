@@ -26,6 +26,7 @@ export const DRAW = {
   cap: 24,       // more objects than this at once (new map, big batch) just appear
   swap: 0.55,    // a rebuilt building (new level, new look): the old one is erased
                  // this much faster, and the new one starts when it is half gone
+  detail: 0.6,   // the detail a turn left out, drawn back in this much faster
   grow: 260,     // ms for people and vehicles to grow out of a building…
   shrink: 200,   // …and to shrink back into one
 };
@@ -52,7 +53,7 @@ export const drawEnabled = () => DRAW.on && !reduced?.matches;
 // `tile` converts screen px to grid units for the overall duration; `scale`
 // is screen px per unit of the groups' drawing (measured when not given –
 // which makes the browser lay out the page there and then).
-function plan(groups, tile, speed, scale) {
+function plan(groups, tile, speed, scale, only) {
   const phases = [[], [], []];
   groups.forEach((root, gi) => {
     if (!root?.isConnected) return;
@@ -63,6 +64,7 @@ function plan(groups, tile, speed, scale) {
       scale = m ? Math.hypot(m.a, m.b) : 1;
     }
     for (const el of root.querySelectorAll(SHAPES)) {
+      if (only && !only.has(el)) continue;
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden') continue;
       let len = 0;
@@ -101,10 +103,11 @@ function run(el, kf, a, b, { T, reverse, elapsed, easing = 'ease-in-out' }) {
   });
 }
 
-// Sketch the groups in, `elapsed` ms into the drawing. Returns the ms left
+// Sketch the groups in, `elapsed` ms into the drawing; only the shapes in
+// `only` (a Set) when given, `speed` < 1 faster. Returns the ms left
 // (<= 0 when done or there is nothing to draw).
-export function drawIn(groups, { elapsed = 0, tile = 32, scale } = {}) {
-  return animate(groups, tile, false, () => elapsed, 1, scale);
+export function drawIn(groups, { elapsed = 0, tile = 32, scale, only, speed = 1 } = {}) {
+  return animate(groups, tile, false, () => elapsed, speed, scale, only);
 }
 
 // Erase the groups: the drawing backwards. `drawn` is how long it had been
@@ -114,8 +117,8 @@ export function eraseOut(groups, { drawn = Infinity, tile = 32, speed = 1, scale
   return animate(groups, tile, true, (T) => Math.max(0, T - drawn * speed), speed, scale);
 }
 
-function animate(groups, tile, reverse, skip, speed = 1, scale) {
-  const p = plan(groups, tile, speed, scale);
+function animate(groups, tile, reverse, skip, speed = 1, scale, only) {
+  const p = plan(groups, tile, speed, scale, only);
   if (!p) return 0;
   const elapsed = skip(p.T);
   if (elapsed >= p.T) return 0;

@@ -240,6 +240,11 @@ export class Painter {
     this.spots = [];
     this.vents = [];      // chimney mouths: { x, y } scene, `at` world, kind, k, seed (see vent())
     this.lod = 0;
+    // the detail worth drawing at all: levels up to `keep`, hatching tiers
+    // up to `keepTier` (Renderer.paintStructure: what the band it is drawn
+    // with leaves out anyway, Renderer.atDetail)
+    this.keep = 2;
+    this.keepTier = 3;
     this.free = null;     // set by the renderer: (x, y, r) -> bool, local coords
     this.bounds = null;   // local [x0, y0, x1, y1] of all solids drawn
     this.join = { left: false, right: false }; // set by the renderer, see structures/index.js
@@ -396,7 +401,7 @@ export class Painter {
   // all in one <path>. Each stroke stops a little short of the edges, by a
   // seeded amount.
   _hatch(pts, normal) {
-    if (!LOOK.hatch || !this._facing(normal, pts[0])) return;
+    if (!LOOK.hatch || Math.max(1, this.lod) > this.keep || !this._facing(normal, pts[0])) return;
     const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     const unit = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
@@ -421,6 +426,7 @@ export class Painter {
     // the map can leave out the denser tiers further out (Renderer.atDetail)
     const d = ['', '', '', ''];
     for (let u = u0 + gapAt(u0) / 2, k = 0; u < u1; u += gapAt(u), k++) {
+      if (tierOf(k) > this.keepTier) continue;
       // where the line at u crosses the outline
       const ws = [];
       for (let i = 0; i < flat.length; i++) {
@@ -616,8 +622,8 @@ export class Painter {
     const n = newellNormal(points);
     if (opts.shadow !== false && !this._footOf(points, n)) this._castFace(points);
     if (!this._facing(n, points[0])) return this;
-    this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
-    if (opts.shadow !== false) this._shade(points, n);
+    if (this._lod(opts) <= this.keep) this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
+    if (opts.shadow !== false && Math.max(1, this.lod) <= this.keep) this._shade(points, n);
     return this;
   }
 
@@ -643,7 +649,7 @@ export class Painter {
     const [wx, wy] = this.toWorld(o[0], o[1]);
     const d = ['', '', '', ''];
     for (const [a, b, k] of wallStrokes(flat, SUN.strokes, share, (wx * 13.1 + wy * 7.7) % 97)) {
-      d[tierOf(k)] += this._sketch([back(a), back(b)], false, 0.7).d;
+      if (tierOf(k) <= this.keepTier) d[tierOf(k)] += this._sketch([back(a), back(b)], false, 0.7).d;
     }
     d.forEach((path, t) => {
       if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln wall-shade${penClass(SUN.strokes.pen)}${tierClass(t, 'rh')}`)}/>`);
@@ -1205,6 +1211,7 @@ export class Painter {
     this._spread(points);
     if (opts.facing && !this._facing(opts.facing, points[0])) return this;
     const lod = opts.lod ?? (opts.facing ? Math.max(2, this.lod) : this.lod);
+    if (lod > this.keep) return this;
     if (opts.cls === 'ink' && (this.camera.perspective || LOOK.open) && this._window(points, opts, lod)) return this;
     this.current.parts.push(this._outline(points, false, opts, lod));
     return this;

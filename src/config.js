@@ -57,6 +57,12 @@ export const CONFIG = {
     // ...and the meadow's chunks in sight drawn at the angle it has reached,
     // for at most this many ms each frame
     turnMeadow: 4,
+    // Turned this many degrees from where it rested, the buildings, trees
+    // and lamps are drawn bare until it rests again, when the pen puts
+    // their detail back (Renderer.goBare); a smaller nudge just slides
+    // them. Half a step of the turn (Camera.STEP): one let go short of it
+    // comes back to the step it left, with nothing to draw anew.
+    turnBare: 1,
     // Further out than `zoom` a wood is drawn as one shape (render/forest.js):
     // trees within `link` of one another, at least `minTrees` of them. Its
     // outline runs about reach / 2 out from the outer trees, found in

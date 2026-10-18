@@ -109,6 +109,15 @@ const ROOF_TIERS = [1, 2, 3].map((n) => new RegExp(`<(?:path|polyline)\\b[^>]*\\
 const ROOF_TIER_CLASS = / rh[1-3]\b/g;
 // The bit of an object's band (Renderer.bandOf) set close up, from lod.near.
 const NEAR = 64;
+// The band an object is drawn with mid-turn, once the view has turned
+// config.render.turnBare from where it rested (bandOf): without the
+// close-up detail (level 1), its roof hatching thinned to tier 1 and a
+// plainer crown, or less where its own band has less – drawn back in by
+// the pen once it rests (land).
+function bareOf(band) {
+  const level = Math.max(1, (band >> 4) & 3), roof = Math.min(1, (band >> 2) & 3), tree = Math.max(1, band & 3);
+  return (level << 4) | (roof << 2) | tree;
+}
 // An object's detail changes only once the zoom is this share past its
 // threshold (Renderer.bandOf), so one resting on it doesn't switch to and fro.
 const BAND_HOLD = 0.02;
@@ -133,6 +142,11 @@ const r2 = (n) => Math.round(n * 100) / 100;
 const SQUASH = { ms: 300, down: 0.3, press: 0.07, spread: 0.035 };
 // An object's place among the others in when its detail changes
 // (Renderer.bandOf): 0..1, seeded by its key ('s12', 'f7', 'k3-4').
+// The shapes an object is drawn with, its garden and shadow (not the mist
+// over it, coverMist).
+function strokesOf(e) {
+  return [e.lg, e.g, e.sg].flatMap((g) => [...g.querySelectorAll('path,polygon,polyline,circle,ellipse,line,rect')]).filter((el) => !el.closest('.mist-cover'));
+}
 // Points every `step` along a polyline, from half a step in, with the
 // direction there: [{ p, dir }] (a track's sleepers).
 function spaced(pts, step) {
@@ -482,8 +496,10 @@ export class Renderer {
         while (batch < n && this.rebuildOrder.length) {
           const key = this.rebuildOrder.pop();
           this.rebuildQueue.delete(key);
-          if (!this.objs.get(key)?.stale) continue;
+          const e = this.objs.get(key);
+          if (!e?.stale) continue;
           this.objsDirty.add(key);
+          if (e.redetail && !e.bandStale) this.viewOnly.add(key); // (its views still hold)
           batch++;
         }
       }
@@ -1386,6 +1402,19 @@ export class Renderer {
     this.reapGhosts(true);
   }
 
+  // Turned far enough (config.render.turnBare): the objects go bare (bareOf)
+  // for the rest of the turn – their facade detail hidden at once, and
+  // each drawn bare at the steps it comes to – and get it back from the
+  // pen once the view rests (land, renderObjects).
+  goBare() {
+    this.bare = true;
+    for (const e of this.objs.values()) {
+      if (e.bare || e.hidBare) continue;
+      for (const g of [e.g, e.lg]) g.classList.add('bare');
+      e.hidBare = 'bare';
+    }
+  }
+
   // One frame of a turn, at the angle the camera has reached. The ground
   // (SHEET) turns as a sheet of paper, exact on flat ground; the roads,
   // paths, railways, fences and parked cars on it are drawn at this angle.
@@ -1395,7 +1424,9 @@ export class Renderer {
   // view rests: prepareTurn), or drawn now, as many as config.render.
   // turnBudget allows – buildings first, those furthest behind first. Each
   // slides the last hair to where it stands at this very angle; one not
-  // drawn yet slides round upright as last drawn, until its turn.
+  // drawn yet slides round upright as last drawn, until its turn. All of
+  // that bare (goBare), and only once the view has turned config.render.
+  // turnBare from where it rested: a nudge just slides them.
   turnFrame() {
     const cam = this.camera, a = cam.angle, t0 = performance.now();
     const k = Math.round(a / Camera.STEP) % STEPS;
@@ -1425,8 +1456,12 @@ export class Renderer {
       e.placedAt = a;
     }
     this.cull();
+    if (!this.bare) {
+      const off = Math.abs(Math.atan2(Math.sin(a - d.angle), Math.cos(a - d.angle)));
+      if (off >= (this.config.render.turnBare * Math.PI) / 180) this.goBare();
+    }
     const due = [];
-    for (const e of this.objs.values()) {
+    for (const e of this.bare ? this.objs.values() : []) {
       if (e.shown === false || e.k === k) continue;
       const view = !this.objsDirty.has(e.key) && e.views?.get(k);
       if (view) this.swapIn(e, view);
@@ -1443,7 +1478,7 @@ export class Renderer {
     // let go, it is coasting to the step it will rest on: everything in
     // sight is made ready there, buildings first, so it rests on what it
     // shows as it comes in
-    const rest = cam.spin ? ((Math.round((a + cam.spin.left) / Camera.STEP) % STEPS) + STEPS) % STEPS : null;
+    const rest = cam.spin && this.bare ? ((Math.round((a + cam.spin.left) / Camera.STEP) % STEPS) + STEPS) % STEPS : null;
     if (rest !== null && rest !== k) {
       this.turnRest = rest;
       for (const kind of ['s', 'f', 'k']) {
@@ -1494,11 +1529,13 @@ export class Renderer {
     }
   }
 
-  // An object's drawing at step `k` of the turn, its garden and shadow, as
-  // a view to keep (swapIn), drawn off the page; null if it is gone.
+  // An object's drawing at step `k` of the turn, bare (bareOf), its garden
+  // and shadow, as a view to keep (swapIn), drawn off the page; null if it
+  // is gone.
   buildView(e, k) {
     const cam = this.camera, live = cam.angle, id = Number(e.key.slice(1));
     cam.angle = k * Camera.STEP;
+    this.drawBare = true;
     try {
       const built = e.key[0] === 's' ? this.buildStructure(this.world.structures.get(id))
         : e.key[0] === 'f' ? this.buildFeature(this.world.features.get(id))
@@ -1507,20 +1544,21 @@ export class Renderer {
       const [g, lg, sg] = [0, 1, 2].map(() => document.createElementNS(SVGNS, 'g'));
       g.innerHTML = built.svg;
       lg.innerHTML = built.ground;
-      sg.innerHTML = this.shadowSVG(built.shade, built.band);
-      return { k, angle: cam.angle, g, lg, sg, shade: built.shade, band: built.band, vents: built.vents?.length ? built.vents : null, ventsTurn: cam.angle, bounds: built.bounds, box: built.box, at: built.at };
+      sg.innerHTML = this.shadowSVG(built.shade, built.detail);
+      return { k, angle: cam.angle, bare: true, g, lg, sg, shade: built.shade, band: built.band, vents: built.vents?.length ? built.vents : null, ventsTurn: cam.angle, bounds: built.bounds, box: built.box, at: built.at };
     } finally {
       cam.angle = live;
+      this.drawBare = false;
     }
   }
 
   // Put a view (buildView) in for the object's drawing, keeping the one it
-  // had, if drawn at a step, for when the turn comes back to it.
+  // had, if a bare one drawn at a step, for when the turn comes back to it.
   swapIn(e, view) {
     e.views ??= new Map();
-    if (e.k != null && !e.views.has(e.k)) {
-      const { k, angle, g, lg, sg, shade, band, vents, ventsTurn, bounds, box, at } = e;
-      e.views.set(e.k, { k, angle, g, lg, sg, shade, band, vents, ventsTurn, bounds, box, at });
+    if (e.k != null && e.bare && !e.views.has(e.k)) {
+      const { k, angle, bare, g, lg, sg, shade, band, vents, ventsTurn, bounds, box, at } = e;
+      e.views.set(e.k, { k, angle, bare, g, lg, sg, shade, band, vents, ventsTurn, bounds, box, at });
     }
     e.views.delete(view.k);
     for (const n of ['g', 'lg', 'sg']) {
@@ -1531,6 +1569,7 @@ export class Renderer {
     e.placedAt = view.angle;
     e.mid = null;
     e.slid = false;
+    e.hide = e.hidBare = ''; // (classes on the groups swapped out)
     this.keepViews(e);
     if (this.mistLevel != null) this.coverMist(e);
   }
@@ -1586,9 +1625,12 @@ export class Renderer {
 
   // The turn is over: the sheet drawn anew at the angle it rests at, and
   // whatever is still behind – from its views when it has one for this
-  // step (so what was shown last is what stays), or drawn anew.
+  // step (so what was shown last is what stays), or drawn anew. What
+  // shows bare (goBare) is drawn whole again, from the middle of the view
+  // out (the rebuild queue in frame()), the pen putting the detail back.
   land() {
-    this.turning = false;
+    const bare = this.bare;
+    this.turning = this.bare = false;
     this.turnRest = null;
     const a = this.camera.angle, k = this.camera.step();
     // the contours, water and brows as turned fade out over their drawing
@@ -1625,7 +1667,7 @@ export class Renderer {
         Object.assign(e, this.placeOf(e.at));
         e.placedAt = a;
       }
-      const view = e.angle !== a && k != null && !this.objsDirty.has(e.key) && e.views?.get(k);
+      const view = bare && e.angle !== a && k != null && !this.objsDirty.has(e.key) && e.views?.get(k);
       if (view) this.swapIn(e, view);
       else if (e.angle !== a) {
         e.stale = true;
@@ -1647,6 +1689,18 @@ export class Renderer {
       }
       if (e.slid) for (const g of [e.g, e.lg, e.sg]) g.removeAttribute('transform');
       e.slid = false;
+      if (e.hidBare) {
+        for (const g of [e.g, e.lg]) g.classList.remove('bare');
+        e.hidBare = '';
+      }
+      if (e.bare && e.angle === a && !this.objsDirty.has(e.key)) {
+        e.stale = true;
+        if (e.shown !== false) {
+          e.redetail = true;
+          this.rebuildQueue.add(e.key);
+          this.rebuildOrder = null;
+        }
+      }
     }
     this.reorder();
     this.preparedAt = null;
@@ -1882,10 +1936,18 @@ export class Renderer {
         orderChanged = true;
       }
       entry.sig = sig;
+      // drawn bare for a turn (goBare), now whole: the pen draws in what
+      // the bare drawing lacked
+      const was = entry.redetail && entry.bare && animate && entry.shown !== false && !this.born.has(key) ? new Set(strokesOf(entry).map((el) => el.outerHTML)) : null;
       entry.g.innerHTML = built.svg;
       entry.lg.innerHTML = built.ground;
       entry.shade = built.shade;
       entry.sg.innerHTML = this.shadowSVG(entry.shade, built.band);
+      if (was) {
+        const only = new Set(strokesOf(entry).filter((el) => !was.has(el.outerHTML)));
+        if (only.size) sketch.push({ entry, only });
+      }
+      entry.bare = entry.redetail = false;
       const b = built.bounds;
       if (!entry.bounds || ['minX', 'maxX', 'minY', 'maxY'].some((k) => entry.bounds[k] !== b[k])) orderChanged = true;
       entry.bounds = b;
@@ -1932,7 +1994,7 @@ export class Renderer {
     // after the DOM is in place: the pen needs computed styles and lengths
     const tile = this.camera.tile, scale = this.drawn.zoom;
     sketch.sort((a, b) => !!b.reverse - !!a.reverse); // erasing first: a swap waits for it
-    for (const { entry, key, reverse, drawnFor, then } of sketch) {
+    for (const { entry, key, reverse, drawnFor, then, only } of sketch) {
       const groups = [entry.lg, entry.g, entry.sg];
       if (reverse) {
         const left = eraseOut(groups, { drawn: drawnFor, tile, scale, speed: then ? DRAW.swap : 1 });
@@ -1942,6 +2004,8 @@ export class Renderer {
           this.born.set(then, now + left / 2);
           sketch.push({ entry: this.objs.get(then), key: then });
         }
+      } else if (only) {
+        drawIn(groups, { tile, scale, only, speed: DRAW.detail });
       } else if (drawIn(groups, { elapsed: now - this.born.get(key), tile, scale }) <= 0) {
         this.born.delete(key); // done
       }
@@ -2020,8 +2084,8 @@ export class Renderer {
     const out = this.paintStreet(key);
     if (!out) return null;
     const { painter, x, y } = out;
-    const band = this.bandFor(`k${key}`);
-    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
+    const band = this.bandFor(`k${key}`), detail = this.drawBare ? bareOf(band) : band;
+    return { band, detail, svg: mergeRuns(this.atDetail(painter.toSVG(), detail)), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
   }
 
   // The painters behind buildStreet / buildFeature / buildStructure, for any
@@ -2049,11 +2113,11 @@ export class Renderer {
   }
 
   buildFeature(f) {
-    const band = f && this.bandFor(`f${f.id}`);
-    const out = this.paintFeature(f, this.camera, band & 3);
+    const band = f && this.bandFor(`f${f.id}`), detail = this.drawBare ? bareOf(band) : band;
+    const out = this.paintFeature(f, this.camera, detail & 3);
     if (!out) return null;
     const { painter, x, y } = out;
-    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
+    return { band, detail, svg: mergeRuns(this.atDetail(painter.toSVG(), detail)), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
   }
 
   // The detail (bandOf) an object is drawn with now: as it was drawn last
@@ -2095,8 +2159,8 @@ export class Renderer {
     const out = this.paintStructure(s);
     if (!out) return null;
     const { painter, points } = out;
-    const band = this.bandFor(`s${s.id}`);
-    return { band, svg: mergeRuns(this.atDetail(painter.toSVG(), band)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), band)), shade: this.shadeOf(painter), vents: painter.vents, ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top, anchor: painter.rigid }) };
+    const band = this.bandFor(`s${s.id}`), detail = this.drawBare ? bareOf(band) : band;
+    return { band, detail, svg: mergeRuns(this.atDetail(painter.toSVG(), detail)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), detail)), shade: this.shadeOf(painter), vents: painter.vents, ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top, anchor: painter.rigid }) };
   }
 
   // An object's shadow (shadows.js): the feet of its walls and the other
@@ -2140,6 +2204,14 @@ export class Renderer {
     painter.sways = live;
     // windows close up (Painter._window): as the band it is drawn with
     if (live) painter.near = !!(this.bandFor(`s${s.id}`) & NEAR);
+    // (what its band leaves out isn't drawn at all)
+    const keep = (p) => {
+      if (!live) return;
+      const band = this.bandFor(`s${s.id}`), detail = this.drawBare ? bareOf(band) : band;
+      p.keep = 2 - ((detail >> 4) & 3);
+      p.keepTier = (detail >> 2) & 3;
+    };
+    keep(painter);
     const points = world.nodesOf(s).map((n) => world.grid.xy(n));
     if (def.site) {
       painter.follow = true; // parks and squares lie on the ground like yards
@@ -2167,6 +2239,7 @@ export class Renderer {
       yp.sways = live;
       yp.follow = true;
       yp.lod = 1;
+      keep(yp);
       YARDS[yard.style].draw(yp, yard, s);
       if (live && yp.spots.length) this.parking.setSpots(s, yp.spots);
       else if (live) this.parking.spots.delete(s.id);
@@ -2186,6 +2259,7 @@ export class Renderer {
       pp.sways = live;
       pp.follow = true;
       pp.lod = 1;
+      keep(pp);
       const plot = this.plotFor(s, plotDef, painter, core, yardWorld);
       drawPlot(pp, plot);
       painter.merge(pp, { aside: true });
