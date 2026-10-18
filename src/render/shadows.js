@@ -2,21 +2,24 @@
 // side turned away from the sun (shadows.html shows them beside the other
 // ways tried):
 //
-//   scribble  on the ground: one zigzag stroke along the foot of each wall
-//             turned away, its teeth pointing out along the sun, short.
+//   hatching  on the ground: the shadow a building casts, as far out along
+//             the sun as its walls are tall, filled with parallel pen lines.
 //             Every wall standing on the ground leaves its foot
-//             (Painter.feet: ends, height, outward normal); the renderer
-//             keeps an object's feet and redraws only this stroke from them
-//             (shadowSVG), so a sun that moves later on needs no repainting
-//             of buildings.
-//   strokes   on the wall itself: a few loose parallel strokes, leaning,
-//             with ragged tops, thinning out across the wall from a seeded
-//             end (wallStrokes, drawn by Painter._shade with the painter's
-//             own wobble); the further the wall is turned away, the more of
-//             them.
+//             (Painter.feet: ends, height, outward normal); each foot turned
+//             away from the sun casts the strip between it and its own foot
+//             shifted along the sun, and the strips together make the
+//             shadow. The renderer keeps an object's feet and redraws only
+//             the hatching from them (shadowSVG), so a sun that moves later
+//             on needs no repainting of buildings. The lines lie on one
+//             grid over the whole ground, each with the same wave wherever
+//             it is drawn, so where two shadows meet they read as one.
+//   strokes   on the wall itself: parallel strokes, leaning, evenly spaced
+//             up to just below the top (wallStrokes, drawn by Painter._shade
+//             with the painter's own wobble); the further the wall is
+//             turned away, the more of them.
 //
 // Both are drawn in the secondary pen (--detail) and fade with the weather
-// (--sun in styles.css). The wall strokes go by the roof hatching's density tiers
+// (--sun in styles.css). Both go by the roof hatching's density tiers
 // (rh1…rh3), so the map thins them out with the roofs, building by
 // building, as it zooms out.
 
@@ -33,14 +36,15 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //            view keeps shadows falling the same way on screen
 //   length   a shadow's length on the ground per unit of height (1 = 45° sun)
 //   low      walls lower than this (kerbs, benches, paving) get neither mark
-// scribble (null: none):
-//   from     how far a wall must turn away to get one (0 = side on to the
-//            sun, 1 = straight away)
-//   reach    how far the teeth reach out, as a share of the cast shadow's
-//            length, but no further than `most` (grid units)
-//   tooth    about this far apart along the wall (grid units)
-// strokes (null: none):
-//   from     as for the scribble; from `full` on the wall gets `most` of its
+// hatch, on the ground (null: none):
+//   angle    the lines' direction on screen, in degrees clockwise from
+//            screen right, so they lie the same way in every view
+//   gap      between the lines (grid units)
+//   wave     how far a line strays to either side as it runs (grid units)
+//   ragged   how unevenly the lines stop at the shadow's edge (grid units)
+// strokes, on the wall (null: none):
+//   from     how far a wall must turn away to get any (0 = side on to the
+//            sun, 1 = straight away); from `full` on it gets `most` of its
 //            strokes, in between fewer
 //   gap      between the strokes, in the wall's plane (grid units)
 //   lean     their angle from level, in the wall's plane (degrees)
@@ -49,10 +53,10 @@ const r2 = (n) => Math.round(n * 100) / 100;
 export const SUN = {
   on: true,
   fall: 150,
-  length: 0.55,
+  length: 1,
   low: 0.08,
-  scribble: { from: 0.1, reach: 0.35, most: 0.09, tooth: 0.07 },
-  strokes: { from: 0.1, full: 0.6, most: 0.9, gap: 0.05, lean: 70, ragged: 0.8, fade: 0.9 },
+  hatch: { angle: 120, gap: 0.04, wave: 0.008, ragged: 0.02 },
+  strokes: { from: 0.05, full: 0.45, most: 1, gap: 0.045, lean: 70, ragged: 0.12, fade: 0 },
 };
 
 // The density tier of hatch line k: every 8th (0), every 4th (1), every
@@ -77,8 +81,9 @@ export function groundDir(deg, rotation = 0) {
 
 // The sun for a camera: `cast` is the ground shift per unit of height.
 export function sunFor(camera, sun = SUN) {
-  const [fx, fy] = groundDir(sun.fall, camera.rotation ?? 0);
-  return { ...sun, cast: [fx * sun.length, fy * sun.length] };
+  const rotation = camera.rotation ?? 0;
+  const [fx, fy] = groundDir(sun.fall, rotation);
+  return { ...sun, rotation, cast: [fx * sun.length, fy * sun.length] };
 }
 
 // How far a wall with outward world normal n (unit, horizontal) is turned
@@ -96,49 +101,93 @@ export function hash(a, b) {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-// The feet that get a scribble: those turned away from the sun and tall
-// enough, with how far it reaches (world units) and the sun's ground
-// direction `c`.
-export function shadedFeet(feet, sun) {
-  const sc = sun.scribble;
-  if (!sc) return [];
+// The strips the feet cast on the ground, each a parallelogram in world
+// points: a foot turned away from the sun and tall enough, and the same
+// foot shifted along the sun by its height.
+export function castStrips(feet, sun) {
   const [sx, sy] = sun.cast;
-  const l = Math.hypot(sx, sy) || 1;
-  const c = [sx / l, sy / l];
   const out = [];
   for (const f of feet) {
-    const away = awayFrom(f.n, sun);
-    if (away <= sc.from || f.h < sun.low) continue;
-    out.push({ ...f, away, reach: Math.min(sc.most, f.h * l * sc.reach), c });
+    if (awayFrom(f.n, sun) <= 0 || f.h < sun.low) continue;
+    const [dx, dy] = [sx * f.h, sy * f.h];
+    out.push([f.a, f.b, [f.b[0] + dx, f.b[1] + dy], [f.a[0] + dx, f.a[1] + dy]]);
   }
   return out;
 }
 
-// An object's scribbles as path data, one subpath per shaded foot: a
-// zigzag along it, every other point out along the sun by a seeded share
-// of the reach. shade = { feet, project } (Renderer.shadeOf); `project(x,
-// y)`: a ground point -> scene px, with the object's relief and warp.
-export function shadowPath({ feet = [], project }, sun) {
-  if (!sun.on) return '';
-  let d = '';
-  for (const { a, b, reach, c } of shadedFeet(feet, sun)) {
-    const ex = b[0] - a[0], ey = b[1] - a[1];
-    const teeth = Math.max(2, Math.round(Math.hypot(ex, ey) / sun.scribble.tooth));
-    const pts = [];
-    for (let i = 0; i <= teeth * 2; i++) {
-      const t = 0.03 + (i / (teeth * 2)) * 0.94 + (hash(i, a[0]) - 0.5) * 0.02;
-      const w = i % 2 ? reach * (0.55 + 0.45 * hash(i, a[1] + b[0])) : reach * 0.08 * hash(b[1], i);
-      pts.push(project(a[0] + ex * t + c[0] * w, a[1] + ey * t + c[1] * w));
+// Where line c of the hatching (the points p with p·v = c) crosses a
+// convex polygon, as [t0, t1] along u; null if it misses.
+function across(poly, u, v, c) {
+  const ts = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    const cp = p[0] * v[0] + p[1] * v[1] - c, cq = q[0] * v[0] + q[1] * v[1] - c;
+    if (cp * cq > 0 || cp === cq) continue;
+    const k = cp / (cp - cq);
+    ts.push((p[0] + (q[0] - p[0]) * k) * u[0] + (p[1] + (q[1] - p[1]) * k) * u[1]);
+  }
+  return ts.length >= 2 ? [Math.min(...ts), Math.max(...ts)] : null;
+}
+
+// The hatching over a set of convex polygons (world points) as runs
+// [k, t0, t1]: line k of the ground's hatching (tierOf) from t0 to t1
+// along it. u: the lines' direction on the ground, v across them. Runs on
+// the same line that overlap are joined.
+export function hatchRuns(polys, u, v, gap) {
+  const lines = new Map();
+  for (const poly of polys) {
+    const cs = poly.map(([x, y]) => x * v[0] + y * v[1]);
+    for (let k = Math.ceil(Math.min(...cs) / gap); k * gap <= Math.max(...cs); k++) {
+      const r = across(poly, u, v, k * gap);
+      if (!r) continue;
+      if (!lines.has(k)) lines.set(k, []);
+      lines.get(k).push(r);
     }
-    d += `M${pts.map(([x, y]) => `${r2(x)} ${r2(y)}`).join('L')}`;
+  }
+  const out = [];
+  for (const [k, rs] of lines) {
+    rs.sort((a, b) => a[0] - b[0]);
+    let [t0, t1] = rs[0];
+    for (const [a, b] of rs.slice(1)) {
+      if (a <= t1) t1 = Math.max(t1, b);
+      else { out.push([k, t0, t1]); [t0, t1] = [a, b]; }
+    }
+    out.push([k, t0, t1]);
+  }
+  return out;
+}
+
+// An object's cast shadow as path data, one per density tier (tierOf):
+// the hatching over the strips its feet cast. shade = { feet, project }
+// (Renderer.shadeOf); `project(x, y)`: a ground point -> scene px, with
+// the object's relief and warp. Each line is drawn through points a step
+// apart, so it follows the ground, and strays to the sides by a wave that
+// depends only on where it is, so two shadows' lines meet as one.
+export function shadowPaths({ feet = [], project }, sun, rotation = 0) {
+  const d = ['', '', '', ''];
+  const h = sun.hatch;
+  if (!sun.on || !h) return d;
+  const u = groundDir(h.angle, rotation), v = [-u[1], u[0]];
+  const step = 0.12;
+  for (const [k, a, b] of hatchRuns(castStrips(feet, sun), u, v, h.gap)) {
+    const t0 = a + h.ragged * hash(k, a), t1 = b - h.ragged * hash(b, k);
+    if (t1 - t0 < h.gap) continue;
+    const n = Math.max(1, Math.ceil((t1 - t0) / step));
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const t = t0 + ((t1 - t0) * i) / n;
+      const c = k * h.gap + h.wave * (0.6 * Math.sin(t * 2.3 + k * 1.7) + 0.4 * Math.sin(t * 6.1 - k * 0.9));
+      pts.push(project(u[0] * t + v[0] * c, u[1] * t + v[1] * c));
+    }
+    d[tierOf(k)] += `M${pts.map(([x, y]) => `${r2(x)} ${r2(y)}`).join('L')}`;
   }
   return d;
 }
 
-// An object's ground shadow as SVG markup.
+// An object's cast shadow as SVG markup (Renderer.atDetail thins it out by
+// the tier classes).
 export function shadowSVG(shade, sun) {
-  const d = shadowPath(shade, sun);
-  return d ? `<path d="${d}" class="shadow"/>` : '';
+  return shadowPaths(shade, sun, sun.rotation).map((d, t) => (d ? `<path d="${d}" class="shadow${tierClass(t, 'rh')}"/>` : '')).join('');
 }
 
 // How many of a wall's strokes to draw (0..1), from how far it is turned

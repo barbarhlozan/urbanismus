@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SUN, groundDir, sunFor, shadedFeet, shadowPath, wallStrokes, strokeShare, tierOf } from '../src/render/shadows.js';
+import { SUN, groundDir, sunFor, castStrips, hatchRuns, shadowPaths, wallStrokes, strokeShare, tierOf } from '../src/render/shadows.js';
 
 // the sun casting along +x
 const sun = (over = {}) => ({ ...SUN, ...over, cast: [SUN.length, 0] });
@@ -24,26 +24,35 @@ const feet = [
 ];
 const project = (x, y) => [x * 10, y * 10];
 
-test('only the walls turned away from the sun get a scribble, and only tall ones', () => {
-  assert.deepEqual(shadedFeet(feet, sun()).map((f) => f.n), [[1, 0]]);
-  assert.equal(shadedFeet(feet.map((f) => ({ ...f, h: SUN.low / 2 })), sun()).length, 0);
+test('only the walls turned away from the sun cast a strip, and only tall ones', () => {
+  assert.deepEqual(castStrips(feet, sun()), [[[1, 0], [1, 1], [1 + SUN.length, 1], [1 + SUN.length, 0]]]);
+  assert.equal(castStrips(feet.map((f) => ({ ...f, h: SUN.low / 2 })), sun()).length, 0);
 });
 
-test('the scribble is one short zigzag on the shaded side', () => {
-  const d = shadowPath({ feet, project }, sun());
-  assert.equal(d.match(/M/g).length, 1);
+test('hatching joins the runs of shadows that overlap on a line', () => {
+  const sq = (x0, x1) => [[x0, 0], [x1, 0], [x1, 1], [x0, 1]];
+  const runs = hatchRuns([sq(0, 2), sq(1, 3), sq(5, 6)], [1, 0], [0, 1], 0.25);
+  const line = runs.filter(([k]) => k === 2).map(([, a, b]) => [a, b]);
+  assert.deepEqual(line, [[0, 3], [5, 6]]);
+});
+
+test('the cast shadow is hatched on the shaded side, as far out as the wall is tall', () => {
+  const d = shadowPaths({ feet, project }, sun()).join('');
   const xs = [...d.matchAll(/[ML](-?[\d.]+) (-?[\d.]+)/g)].map((m) => +m[1]);
-  assert.ok(xs.every((x) => x >= 10 - 1e-6), 'beyond the shaded wall at x = 1');
-  assert.ok(Math.max(...xs) <= 10 + SUN.scribble.most * 10 + 1e-6, 'no further than `most`');
-  assert.equal(shadowPath({ feet, project }, sun({ on: false })), '');
-  assert.equal(shadowPath({ feet, project }, sun({ scribble: null })), '');
+  assert.ok(xs.length > 10);
+  const slack = SUN.hatch.wave * 10 + 0.01;
+  assert.ok(xs.every((x) => x >= 10 - slack), 'beyond the shaded wall at x = 1');
+  assert.ok(Math.max(...xs) <= 10 + SUN.length * 10 + slack, 'no further than its length');
+  assert.equal(shadowPaths({ feet, project }, sun({ on: false })).join(''), '');
+  assert.equal(shadowPaths({ feet, project }, sun({ hatch: null })).join(''), '');
 });
 
 test('wall strokes: more the further a wall is turned, ragged and thinning out', () => {
-  const st = SUN.strokes;
-  assert.equal(strokeShare(st.from, sun()), 0);
-  assert.ok(strokeShare((st.from + st.full) / 2, sun()) < strokeShare(1, sun()));
-  assert.equal(strokeShare(1, sun()), st.most);
+  const st = { ...SUN.strokes, ragged: 0.8, fade: 0.9, most: 0.9 };
+  const S = SUN.strokes;
+  assert.equal(strokeShare(S.from, sun()), 0);
+  assert.ok(strokeShare((S.from + S.full) / 2, sun()) < strokeShare(1, sun()));
+  assert.equal(strokeShare(1, sun()), S.most);
   const wall = [[0, 0], [4, 0], [4, 0.6], [0, 0.6]];
   const all = wallStrokes(wall, { ...st, ragged: 0, fade: 0 }, 1, 3);
   const loose = wallStrokes(wall, st, 1, 3);

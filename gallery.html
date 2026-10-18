@@ -33,7 +33,7 @@
     //   &scheme=2    color scheme (src/theme.js: 0 Night, 1 Red light, 2 Paper)
     //   &join=1      drawn as if sharing walls on both sides (street fronts)
     //   &sketch=1.2  hand-drawn wobble (LOOK.sketch); any LOOK key works, e.g. &eave=0.05
-    //   &shadow=0    no shadows at all, &walls=0 no wall strokes, &scribble=0 none at the foot;
+    //   &shadow=0    no shadows at all, &walls=0 no wall strokes, &cast=0 none on the ground;
     //                any other SUN key works too, e.g. &fall=60&length=1 (src/render/shadows.js)
     //   &lod=1       as seen from middle zoom (2: far), to check what thins out
     //   &near=0      windows as further out, without their glazing bars (&open=false: ink blocks)
@@ -60,7 +60,7 @@
     for (const k of Object.keys(SUN)) if (typeof SUN[k] !== 'object' && k !== 'on' && q.has(k)) SUN[k] = isNaN(+q.get(k)) ? q.get(k) : +q.get(k);
     if (q.has('shadow')) SUN.on = q.get('shadow') !== '0';
     if (q.get('walls') === '0') SUN.strokes = null;
-    if (q.get('scribble') === '0') SUN.scribble = null;
+    if (q.get('cast') === '0') SUN.hatch = null;
     // a painter's cast shadow (drawn under it, as the map's shadows layer)
     const lod = q.get('lod') ?? 0;
     const shade = (g) => shadowSVG({ feet: g.feet, project: g.groundProjector() }, sunFor(cam));
