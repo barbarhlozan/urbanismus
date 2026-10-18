@@ -261,15 +261,15 @@ html, body {
    glazing bars in the finest pen */
 .layer-objects .pane { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
 .layer-objects .pane.bar { fill: none; stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
-/* shadows (src/render/shadows.js): a scribble on the ground at the foot of
-   a wall turned from the sun, a few loose strokes on it – in the
-   secondary pen, behind the drawing. --sun: how much the sun shows, from
+/* shadows (src/render/shadows.js): the shadow a building casts on the
+   ground, hatched, and hatching on its walls turned from the sun – in the
+   ink and pen of the roof hatching, the cast shadow behind the drawing. --sun: how much the sun shows, from
    the weather (config.weather.sun, set on #world and #objects by main.js,
    on a photo by photo.js); under a grey sky they fade almost away */
 @property --sun { syntax: '<number>'; inherits: true; initial-value: 1; }
 #world, #objects { transition: --sun 4s; }
-.shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
-.layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-opacity: var(--sun); }
+.shadow { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
+.layer-objects .wall-shade { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-opacity: var(--sun); }
 /* screen-facing line drawings (trees, see features/trees.js) */
 /* woods far out, one shape each (render/forest.js): as a tree's crown */
 .layer-forest .forest { fill: var(--bg); stroke: none; fill-rule: evenodd; }

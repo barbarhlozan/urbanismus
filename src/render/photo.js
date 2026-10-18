@@ -3,8 +3,8 @@
 //
 // Everything draws through a PerspectiveCamera (perspective.js): the
 // structures, trees and street lamps with their own draw code (the
-// renderer's paint* functions) with the scribbles at the foot of their shaded
-// walls (shadows.js), the roads, footpaths, fences and railways with the
+// renderer's paint* functions) with the shadows their shaded walls cast
+// (shadows.js), the roads, footpaths, fences and railways with the
 // renderer's ink items; deer, cows and sheep as the map's figures.
 //
 // The ground is solid: it is cut into bands across the view, each a little
@@ -128,8 +128,8 @@ export function takePhoto(renderer, shot) {
       const [gx, gy] = painter.groundAt[i];
       if (Math.hypot(gx - x, gy - y) >= PHOTO.lots) bands.add(bandAt(gx, gy), 'lots', svg);
     });
-    // the scribbles at the foot of its shaded walls, each on the ground
-    // band where it lies
+    // the shadow each of its shaded walls casts, on the ground band where
+    // the wall stands
     const project = painter.groundProjector();
     for (const f of painter.feet) {
       const [mx, my] = [(f.a[0] + f.b[0]) / 2, (f.a[1] + f.b[1]) / 2];

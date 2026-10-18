@@ -16,9 +16,9 @@
 //              close up the track itself (trackItems)
 //   roads    – roads + driveways (for buildings without surroundings);
 //              over the railways, so level crossings read as road
-//   shadows  – the scribbles at the foot of shaded walls (shadows.js);
-//              built together with objects, over the roads so a scribble
-//              runs on across the street
+//   shadows  – the hatched shadows buildings cast on the ground
+//              (shadows.js); built together with objects, over the roads
+//              so a shadow runs on across the street
 //   parked   – parked cars (hollow squares) in parking lots
 //   trains   – one railcar each (an oblong)
 //   agents   – moving dots; sit under objects so buildings hide them correctly
@@ -1472,7 +1472,7 @@ export class Renderer {
       entry.g.innerHTML = built.svg;
       entry.lg.innerHTML = built.ground;
       entry.shade = built.shade;
-      entry.sg.innerHTML = this.shadowSVG(entry.shade);
+      entry.sg.innerHTML = this.shadowSVG(entry.shade, built.band);
       const b = built.bounds;
       if (!entry.bounds || ['minX', 'maxX', 'minY', 'maxY'].some((k) => entry.bounds[k] !== b[k])) orderChanged = true;
       entry.bounds = b;
@@ -1684,15 +1684,15 @@ export class Renderer {
     return painter.feet.length ? { feet: painter.feet, project: painter.groundProjector() } : null;
   }
 
-  shadowSVG(shade) {
-    return shade ? shadowSVG(shade, sunFor(this.camera)) : '';
+  shadowSVG(shade, band) {
+    return shade ? this.atDetail(shadowSVG(shade, sunFor(this.camera)), band) : '';
   }
 
   // Every object's shadow drawn again from its feet, with SUN as it is
   // now – without repainting the objects (mark the layer dirty after a
   // change to SUN).
   renderShadows() {
-    for (const e of this.objs.values()) e.sg.innerHTML = this.shadowSVG(e.shade);
+    for (const e of this.objs.values()) e.sg.innerHTML = this.shadowSVG(e.shade, e.band);
   }
 
   paintStructure(s, camera = this.camera) {
@@ -2096,8 +2096,8 @@ export class Renderer {
         y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
       }
     }
-    // the scribble at its foot reaches out a little along the sun, any way it falls
-    const s = SUN.on && SUN.scribble ? SUN.scribble.most * t * 1.5 : 0;
+    // its shadow reaches out along the sun as far as it is tall, any way it falls
+    const s = SUN.on && SUN.hatch ? SUN.length * top * t * 1.2 : 0;
     return [x0 - t - s, y0 - top * this.camera.zScale * t - 2 * t, x1 + t + s, y1 + t + s];
   }
 

@@ -27,9 +27,9 @@
 //   g.solid(x, y, z)                         start a new depth-sorted group manually
 //   g.cylinder(x, y, z, r, h, sides, opts)   upright polygonal cylinder (chimneys, silos)
 //
-// Shadows – a wall turned away from the sun gets a few loose strokes, and
-// where it stands on the ground a scribble at its foot
-// (render/shadows.js; opts.shadow = false: neither for this face).
+// Shadows – a wall turned away from the sun gets hatched, and from where
+// it stands on the ground it casts a hatched shadow (render/shadows.js;
+// opts.shadow = false: neither for this face).
 //
 // Ground drawing – flat linework at z = 0 (lawns, paving, parking lines,
 // paths). It goes to a separate layer under roads and buildings, so it never
@@ -617,8 +617,8 @@ export class Painter {
     return this;
   }
 
-  // A wall turned away from the sun gets a few loose strokes (SUN.strokes,
-  // render/shadows.js wallStrokes), the more the further it is turned,
+  // A wall turned away from the sun gets hatched (SUN.strokes,
+  // render/shadows.js wallStrokes), the more densely the further it is turned,
   // sketched with the painter's own wobble. Drawn right after the wall, so
   // what is drawn on it later (ink windows) covers them; by the roof
   // hatching's density tiers, and hidden with the facade detail when far.
@@ -655,7 +655,7 @@ export class Painter {
   }
 
   // Record where a wall stands on the ground (its foot: world ends, height,
-  // outward normal), for the scribble at its foot (render/shadows.js).
+  // outward normal), for the shadow it casts (render/shadows.js).
   _footOf(points, n) {
     if (!this.casting) return;
     const w = this._wallNormal(n);
