@@ -43,9 +43,9 @@ const CONTROLS = 'button, [role="slider"]';
 // cells packed against their neighbours and the frame (tabs, tiles, the
 // dock's buttons, the × in a heading): their marks sit just inside, not
 // over the next cell
-const CELLS = '.close, .bm-tab, .bm-tool, .bm-act, .bm-toggle, .bm-opts button, .bm-drop, .photo-corner, .chron-tab';
+const CELLS = '.close, .bm-tab, .bm-tool, .bm-act, .bm-toggle, .bm-opts button, .bm-drop, .bm-camera, .chron-tab';
 // what can be chosen, by the mark it gets (styles.css shows it)
-const CHOSEN = '.bm-tab, .bm-tool, .photo-corner, .controls button, .chron-tab';
+const CHOSEN = '.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab';
 const TICKED = '.scheme';
 const SETTING = '.bm-opts button[aria-pressed], .bm-act[aria-pressed]';
 const HELD = '.bm-toggle';

@@ -449,7 +449,7 @@ terrain
   cs: Terén
   en: Terrain
 
-# photographs: the camera in the bottom-right corner, and photo mode's
+# photographs: the camera at the end of the Build menu's bottom row, and photo mode's
 # name and options in the dock while it's in hand
 
 control.photo
@@ -685,8 +685,8 @@ chronicle.print.caption
   en: {caption}, day {day}
 
 chronicle.no-photos
-  cs: Zatím tu není žádná fotografie. Fotoaparát je vpravo dole.
-  en: No photographs yet. The camera is in the bottom right corner.
+  cs: Zatím tu není žádná fotografie. Fotoaparát je poslední tlačítko v nabídce Stavět.
+  en: No photographs yet. The camera is the last button of the Build menu.
 
 # ---------- The ledger (the chronicle's Stav obce tab) ----------
 # the town today, as a hand-kept register has it: a rubric in the margin,

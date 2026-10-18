@@ -1,11 +1,9 @@
 // Screen furniture: the town's name and its chronicle book (top-left),
 // the Menu (top-right), the Build menu (bottom centre, or a rail on the
-// right; see buildMenu.js) and, alone in the bottom-right corner, the
-// camera: photo mode, one tap away. It's boxed in pen while photo mode
-// is on; its options, like any tool's, are in the Build menu's dock.
-// Terrain and Zpět / Znovu (undo, redo) stand in the Build menu too, beside
-// Erase (tools/terrain.js); the Menu keeps what's set now and then
-// (colours, files, language…).
+// right; see buildMenu.js). Zpět / Znovu (undo, redo), Terrain
+// (tools/terrain.js) and the camera (photo mode) stand in the Build menu,
+// beside Erase; the Menu keeps what's set now and then (colours, files,
+// language…).
 // The name can be edited in place; the book beside it opens the chronicle.
 // The Menu folds into its ≡ button: it starts folded and opens, on a wide
 // screen, as a line of drawings along the top edge, left of the button
@@ -13,7 +11,7 @@
 // down from it – either way in a pen-drawn frame like the other boxes
 // (main.js sketchFrames), only while open. It folds again once one is used
 // or on a click elsewhere. Each item is a drawing alone, read from its own
-// file in icons/ui/ (uiIcons.js), as are the ≡ and its cross, the camera,
+// file in icons/ui/ (uiIcons.js), as are the ≡ and its cross,
 // the book and the pencil by the name; an item's name is its title and, written
 // small in the pen beside it, shows while the pointer is on it or, on a
 // touch screen, after a long press, which then doesn't press it. The
@@ -22,7 +20,7 @@
 // app's name, version and author, small and quiet like a printer's line.
 
 import { BuildMenu } from './buildMenu.js';
-import { statIcon, cameraIcon, menuIcon } from './icons.js';
+import { statIcon, menuIcon } from './icons.js';
 import { drawing } from './uiIcons.js';
 import { resize, shrink } from './motion.js';
 import { CONFIG } from '../config.js';
@@ -71,8 +69,7 @@ export class Hud {
         ${control('language', `${t('control.language')}: ${LANGUAGES[otherLanguage()]}`, LANGUAGES[otherLanguage()], `flag${otherLanguage()}`)}
         <span class="imprint"><span>${CONFIG.app.name} v${CONFIG.app.version}</span> <span>${CONFIG.app.author}</span></span>
         <button class="close menu-toggle" aria-expanded="true">${menuButtonIcon()}</button>
-      </div>
-      <button class="photo-corner" data-act="photo" title="${t('control.photo')} (P)" aria-label="${t('control.photo')}" aria-pressed="false">${cameraIcon()}</button>`);
+      </div>`);
 
     this.chronEl = root.querySelector('.hud .chron');
     this.chronEl.addEventListener('click', () => actions.chronicle());
@@ -100,15 +97,6 @@ export class Hud {
     });
     nameEl.addEventListener('focus', () => nameEl.select());
     showName();
-
-    // the camera: picks up photo mode, or puts it down (main.js)
-    this.cameraEl = root.querySelector('.photo-corner');
-    this.cameraEl.addEventListener('click', () => actions.photo());
-    tools.onChange((tool) => {
-      const on = tool.id === 'photo';
-      this.cameraEl.classList.toggle('on', on);
-      this.cameraEl.setAttribute('aria-pressed', String(on));
-    });
 
     const controlsEl = root.querySelector('.controls');
     const menuBtn = controlsEl.querySelector('.menu-toggle');

@@ -49,14 +49,14 @@ drawing written in the code, the one each file was first exported from.
 | `lang-en.svg` | Menu: English (the Union Jack), shown while the game is in Czech |
 | `rename.svg` | Top left: the pencil beside the town's name, to rename it |
 | `chronicle.svg` | Top left: the chronicle book, beside the town's name |
-| `camera.svg` | Bottom right corner: photo mode, **P**; and the dock while it's on |
+| `camera.svg` | Build menu, last in the row under the rail (on a phone, the panel's bottom row): photo mode, **P**; and the dock while it's on |
 | `rotate.svg` | Tool dock: rotate option, **Tab** |
 | `bend-diagonal.svg` | Tool dock: a line's bend, diagonal first, **Tab** |
 | `bend-straight.svg` | Tool dock: a line's bend, straight first, **Tab** |
 | `another-look.svg` | Tool dock: another look, **Space** |
-| `terrain.svg` | Build menu, beside Erase: Terén / Terrain (the contour lines) |
-| `undo.svg` | Build menu, beside Erase, and the dock on a phone: Zpět / Undo, **⌘Z** |
-| `redo.svg` | Build menu, beside Erase, and the dock on a phone: Znovu / Redo |
+| `terrain.svg` | Build menu, after Erase, before the camera: Terén / Terrain (the contour lines), a range of mountains |
+| `undo.svg` | Build menu, first in the row, before Erase, and the dock on a phone: Zpět / Undo, **⌘Z** |
+| `redo.svg` | Build menu, right after Zpět, and the dock on a phone: Znovu / Redo |
 | `no-road.svg` | Building card: the warning that no road or path reaches it |
 | `dice.svg` | New map: Jiné jméno / Another name, beside the town's name |
 | `hills.svg` | New map: Krajina / Land (the hills) |

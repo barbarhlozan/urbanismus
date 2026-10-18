@@ -40,7 +40,6 @@
   --cell: calc(var(--bar-h) - 2px);
   --tile: calc(2 * var(--cell));
   --bm-w: var(--panel-w/2);
-  --cam: calc(var(--bar-h) + 14px); /* the camera in the corner, square */
   --ui-font: "Basteleur", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* notches and home indicators on phones */
   --safe-t: env(safe-area-inset-top, 0px);
@@ -630,27 +629,7 @@ body:not(.touch) .controls button:hover > .label, .controls button.telling > .la
   .controls .label { right: auto; left: 50%; top: calc(100% + 9px); transform: translateX(-50%); }
 }
 
-/* the camera: photo mode, alone in the bottom-right corner (hud.js) – below
-   the Build menu's rail on a wide screen, right of its dock otherwise; a
-   pen drawing in a pen frame, inked in while photo mode is on */
-#ui .photo-corner {
-  position: fixed;
-  right: calc(20px + var(--safe-r));
-  bottom: calc(20px + var(--safe-b));
-  z-index: 4; /* (under the Build menu's panel, should it open over it) */
-  width: var(--cam);
-  height: var(--cam);
-  padding: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  border: var(--line) solid var(--fg);
-  border-radius: var(--radius);
-}
-.photo-corner .camera-icon path { stroke-width: calc(1.25px * var(--stroke, 1)); }
 .bm-held .camera-icon path { stroke-width: calc(1.1px * var(--stroke, 1)); }
-#ui .photo-corner.locked { display: none; }
 
 
 .popup {
@@ -1190,14 +1169,16 @@ body.loading #ui { visibility: hidden; }
 .bm-tool .bm-icon { width: calc(var(--tile) - 34px); height: calc(var(--tile) - 34px); flex: 0 0 auto; display: flex; }
 .bm-tool .bm-name { font-size: 10px; line-height: 1.1; max-width: 100%; overflow-wrap: anywhere; }
 .bm-tool .key { position: absolute; top: 3px; right: 5px; font-size: 9px; color: var(--detail); white-space: nowrap; }
-/* Erase and Terrain: along the bottom, one bar high, side by side, a
-   drawing and its name in each */
+/* Zpět, Znovu, Erase, Terrain and the camera: along the bottom, one bar
+   high, side by side, a drawing and its name in each */
 .bm-loose { display: flex; border-top: var(--line) solid var(--fg); }
 #ui .bm-loose > button { flex: 1 1 auto; min-width: 0; position: relative; display: flex; align-items: center; flex-direction: row; justify-content: center; gap: 5px; height: var(--bar-h); padding: 0 4px; }
 #ui .bm-loose > button + button { border-left: var(--line) solid var(--fg); }
 .bm-loose .bm-icon { width: calc(var(--bar-h) - 14px); height: calc(var(--bar-h) - 14px); flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
 .bm-loose .bm-icon :is(.ctl-icon, .opt-icon) { width: 16px; height: 16px; }
 .bm-loose .bm-icon :is(.ctl-icon, .opt-icon) :is(path, circle) { stroke-width: 1.1 !important; fill: none !important; }
+.bm-loose .bm-icon .camera-icon { width: 20px; height: 20px; }
+.bm-loose .bm-icon .camera-icon path { stroke-width: calc(1.25px * var(--stroke, 1)); }
 .bm-loose .bm-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bm-loose .key { display: none; } /* (in the tooltip, as on the tiles) */
 #ui .bm-loose button:is(.locked, [hidden]) { display: none; }
@@ -1582,7 +1563,7 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
 #ui .dlg-choices button.focus > .pm .pm-u { stroke-dashoffset: 0; opacity: 1; transition-delay: 0s; }
 /* chosen: boxed */
-#ui :is(.bm-tab.on, .bm-tool.active, .photo-corner.on, .controls button.on, .chron-tab.on) > .pm .pm-chosen { display: inline; }
+#ui :is(.bm-tab.on, .bm-tool.active, .bm-camera.on, .controls button.on, .chron-tab.on) > .pm .pm-chosen { display: inline; }
 /* the line of words picked: ticked */
 #ui .scheme.on > .pm .pm-tick { display: inline; }
 /* a setting: its box, crossed while on */
@@ -1645,18 +1626,17 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
   .hud .name { font-size: 16px; }
 
   .build-menu { bottom: calc(10px + var(--safe-b)); }
-  #ui .photo-corner { right: calc(8px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); }
-  /* with a tool in hand the dock grows: it keeps to the room left of the
-     camera, in its middle, the tool shown by its drawing alone (no room
+  /* with a tool in hand the dock grows: it keeps to the width of the
+     screen, in its middle, the tool shown by its drawing alone (no room
      for names) */
-  .build-menu.folded.has-tool:not(.folding) { left: calc(8px + var(--safe-l)); right: calc(8px + var(--cam) + 8px + var(--safe-r)); transform: none; }
+  .build-menu.folded.has-tool:not(.folding) { left: calc(8px + var(--safe-l)); right: calc(8px + var(--safe-r)); transform: none; }
   .bm-dock { max-width: 100%; }
   .build-menu.has-tool .bm-label { display: none; }
   #ui .build-menu.has-tool .bm-toggle { padding: 0 4px; }
   #ui .bm-opts button, #ui .bm-history button, #ui .bm-drop { padding: 0 8px; }
   .bm-panel { width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); }
-  /* Erase, Terrain: half a phone each – room for the names (the keys go:
-     a phone has none) */
+  /* Erase, Terrain, the camera: a third of a phone each – room for the
+     names (the keys go: a phone has none) */
   .bm-loose .key { display: none; }
   #ui .bm-loose > button { padding: 0 4px; gap: 4px; justify-content: center; }
 
@@ -1790,9 +1770,9 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 }
 .photo-frame { border: var(--line) solid var(--fg); line-height: 0; }
 /* while the print is out, photo mode rests: its dock goes, and the camera
-   in the corner can't be pressed until the print is put away */
+   in the Build menu can't be pressed until the print is put away */
 body.print-open #ui .build-menu .bm-dock { visibility: hidden; }
-body.print-open #ui .photo-corner { pointer-events: none; opacity: 0.4; }
+body.print-open #ui .bm-camera { pointer-events: none; opacity: 0.4; }
 .photo-print svg.photo { width: 100%; height: auto; display: block; }
 .photo-caption { font-size: 13px; text-align: center; padding: 2px 0; }
 .photo-buttons { display: flex; justify-content: center; gap: 8px; }
