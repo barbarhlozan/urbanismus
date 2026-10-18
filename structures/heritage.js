@@ -536,6 +536,7 @@ export const castle = {
   id: 'castle',
   name: 'Castle',
   blurb: 'Ruin, castle or chateau',
+  size: 'Large',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   plot: { props: 'green', boundary: 0.2, kinds: ['hedge'], density: 0.45 },
   stats: { jobs: 3 },
@@ -616,5 +617,51 @@ export const castle = {
     heap(g, 1.2, 0.2, 0.06);
     tree(g, 0.25, 0.95, 1, 'spreading');
     tree(g, 1.25, 0.45, 0.9);
+  },
+};
+
+// What is left of a small castle on one dot (Kozí Hrádek, Šelmberk): the
+// round keep with its top broken off and a stump of the curtain wall
+// ('keep'), or one gable of the palace standing with its window holes,
+// a crumbling wall behind it ('gable'). Fallen stones and a tree or two.
+export const castleSmall = {
+  ...castle,
+  id: 'castle-small',
+  size: 'Small',
+  footprint: [[0, 0]],
+  plot: { props: 'green', boundary: 0, density: 0.4 },
+  stats: {},
+  agents: 0,
+  kinds: ['keep', 'gable'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    const mirror = g.chance(0.5), M = (x) => (mirror ? -x : x);
+    if (kind === 'gable') {
+      // the palace's end wall, its gable still up; the side wall behind
+      // it and a low stretch in front have crumbled to courses
+      const [a, b] = [M(-0.3), M(0.2)].sort((p, q) => p - q), h = g.range(0.26, 0.32);
+      g.box(a, 0.06, 0, b - a, 0.06, h);
+      g.windows(a, 0.06, b - a, 0.06, 0.1, h, 0.12, 0.13, { skip: ['left', 'right', 'back'] });
+      const m = (a + b) / 2, top = h + 0.16, c = [m, 0.09, h + 0.05];
+      g.solid(...c);
+      for (const y of [0.06, 0.12]) g.face(outward([[a, y, h], [b, y, h], [m, y, top]], c));
+      for (const x of [a, b]) g.face(outward([[x, 0.06, h], [m, 0.06, top], [m, 0.12, top], [x, 0.12, h]], c));
+      ruinWall(g, [M(-0.27), 0.16], [M(-0.27), 0.4], g.range(0.18, 0.24));
+      ruinWall(g, [M(-0.05), -0.26], [M(0.32), -0.26], g.range(0.09, 0.13));
+      heap(g, M(0.3), 0.0, 0.06);
+      heap(g, M(-0.2), -0.18, 0.05);
+      tree(g, M(0.18), 0.3, 0.9, 'spreading');
+      return;
+    }
+    // the keep, a stretch of curtain wall running off it to the front
+    const x = M(0.06), r = 0.13;
+    roundTower(g, x, 0.1, r, g.range(0.5, 0.62), 'broken');
+    const w = M(-0.34), e = x - M(r + 0.01);
+    ruinWall(g, [Math.min(w, e), 0.1], [Math.max(w, e), 0.1], g.range(0.2, 0.26));
+    ruinWall(g, [x, -0.04], [x, -0.3], g.range(0.1, 0.15));
+    heap(g, M(-0.2), -0.12, 0.06);
+    heap(g, M(0.27), -0.2, 0.05);
+    tree(g, M(-0.22), 0.33, 0.85);
+    tree(g, M(0.3), 0.32, 0.7, 'spruce');
   },
 };

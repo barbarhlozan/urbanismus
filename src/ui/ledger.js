@@ -76,7 +76,7 @@ const KINDS = [
   ['park', (d) => matches(d, 'park') && d.id !== 'pool'],
   ['square', (d) => matches(d, 'square') && d.id !== 'bus-station'],
   ['memorial', ids('memorial')],
-  ['castle', ids('castle')],
+  ['castle', ids('castle', 'castle-small')],
   ['tv-tower', ids('tv-tower')],
   ['stadium', ids('stadium')],
 ];

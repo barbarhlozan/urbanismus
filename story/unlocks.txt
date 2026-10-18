@@ -127,7 +127,7 @@
 #     church             church
 #     town_hall          town_hall, town_hall_small, town_hall_large
 #     memorial           memorial
-#     castle             castle
+#     castle             castle, castle_small
 #     tower              tv_tower
 #     stadium            stadium
 #

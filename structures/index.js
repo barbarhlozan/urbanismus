@@ -104,7 +104,7 @@ export const BUILD_FAMILIES = [
   [square.monumentSquare], [square.marketSquare], [square.busStation], [square.grandSquare], [square.paradeSquare],
   // Památky
   [heritage.chapel], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
-  [heritage.castle], [landmarks.tvTower], [landmarks.stadium],
+  [heritage.castle, heritage.castleSmall], [landmarks.tvTower], [landmarks.stadium],
 ];
 
 export const STRUCTURES = BUILD_FAMILIES.flat();
