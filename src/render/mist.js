@@ -27,7 +27,6 @@
 // beyond it, which they would cover a little.) The camera's warp is not
 // followed (STYLE.warp is 0).
 
-import { rotateQuarter } from '../core/grid.js';
 import { mulberry32 } from '../core/random.js';
 
 const COS30 = Math.cos(Math.PI / 6);
@@ -77,7 +76,7 @@ export function mistSurface(camera, height, [x0, y0, x1, y1], level, opts = MIST
   const uMin = Math.min(...corners.map((c) => c[0])), uMax = Math.max(...corners.map((c) => c[0]));
   const tMin = Math.min(...corners.map((c) => c[1])), tMax = Math.max(...corners.map((c) => c[1]));
   const at = (u, t) => {
-    const [x, y] = rotateQuarter((t + u) / 2, (t - u) / 2, -camera.rotation);
+    const [x, y] = camera.toWorld((t + u) / 2, (t - u) / 2);
     return [x + camera.cx, y + camera.cy];
   };
   const sy = (t) => (t / 2 - level * Z) * T;
@@ -203,7 +202,7 @@ export function coverSVG(camera, at, base, height, level, seed = 1) {
     const n = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.12));
     for (let i = s ? 1 : 0; i <= n; i++) {
       const rx = a[0] + ((b[0] - a[0]) * i) / n, ry = a[1] + ((b[1] - a[1]) * i) / n;
-      const [wx, wy] = rotateQuarter(rx, ry, -camera.rotation);
+      const [wx, wy] = camera.toWorld(rx, ry);
       const g = height(wx + camera.cx, wy + camera.cy);
       const t = rx + ry, sx = (rx - ry) * COS30 * T;
       samples.push([sx, (t / 2 - level * Z) * T, g < level ? (t / 2 - g * Z) * T : null]);

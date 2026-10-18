@@ -98,6 +98,9 @@ a Czech or German layout.
   footpath) to build more of it
 - **Middle click** – same as **Tab** (rotate what you're placing, flip a line's bend)
 - **Drag / wheel** – pan / zoom
+- **Right-button drag** – turn the view, to any angle; let go mid-turn and it coasts on
+  a little and settles. On a phone, twist two fingers. Buildings slide round upright
+  while it turns and are drawn anew from the new side once it rests
 - **Terrain** – contour lines: a button beside Erase (under the Build rail on a computer, in
   the panel's bottom row on a phone), crossed while on; once on they stay on whatever's in
   hand, until switched off there (off by default, they are the most expensive thing to draw)

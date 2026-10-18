@@ -673,7 +673,7 @@ function people(renderer, cam, seen) {
   const base = renderer.camera;
   const px = 1 / (base.zScale * base.tile); // map height of one of the figures' units
   const umbrellas = renderer.config.weather?.people?.[world.weather?.kind]?.umbrellas ?? 0;
-  const iso = { rotation: 0, tile: 32 }; // the bikes' directions as on an unturned map
+  const iso = { angle: 0, tile: 32 }; // the bikes' directions as on an unturned map
   const out = [];
   for (const a of agents.visible()) {
     const mode = a.trip?.mode;

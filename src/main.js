@@ -171,7 +171,7 @@ const popup = new Popup(uiRoot);
 // same one is pointed at in the same turn of the view.
 let topCache = { key: '', y: null };
 function topOf(s) {
-  const key = `${s.id}:${camera.rotation}`;
+  const key = `${s.id}:${camera.angle}`;
   if (topCache.key === key) return topCache.y;
   const g = renderer.objs.get(`s${s.id}`)?.g;
   let top = Infinity;
@@ -651,6 +651,7 @@ function loop(now) {
     deer.update(simDt);
     livestock.update(simDt);
     growth.update(simDt);
+    camera.coast(dt); // (a turn let go: in real time, whatever the clock)
     renderer.frame((dots ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
     const sky = weather.sky();
     cloudShadows.frame(simDt, camera, sky.cover);

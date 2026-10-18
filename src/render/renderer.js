@@ -112,6 +112,7 @@ const NEAR = 64;
 // threshold (Renderer.bandOf), so one resting on it doesn't switch to and fro.
 const BAND_HOLD = 0.02;
 const OVERSCAN = 0.25;
+const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
 // An object's place among the others in when its detail changes
 // (Renderer.bandOf): 0..1, seeded by its key ('s12', 'f7', 'k3-4').
@@ -383,33 +384,37 @@ export class Renderer {
       this.layers.terrain.style.setProperty('--z', this.zoomVar);
     }
     this.updateLod(this.drawn.zoom);
-    for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
-    this.dirty.clear();
-    if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
     for (const ink of Object.values(this.ink)) if (ink.busy) ink.tick();
-    if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
-    // a new level of detail: the objects in sight, as many as fit in
-    // config.render.rebuildBudget ms by what they took so far (rebandObjects),
-    // once the view has settled – each batch repaints the whole objects layer
-    let batch = 0;
-    if (this.rebuildQueue.size && !this.objsAll && performance.now() - this.movedAt > VIEW_SETTLE) {
-      this.rebuildOrder ??= this.nearestLast(this.rebuildQueue);
-      const n = Math.max(1, Math.floor(this.config.render.rebuildBudget / this.rebuildCost));
-      while (batch < n && this.rebuildOrder.length) {
-        const key = this.rebuildOrder.pop();
-        this.rebuildQueue.delete(key);
-        if (!this.objs.get(key)?.stale) continue;
-        this.objsDirty.add(key);
-        batch++;
+    // mid-turn the map as drawn is turned as a whole (placeView): what
+    // changes meanwhile waits until the view rests and all is drawn anew
+    if (this.cssTop == null) {
+      for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
+      this.dirty.clear();
+      if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
+      if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
+      // a new level of detail: the objects in sight, as many as fit in
+      // config.render.rebuildBudget ms by what they took so far (rebandObjects),
+      // once the view has settled – each batch repaints the whole objects layer
+      let batch = 0;
+      if (this.rebuildQueue.size && !this.objsAll && performance.now() - this.movedAt > VIEW_SETTLE) {
+        this.rebuildOrder ??= this.nearestLast(this.rebuildQueue);
+        const n = Math.max(1, Math.floor(this.config.render.rebuildBudget / this.rebuildCost));
+        while (batch < n && this.rebuildOrder.length) {
+          const key = this.rebuildOrder.pop();
+          this.rebuildQueue.delete(key);
+          if (!this.objs.get(key)?.stale) continue;
+          this.objsDirty.add(key);
+          batch++;
+        }
       }
+      if (this.objsAll || this.objsDirty.size) {
+        const t0 = performance.now();
+        const n = this.objsDirty.size;
+        this.renderObjects();
+        if (batch) this.rebuildCost += ((performance.now() - t0) / n - this.rebuildCost) * 0.3;
+      }
+      if (this.objsPlace) this.placeObjects();
     }
-    if (this.objsAll || this.objsDirty.size) {
-      const t0 = performance.now();
-      const n = this.objsDirty.size;
-      this.renderObjects();
-      if (batch) this.rebuildCost += ((performance.now() - t0) / n - this.rebuildCost) * 0.3;
-    }
-    if (this.objsPlace) this.placeObjects();
     if (this.ghosts.size) this.reapGhosts();
     if (this.showAgents) {
       this.pen.begin(this.camera, this.strokeK);
@@ -594,14 +599,14 @@ export class Renderer {
   }
 
   // What the camera sees of the ground, the brows (brows.js) and the rock
-  // faces (rocks.js), worked out for each rotation of the view and kept
-  // (per rotation and relief: turning back to a view finds them ready); as
-  // pencil strokes, a path per kind and chunk of the map.
+  // faces (rocks.js), worked out for each turn of the view and kept (the
+  // last few turns, per relief: turning back to a view finds them ready);
+  // as pencil strokes, a path per kind and chunk of the map.
   renderBrows() {
     const { camera, world } = this;
     if (!BROWS.on || !camera.lift) return '';
     if (this.brows?.lift !== camera.lift) this.brows = { lift: camera.lift, views: new Map() };
-    let view = this.brows.views.get(camera.rotation);
+    let view = this.brows.views.get(camera.angle);
     if (!view) {
       const { terrain, grid } = world;
       const m = 1.2; // (as the contours)
@@ -615,7 +620,8 @@ export class Renderer {
       const rocks = rockLines(world, camera, height, [-0.5, -0.5, grid.width - 0.5, grid.height - 0.5], (x, y) => hiddenAt(vis, camera, x, y));
       const lips = rocks.lips.flatMap((l, n) => pencil(l, n, ROCK_LOOK.pencil));
       view = { tiers, lips, faces: rocks.faces };
-      this.brows.views.set(camera.rotation, view);
+      if (this.brows.views.size >= 6) this.brows.views.delete(this.brows.views.keys().next().value);
+      this.brows.views.set(camera.angle, view);
     }
     const paths = (lines, cls) => chunked(lines, CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
     // (the brows are already on the picture, in tiles)
@@ -1210,22 +1216,32 @@ export class Renderer {
       for (const w of this.wrappers) Object.assign(w.style, { left: `${-this.ox}px`, top: `${-this.oy}px`, width: `${W + 2 * this.ox}px`, height: `${H + 2 * this.oy}px`, transformOrigin: `${this.ox}px ${this.oy}px` });
       this.drawn = null;
     }
-    const view = `${cam.zoom} ${cam.panX} ${cam.panY}`;
+    const view = `${cam.zoom} ${cam.panX} ${cam.panY} ${cam.angle}`;
     if (view !== this.lastView) {
       this.lastView = view;
       this.movedAt = now;
     }
     const d = this.drawn;
-    let css = '';
+    let css = '', cssTop = null;
     if (!d || d.view !== view) {
       const k = d ? cam.zoom / d.zoom : 1;
       const tx = d ? cam.panX - k * d.panX : 0, ty = d ? cam.panY - k * d.panY : 0;
       const { ox, oy } = this;
       const covered = tx - k * ox <= 0 && ty - k * oy <= 0 && tx + k * (W + ox) >= W && ty + k * (H + oy) >= H;
-      if (d && covered && this.deferView && now - this.movedAt < VIEW_SETTLE) {
+      // turning: the drawing turns as a sheet of paper until the view rests
+      // (a bare corner of paper may show meanwhile), then it is drawn anew
+      const turned = d && d.angle !== cam.angle;
+      if (d && (covered || turned) && this.deferView && now - this.movedAt < VIEW_SETTLE) {
         css = `translate(${tx}px, ${ty}px) scale(${k})`;
+        // (the buildings and trees stand up meanwhile: standUp)
+        if (turned) [css, cssTop] = [this.turnCSS(d, k), css];
+        if (turned) this.standUp(d);
       } else {
-        this.drawn = { view, zoom: cam.zoom, panX: cam.panX, panY: cam.panY };
+        if (turned) {
+          this.sitDown();
+          this.invalidate();
+        }
+        this.drawn = { view, zoom: cam.zoom, panX: cam.panX, panY: cam.panY, angle: cam.angle };
         const t = `translate(${cam.panX + ox} ${cam.panY + oy}) scale(${cam.zoom})`;
         for (const scene of this.scenes) scene.setAttribute('transform', t);
         this.updateStroke(cam.zoom);
@@ -1235,12 +1251,75 @@ export class Renderer {
         this.cullMeadow();
       }
     }
-    if (css !== this.css) {
-      this.css = css;
+    if (css !== this.css || cssTop !== this.cssTop) {
+      // the hover marks are drawn for the camera as it is: they would turn
+      // twice over, so they wait for the turn to end
+      this.layers.overlay.style.visibility = cssTop !== null ? 'hidden' : '';
+      [this.css, this.cssTop] = [css, cssTop];
       // on the wrappers, not the SVGs: a transform on an <svg> itself
       // makes the browser lay it out again
-      for (const w of this.wrappers) w.style.transform = css;
+      this.wrappers[0].style.transform = css;
+      this.wrappers[1].style.transform = cssTop ?? css;
     }
+  }
+
+  // The ground of the map as drawn (`d`, at d.angle) turned to where the
+  // camera is now, in scene px: about the middle of the map (the scene's
+  // origin), as in Camera.project, without the relief. [[a, b], [c, d]].
+  turnMatrix(d) {
+    const c = COS30, a = this.camera.angle - d.angle, cos = Math.cos(a), sin = Math.sin(a);
+    // scene px -> view axes (the projection undone) -> turned -> scene px
+    const inv = [[0.5 / c, 1], [-0.5 / c, 1]];
+    const turn = [[cos, -sin], [sin, cos]];
+    const proj = [[c, -c], [0.5, 0.5]];
+    const mul = (p, q) => [0, 1].map((i) => [0, 1].map((j) => p[i][0] * q[0][j] + p[i][1] * q[1][j]));
+    return mul(proj, mul(turn, inv));
+  }
+
+  // The CSS transform that turns the map as drawn as a sheet of paper to
+  // where the camera has turned it, scaled by `k` (hills lean with the sheet
+  // until it is drawn again).
+  turnCSS(d, k) {
+    const cam = this.camera;
+    const m = this.turnMatrix(d).map((row) => row.map((v) => v * k));
+    const tx = cam.panX - (m[0][0] * d.panX + m[0][1] * d.panY);
+    const ty = cam.panY - (m[1][0] * d.panX + m[1][1] * d.panY);
+    return `matrix(${m[0][0]}, ${m[1][0]}, ${m[0][1]}, ${m[1][1]}, ${tx}, ${ty})`;
+  }
+
+  // While the view turns, buildings and trees (#objects, only moved and
+  // scaled with the camera) keep standing up as drawn: each slides to where
+  // the turned ground takes the middle of its own ground, and the mist and
+  // the road marks over them turn with the ground. Out of order where they
+  // pass each other, until the turn ends and all is drawn again (sitDown).
+  standUp(d) {
+    const m = this.turnMatrix(d);
+    const turn = `matrix(${m[0][0]} ${m[1][0]} ${m[0][1]} ${m[1][1]} 0 0)`;
+    for (const l of ['mist', 'notes']) this.layers[l].setAttribute('transform', turn);
+    this.standing ??= new Set();
+    for (const e of [...this.objs.values(), ...this.ghosts.values()]) {
+      if (e.shown === false || !e.at?.points?.length) continue;
+      // (cached: where the middle of its ground was drawn)
+      if (e.footAngle !== d.angle) {
+        const pts = e.at.points;
+        const x = pts.reduce((s, p) => s + p[0], 0) / pts.length, y = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+        const cam = this.camera, a = d.angle, cx = x - cam.cx, cy = y - cam.cy;
+        const rx = cx * Math.cos(a) - cy * Math.sin(a), ry = cx * Math.sin(a) + cy * Math.cos(a);
+        e.foot = [(rx - ry) * COS30 * cam.tile, (rx + ry) * 0.5 * cam.tile];
+        e.footAngle = d.angle;
+      }
+      const [sx, sy] = e.foot;
+      const dx = m[0][0] * sx + m[0][1] * sy - sx, dy = m[1][0] * sx + m[1][1] * sy - sy;
+      e.g.setAttribute('transform', `translate(${r2(dx)} ${r2(dy)})`);
+      this.standing.add(e.g);
+    }
+  }
+
+  // The turn is over: everything back where it is drawn.
+  sitDown() {
+    for (const l of ['mist', 'notes']) this.layers[l].removeAttribute('transform');
+    for (const g of this.standing ?? []) g.removeAttribute('transform');
+    this.standing?.clear();
   }
 
   // Line widths for the zoom `z` (--stroke in styles.css): 1 / z rounded to
@@ -1412,7 +1491,8 @@ export class Renderer {
     const sketch = [];
     let swaps = 0;
     for (const [key, t] of this.born) if (t !== null && now - t > DRAW.max * DRAW.speed) this.born.delete(key);
-    let orderChanged = false;
+    // (turned past its quarter, the view puts the same boxes in another order)
+    let orderChanged = this.orderAngle !== this.camera.angle;
     for (const key of keys) {
       const id = Number(key.slice(1));
       let entry = this.objs.get(key);
@@ -1480,7 +1560,7 @@ export class Renderer {
       entry.at = built.at;
       entry.band = built.band;
       entry.vents = built.vents?.length ? built.vents : null;
-      entry.ventsTurn = this.camera.rotation;
+      entry.ventsTurn = this.camera.angle;
       this.coverMist(entry);
       if (entry.hide) {
         for (const g of [entry.g, entry.lg]) g.classList.remove(entry.hide);
@@ -1501,7 +1581,8 @@ export class Renderer {
     this.dying.clear();
 
     if (orderChanged) {
-      const order = isoSort([...this.objs.values(), ...this.ghosts.values()].map((e) => ({ ...e.bounds, entry: e }))).map((i) => i.entry);
+      const order = isoSort([...this.objs.values(), ...this.ghosts.values()].map((e) => ({ ...e.bounds, entry: e })), this.camera.quarterView()).map((i) => i.entry);
+      this.orderAngle = this.camera.angle;
       placeInOrder(this.layers.objects, order.filter((e) => e.shown !== false).map((e) => e.g)); // (out of sight: out of the page, see cull)
       this.order = order;
       this.objsPlace = false;
@@ -2265,7 +2346,7 @@ export class Renderer {
     const vents = [];
     const height = this.mistLevel != null ? this.groundHeight() : null;
     for (const e of this.objs.values()) {
-      if (!e.vents || e.shown === false || e.ventsTurn !== this.camera.rotation) continue;
+      if (!e.vents || e.shown === false || e.ventsTurn !== this.camera.angle) continue;
       for (const v of e.vents) {
         if (height && (this.camera.lift?.(v.at[0], v.at[1]) ?? 0) + v.at[2] < this.mistLevel) continue;
         vents.push(v);
@@ -2431,11 +2512,12 @@ export class Renderer {
     return !v || (b[0] < v[2] && b[2] > v[0] && b[1] < v[3] && b[3] > v[1]);
   }
 
-  // Ground rectangle of an object in view-aligned axes (both grow towards the viewer).
+  // Ground rectangle of an object in the axes of the view's nearest quarter
+  // turn (Camera.quarter: both lead towards the viewer), for isoSort.
   viewBounds(points, pad) {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const [x, y] of points) {
-      const [rx, ry] = this.camera.rotated(x, y);
+      const [rx, ry] = this.camera.quarter(x, y);
       minX = Math.min(minX, rx - pad);
       maxX = Math.max(maxX, rx + pad);
       minY = Math.min(minY, ry - pad);
@@ -2679,7 +2761,7 @@ export class Renderer {
     const order = cars
       .map(({ i, p: [x, y, dx, dy] }) => ({ i, x, y, a: Math.atan2(dy, dx), h: headingIndex(Math.atan2(dy, dx)), depth: cam.depth(x, y) }))
       .sort((a, b) => a.depth - b.depth);
-    const key = `${cam.rotation}|${order.map((c) => `${c.i}:${c.h}`).join(',')}`;
+    const key = `${cam.angle}|${order.map((c) => `${c.i}:${c.h}`).join(',')}`;
     if (el.key !== key) {
       el.key = key;
       el.shapes = order.map((c) => shapesOf(vehicleSVG(cam, `railcar:${len}`, c.h, c.i % VEHICLES.hands)));
@@ -2738,7 +2820,7 @@ export class Renderer {
     }
     const heading = el.heading ?? 0;
     const hand = (el.model ??= modelFor(a.id)).hand;
-    const key = `${cam.rotation}|${heading}|${name}`;
+    const key = `${cam.angle}|${heading}|${name}`;
     if (el.key !== key) {
       el.key = key;
       el.body = { shapes: shapesOf(vehicleSVG(cam, name, heading, hand)) };
@@ -2771,7 +2853,7 @@ export class Renderer {
     // put up an umbrella; who does is fixed per walker, so worked out once
     const share = this.umbrellas;
     const brolly = kind === 'walker' && share > 0 && ((el.brolly ??= bodyFor(`${a.id}u`)) + 0.5) / PEOPLE.bodies <= share;
-    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.rotation}` : `w${body}${brolly ? 'u' : ''}`;
+    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.angle}` : `w${body}${brolly ? 'u' : ''}`;
     if (el.key !== key) {
       el.key = key;
       el.shapes = !close ? [shape(kind, personMark(kind, a.id))]
@@ -2792,7 +2874,7 @@ export class Renderer {
     const close = this.camera.zoom >= VEHICLES.minZoom;
     const model = (el.model ??= modelFor(a.id));
     const heading = el.heading ?? 0;
-    const key = close ? `${model.name}|${heading}|${this.camera.rotation}` : 'dot';
+    const key = close ? `${model.name}|${heading}|${this.camera.angle}` : 'dot';
     if (el.key === key) return;
     el.key = key;
     el.shapes = close ? shapesOf(vehicleSVG(this.camera, model.name, heading, model.hand)) : (CAR_MARK ??= [shape('car', carMark())]);

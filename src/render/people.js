@@ -12,9 +12,8 @@
 // variants per kind, picked by the agent's id; the cyclists' wheels come in
 // VEHICLES.headings directions. Everything is cached.
 
-import { rotateQuarter } from '../core/grid.js';
 import { mulberry32 } from '../core/random.js';
-import { VEHICLES } from './vehicles.js';
+import { VEHICLES, headingIndex } from './vehicles.js';
 
 export const PEOPLE = {
   bodies: 12,    // body shapes to pick from
@@ -142,11 +141,13 @@ export function walkerSVG(variant, rain = false) {
 // tube, fork), a saddle and curled bars – with the figure sat on the saddle,
 // one arm out to the bars.
 export function cyclistSVG(camera, heading, variant) {
-  const key = `c${variant}|${heading}|${camera.rotation}|${camera.tile}`;
+  // (by the heading on screen: on the ground plus the view's turn)
+  const seen = headingIndex((heading / VEHICLES.headings) * Math.PI * 2 + camera.angle);
+  const key = `c${variant}|${seen}|${camera.tile}`;
   if (!cache.has(key)) {
-    const a = (heading / VEHICLES.headings) * Math.PI * 2;
+    const a = (seen / VEHICLES.headings) * Math.PI * 2;
     const half = PEOPLE.wheel / 2;
-    const [rx, ry] = rotateQuarter(Math.cos(a) * half, Math.sin(a) * half, camera.rotation);
+    const [rx, ry] = [Math.cos(a) * half, Math.sin(a) * half];
     const [dx, dy] = [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile];
     const wr = PEOPLE.height * 0.17;
     // a point `t` of the way from the middle to the front hub (-1 the back
@@ -180,13 +181,12 @@ export function cyclistSVG(camera, heading, variant) {
 export const CANOE = { length: 0.15, beam: 0.042, rim: 0.27, rise: 0.22, crew: 0.72 };
 
 export function canoeSVG(camera, heading, crew, stroke) {
-  const key = `k${heading}|${crew.join(',')}|${stroke}|${camera.rotation}|${camera.tile}`;
+  // (by the heading on screen: on the ground plus the view's turn)
+  const seen = headingIndex((heading / VEHICLES.headings) * Math.PI * 2 + camera.angle);
+  const key = `k${seen}|${crew.join(',')}|${stroke}|${camera.tile}`;
   if (cache.has(key)) return cache.get(key);
-  const a = (heading / VEHICLES.headings) * Math.PI * 2;
-  const screen = (wx, wy) => {
-    const [rx, ry] = rotateQuarter(wx, wy, camera.rotation);
-    return [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile];
-  };
+  const a = (seen / VEHICLES.headings) * Math.PI * 2;
+  const screen = (rx, ry) => [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile];
   const A = screen(Math.cos(a) * CANOE.length / 2, Math.sin(a) * CANOE.length / 2); // middle to the bow
   const N = screen(-Math.sin(a) * CANOE.beam / 2, Math.cos(a) * CANOE.beam / 2);   // middle to one side
   const H = PEOPLE.height; // heights in scene px, from the figures

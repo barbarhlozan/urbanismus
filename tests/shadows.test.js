@@ -10,9 +10,9 @@ test('screen directions map onto the ground and back with the view', () => {
   const [x, y] = groundDir(90);
   assert.ok(Math.abs(x - y) < 1e-9 && x > 0);
   // a quarter turn of the view turns the ground direction with it
-  const [rx, ry] = groundDir(90, 1);
+  const [rx, ry] = groundDir(90, Math.PI / 2);
   assert.ok(Math.abs(rx * x + ry * y) < 1e-9);
-  assert.equal(sunFor({ rotation: 0 }).cast.length, 2);
+  assert.equal(sunFor({ angle: 0 }).cast.length, 2);
 });
 
 // a unit box's four walls, outward normals, 1 high

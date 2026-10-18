@@ -28,7 +28,6 @@
 // slope's steepest line; past 1 the brow is the outline itself – the last
 // point seen before the ground drops out of sight – and is drawn darkest.
 
-import { rotateQuarter } from '../core/grid.js';
 
 const COS30 = Math.cos(Math.PI / 6);
 
@@ -71,7 +70,7 @@ export const BROWS = {
 
 // World point of view coordinates (u, t).
 function worldOf(camera, u, t) {
-  const [dx, dy] = rotateQuarter((t + u) / 2, (t - u) / 2, -camera.rotation);
+  const [dx, dy] = camera.toWorld((t + u) / 2, (t - u) / 2);
   return [dx + camera.cx, dy + camera.cy];
 }
 
