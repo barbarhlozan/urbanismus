@@ -10,16 +10,21 @@
 //             shifted along the sun, and the strips together make the
 //             shadow. The renderer keeps an object's feet and redraws only
 //             the hatching from them (shadowSVG), so a sun that moves later
-//             on needs no repainting of buildings. The lines lie on one
-//             grid over the whole ground, each with the same wave wherever
-//             it is drawn, so where two shadows meet they read as one.
+//             on needs no repainting of buildings. Trees cast theirs from
+//             the shapes they leave (Painter.casts, castShapes): a crown's
+//             round shadow, a spruce's pointed one, and a line from the
+//             trunk. The lines lie on one grid over the whole ground, each
+//             with the same wave wherever it is drawn, so where two shadows
+//             meet they read as one.
 //   strokes   on the wall itself: parallel strokes, leaning, evenly spaced
 //             up to just below the top (wallStrokes, drawn by Painter._shade
 //             with the painter's own wobble); the further the wall is
 //             turned away, the more of them.
 //
-// Both are drawn in the secondary pen (--detail) and fade with the weather
-// (--sun in styles.css). Both go by the roof hatching's density tiers
+// Both are drawn in the secondary ink (--detail), each with one of the
+// map's five pens (`pen`, styles.css), and fade with the weather (--sun in
+// styles.css). To try other settings on the map: cmd.sun({ … }) in the
+// console. Both go by the roof hatching's density tiers
 // (rh1…rh3), so the map thins them out with the roofs, building by
 // building, as it zooms out.
 
@@ -42,6 +47,7 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //   gap      between the lines (grid units)
 //   wave     how far a line strays to either side as it runs (grid units)
 //   ragged   how unevenly the lines stop at the shadow's edge (grid units)
+//   pen      which of the map's pens (1 finest … 5 thickest, styles.css)
 // strokes, on the wall (null: none):
 //   from     how far a wall must turn away to get any (0 = side on to the
 //            sun, 1 = straight away); from `full` on it gets `most` of its
@@ -50,14 +56,18 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //   lean     their angle from level, in the wall's plane (degrees)
 //   ragged   how unevenly their tops stop short (0 = all full height)
 //   fade     how much they thin out across the wall (0 = not at all)
+//   pen      as for the hatch
 export const SUN = {
   on: true,
   fall: 150,
   length: 1,
   low: 0.08,
-  hatch: { angle: 120, gap: 0.04, wave: 0.008, ragged: 0.02 },
-  strokes: { from: 0.05, full: 0.45, most: 1, gap: 0.045, lean: 70, ragged: 0.12, fade: 0 },
+  hatch: { angle: 120, gap: 0.04, wave: 0.008, ragged: 0.02, pen: 2 },
+  strokes: { from: 0.05, full: 0.45, most: 1, gap: 0.045, lean: 70, ragged: 0.12, fade: 0, pen: 2 },
 };
+
+// The class of a pen (1…5) in styles.css.
+export const penClass = (pen) => ` p${Math.min(5, Math.max(1, Math.round(pen ?? 2)))}`;
 
 // The density tier of hatch line k: every 8th (0), every 4th (1), every
 // other (2), the rest (3) – the roof hatching's, see Renderer.atDetail.
@@ -115,6 +125,52 @@ export function castStrips(feet, sun) {
   return out;
 }
 
+// The shadows the shapes a drawing leaves cast on the ground
+// (Painter.cast; world points, heights in grid units):
+//   crown  { at, z, r, rz }    a round crown: r across, rz up, its middle
+//                              z above the ground at `at`
+//   cone   { at, z0, z1, r }   a spruce's: r across at z0, a point at z1
+//   stem   { at, z }           a trunk up to z
+// as { polys (convex, for hatchRuns), lines (each a pen line) }.
+export function castShapes(casts = [], sun) {
+  const [sx, sy] = sun.cast;
+  const L = Math.hypot(sx, sy) || 1, c = [sx / L, sy / L], q = [-c[1], c[0]];
+  const along = ([x, y], z) => [x + sx * z, y + sy * z];
+  const polys = [], lines = [];
+  for (const s of casts) {
+    if (s.kind === 'crown') {
+      const [mx, my] = along(s.at, s.z), a = Math.hypot(s.r, L * s.rz), n = 12;
+      polys.push(Array.from({ length: n }, (_, i) => {
+        const t = (i / n) * 2 * Math.PI, u = Math.cos(t) * a, v = Math.sin(t) * s.r;
+        return [mx + c[0] * u + q[0] * v, my + c[1] * u + q[1] * v];
+      }));
+    } else if (s.kind === 'cone') {
+      const [mx, my] = along(s.at, s.z0), tip = along(s.at, s.z1), n = 10;
+      const ring = Array.from({ length: n }, (_, i) => [mx + Math.cos((i / n) * 2 * Math.PI) * s.r, my + Math.sin((i / n) * 2 * Math.PI) * s.r]);
+      polys.push(hull([...ring, tip]));
+    } else if (s.kind === 'stem' && s.z > 0) {
+      lines.push([s.at, along(s.at, s.z)]);
+    }
+  }
+  return { polys, lines };
+}
+
+// The convex hull of points, anticlockwise (monotone chain).
+function hull(pts) {
+  pts = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list) => {
+    const out = [];
+    for (const p of list) {
+      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], p) <= 0) out.pop();
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return [...half(pts), ...half([...pts].reverse())];
+}
+
 // Where line c of the hatching (the points p with p·v = c) crosses a
 // convex polygon, as [t0, t1] along u; null if it misses.
 function across(poly, u, v, c) {
@@ -158,18 +214,26 @@ export function hatchRuns(polys, u, v, gap) {
 }
 
 // An object's cast shadow as path data, one per density tier (tierOf):
-// the hatching over the strips its feet cast. shade = { feet, project }
+// the hatching over the strips its feet cast and the shadows of what else
+// it drew (castShapes), with its trunks' lines in the first tier, so they
+// stay as far out as anything. shade = { feet, casts, project }
 // (Renderer.shadeOf); `project(x, y)`: a ground point -> scene px, with
 // the object's relief and warp. Each line is drawn through points a step
 // apart, so it follows the ground, and strays to the sides by a wave that
 // depends only on where it is, so two shadows' lines meet as one.
-export function shadowPaths({ feet = [], project }, sun, rotation = 0) {
+export function shadowPaths({ feet = [], casts = [], project }, sun, rotation = 0) {
   const d = ['', '', '', ''];
   const h = sun.hatch;
   if (!sun.on || !h) return d;
   const u = groundDir(h.angle, rotation), v = [-u[1], u[0]];
   const step = 0.12;
-  for (const [k, a, b] of hatchRuns(castStrips(feet, sun), u, v, h.gap)) {
+  const { polys, lines } = castShapes(casts, sun);
+  for (const [a, b] of lines) {
+    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+    const pts = Array.from({ length: n + 1 }, (_, i) => project(a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n));
+    d[0] += `M${pts.map(([x, y]) => `${r2(x)} ${r2(y)}`).join('L')}`;
+  }
+  for (const [k, a, b] of hatchRuns([...castStrips(feet, sun), ...polys], u, v, h.gap)) {
     const t0 = a + h.ragged * hash(k, a), t1 = b - h.ragged * hash(b, k);
     if (t1 - t0 < h.gap) continue;
     const n = Math.max(1, Math.ceil((t1 - t0) / step));
@@ -187,7 +251,8 @@ export function shadowPaths({ feet = [], project }, sun, rotation = 0) {
 // An object's cast shadow as SVG markup (Renderer.atDetail thins it out by
 // the tier classes).
 export function shadowSVG(shade, sun) {
-  return shadowPaths(shade, sun, sun.rotation).map((d, t) => (d ? `<path d="${d}" class="shadow${tierClass(t, 'rh')}"/>` : '')).join('');
+  const pen = penClass(sun.hatch?.pen);
+  return shadowPaths(shade, sun, sun.rotation).map((d, t) => (d ? `<path d="${d}" class="shadow${pen}${tierClass(t, 'rh')}"/>` : '')).join('');
 }
 
 // How many of a wall's strokes to draw (0..1), from how far it is turned
