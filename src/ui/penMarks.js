@@ -7,15 +7,16 @@
 // mark shows when:
 //
 //   pointed at       a line drawn under its word, or under its drawing if
-//                    it has no word, from the left (never on a touch
+//                    it has no word, from the left; down the side of a
+//                    word written upright, from the top (never on a touch
 //                    screen, which has no pointer to hover)
 //   pressed          it grows a little and settles back (motion.js press),
 //                    and its marks – and its own pen frame, if it has one –
 //                    are drawn afresh
-//   chosen           ringed, the way an answer is circled on a form: a
-//                    loose ring round a drawing (a tab, a tile, the
-//                    camera), a box round a word (a Menu word whose panel
-//                    is open)
+//   chosen           boxed: a box drawn in the thin pen round the edge of
+//                    the control, filling round it (a tab, a tile, the
+//                    camera, a Menu word whose panel is open), just inside
+//                    a cell packed against its neighbours
 //   picked line      a tick at the right of the line of words picked (a
 //                    colour scheme)
 //   setting          a small box in the corner, crossed while it's on
@@ -34,7 +35,7 @@
 //
 // penMarks(root) marks every control under root, and the ones added later.
 
-import { sketchLine, sketchBox, sketchEllipse, seedOf } from '../render/sketch.js';
+import { sketchLine, sketchBox, seedOf } from '../render/sketch.js';
 import { press } from './motion.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -44,7 +45,7 @@ const CONTROLS = 'button, [role="slider"]';
 // over the next cell
 const CELLS = '.close, .bm-tab, .bm-tool, .bm-act, .bm-toggle, .bm-opts button, .bm-drop, .photo-corner, .chron-tab';
 // what can be chosen, by the mark it gets (styles.css shows it)
-const RINGED = '.bm-tab, .bm-tool, .photo-corner, .controls button, .chron-tab';
+const CHOSEN = '.bm-tab, .bm-tool, .photo-corner, .controls button, .chron-tab';
 const TICKED = '.scheme';
 const SETTING = '.bm-opts button[aria-pressed], .bm-act[aria-pressed]';
 const HELD = '.bm-toggle';
@@ -57,7 +58,7 @@ const IN = -3;  // …or inside a cell, or a box that would clip them
 const ARM = 6;  // px: each arm of a crop mark
 
 let count = 0;
-const parts = ['crop', 'u', 'ring', 'tick', 'box', 'x', 'held', 'strike'];
+const parts = ['crop', 'u', 'chosen', 'tick', 'box', 'x', 'held', 'strike'];
 
 export function penMarks(root) {
   const resized = new ResizeObserver((entries) => {
@@ -179,18 +180,25 @@ function draw(el) {
   set('crop', d);
   if (el.matches('[role="slider"]')) return; // (its knob shows the rest)
 
-  // the line under its word: a little past each end, never quite level
+  // the line under its word: a little past each end, never quite level;
+  // down the side of a word written upright (a book's thumb tab), on the
+  // side its letters stand on, from its first letter
   const c = contents(el, w);
-  const base = Math.min(c.y + c.h + 2.5, h - (cell ? 4 : 1.5)); // (clear of a cell's rule)
-  set('u', sketchLine([c.x - 1, base], [c.x + c.w + 1, base + ((s % 3) - 1) * 0.5], s, { over: 2 + (s % 4), bow: 1.3 }));
+  const tilt = ((s % 3) - 1) * 0.5;
+  if (getComputedStyle(el).writingMode.startsWith('vertical')) {
+    const side = Math.max(c.x - 2.5, cell ? 4 : 1.5);
+    set('u', sketchLine([side, c.y - 1], [side + tilt, c.y + c.h + 1], s, { over: 2 + (s % 4), bow: 1.3 }));
+  } else {
+    const base = Math.min(c.y + c.h + 2.5, h - (cell ? 4 : 1.5)); // (clear of a cell's rule)
+    set('u', sketchLine([c.x - 1, base], [c.x + c.w + 1, base + tilt], s, { over: 2 + (s % 4), bow: 1.3 }));
+  }
 
-  if (el.matches(RINGED)) {
-    set('ring', cell
-      // round the drawing: a tile a little off-centre and lumpier than a tab
-      ? el.matches('.bm-tool')
-        ? sketchEllipse(w / 2 + (s % 3) - 1, h / 2, w / 2 + 1, h / 2 - 1, s, { turns: 1.1, lump: 0.08 })
-        : sketchEllipse(w / 2, h / 2, w / 2 - 4, h / 2 - 4, s, { turns: 1.12, lump: 0.05 })
-      : sketchBox(c.x - 6, c.y - 3, c.w + 12, c.h + 6, s, { over: 4, waver: 1.4, slip: 1 }));
+  if (el.matches(CHOSEN)) {
+    // a box round its edge, in the thin pen and squarer than the tool in
+    // hand's: on the edge (clear of the pen frame round a row of them),
+    // just inside a cell, so it keeps off the next one
+    const i = cell || clipped(el) ? 2.5 : 0;
+    set('chosen', sketchBox(i, i, w - 2 * i, h - 2 * i, s + 7, { over: 2.5, waver: 0.8, slip: 0.6 }));
   }
   if (el.matches(TICKED)) {
     const x = w - 24, y = h / 2;

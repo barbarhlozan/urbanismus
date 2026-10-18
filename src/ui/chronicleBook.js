@@ -7,7 +7,8 @@
 //   Kronika     the entries, day by day: the town's lines, the story's
 //               paragraphs, and every photo taken, pasted in with corner
 //               mounts under the day it was taken (ui/prints.js). A cloth
-//               ribbon lies in the newest pages.
+//               ribbon lies in the newest pages (on a phone just its end
+//               shows, hanging out past the bottom).
 //   Fotografie  the photos again, two to a page, as an album.
 //   Stav obce   the ledger: the town as it stands today, its numbers in
 //               words (ui/ledger.js), counted afresh whenever it shows.
@@ -245,7 +246,7 @@ export class ChronicleBook {
 
   // The tabs' outlines: three sides each, drawn freehand, open toward the
   // page for the one that's open (it runs into the page), closed for the
-  // others. (The ring round the open one is its pen mark, ui/penMarks.js.)
+  // others. (The box round the open one is its pen mark, ui/penMarks.js.)
   drawTabs() {
     const down = !this.el.classList.contains('single'); // (down the fore edge)
     this.tabEls.forEach((el, i) => {
@@ -263,11 +264,15 @@ export class ChronicleBook {
   }
 
   // The ribbon: hangs from the top of the book over the newest pages and
-  // out past the bottom, two edges, a few threads, the end cut in a V.
+  // out past the bottom, two edges, a few threads, the end cut in a V. On
+  // a phone only its end shows, from under the page down past the bottom
+  // (styles.css), so it never lies over the writing.
   drawRibbon(show) {
     this.ribbonEl.classList.toggle('hidden', !show);
     if (!show) return;
-    const w = 12, h = this.el.offsetHeight + 40;
+    const w = 12, h = this.el.classList.contains('single')
+      ? this.el.querySelector('.chron-foot').offsetHeight + 34
+      : this.el.offsetHeight + 40;
     if (this.ribbonEl.dataset.h === String(h)) return;
     this.ribbonEl.dataset.h = h;
     const s = 4021;

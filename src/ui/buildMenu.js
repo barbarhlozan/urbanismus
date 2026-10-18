@@ -16,8 +16,8 @@
 // panel's bottom row with Erase and Terrain only, the panel being folded
 // most of the time: Zpět and Znovu stand in the dock there instead, beside
 // the Build button or before the × of the tool in hand. The tool in hand
-// has its name boxed in the thick pen, the chosen tab and tile are ringed
-// (penMarks.js).
+// has its name boxed in the thick pen, the chosen tab and tile are boxed
+// in the thin pen (penMarks.js).
 //
 // Keys (ui/keys.js): the number row opens a group, the letter rows pick a
 // tool in the open group, its tiles in reading order – the keys shown on
