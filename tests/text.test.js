@@ -45,7 +45,6 @@ test('every t(…) in the code has its word', () => {
     ...['transport', 'housing', 'work', 'amenities', 'spaces', 'heritage'].map((id) => `group.${id}`),
     ...['photo', 'assets', 'debug', 'export', 'import', 'newMap'].flatMap((a) => [`control.${a}`]),
     ...['residents', 'jobs'].map((k) => `stat.${k}.n`),
-    'inspect.clear.tree',
   ];
   for (const key of made) assert.ok(all.has(key), key);
 });

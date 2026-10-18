@@ -53,10 +53,11 @@ drawing written in the code, the one each file was first exported from.
 | `rotate.svg` | Tool dock: rotate option, **Tab** |
 | `bend-diagonal.svg` | Tool dock: a line's bend, diagonal first, **Tab** |
 | `bend-straight.svg` | Tool dock: a line's bend, straight first, **Tab** |
-| `another-look.svg` | Tool dock: another look, **Space** |
+| `another-look.svg` | Tool dock: another look, **Space**; and the Building card: Jiná podoba / Another look |
 | `terrain.svg` | Build menu, after Erase, before the camera: Terén / Terrain (the contour lines), a range of mountains |
 | `undo.svg` | Build menu, first in the row, before Erase, and the dock on a phone: Zpět / Undo, **⌘Z** |
 | `redo.svg` | Build menu, right after Zpět, and the dock on a phone: Znovu / Redo |
+| `yard.svg` | Building card: Okolí / Surroundings, beside Jiná podoba (a fence and a shrub) |
 | `no-road.svg` | Building card: the warning that no road or path reaches it |
 | `dice.svg` | New map: Jiné jméno / Another name, beside the town's name |
 | `hills.svg` | New map: Krajina / Land (the hills) |

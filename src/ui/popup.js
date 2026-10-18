@@ -3,6 +3,9 @@
 // items: [{ label, note?, disabled?, info?, heading?, unavailable?, action?, keepOpen? }]
 // or { section } – a line across with a small heading ('' for just the line)
 // or { block } – ready-made HTML (escaped by whoever builds it), e.g. a summary
+// An item with an `icon` (ready-made SVG) is shown as that drawing alone,
+// its label only as its name on pointing at it; icons that follow one
+// another stand side by side in a row.
 // (unavailable: can't be done here – shown crossed out in the detail colour)
 // keepOpen items leave the menu open and rebuild it with `refresh()`
 // (passed to show), e.g. to cycle through options.
@@ -89,7 +92,10 @@ export class Popup {
 
   render(title, items) {
     this.items = items;
-    this.body.innerHTML = `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="${t('close')}">×</button></div>` + items.map((item, i) => {
+    const html = items.map((item, i) => {
+      if (item.icon) {
+        return `<button data-i="${i}" class="popup-icon" title="${esc(item.label)}" aria-label="${esc(item.label)}">${item.icon}</button>`;
+      }
       if (item.block != null) return `<div class="popup-block">${item.block}</div>`;
       if (item.section != null) return `<div class="popup-section">${esc(item.section)}</div>`;
       const disabled = item.disabled || item.info || !item.action;
@@ -97,7 +103,16 @@ export class Popup {
       return `<button data-i="${i}" class="${cls}" ${disabled ? 'disabled' : ''}>
         <span class="label">${esc(item.label)}</span><span class="note">${esc(item.note ?? '')}</span>
       </button>`;
-    }).join('');
+    });
+    // a run of drawings: one row
+    let body = '';
+    html.forEach((h, i) => {
+      const icon = !!items[i].icon;
+      if (icon && !items[i - 1]?.icon) body += '<div class="popup-icons">';
+      body += h;
+      if (icon && !items[i + 1]?.icon) body += '</div>';
+    });
+    this.body.innerHTML = `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="${t('close')}">×</button></div>${body}`;
     // shown (at once, for measuring) unless it's on its way out: then
     // show() brings it back with an entrance
     if (!this.el.classList.contains('leaving')) this.el.classList.remove('hidden');

@@ -16,9 +16,6 @@ done
   cs: Hotovo
   en: Done
 
-back
-  cs: Zpět
-  en: Back
 
 town.name
   cs: Jméno obce
@@ -486,9 +483,6 @@ inspect.change-look
   cs: Jiná podoba
   en: Another look
 
-inspect.turn-into
-  cs: Přestavět na
-  en: Rebuild into
 
 inspect.yard
   cs: Okolí
@@ -502,37 +496,12 @@ inspect.demolish
   cs: Zbourat
   en: Demolish
 
-inspect.remove.road
-  cs: Odstranit silnici
-  en: Remove the road
 
-inspect.remove.lane
-  cs: Odstranit úzkou silnici
-  en: Remove the narrow road
 
-inspect.remove.rail
-  cs: Odstranit železnici
-  en: Remove the railway
 
-inspect.remove.path
-  cs: Odstranit pěšinu
-  en: Remove the footpath
 
-inspect.remove.fence
-  cs: Odstranit ohradu
-  en: Remove the fence
 
-inspect.clear.tree
-  cs: Vykácet stromy
-  en: Fell the trees
 
-inspect.crossing
-  cs: Železniční přejezd
-  en: Level crossing
-
-feature.tree
-  cs: Stromy
-  en: Trees
 
 yard.garden
   cs: Zahrada

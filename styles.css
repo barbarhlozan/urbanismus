@@ -684,6 +684,11 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .popup button:disabled { cursor: default; }
 .popup .unavailable, .popup button:disabled:not(.info):not(.heading) .label { color: var(--detail); }
 .popup .note { font-size: 10px; color: var(--detail); }
+/* drawings in a row (the Building card's look and surroundings), each a
+   square you can press, named on pointing at it */
+.popup-icons { display: flex; gap: 4px; padding: 2px 8px 6px; }
+#ui .popup button.popup-icon { width: auto; padding: 8px; justify-content: center; }
+.popup-icon .icon { width: 24px; height: 24px; display: block; fill: none; stroke: currentColor; stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .popup { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); display: flex; flex-direction: column; }
 .popup-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .popup.sheet {

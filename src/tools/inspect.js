@@ -1,37 +1,36 @@
-// Default tool: click a building, road or feature to get a menu of what can
-// be done with it. Building new things is done from the Build menu.
+// Default tool: click a building to get its card – what it is, another
+// look, its surroundings, and Zbourat. Roads, railways, paths, fences and
+// trees open nothing: Erase takes them away (and ⌘Z brings them back).
+// Building new things is done from the Build menu.
 
-import { STRUCTURES, STRUCTURE_TYPES, categoryOf, yardOf, kindsOf, kindShown } from '../../structures/index.js';
+import { STRUCTURE_TYPES, yardOf, kindsOf, kindShown } from '../../structures/index.js';
 import { YARDS, YARD_STYLES } from '../../structures/yards.js';
-import { FEATURE_TYPES } from '../../features/index.js';
-import { UNLOCKS } from '../story/unlocks.js';
 import { statIcon } from '../ui/icons.js';
+import { iconSvg } from '../ui/uiIcons.js';
 import { t, hasText } from '../core/text.js';
-import { nameOf, blurbOf, sizeOf } from '../ui/names.js';
+import { nameOf, blurbOf } from '../ui/names.js';
 
-// names of the surroundings and of what grows on the map (yard.<id>,
-// feature.<id>), else their own
-const named = (key, fallback) => (hasText(key) ? t(key) : fallback);
-const yardName = (id) => named(`yard.${id}`, YARDS[id].name);
-const featureName = (type) => named(`feature.${type}`, FEATURE_TYPES[type].name);
+// names of the surroundings (yard.<id>), else their own
+const yardName = (id) => (hasText(`yard.${id}`) ? t(`yard.${id}`) : YARDS[id].name);
+
+// stand-ins for the card's two drawings, icons/ui/another-look.svg and
+// icons/ui/yard.svg (uiIcons.js)
+const ANOTHER_LOOK = '<path d="M2.5 2.5 H13.5 V13.5 H2.5 Z"/><circle cx="5.5" cy="5.5" r="0.9"/><circle cx="10.5" cy="10.5" r="0.9"/><circle cx="8" cy="8" r="0.9"/>';
+const YARD = '<path d="M1.5 13.6 C5 13.3 10 13.8 14.6 13.4"/><path d="M2.6 13.5 V8.6 L3.3 7.6 L4 8.6 V13.5 M6.2 13.5 V8.6 L6.9 7.6 L7.6 8.6 V13.5 M1.6 10 H8.8 M1.6 12 H8.8"/><path d="M9.6 13.4 C8.9 12 9.5 10.2 11 10.1 C11.2 8.4 13.6 8.2 14 9.9 C15.2 10.4 15.1 12.6 13.9 13.4"/>';
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export function createInspectTool(ctx) {
-  // which page of a building's menu is showing: its own, or 'convert' (the
-  // types it can turn into); every new click starts on its own
-  const nav = { page: 'main' };
   return {
     id: 'inspect',
     label: t('tool.select'),
     toolbar: false, // it's what you're in when no tool is picked
 
     click(node, event) {
-      nav.page = 'main';
-      const menu = node < 0 ? null : menuFor(ctx, node, nav);
-      if (!menu) return ctx.popup.hide();
-      const around = screenBox(ctx, node);
-      ctx.popup.show(event.clientX, event.clientY, menu.title, menu.items, () => menuFor(ctx, node, nav), around);
+      const s = node < 0 ? null : ctx.world.structureAt(node);
+      if (!s) return ctx.popup.hide();
+      const { title, items } = structureMenu(ctx, s);
+      ctx.popup.show(event.clientX, event.clientY, title, items, () => structureMenu(ctx, s), screenBox(ctx, s));
     },
 
     exit() {
@@ -44,18 +43,15 @@ export function createInspectTool(ctx) {
   };
 }
 
-// Screen box around what was clicked (a building's whole footprint and some
-// height, or the one dot), so the menu can open beside it, not over it.
+// Screen box around the building clicked (its whole footprint and some
+// height), so the card can open beside it, not over it.
 const HEIGHT = 2.5; // in tiles; enough for most buildings
-function screenBox({ world, camera }, node) {
-  const s = world.structureAt(node);
-  const nodes = s ? world.nodesOf(s) : [node];
-  const z = s ? HEIGHT : 0.5;
+function screenBox({ world, camera }, s) {
   let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
-  for (const n of nodes) {
+  for (const n of world.nodesOf(s)) {
     const [x, y] = world.grid.xy(n);
     for (const [dx, dy] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
-      for (const h of [0, z]) {
+      for (const h of [0, HEIGHT]) {
         const [sx, sy] = camera.project(x + dx, y + dy, h);
         const cx = sx * camera.zoom + camera.panX, cy = sy * camera.zoom + camera.panY;
         left = Math.min(left, cx); right = Math.max(right, cx);
@@ -79,39 +75,26 @@ function summary(def, served) {
   return html;
 }
 
-function structureMenu({ world }, s, nav) {
+function structureMenu({ world }, s) {
   const def = STRUCTURE_TYPES[s.type];
-
-  // turning it into something else of the same kind (a house into
-  // apartments, a plaza into a fountain square): only what fits here, and
-  // may be built (src/story/unlocks.js)
-  const converts = STRUCTURES
-    .filter((other) => other.id !== s.type && categoryOf(other) === categoryOf(def) && world.canConvert(s.id, other.id).ok
-      && UNLOCKS.allows(other.id))
-    .map((other) => ({ label: nameOf(other), note: other.size ? sizeOf(other) : '', action: () => world.convertStructure(s.id, other.id) }));
-
-  // the second page: just those, and the way back
-  if (nav.page === 'convert' && converts.length) {
-    return {
-      title: nameOf(def),
-      items: [
-        { label: `‹ ${t('back')}`, keepOpen: true, action: () => { nav.page = 'main'; } },
-        { section: t('inspect.turn-into') },
-        ...converts,
-      ],
-    };
-  }
 
   // what it is: to look at, not to click
   const items = [{ block: summary(def, world.isServed(s)) }];
 
-  // changing how it looks – its next kind, in the order Space goes through
-  // them while building (tools/build.js) – or into what
+  // how it looks, as two drawings side by side (each named on pointing at
+  // it): its next kind, in the order Space goes through them while
+  // building (tools/build.js)…
   const kinds = kindsOf(def);
   const nextKind = () => kinds[(kinds.indexOf(kindShown(def, s)) + 1) % kinds.length];
-  items.push({ label: t('inspect.change-look'), keepOpen: true, action: () => world.restyleStructure(s.id, kinds.length > 1 ? nextKind() : null) });
+  items.push({
+    icon: iconSvg('another-look', 'class="icon" aria-hidden="true"', ANOTHER_LOOK),
+    label: t('inspect.change-look'),
+    keepOpen: true,
+    action: () => world.restyleStructure(s.id, kinds.length > 1 ? nextKind() : null),
+  });
 
-  // Surroundings: cycles automatic -> each style -> none -> automatic.
+  // …and its surroundings: automatic -> each style -> none -> automatic,
+  // the one it has now named with it
   if (def.yards?.length) {
     const choice = s.data.yard ?? 'auto';
     const cars = world.accessInfo(s) !== null; // no car park without a road
@@ -121,38 +104,15 @@ function structureMenu({ world }, s, nav) {
     const note = choice === 'auto' ? (current ? yardName(current) : none) : choice === 'none' ? none : yardName(choice);
     const order = ['auto', ...YARD_STYLES.filter((y) => cars || !YARDS[y].cars || y === choice), 'none'];
     const next = order[(order.indexOf(choice) + 1) % order.length];
-    items.push({ label: t('inspect.yard'), note, keepOpen: true, action: () => world.setYard(s.id, next === 'auto' ? null : next) });
+    items.push({
+      icon: iconSvg('yard', 'class="icon" aria-hidden="true"', YARD),
+      label: `${t('inspect.yard')}: ${note}`,
+      keepOpen: true,
+      action: () => world.setYard(s.id, next === 'auto' ? null : next),
+    });
   }
-  if (converts.length) items.push({ label: `${t('inspect.turn-into')}…`, note: '›', keepOpen: true, action: () => { nav.page = 'convert'; } });
 
   items.push({ section: '' }, { label: t('inspect.demolish'), action: () => world.removeStructure(s.id) });
 
   return { title: nameOf(def), items };
-}
-
-function menuFor(ctx, node, nav = { page: 'main' }) {
-  const { world } = ctx;
-  const s = world.structureAt(node);
-  if (s) return structureMenu(ctx, s, nav);
-
-  const feature = world.featureAt(node);
-  const road = world.hasRoad(node);
-  const rail = world.hasRail(node);
-  const fine = world.coarseToFine(node);
-  const path = world.paths.hasNode(fine);
-  const fence = world.fences.hasNode(fine);
-
-  // Building is done from the Build menu; here only what's already there.
-  const items = [];
-  const lane = road && world.laneOnly(node);
-  if (road) items.push({ label: t(lane ? 'inspect.remove.lane' : 'inspect.remove.road'), action: () => world.removeRoadAt(node) });
-  if (rail) items.push({ label: t('inspect.remove.rail'), action: () => world.removeNetworkAt('rail', fine) });
-  if (path) items.push({ label: t('inspect.remove.path'), action: () => world.removeNetworkAt('path', fine) });
-  if (fence) items.push({ label: t('inspect.remove.fence'), action: () => world.removeNetworkAt('fence', fine) });
-  if (feature) items.push({ label: t(`inspect.clear.${feature.type}`), action: () => world.removeFeature(feature.id) });
-  if (!items.length) return null; // empty ground or water: no menu
-
-  const title = road && rail ? t('inspect.crossing') : lane ? t('tool.lane') : road ? t('tool.road') : rail ? t('tool.rail')
-    : path ? t('tool.path') : fence ? t('tool.fence') : featureName(feature.type);
-  return { title, items };
 }

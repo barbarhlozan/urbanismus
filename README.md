@@ -114,8 +114,10 @@ folded there and folds again once you pick a tool.
 ## How it works, roughly
 
 - Every building is built as what it is – a house, apartments, a panel block, a Jednota, a
-  hospoda – and stays that way; click one and **Turn into…** to rebuild it as something else
-  of its group that fits there.
+  hospoda – and stays that way; to have something else there, take it down and build anew.
+  Clicking a building opens its card: what it is, another look and its surroundings (two
+  drawings), and Zbourat. Clicking a road, path, railway, fence or trees does nothing: Erase
+  removes them, and ⌘Z brings back what was removed.
 - Not everything needs a road. Homes, shops and offices, services, landmarks and the
   cemetery do fine with just a footpath within a dot and a half: their people walk or
   cycle, and they face the footpath. Industry, mines, farms and stations still need a road.
