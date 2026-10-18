@@ -24,7 +24,7 @@ export class Camera {
     this.minZoom = minZoom;
     this.maxZoom = maxZoom;
     this.angle = 0;
-    this.spin = null; // a turn let go, coasting to a stop: { at: [px, py], v: radians per second }
+    this.spin = null; // a turn let go, coasting to a stop: { at: [px, py], left: radians still to go }
     this.panX = 0;
     this.panY = 0;
     this.cx = (grid.width - 1) / 2;
@@ -216,20 +216,37 @@ export class Camera {
   }
 
   // Let a turn go at `v` radians per second around the screen point `at`:
-  // it carries on a little, slowing to a stop (coast).
+  // it carries on a little, slowing to a stop (coast), and comes to rest on
+  // a step of the view's turn (Camera.STEP), where the map keeps its
+  // drawings ready (Renderer.turnFrame) – however slowly it was let go.
   letGo(at, v) {
-    const { min, max } = Camera.SPIN;
-    this.spin = Math.abs(v) > min ? { at, v: Math.sign(v) * Math.min(max, Math.abs(v)) } : null;
+    const { min, max, ease } = Camera.SPIN;
+    v = Math.abs(v) > min ? Math.sign(v) * Math.min(max, Math.abs(v)) : 0;
+    const to = Math.round((this.angle + v * ease) / Camera.STEP) * Camera.STEP;
+    this.spin = { at, left: to - this.angle };
   }
 
   // One frame of a coasting turn (`dt` seconds): it slows evenly, as a
-  // turntable left to itself, and lands without coming back.
+  // turntable left to itself, and lands without coming back. The last
+  // hair of the way (SPIN.near) it is simply there.
   coast(dt) {
     if (!this.spin) return;
-    const { at, v } = this.spin;
-    this.turnAt(...at, v * dt);
-    this.spin.v = v * Math.exp(-dt / Camera.SPIN.ease);
-    if (Math.abs(this.spin.v) < Camera.SPIN.min) this.spin = null;
+    const { at, left } = this.spin;
+    const near = Math.abs(left) < Camera.SPIN.near;
+    const da = near ? left : left * (1 - Math.exp(-dt / Camera.SPIN.ease));
+    this.turnAt(...at, da);
+    this.spin.left -= da;
+    if (near) {
+      this.angle = Math.round(this.angle / Camera.STEP) * Camera.STEP; // (exactly)
+      this.spin = null;
+    }
+  }
+
+  // The step of the turn the view rests on (0 … 360° / STEP), or null
+  // between steps.
+  step() {
+    const k = this.angle / Camera.STEP;
+    return Math.abs(k - Math.round(k)) < 1e-9 ? Math.round(k) % Math.round((Math.PI * 2) / Camera.STEP) : null;
   }
 
   // ---- keeping the map in view ----
@@ -315,8 +332,12 @@ Camera.EASE = 0.12; // ...and how much further it slows to a stop
 // Turning the view: radians per px of a right-button drag across the
 // screen; a twist of two fingers turns it as far as they turn, once they
 // have turned `dead` radians (so a pinch doesn't turn the map by the way).
-// A turn let go carries on, slowing over `ease` seconds, and stops below
-// `min` radians per second; a flick sets it going at most `max` (so it
-// carries on a quarter turn at the most).
+// A turn let go carries on, slowing over `ease` seconds, as far as it
+// would going at more than `min` radians per second; a flick sets it going
+// at most `max` (so it carries on a quarter turn at the most). Within
+// `near` radians of where it stops, it is there.
 Camera.TURN = { px: 0.005, dead: 0.12 };
-Camera.SPIN = { ease: 0.22, min: 0.05, max: 6 };
+Camera.SPIN = { ease: 0.22, min: 0.05, max: 6, near: 0.0005 };
+// The view comes to rest on steps of its turn this far apart (2°): a
+// quarter turn is a whole number of them.
+Camera.STEP = Math.PI / 90;
