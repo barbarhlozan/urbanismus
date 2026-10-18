@@ -1,5 +1,5 @@
 // Default tool: click a building to get its card – its name, how many live
-// there (a number by a little figure) under it, and a row of drawings in
+// there under it (a little figure for each), and a row of drawings, all in
 // the middle: another look, its surroundings, Zbourat (an eraser). Roads, railways, paths, fences and
 // trees open nothing: Erase takes them away (and ⌘Z brings them back).
 // Building new things is done from the Build menu.
@@ -69,12 +69,20 @@ function screenBox({ world, camera }, s) {
   return { left, top, right, bottom };
 }
 
-// The building at a glance, kept short: how many people live there, as a
-// number by one of the town's little figures (none for a building nobody
-// lives in), and a warning when nothing reaches it.
+// The building at a glance, kept short: how many people live there, one
+// little figure for each, as the town's people are drawn (none for a
+// building nobody lives in) – a few in a line for a house, a small crowd
+// in rows for a block, smaller (.crowd in styles.css). Each stands a hair
+// higher or lower than the next, the same each time, as if drawn in one by
+// one. The number itself is the figures' name, for pointing and reading
+// aloud.
 function residents(def) {
   const n = def.stats?.residents;
-  return n ? `<span class="bi-people" title="${esc(t('stat.residents.n', { n }))}">${n}${iconSvg('person', 'class="icon" aria-hidden="true"', PERSON)}</span>` : '';
+  if (!n) return '';
+  const figure = iconSvg('person', 'class="icon" aria-hidden="true"', PERSON);
+  const one = (i) => `<span class="fig" style="--lift:${((i * 7) % 5) - 2}">${figure}</span>`;
+  const label = esc(t('stat.residents.n', { n }));
+  return `<span class="bi-people${n > 12 ? ' crowd' : ''}" role="img" title="${label}" aria-label="${label}">${Array.from({ length: n }, (_, i) => one(i)).join('')}</span>`;
 }
 function warning(def) {
   return `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${t(def.access === 'any' ? 'inspect.needs.any' : 'inspect.needs.road')}</span></div>`;
@@ -87,7 +95,7 @@ function structureMenu({ world }, s) {
   // it; then a row of drawings
   const people = residents(def);
   const items = [];
-  if (people) items.push({ block: `<div class="bi-row">${people}</div>` });
+  if (people) items.push({ block: people });
   if (!world.isServed(s)) items.push({ block: warning(def) });
 
   // how it looks, as two drawings side by side (each named on pointing at

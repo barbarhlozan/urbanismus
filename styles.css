@@ -666,10 +666,10 @@ body:not(.touch) .controls button:hover > .label, .controls button.telling > .la
 /* the Building card's head: its name the one thing to read first, larger,
    with room round it; no rule under it or beside the ×, which sits quiet
    in the corner */
-.popup .title { border-bottom: none; padding: 10px 0 2px 16px; align-items: flex-start; }
+.popup .title { border-bottom: none; padding: 10px 34px 2px; justify-content: center; text-align: center; }
 .popup .title > span { font-size: 17px; line-height: 1.25; padding: 6px 0 0; }
-#ui .popup .title .close { border-left: none; align-self: flex-start; min-height: 0; padding: 6px 12px; font-size: 14px; color: var(--detail); }
-.popup .popup-block { padding: 2px 16px 4px; }
+#ui .popup .title .close { position: absolute; top: 6px; right: 0; border-left: none; min-height: 0; padding: 6px 12px; font-size: 14px; color: var(--detail); }
+.popup .popup-block { padding: 2px 16px 4px; align-items: center; text-align: center; }
 
 /* × in the header of the popup menu and the Style panel */
 #ui .close {
@@ -702,8 +702,12 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
    square you can press, named on pointing at it */
 .popup-icons { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 10px 12px; }
 #ui .popup button.popup-icon { width: auto; padding: 6px; justify-content: center; }
-.bi-people { display: inline-flex; align-items: center; gap: 3px; font-size: 14px; color: var(--detail); }
-.bi-people .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+/* who lives there: a figure each, in a line (or rows, .crowd), in the middle */
+.bi-people { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 1px; max-width: 190px; padding-top: 2px; color: var(--fg); }
+.bi-people .fig { display: block; transform: translateY(calc(var(--lift, 0) * 0.5px)); }
+.bi-people.crowd { gap: 0; max-width: 176px; }
+.bi-people.crowd .icon { width: 11px; height: 11px; }
+.bi-people .icon { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .popup-icon .icon { width: 22px; height: 22px; display: block; fill: none; stroke: currentColor; stroke-width: calc(1.1px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .popup { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); display: flex; flex-direction: column; }
 .popup-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
