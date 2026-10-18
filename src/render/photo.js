@@ -129,12 +129,17 @@ export function takePhoto(renderer, shot) {
       if (Math.hypot(gx - x, gy - y) >= PHOTO.lots) bands.add(bandAt(gx, gy), 'lots', svg);
     });
     // the shadow each of its shaded walls casts, on the ground band where
-    // the wall stands
+    // the wall stands, and each of its roofs, gables and trees, on the band
+    // where it stands
     const project = painter.groundProjector();
-    for (const f of painter.feet) {
-      const [mx, my] = [(f.a[0] + f.b[0]) / 2, (f.a[1] + f.b[1]) / 2];
-      const svg = Math.hypot(mx - x, my - y) >= PHOTO.clear ? shadowSVG({ feet: [f], project }, sun) : '';
+    const put = (mx, my, shade) => {
+      const svg = Math.hypot(mx - x, my - y) >= PHOTO.clear ? shadowSVG({ ...shade, project }, sun) : '';
       if (svg) bands.add(bandAt(mx, my), 'lots', svg);
+    };
+    for (const f of painter.feet) put((f.a[0] + f.b[0]) / 2, (f.a[1] + f.b[1]) / 2, { feet: [f] });
+    for (const c of painter.casts) {
+      const [mx, my] = c.at ?? [c.pts.reduce((a, p) => a + p[0], 0) / c.pts.length, c.pts.reduce((a, p) => a + p[1], 0) / c.pts.length];
+      put(mx, my, { casts: [c] });
     }
   };
   for (const s of world.structures.values()) {

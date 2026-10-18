@@ -210,7 +210,7 @@
       if (!stationCache.has(key)) {
         const g = new Painter(cam, ST, 2, 7);
         station.draw(g, { type: 'station', seed: 7, id: 0, node: 0, rotation: 2 });
-        const shade = shadowSVG({ feet: g.feet, project: g.groundProjector() }, sunFor(cam));
+        const shade = shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sunFor(cam));
         stationCache.set(key, { ground: g.toGroundSVG(), shade, objects: g.toSVG(), cls: 'lod-0' });
       }
       return stationCache.get(key);

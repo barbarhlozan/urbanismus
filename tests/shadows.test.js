@@ -86,3 +86,14 @@ test('a tree casts its crown along the sun, and its trunk as a line', () => {
   const d = shadowPaths({ casts: [{ kind: 'crown', at: [0, 0], z: 1, r: 0.2, rz: 0.3 }], project }, s).join('');
   assert.ok(d.length > 0);
 });
+
+test('a roof casts its own outline, and a gable end wall its point', () => {
+  const s = sun();
+  // a roof plane from the eave at 1 up to the ridge at 1.5, across x = 0..1
+  const { polys } = castShapes([{ kind: 'face', pts: [[0, 0, 1], [0, 1, 1], [0.5, 1, 1.5], [0.5, 0, 1.5]] }], s);
+  const xs = polys[0].map(([x]) => x);
+  assert.ok(Math.abs(Math.min(...xs) - SUN.length) < 1e-9 && Math.abs(Math.max(...xs) - (0.5 + 1.5 * SUN.length)) < 1e-9);
+  // a wall level at 1 casts its strip that far, whatever its point reaches
+  const [strip] = castStrips([{ a: [1, 0], b: [1, 1], h: 1.5, level: 1, n: [1, 0] }], s);
+  assert.equal(Math.max(...strip.map(([x]) => x)), 1 + SUN.length);
+});

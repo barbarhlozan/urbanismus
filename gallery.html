@@ -63,7 +63,7 @@
     if (q.get('cast') === '0') SUN.hatch = null;
     // a painter's cast shadow (drawn under it, as the map's shadows layer)
     const lod = q.get('lod') ?? 0;
-    const shade = (g) => shadowSVG({ feet: g.feet, project: g.groundProjector() }, sunFor(cam));
+    const shade = (g) => shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sunFor(cam));
     // before = the look at the start of the hand-drawn pass (wobble only)
     const NEW = { ...LOOK }, OLD = { ...LOOK, fascia: 0.012, sill: true, overshoot: 0, ink: false, hatch: 0, ground: 0, floors: true };
     const looks = q.has('compare') ? [['before', OLD], ['after', NEW]]
