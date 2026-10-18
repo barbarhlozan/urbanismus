@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dědina – UI drawings</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <style>
+    @font-face { font-family: "Basteleur"; src: url("../../fonts/Basteleur-Moonlight.woff2") format("woff2"); }
+    :root { --bg: #000; --main: #bababa; --detail: #5f5f5f; }
+    body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--main); font: 14px/1.45 "Basteleur", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; }
+    h1 { font-weight: normal; font-size: 26px; margin: 0 0 4px; }
+    h2 { font-weight: normal; font-size: 18px; margin: 32px 0 0; }
+    p { margin: 0 0 8px; color: color-mix(in srgb, var(--main) 70%, var(--bg)); }
+    .rule { display: block; width: 100%; height: 6px; overflow: visible; }
+    .rule path { fill: none; stroke: var(--detail); stroke-width: 0.7px; stroke-linecap: round; }
+    .row { display: grid; grid-template-columns: 24px 96px 1fr; gap: 20px; align-items: center; padding: 14px 0 12px; }
+    .row svg.drawing { display: block; overflow: visible; color: var(--main); }
+    .row svg.drawing * { vector-effect: non-scaling-stroke; }
+    .name { font-size: 16px; }
+    .where { color: color-mix(in srgb, var(--main) 70%, var(--bg)); }
+    .missing { color: var(--detail); font-style: italic; }
+    code { font: inherit; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>The UI's drawings</h1>
+    <p>Every file in <code>icons/ui/</code>, at 24 px and at 96 px, and where the game shows it.
+      Replace a file and reload to change a drawing (see the README here for how to draw one).
+      At 96 px the lines keep the weight the file gives them, as the game keeps its pen.</p>
+    <div id="out"></div>
+  </main>
+  <script type="module">
+    // Dev page: the list of drawings is the loader's own (src/ui/uiIcons.js
+    // ICONS), grouped by the place before the colon; each file is fetched
+    // and drawn in twice, as it is, in the colour scheme in use.
+    import { ICONS } from '../../src/ui/uiIcons.js';
+    import { applyTheme } from '../../src/theme.js';
+    import { sketchLine } from '../../src/render/sketch.js';
+
+    applyTheme();
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const rule = (seed) => `<svg class="rule" viewBox="0 0 760 6" preserveAspectRatio="none" aria-hidden="true"><path d="${sketchLine([2, 3], [758, 3.4], seed, { over: 2, bow: 1.5 })}"/></svg>`;
+
+    const files = await Promise.all(Object.keys(ICONS).map(async (name) => {
+      try {
+        const res = await fetch(`${name}.svg`);
+        if (!res.ok) throw new Error(res.status);
+        const svg = new DOMParser().parseFromString(await res.text(), 'image/svg+xml').documentElement;
+        if (svg.localName !== 'svg') throw new Error('not an SVG');
+        for (const s of svg.querySelectorAll('script, foreignObject')) s.remove();
+        return svg;
+      } catch {
+        return null;
+      }
+    }));
+    const at = (svg, px) => {
+      const copy = document.importNode(svg, true);
+      copy.setAttribute('class', 'drawing');
+      copy.setAttribute('width', px);
+      copy.setAttribute('height', px);
+      return copy.outerHTML;
+    };
+
+    let html = '', group = null, seed = 1;
+    Object.entries(ICONS).forEach(([name, where], i) => {
+      const place = where.split(':')[0];
+      if (place !== group) html += `<h2>${esc((group = place))}</h2>`;
+      const svg = files[i];
+      html += rule(seed++) + `<div class="row">
+        ${svg ? at(svg, 24) + at(svg, 96) : '<span></span><span class="missing">missing</span>'}
+        <div><div class="name">${esc(name)}.svg</div><div class="where">${esc(where)}</div></div>
+      </div>`;
+    });
+    document.getElementById('out').innerHTML = html + rule(seed);
+  </script>
+</body>
+</html>

@@ -1,10 +1,11 @@
 // Small line drawings for the Build menu. Buildings are drawn with their own
 // draw() through the same Painter as the map (with a fixed seed), so the
 // icons always match what gets built; lines and the eraser are hand drawn.
-// Photo mode's camera (cameraIcon) is drawn by the pen of the UI frames
-// (render/sketch.js), stroke by stroke. The Menu's drawings are files of
-// their own in icons/menu/ (menuIcons.js); those below are kept as their
-// stand-ins.
+// The other drawings here (the camera, the HUD's, the Menu's, the New map
+// settings') are files of their own in icons/ui/, read at startup
+// (uiIcons.js); the ones written below stand in for a file that can't be
+// read. The camera's stand-in is drawn by the pen of the UI frames
+// (render/sketch.js), stroke by stroke; its file was exported from it.
 
 import { Camera } from '../render/camera.js';
 import { Painter } from '../render/painter.js';
@@ -12,6 +13,7 @@ import { vehicleSVG } from '../render/vehicles.js';
 import { drawSeed, footprintOffsets } from '../../structures/index.js';
 import { sampleSitePaths } from '../roads/siteWalks.js';
 import { sketchLine, sketchRect, sketchEllipse } from '../render/sketch.js';
+import { drawing, iconSvg } from './uiIcons.js';
 
 const ICON_SEED = 12345;
 const PAD = 3;
@@ -125,12 +127,16 @@ export function toolIcon(tool) {
   return art ? `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">${art}</svg>` : '<svg class="icon" viewBox="0 0 32 32"></svg>';
 }
 
-// Photo mode's camera: a plain camera – a box, the viewfinder's hump on
-// top, the shutter button beside it, the lens in the middle. A few pen
-// strokes on a 32×32 box, the same every time (fixed seeds).
+// Photo mode's camera, icons/ui/camera.svg. Its stand-in is a plain camera
+// – a box, the viewfinder's hump on top, the shutter button beside it, the
+// lens in the middle – in a few pen strokes on a 32×32 box, the same every
+// time (fixed seeds), drawn once when first wanted.
 let camera = null;
 export function cameraIcon() {
-  if (camera) return camera;
+  return iconSvg('camera', 'class="icon camera-icon" aria-hidden="true"', camera ??= cameraArt(), '0 0 32 32');
+}
+
+function cameraArt() {
   const o = { k: 0.3 };
   const d = [
     sketchRect(4, 10.5, 24, 15.5, 31, { k: 0.3, over: 1.4, bow: 1 }),     // the body
@@ -139,11 +145,12 @@ export function cameraIcon() {
     sketchEllipse(16, 18.2, 5, 5, 36, o),                                  // the lens
     sketchEllipse(16, 18.2, 2, 2, 37, o),
   ].join('');
-  camera = `<svg class="icon camera-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="${d}"/></svg>`;
-  return camera;
+  return `<path d="${d}"/>`;
 }
 
-// Little pen drawings for the HUD's numbers, on a 16×16 box.
+// Little pen drawings for the HUD's numbers, on a 16×16 box. The ones in
+// use have files in icons/ui/ (STAT_FILES); the rest aren't shown anywhere
+// at present.
 const STATS = {
   residents: '<circle cx="6" cy="5" r="2"/><path d="M2.5 13 C2.5 9 9.5 9 9.5 13"/><circle cx="11.2" cy="5.8" r="1.6"/><path d="M10.4 9.3 C12.6 8.9 14 10.4 14 13"/>',
   jobs: '<path d="M2 6.2 H14 V13.2 H2 Z M6 6.2 V4 H10 V6.2 M2 9.2 H14"/>',
@@ -165,14 +172,17 @@ const STATS = {
   storm: '<path d="M4 9.5 H12 A2.4 2.4 0 0 0 12 4.8 A3.6 3.6 0 0 0 5.2 5.7 A1.9 1.9 0 0 0 4 9.5 Z M8.6 9.5 L7 12 H9 L7.6 14.6 M4.9 11.2 L4.1 13.6 M12 11.2 L11.2 13.6"/>',
 };
 
+const STAT_FILES = { pen: 'rename', book: 'chronicle', cutoff: 'no-road' };
+
 export function statIcon(id) {
-  return `<svg class="icon stat-icon" viewBox="0 0 16 16" aria-hidden="true">${STATS[id] ?? ''}</svg>`;
+  return iconSvg(STAT_FILES[id], 'class="icon stat-icon" aria-hidden="true"', STATS[id] ?? '');
 }
 
-// Pen drawings for the buttons at the top right and the New map settings,
-// on a 16×16 box. The Menu's own drawings are read from icons/menu/
-// (menuIcons.js); the ones here for its items (colors, export, import,
-// newMap, fullscreen, the flags) stand in when a file there can't be read.
+// Pen drawings for the Menu's items and the New map settings, on a 16×16
+// box: stand-ins for their files in icons/ui/ (MENU_FILES, CONTROL_FILES),
+// when one can't be read. The photographer's camera on the map is drawn
+// from `photo` (render/overlay.js), a mark of the map's, without a file;
+// `assets` and `debug` aren't shown anywhere at present.
 const CONTROLS = {
   photo: '<path d="M2 5.5 H5 L6.2 3.6 H9.8 L11 5.5 H14 V12.6 H2 Z"/><circle cx="8" cy="9" r="2.3"/>',
   // little hills: a tall one behind, a low one in front, on the ground line
@@ -206,6 +216,43 @@ export function controlArt(id) {
   return CONTROLS[id] ?? '';
 }
 
+// the New map settings' files
+const CONTROL_FILES = { terrain: 'hills', lakes: 'lakes', forest: 'forest', river: 'river' };
+
 export function controlIcon(id) {
-  return `<svg class="icon ctl-icon" viewBox="0 0 16 16" aria-hidden="true">${CONTROLS[id] ?? ''}</svg>`;
+  return iconSvg(CONTROL_FILES[id], 'class="icon ctl-icon" aria-hidden="true"', CONTROLS[id] ?? '');
+}
+
+// A Menu item's drawing: its file in icons/ui/, and the drawing above it
+// falls back on
+const MENU_FILES = {
+  colors: ['colors', 'colors'],
+  export: ['export', 'export'],
+  import: ['import', 'import'],
+  newMap: ['newmap', 'newMap'],
+  fullscreen: ['fullscreen', 'fullscreen'],
+  fullscreenExit: ['fullscreen-exit', 'fullscreen'],
+  flagcs: ['lang-cs', 'flagcs'],
+  flagen: ['lang-en', 'flagen'],
+};
+
+// One part of a Menu drawing, in a box of its own (its file's viewBox, or
+// the stand-in's 16×16). A file's lines are all drawn in the Menu's pen
+// (styles.css, .from-file).
+function menuPart(id, cls = '') {
+  const [file, stand] = MENU_FILES[id];
+  const d = drawing(file, controlArt(stand));
+  const c = cls ? ` class="${cls}"` : '';
+  return `<svg${c} viewBox="${d.viewBox}">${d.file ? `<g class="from-file">${d.art}</g>` : d.art}</svg>`;
+}
+
+// A Menu item's drawing as an <svg>. Full screen has two, going in and
+// coming back, and the button shows one or the other (styles.css). (Where
+// the stand-in is drawn for one, it carries both of its own; the same rule
+// hides the one that doesn't belong.)
+export function menuIcon(id) {
+  const inner = id === 'fullscreen'
+    ? menuPart('fullscreen', 'fs-enter') + menuPart('fullscreenExit', 'fs-exit')
+    : menuPart(id);
+  return `<svg class="icon ctl-icon menu-art" viewBox="0 0 1 1" aria-hidden="true">${inner}</svg>`;
 }

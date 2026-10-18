@@ -17,6 +17,7 @@
 import { reveal, cascade, drawOn } from './motion.js';
 import { sketchLine, seedOf } from '../render/sketch.js';
 import { sketchFrame } from './sketchFrame.js';
+import { drawing } from './uiIcons.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -28,20 +29,23 @@ export class Dialogue {
     this.el.className = 'dialogue hidden';
     this.el.setAttribute('role', 'dialog');
     this.el.setAttribute('aria-live', 'polite');
+    // › once the line is all written, to go on: two pen strokes
+    // (icons/ui/more.svg, or these when it can't be read), drawn on when it
+    // shows and then still
+    const more = drawing('more', `<path d="${sketchLine([2, 2.5], [8, 8], seedOf(3, 41), { over: 0.6, bow: 0.6 }) + sketchLine([8, 8], [2.5, 13.5], seedOf(4, 41), { over: 0.6, bow: 0.6 })}"/>`, '0 0 10 16');
     this.el.innerHTML = `
       <div class="dlg-speaker"></div>
       <div class="dlg-text"></div>
       <div class="dlg-choices"></div>
-      <svg class="dlg-more" viewBox="0 0 10 16" aria-hidden="true"><path pathLength="1"/></svg>`;
+      <svg class="dlg-more" viewBox="${more.viewBox}" aria-hidden="true">${more.art}</svg>`;
     root.appendChild(this.el);
     sketchFrame(this.el);
     this.speakerEl = this.el.querySelector('.dlg-speaker');
     this.textEl = this.el.querySelector('.dlg-text');
     this.choicesEl = this.el.querySelector('.dlg-choices');
-    // › once the line is all written, to go on: two pen strokes, drawn on
-    // when it shows and then still
-    this.moreEl = this.el.querySelector('.dlg-more path');
-    this.moreEl.setAttribute('d', sketchLine([2, 2.5], [8, 8], seedOf(3, 41), { over: 0.6, bow: 0.6 }) + sketchLine([8, 8], [2.5, 13.5], seedOf(4, 41), { over: 0.6, bow: 0.6 }));
+    // its lines, each measured as one long so drawOn can draw it in
+    this.moreEls = [...this.el.querySelectorAll('.dlg-more :is(path, line, polyline, circle, ellipse, rect, polygon)')];
+    for (const p of this.moreEls) p.setAttribute('pathLength', '1');
     this.pending = null; // { kind: 'say' | 'choose', resolve }
     this.typer = null;
 
@@ -149,7 +153,7 @@ export class Dialogue {
     if (instant || !this.typing || matchMedia('(prefers-reduced-motion: reduce)').matches) {
       this.textEl.textContent = text;
       this.el.classList.remove('typing');
-      drawOn(this.moreEl, 240);
+      for (const p of this.moreEls) drawOn(p, 240);
       return;
     }
     // the whole line is laid out at once (the box doesn't grow as it's
@@ -174,7 +178,7 @@ export class Dialogue {
     if (!this.el.classList.contains('typing')) return;
     if (this.full != null) this.textEl.textContent = this.full;
     this.el.classList.remove('typing');
-    drawOn(this.moreEl, 240);
+    for (const p of this.moreEls) drawOn(p, 240);
   }
 
   next() {

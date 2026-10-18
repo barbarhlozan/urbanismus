@@ -525,7 +525,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .icon.stat-icon circle { stroke-width: 1.1 !important; }
 
 /* the Menu: a menu mark in the corner opening into what's set now and then,
-   each a drawing alone (src/ui/hud.js, icons/menu/) – no box and no rules,
+   each a drawing alone (src/ui/hud.js, icons/ui/) – no box and no rules,
    drawings on the paper, underlined under the pointer, and named in a small
    word beside them while pointed at or held */
 .controls {
@@ -770,7 +770,7 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
   height: 16px;
   overflow: visible;
 }
-.dlg-more path { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
+.dlg-more :is(path, line, polyline, circle, ellipse, rect, polygon) { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
 .dialogue.typing .dlg-more, .dialogue.choosing .dlg-more { visibility: hidden; }
 .dlg-choices:empty { display: none; }
 .dlg-choices { border-top: var(--line) solid var(--fg); padding: 4px 0; }
@@ -1347,7 +1347,7 @@ body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 4
 /* three dots in a scheme's colors, on each of its rows */
 .swatches { display: inline-flex; gap: 3px; vertical-align: middle; }
 .swatches i { width: 8px; height: 8px; border-radius: 50%; border: var(--line) solid currentColor; box-sizing: border-box; }
-/* full screen: going in, or coming back (menuIcons.js) */
+/* full screen: going in, or coming back (icons.js menuIcon) */
 .controls [data-act="fullscreen"] .fs-exit, .controls [data-act="fullscreen"].full .fs-enter { display: none; }
 .controls [data-act="fullscreen"].full .fs-exit { display: inline; }
 .controls button[hidden] { display: none !important; }

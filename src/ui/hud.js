@@ -13,7 +13,8 @@
 // down from it – either way in a pen-drawn frame like the other boxes
 // (main.js sketchFrames), only while open. It folds again once one is used
 // or on a click elsewhere. Each item is a drawing alone, read from its own
-// file in icons/menu/ (menuIcons.js); its name is its title and, written
+// file in icons/ui/ (uiIcons.js), as are the ≡ and its cross, the camera,
+// the book and the pencil by the name; an item's name is its title and, written
 // small in the pen beside it, shows while the pointer is on it or, on a
 // touch screen, after a long press, which then doesn't press it. The
 // drawings stand in groups: Colours, then the files (save, open, a new
@@ -21,14 +22,21 @@
 // app's name, version and author, small and quiet like a printer's line.
 
 import { BuildMenu } from './buildMenu.js';
-import { statIcon, cameraIcon } from './icons.js';
-import { menuIcon } from './menuIcons.js';
+import { statIcon, cameraIcon, menuIcon } from './icons.js';
+import { drawing } from './uiIcons.js';
 import { resize, shrink } from './motion.js';
 import { CONFIG } from '../config.js';
 import { t, language, LANGUAGES } from '../core/text.js';
 
-const MENU_ICON = `<svg class="icon menu-icon" viewBox="0 0 16 16" aria-hidden="true">
-  <path class="bars" d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><path class="cross" d="M4 4l8 8M12 4l-8 8"/></svg>`;
+// The Menu button's drawing: ≡ while it's folded, a cross while it's open
+// (styles.css shows one), icons/ui/menu.svg and menu-close.svg. The two
+// share the button's box, the ≡'s file's viewBox.
+const menuButtonIcon = () => {
+  const bars = drawing('menu', '<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>');
+  const cross = drawing('menu-close', '<path d="M4 4l8 8M12 4l-8 8"/>');
+  const part = (d, cls) => (d.file ? `<g class="${cls}">${d.art}</g>` : d.art.replace('<path', `<path class="${cls}"`));
+  return `<svg class="icon menu-icon" viewBox="${bars.viewBox}" aria-hidden="true">${part(bars, 'bars')}${part(cross, 'cross')}</svg>`;
+};
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 // a button in the Menu: its drawing, and its name (control.<act>) as its
@@ -62,7 +70,7 @@ export class Hud {
         ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
         ${control('language', `${t('control.language')}: ${LANGUAGES[otherLanguage()]}`, LANGUAGES[otherLanguage()], `flag${otherLanguage()}`)}
         <span class="imprint"><span>${CONFIG.app.name} v${CONFIG.app.version}</span> <span>${CONFIG.app.author}</span></span>
-        <button class="close menu-toggle" aria-expanded="true">${MENU_ICON}</button>
+        <button class="close menu-toggle" aria-expanded="true">${menuButtonIcon()}</button>
       </div>
       <button class="photo-corner" data-act="photo" title="${t('control.photo')} (P)" aria-label="${t('control.photo')}" aria-pressed="false">${cameraIcon()}</button>`);
 

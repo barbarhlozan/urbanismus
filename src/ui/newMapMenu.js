@@ -20,6 +20,7 @@ import { townName } from '../core/townName.js';
 import { reveal, isShown, bump } from './motion.js';
 import { SketchSlider } from './sketchSlider.js';
 import { controlIcon } from './icons.js';
+import { iconSvg } from './uiIcons.js';
 import { LandscapePreview } from './landscapePreview.js';
 import { t } from '../core/text.js';
 
@@ -99,7 +100,7 @@ export class NewMapMenu {
         <label class="newmap-name">
           <span class="field-name">${t('newmap.name')}</span>
           <input class="name-field" maxlength="40" spellcheck="false" autocomplete="off" aria-label="${t('town.name')}">
-          <button class="dice" title="${t('newmap.reroll')}" aria-label="${t('newmap.reroll')}">${DICE}</button>
+          <button class="dice" title="${t('newmap.reroll')}" aria-label="${t('newmap.reroll')}">${iconSvg('dice', 'width="14" height="14" aria-hidden="true"', DICE)}</button>
         </label>
         <div class="scene-slot"></div>
         ${SETTINGS.map((s) => `
@@ -249,5 +250,6 @@ export class NewMapMenu {
   }
 }
 
-// a die showing five, drawn like the stat icons
-const DICE = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/>${[[5, 5], [11, 5], [8, 8], [5, 11], [11, 11]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.1" fill="currentColor"/>`).join('')}</svg>`;
+// a die showing five, drawn like the stat icons: icons/ui/dice.svg, or
+// this when it can't be read
+const DICE = `<rect x="2" y="2" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/>${[[5, 5], [11, 5], [8, 8], [5, 11], [11, 11]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.1" fill="currentColor"/>`).join('')}`;

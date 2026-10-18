@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Bend, diagonal first: from the dot where the line starts, slanting, then straight -->
+  <path d="M2.5 12.5 L8 7 H13.5"/>
+  <circle cx="2.5" cy="12.5" r="1.1"/>
+</svg>
