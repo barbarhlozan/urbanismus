@@ -1,8 +1,10 @@
 // Annotations (switchable in render/style.js):
-//   hover tags  the name of the building under the pointer set on it
-//               like a label on a map, underlined by pen ("Pekárna");
-//               with the Terrain lines on, a hill's top mark tells its
-//               name and height ("Holý vrch · 570 m", terrain/hills.js)
+//   hover tags  with the Terrain lines on, a hill's top mark tells its
+//               name and height under the pointer, set on it like a label
+//               on a map, underlined by pen ("Holý vrch · 570 m",
+//               terrain/hills.js). Buildings get no name on pointing: they
+//               give a little squash instead (Renderer.markHovered), and
+//               their name is on the card a click opens.
 //
 // Systems also report what happens with annotations.log(text, [x, y])
 // (visitors, residents leaving, buildings growing…). The player doesn't
@@ -10,11 +12,9 @@
 // LOG_LINES are kept in annotations.lines, newest first, for debugging from
 // the console (cmd.log()).
 
-import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { ELEVATION } from '../terrain/elevation.js';
 import { HILLS } from '../terrain/hills.js';
 import { STYLE } from '../render/style.js';
-import { nameOf } from './names.js';
 import { sketchLine, seedOf } from '../render/sketch.js';
 
 const LOG_LINES = 200;
@@ -31,11 +31,9 @@ function textWidth(text, size) {
 }
 
 export class Annotations {
-  // heights(): whether open ground tells its height (the Terrain lines are on);
-  // topOf(s): the scene y of the top of a structure's drawing, if it's drawn
-  constructor({ world, camera, clock, heights = () => false, topOf = () => null }) {
+  // heights(): whether open ground tells its height (the Terrain lines are on)
+  constructor({ world, camera, clock, heights = () => false }) {
     this.heights = heights;
-    this.topOf = topOf;
     this.world = world;
     this.camera = camera;
     this.clock = clock;
@@ -62,29 +60,18 @@ export class Annotations {
     const node = world.grid.nodeAt(x, y);
     if (node < 0) return null;
     // a hill's top mark (with the Terrain lines showing): its name and height
-    if (this.heights()) {
-      const hill = world.hills.find((hl) => Math.hypot(hl.x - x, hl.y - y) <= HILLS.hover);
-      if (hill) return { pos: [hill.x, hill.y], height: 0.15, name: `${hill.name} · ${Math.round(ELEVATION.base + hill.height)} m` };
-    }
-    // only buildings get a tag – roads, rails, paths and trees don't
-    const s = world.structureAt(node);
-    if (s) return { pos: world.centerOf(s), height: 0.5, name: nameOf(STRUCTURE_TYPES[s.type]), top: this.topOf(s) };
-    return null;
+    if (!this.heights()) return null;
+    const hill = world.hills.find((hl) => Math.hypot(hl.x - x, hl.y - y) <= HILLS.hover);
+    return hill ? { pos: [hill.x, hill.y], height: 0.15, name: `${hill.name} · ${Math.round(ELEVATION.base + hill.height)} m` } : null;
   }
 
-  // The name centred on the point – for a building, on the middle of the
-  // dots it stands on, halfway up its drawing (`top`: the scene y of its
-  // roof, where that's known) – and underlined by pen; a halo of the
+  // The name centred on the point and underlined by pen; a halo of the
   // background colour keeps the letters clear of the drawing behind (.tag
   // in styles.css). All in screen pixels, divided by the zoom.
-  tag({ pos: [x, y], height, name, top = null }) {
+  tag({ pos: [x, y], height, name }) {
     const z = this.camera.zoom;
     const size = 14;
-    let [sx, sy] = this.camera.project(x, y, height);
-    if (top != null) {
-      const [, ground] = this.camera.project(x, y, this.world.terrain.heightAt(x, y));
-      sy = (ground + top) / 2;
-    }
+    const [sx, sy] = this.camera.project(x, y, height);
     const w = textWidth(name, size);
     const nameY = sy + (size * 0.3) / z, lineY = nameY + 4 / z;
     const seed = seedOf(x, y, name.length);

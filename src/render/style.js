@@ -10,5 +10,5 @@ export const STYLE = {
   tremor: 0,       // 0–1 fine wobble on top of it
   contours: false, // terrain contour lines at the start (the Terrain button switches
                    // them; they cost the most to draw, so they start off)
-  hoverTags: true, // the name over the building under the pointer
+  hoverTags: true, // a hill's name and height under the pointer, with the Terrain lines on
 };

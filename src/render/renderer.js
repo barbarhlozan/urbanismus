@@ -389,6 +389,25 @@ export class Renderer {
     this.erasingEls = els;
   }
 
+  // The building under the pointer (an objs key, 's12', or null): it gives
+  // a little squash as the pointer comes onto it – pressed down from the
+  // roof and spreading a touch, then back up, settling without a bounce
+  // (.squish in styles.css) – once each time it's pointed at, so it reads
+  // as something to click. Not while it slides in a turn of the view (its
+  // transform is the slide's then). Set by main.js; frame() applies it.
+  markHovered() {
+    const key = this.hovered ?? null;
+    if (key === this.hoveredKey) return;
+    this.hoveredKey = key;
+    const entry = key ? this.objs.get(key) : null;
+    if (!entry || entry.slid || entry.shown === false) return;
+    const { g } = entry;
+    g.classList.remove('squish');
+    void g.getBoundingClientRect(); // (so a second time plays it again)
+    g.classList.add('squish');
+    g.addEventListener('animationend', () => g.classList.remove('squish'), { once: true });
+  }
+
   frame(overlaySVG) {
     this.placeView();
     // labels that keep their screen size divide by this (styles.css); set
@@ -452,6 +471,7 @@ export class Renderer {
       this.deerGone.clear();
     }
     this.markErasing();
+    this.markHovered();
     if (overlaySVG !== this.lastOverlay) {
       this.letGo(overlaySVG);
       this.layers.overlay.innerHTML = overlaySVG;

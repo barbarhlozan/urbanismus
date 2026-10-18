@@ -165,29 +165,7 @@ trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
 const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, boats, deer, livestock, parking, config: CONFIG });
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);
-// The top of a building's own drawing (its walls and roofs: not the trees
-// and other screen-facing glyphs of its yard, which may stand far taller
-// and further back), in scene units, for its name over it; kept while the
-// same one is pointed at in the same turn of the view.
-let topCache = { key: '', y: null };
-function topOf(s) {
-  const key = `${s.id}:${camera.angle}`;
-  if (topCache.key === key) return topCache.y;
-  const g = renderer.objs.get(`s${s.id}`)?.g;
-  let top = Infinity;
-  if (g?.isConnected) {
-    for (const el of g.querySelectorAll('polygon, polyline, path')) {
-      if (el.closest('.sway') || el.matches('.glyph, .tree')) continue;
-      const r = el.getBoundingClientRect();
-      if (r.height || r.width) top = Math.min(top, r.top);
-    }
-  }
-  if (top === Infinity) return null; // (not drawn yet: ask again next time)
-  const y = camera.clientToScene(0, top)[1]; // (window coordinates, as the pointer's)
-  topCache = { key, y };
-  return y;
-}
-const annotations = new Annotations({ world, camera, clock, heights: () => renderer.contours, topOf });
+const annotations = new Annotations({ world, camera, clock, heights: () => renderer.contours });
 agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos);
 
 // the town's chronicle, and the story told along the way (story/story.txt)
@@ -652,6 +630,12 @@ function loop(now) {
     livestock.update(simDt);
     growth.update(simDt);
     camera.coast(dt); // (a turn let go: in real time, whatever the clock)
+    // the building under the pointer, with nothing in hand, gives a little
+    // squash as the pointer comes onto it (Renderer.markHovered): there's
+    // something to click; its name is on the card that opens
+    const hovered = tools.active?.id === 'inspect' && !popup.open && !photoPrint.open && tools.hoverNode >= 0
+      ? world.structureAt(tools.hoverNode) : null;
+    renderer.hovered = hovered ? `s${hovered.id}` : null;
     renderer.frame((dots ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
     const sky = weather.sky();
     cloudShadows.frame(simDt, camera, sky.cover);
