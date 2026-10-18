@@ -10,8 +10,10 @@
 // (unavailable: can't be done here – shown crossed out in the detail colour)
 // keepOpen items leave the menu open and rebuild it with `refresh()`
 // (passed to show), e.g. to cycle through options.
-// `around` (a screen box of what was clicked) puts the menu beside it rather
-// than at the pointer: to the right if there's room, else to the left.
+// `around` (a screen box of what was clicked) puts the menu over it rather
+// than at the pointer, centred on it and a little above, never covering
+// it: below it when there's no room above (something near the top of the
+// screen), else beside it, right or left, when neither fits.
 
 import { isNarrow } from './device.js';
 import { reveal, isShown } from './motion.js';
@@ -77,18 +79,22 @@ export class Popup {
       return;
     }
     const { width, height } = this.el.getBoundingClientRect();
-    const GAP = 16;
+    const GAP = 14;  // px kept clear between the card and what it's about
+    const EDGE = 8;  // px from the window's edge
     let left = x + 12, top = y + 12;
     if (around) {
-      const fitsRight = around.right + GAP + width <= innerWidth - 8;
-      const fitsLeft = around.left - GAP - width >= 8;
-      if (fitsRight || !fitsLeft) left = around.right + GAP;
-      else left = around.left - GAP - width;
-      if (!fitsRight && !fitsLeft) left = x + 12; // too wide to go beside it
-      top = (around.top + around.bottom) / 2 - height / 2;
+      left = (around.left + around.right) / 2 - width / 2;
+      if (around.top - GAP - height >= EDGE) top = around.top - GAP - height;
+      else if (around.bottom + GAP + height <= innerHeight - EDGE) top = around.bottom + GAP;
+      else {
+        // too tall a thing on too short a screen: beside it, level with it
+        const fitsRight = around.right + GAP + width <= innerWidth - EDGE;
+        left = fitsRight || around.left - GAP - width < EDGE ? around.right + GAP : around.left - GAP - width;
+        top = (around.top + around.bottom) / 2 - height / 2;
+      }
     }
-    this.el.style.left = `${Math.max(8, Math.min(left, innerWidth - width - 8))}px`;
-    this.el.style.top = `${Math.max(8, Math.min(top, innerHeight - height - 8))}px`;
+    this.el.style.left = `${Math.max(EDGE, Math.min(left, innerWidth - width - EDGE))}px`;
+    this.el.style.top = `${Math.max(EDGE, Math.min(top, innerHeight - height - EDGE))}px`;
   }
 
   render(title, items) {

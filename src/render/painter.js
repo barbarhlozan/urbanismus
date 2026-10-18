@@ -1183,8 +1183,12 @@ export class Painter {
     return (x, y) => this.camera.project(x, y, this.oz, at, lift);
   }
 
-  // Combine another painter's output (same camera) into this one.
-  merge(other) {
+  // Combine another painter's output (same camera) into this one. `aside`:
+  // what it drew isn't the building itself (its yard, its plot) – toSVG
+  // groups each such piece in a <g class="aside">, so the building's own
+  // parts can be told apart (Renderer.buildingParts).
+  merge(other, { aside = false } = {}) {
+    if (aside) for (const solid of other.solids) solid.aside = true;
     this.feet.push(...other.feet);
     this.casts.push(...other.casts);
     this.top = Math.max(this.top, other.top + other.oz - this.oz);
@@ -1304,6 +1308,7 @@ export class Painter {
   toSVG() {
     return orderSolids(this.solids, this.camera.quarterView?.()[1]).map((s) => (s.sway
       ? `<g class="sway" data-foot="${r2(s.sway[0])} ${r2(s.sway[1])}">${s.parts.join('')}</g>`
-      : s.parts.join('') + (s.late?.join('') ?? ''))).join('');
+      : s.aside ? `<g class="aside">${s.parts.join('')}${s.late?.join('') ?? ''}</g>`
+        : s.parts.join('') + (s.late?.join('') ?? ''))).join('');
   }
 }

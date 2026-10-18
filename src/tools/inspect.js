@@ -33,7 +33,10 @@ export function createInspectTool(ctx) {
       const s = node < 0 ? null : ctx.world.structureAt(node);
       if (!s) return ctx.popup.hide();
       const { title, items } = structureMenu(ctx, s);
-      ctx.popup.show(event.clientX, event.clientY, title, items, () => structureMenu(ctx, s), screenBox(ctx, s));
+      // beside the building's own drawing as it's shown (its tower or
+      // chimney too), or failing that its footprint and some height
+      const around = ctx.renderer?.buildingBox(`s${s.id}`) ?? screenBox(ctx, s);
+      ctx.popup.show(event.clientX, event.clientY, title, items, () => structureMenu(ctx, s), around);
     },
 
     exit() {
@@ -47,7 +50,8 @@ export function createInspectTool(ctx) {
 }
 
 // Screen box around the building clicked (its whole footprint and some
-// height), so the card can open beside it, not over it.
+// height), for when its drawing can't be measured, so the card can open
+// clear of it.
 const HEIGHT = 2.5; // in tiles; enough for most buildings
 function screenBox({ world, camera }, s) {
   let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;

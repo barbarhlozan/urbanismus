@@ -127,6 +127,10 @@ const PREPARE_REST = 400;
 const SETTLE_FADE = 260; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
+
+// The squash of a building pointed at (Renderer.markHovered): how long, the
+// share of it spent going down, and how much it's pressed down and spread.
+const SQUASH = { ms: 300, down: 0.3, press: 0.07, spread: 0.035 };
 // An object's place among the others in when its detail changes
 // (Renderer.bandOf): 0..1, seeded by its key ('s12', 'f7', 'k3-4').
 // Points every `step` along a polyline, from half a step in, with the
@@ -389,23 +393,65 @@ export class Renderer {
     this.erasingEls = els;
   }
 
+  // A building's own drawing – its walls, roofs and windows – without its
+  // yard and plot (Painter.merge's `aside`: garden, sheds, fences, cars)
+  // or any tree, which are drawn in among its parts, nearer or further.
+  // [] when it isn't drawn.
+  buildingParts(key) {
+    const g = this.objs.get(key)?.g;
+    return g?.isConnected ? [...g.children].filter((el) => !el.matches('.aside, .sway, .glyph, .tree')) : [];
+  }
+
+  // Where a building's own drawing is on screen (window px: left, top,
+  // right, bottom), or null when it isn't drawn.
+  buildingBox(key) {
+    let box = null;
+    for (const el of this.buildingParts(key)) {
+      const r = el.getBoundingClientRect();
+      if (!r.width && !r.height) continue;
+      box = box ? { left: Math.min(box.left, r.left), top: Math.min(box.top, r.top), right: Math.max(box.right, r.right), bottom: Math.max(box.bottom, r.bottom) }
+        : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    }
+    return box;
+  }
+
   // The building under the pointer (an objs key, 's12', or null): it gives
   // a little squash as the pointer comes onto it – pressed down from the
-  // roof and spreading a touch, then back up, settling without a bounce
-  // (.squish in styles.css) – once each time it's pointed at, so it reads
-  // as something to click. Not while it slides in a turn of the view (its
-  // transform is the slide's then). Set by main.js; frame() applies it.
+  // roof and spreading a touch, standing on its ground, then back up,
+  // settling without a bounce – once each time it's pointed at, so it reads
+  // as something to click. Only the building: its garden stands still.
+  // Its parts are drawn in among the yard's, so each is squashed on its
+  // own about the same point, the middle of the building's base. Not while
+  // it slides in a turn of the view. Set by main.js; frame() applies it.
   markHovered() {
     const key = this.hovered ?? null;
     if (key === this.hoveredKey) return;
     this.hoveredKey = key;
     const entry = key ? this.objs.get(key) : null;
-    if (!entry || entry.slid || entry.shown === false) return;
-    const { g } = entry;
-    g.classList.remove('squish');
-    void g.getBoundingClientRect(); // (so a second time plays it again)
-    g.classList.add('squish');
-    g.addEventListener('animationend', () => g.classList.remove('squish'), { once: true });
+    if (!entry || entry.slid || entry.shown === false || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const parts = this.buildingParts(key);
+    let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const el of parts) {
+      const b = el.getBBox();
+      if (!b.width && !b.height) continue;
+      x0 = Math.min(x0, b.x); x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
+    }
+    if (!(x1 > x0)) return;
+    const px = r2((x0 + x1) / 2), py = r2(y1);
+    const start = performance.now();
+    const run = (entry.squash = {});
+    const step = (now) => {
+      if (entry.squash !== run) return; // (pointed at again: the new one goes on)
+      const t = Math.min(1, (now - start) / SQUASH.ms);
+      // down quickly, easing in to the deepest point, then slowly back up
+      const f = t < SQUASH.down ? 1 - (1 - t / SQUASH.down) ** 2 : (1 - (t - SQUASH.down) / (1 - SQUASH.down)) ** 2;
+      const k3 = (n) => Math.round(n * 1000) / 1000;
+      const sx = k3(1 + SQUASH.spread * f), sy = k3(1 - SQUASH.press * f);
+      const tf = t < 1 ? `translate(${px} ${py}) scale(${sx} ${sy}) translate(${-px} ${-py})` : null;
+      for (const el of parts) tf ? el.setAttribute('transform', tf) : el.removeAttribute('transform');
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   frame(overlaySVG) {
@@ -2124,7 +2170,7 @@ export class Renderer {
       YARDS[yard.style].draw(yp, yard, s);
       if (live && yp.spots.length) this.parking.setSpots(s, yp.spots);
       else if (live) this.parking.spots.delete(s.id);
-      painter.merge(yp);
+      painter.merge(yp, { aside: true });
       yardWorld = yard.outline.map(([lx, ly]) => yp.toWorld(lx, ly));
       for (const [lx, ly] of [[yard.x0, yard.y0], [yard.x1, yard.y0]]) points.push(yp.toWorld(lx, ly));
     } else if (live) {
@@ -2142,7 +2188,7 @@ export class Renderer {
       pp.lod = 1;
       const plot = this.plotFor(s, plotDef, painter, core, yardWorld);
       drawPlot(pp, plot);
-      painter.merge(pp);
+      painter.merge(pp, { aside: true });
       if (plot.spread) points.push([x + plot.cell[0], y + plot.cell[1]], [x + plot.cell[2], y + plot.cell[3]]);
     }
     return { painter, points };
