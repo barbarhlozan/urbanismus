@@ -19,7 +19,7 @@
 // `cars: true` styles are only for buildings with a road (see yardOf).
 
 import { tree, bush, hedge, fenceAlong, bench, crates, bricks, cableDrum, concreteRings, woodpile, trailer, lamp, paving, garages, flowerBed, kiosk, bikeRack } from './kit.js';
-import { LONE, PLOT_TREES, GARDEN_TREES, GARDEN_BUSHES } from './plots.js';
+import { LONE, PLOT_TREES, PLOT_BUSHES, GARDEN_TREES, GARDEN_BUSHES } from './plots.js';
 
 const spots = (x0, x1, step) => {
   const out = [];
@@ -83,7 +83,7 @@ export const YARDS = {
         tree(g, x, yard.frontAt(x) + 0.12, g.range(0.9, 1.15));
       }
       const bx = g.pick([-0.25, 0.25]);
-      if (g.chance(0.5) && room(yard, bx, 0.2) > 0.05) bush(g, bx, (yard.frontAt(bx) + 0.2 + yard.y1) / 2);
+      if (g.chance(0.5 * PLOT_BUSHES) && room(yard, bx, 0.2) > 0.05) bush(g, bx, (yard.frontAt(bx) + 0.2 + yard.y1) / 2);
     },
   },
 

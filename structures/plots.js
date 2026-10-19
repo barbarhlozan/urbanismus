@@ -18,11 +18,12 @@ import { tree, bush, shed, bench, bins, crates, pallets, bricks, cableDrum, conc
 // Share of the trees a plot would have that it gets (the rest of their
 // spots stay open lawn), so a building stands in the open with a tree or
 // two, not in a grove. The front yards (yards.js) use it too.
-export const PLOT_TREES = 0.55;
+export const PLOT_TREES = 0.45;
 // Gardens keep fewer still: a house has the odd fruit tree, not an orchard.
-export const GARDEN_TREES = 0.2;
+export const GARDEN_TREES = 0.15;
 // The same for bushes: a few by the house, not a scatter across the lawn.
-export const GARDEN_BUSHES = 0.35;
+export const PLOT_BUSHES = 0.7;
+export const GARDEN_BUSHES = 0.25;
 
 // Plot styles that spread over the empty ground round them (up to this many
 // dots out, render/lots.js plotClaim) rather than keep to their own square:
@@ -60,7 +61,7 @@ export const PLOT_STYLES = {
   ],
   green: [
     [5, 0.07, (g, x, y) => g.chance(PLOT_TREES) && tree(g, x, y, g.range(0.85, 1.1))],
-    [3, 0.045, (g, x, y) => bush(g, x, y, 0.04)],
+    [3, 0.045, (g, x, y) => g.chance(PLOT_BUSHES) && bush(g, x, y, 0.04)],
     [1, 0.07, (g, x, y) => bench(g, x, y, g.chance(0.5))],
   ],
   // housing estate greens: carpet racks, drying frames, a playground
@@ -75,7 +76,7 @@ export const PLOT_STYLES = {
   service: [
     [3, 0.05, (g, x, y) => bins(g, x, y)],
     [1, 0.07, (g, x, y) => g.chance(PLOT_TREES) && tree(g, x, y, 0.9)],
-    [2, 0.045, (g, x, y) => bush(g, x, y, 0.04)],
+    [2, 0.045, (g, x, y) => g.chance(PLOT_BUSHES) && bush(g, x, y, 0.04)],
   ],
   works: [
     [3, 0.07, (g, x, y) => crates(g, x, y)],
