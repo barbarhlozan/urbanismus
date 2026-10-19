@@ -15,10 +15,12 @@
 
 import { tree, bush, shed, bench, bins, crates, pallets, bricks, cableDrum, concreteRings, woodpile, trailer, fenceAlong, hedgeAlong, carpetRack, dryingFrame, sandpit, climbingFrame, barrels, timber, heap, tank, transformer } from './kit.js';
 
-// Share of the trees a garden would have that it gets (the rest of their
-// spots stay open lawn): about a third, so a house has a tree or two, not
-// an orchard. The garden front yard (yards.js) uses it too.
-export const GARDEN_TREES = 0.35;
+// Share of the trees a plot would have that it gets (the rest of their
+// spots stay open lawn), so a building stands in the open with a tree or
+// two, not in a grove. The front yards (yards.js) use it too.
+export const PLOT_TREES = 0.55;
+// Gardens keep fewer still: a house has the odd fruit tree, not an orchard.
+export const GARDEN_TREES = 0.2;
 // The same for bushes: a few by the house, not a scatter across the lawn.
 export const GARDEN_BUSHES = 0.35;
 
@@ -57,13 +59,13 @@ export const PLOT_STYLES = {
     [1, 0.09, (g, x, y) => shed(g, x, y), 1],
   ],
   green: [
-    [5, 0.07, (g, x, y) => tree(g, x, y, g.range(0.85, 1.1))],
+    [5, 0.07, (g, x, y) => g.chance(PLOT_TREES) && tree(g, x, y, g.range(0.85, 1.1))],
     [3, 0.045, (g, x, y) => bush(g, x, y, 0.04)],
     [1, 0.07, (g, x, y) => bench(g, x, y, g.chance(0.5))],
   ],
   // housing estate greens: carpet racks, drying frames, a playground
   estate: [
-    [5, 0.07, (g, x, y) => tree(g, x, y, g.range(0.85, 1.1))],
+    [5, 0.07, (g, x, y) => g.chance(PLOT_TREES) && tree(g, x, y, g.range(0.85, 1.1))],
     [2, 0.07, (g, x, y) => carpetRack(g, x, y)],
     [2, 0.1, (g, x, y) => dryingFrame(g, x, y)],
     [1, 0.09, (g, x, y) => sandpit(g, x, y)],
@@ -72,7 +74,7 @@ export const PLOT_STYLES = {
   ],
   service: [
     [3, 0.05, (g, x, y) => bins(g, x, y)],
-    [1, 0.07, (g, x, y) => tree(g, x, y, 0.9)],
+    [1, 0.07, (g, x, y) => g.chance(PLOT_TREES) && tree(g, x, y, 0.9)],
     [2, 0.045, (g, x, y) => bush(g, x, y, 0.04)],
   ],
   works: [

@@ -19,7 +19,7 @@
 // `cars: true` styles are only for buildings with a road (see yardOf).
 
 import { tree, bush, hedge, fenceAlong, bench, crates, bricks, cableDrum, concreteRings, woodpile, trailer, lamp, paving, garages, flowerBed, kiosk, bikeRack } from './kit.js';
-import { LONE, GARDEN_TREES, GARDEN_BUSHES } from './plots.js';
+import { LONE, PLOT_TREES, GARDEN_TREES, GARDEN_BUSHES } from './plots.js';
 
 const spots = (x0, x1, step) => {
   const out = [];
@@ -78,8 +78,8 @@ export const YARDS = {
     draw(g, yard) {
       const { x0, x1 } = yard;
       g.groundLine(edgeLine(yard, 0.03, x0 + 0.03, x1 - 0.03));
-      for (const x of spots(x0, x1, 0.3)) {
-        if (Math.abs(x) <= 0.1 || room(yard, x, 0.12) < 0.04) continue;
+      for (const x of spots(x0, x1, 0.42)) {
+        if (Math.abs(x) <= 0.1 || room(yard, x, 0.12) < 0.04 || !g.chance(PLOT_TREES * 1.4)) continue;
         tree(g, x, yard.frontAt(x) + 0.12, g.range(0.9, 1.15));
       }
       const bx = g.pick([-0.25, 0.25]);
@@ -115,7 +115,7 @@ export const YARDS = {
       paving(g, innerOutline(yard, 0.03, 0.04), 0.12);
       for (const side of [-1, 1]) {
         const x = side * Math.min(0.28, (side < 0 ? -x0 : x1) - 0.14);
-        if (room(yard, x, 0.03) < 0.2) continue;
+        if (room(yard, x, 0.03) < 0.2 || !g.chance(PLOT_TREES)) continue;
         const y = (yard.frontAt(x) + 0.03 + y1) / 2;
         g.groundCircle(x, y, 0.07);
         tree(g, x, y, 0.95);
