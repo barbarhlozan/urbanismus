@@ -388,10 +388,13 @@ function innerCurls(g, at, a0, a1, ragged, simple) {
   const light = ballLight(g.camera), shadeAt = Math.atan2(-light[0], -light[1]);
   const out = [];
   for (let i = simple ? 1 : g.int(2, 3); i > 0; i--) {
+    // (every choice made before any is skipped: the light moves with the
+    // sun and the view, and the tree – and all drawn after it with the
+    // same painter, a building's garden – must not change with it)
     const mid = shadeAt + g.range(-0.7, 0.7), span = ragged ? g.range(0.25, 0.4) : g.range(0.5, 0.9);
+    const k = g.range(0.6, 0.8), bumps = g.int(1, 2), line = [], m = 10;
     const from = Math.max(a0 + 0.15, mid - span / 2), to = Math.min(a1 - 0.15, mid + span / 2);
     if (to - from < 0.2) continue;
-    const k = g.range(0.6, 0.8), bumps = g.int(1, 2), line = [], m = 10;
     for (let j = 0; j <= m; j++) {
       const t = j / m;
       const kk = ragged ? k * (j % 2 ? 1.06 : 0.94) : k * (1 + 0.1 * Math.abs(Math.sin(Math.PI * bumps * t)));
