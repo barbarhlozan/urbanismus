@@ -8,7 +8,7 @@ import { planRoute } from '../roads/routing.js';
 import { eraseTarget } from '../tools/erase.js';
 import { ROAD_MARK } from '../render/roadMarks.js';
 import { SUN, DAY, sunAt } from '../render/shadows.js';
-import { NIGHT } from '../render/night.js';
+import { NIGHT, showNight } from '../render/night.js';
 
 const STEP = 0.5; // simulated seconds per step while jumping
 
@@ -181,15 +181,14 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
       }
       return { on: DAY.on, at: renderer?.sunPos, day: DAY.day, positions: DAY.positions.length };
     },
-    // the night (NIGHT in render/night.js), hatched over the whole map for
-    // now: true / false, or settings, e.g. { over: 'ground', every: 2,
-    // cross: true }
+    // the night (NIGHT in render/night.js): true / false, or settings,
+    // e.g. { style: 'lines', every: 1 } or { style: 'invert', tone: 0.6 }
     night(over = {}) {
       if (typeof over === 'boolean') over = { on: over };
       else if (Object.keys(over).length && !('on' in over)) over = { on: true, ...over };
       for (const k of Object.keys(over)) if (!(k in NIGHT)) throw new Error(`cmd.night: no setting '${k}' (${Object.keys(NIGHT).join(', ')})`);
       Object.assign(NIGHT, over);
-      renderer?.dirty.add('night');
+      showNight(renderer);
       return { ...NIGHT };
     },
     // the hand of the road marks on buildings nothing reaches (render/roadMarks.js)
@@ -217,7 +216,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',
-        "cmd.night(true) / cmd.night({ over: 'ground' | 'all', every: 3, cross: true })   the night, over the whole map for now",
+        "cmd.night(true) / cmd.night({ style: 'lines', every: 1 }) / cmd.night({ style: 'invert', tone: 0.6 })   the night",
         'cmd.day(n) / cmd.day()   hold the sun at position n of the day / let the day go on; cmd.day({ day: 120 }) a shorter day',
         `cmd.roadMark(${ROAD_MARK.styles.map((k) => `'${k}'`).join(' | ')})   now: '${ROAD_MARK.style}'`,
         'cmd.seed()                the map seed',

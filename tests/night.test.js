@@ -1,26 +1,34 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SUN } from '../src/render/shadows.js';
-import { NIGHT, nightLines } from '../src/render/night.js';
+import { nightTile } from '../src/render/night.js';
+import { SCHEMES, nightPalette } from '../src/theme.js';
 
-const box = [0, 0, 10, 6];
-
-test('the night hatches the whole box, and no further', () => {
-  const [near, far] = nightLines(box, SUN, 0.3, { ...NIGHT, every: 2 });
-  assert.ok(near.length > 0 && far.length > 0);
-  const slack = SUN.hatch.wave + 1e-6;
-  let length = 0;
-  for (const line of [...near, ...far]) {
-    for (const [x, y] of line) assert.ok(x > -slack && x < 10 + slack && y > -slack && y < 6 + slack);
-    length += Math.hypot(line.at(-1)[0] - line[0][0], line.at(-1)[1] - line[0][1]);
-  }
-  // as much line as the box's area over the lines' spacing (less the corners)
-  const expect = 60 / (SUN.hatch.gap * 2);
-  assert.ok(length > expect * 0.9 && length < expect * 1.05, `${length} of ${expect}`);
+test('the night in lines is one tile of pen lines, as dense as asked', () => {
+  const lines = (gap) => (nightTile('n', gap, SUN.hatch, 32).match(/M/g) ?? []).length;
+  const sparse = lines(0.16), dense = lines(0.04);
+  assert.ok(dense > sparse * 3.5 && dense < sparse * 4.5, `${dense} / ${sparse}`);
+  assert.match(nightTile('n', 0.08, SUN.hatch, 32), new RegExp(`rotate\\(${SUN.hatch.angle}\\)`));
 });
 
-test('crossed, it has a second set of lines as long as the first', () => {
-  const count = (o) => o.flat().length;
-  const one = nightLines(box, SUN, 0, { ...NIGHT, every: 4 }), two = nightLines(box, SUN, 0, { ...NIGHT, every: 4, cross: true });
-  assert.ok(count(two) > count(one) * 1.7);
+test('the night turns the paper darker than either ink', () => {
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return ((n >> 16) & 255) + ((n >> 8) & 255) + (n & 255); };
+  for (const scheme of SCHEMES.filter((s) => lum(s.bg) > lum(s.main))) {
+    const night = nightPalette(scheme, 1);
+    assert.ok(lum(night.bg) < lum(night.detail) && lum(night.bg) < lum(night.main), scheme.name);
+    // halfway, between the two; none, the day as it was
+    const half = nightPalette(scheme, 0.5);
+    assert.ok(lum(half.bg) < lum(scheme.bg) && lum(half.bg) > lum(night.bg), scheme.name);
+    assert.deepEqual(Object.values(nightPalette(scheme, 0)).map(lum), [scheme.bg, scheme.main, scheme.detail].map(lum));
+  }
+});
+
+test('on the way to the night the ink never fades into the paper', () => {
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return ((n >> 16) & 255) + ((n >> 8) & 255) + (n & 255); };
+  for (const scheme of SCHEMES.filter((s) => lum(s.bg) > lum(s.main))) {
+    for (let i = 0; i <= 20; i++) {
+      const p = nightPalette(scheme, i / 20, 0.4);
+      assert.ok(Math.abs(lum(p.bg) - lum(p.main)) > 120, `${scheme.name} at ${i / 20}: ${p.bg} / ${p.main}`);
+    }
+  }
 });

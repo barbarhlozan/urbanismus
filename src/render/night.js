@@ -1,60 +1,66 @@
-// Night, as a pen draws it: the whole sheet hatched over with the lines the
-// shadows are drawn with (shadows.js hatchLine – the same lines, so where a
-// shadow lies the night just goes on), and later on, the lit places left
-// out of it. For now it covers the whole map, to see how it looks
-// (cmd.night, the Debug panel):
+// Night – two ways tried, chosen in the Debug panel or with cmd.night:
 //
-//   over   'all': over everything, the buildings too, like a sheet of
-//          tracing paper laid over the drawing; 'ground': on the ground,
-//          roads and fences, under the buildings and trees, which stay
-//          paper-white
-//   every  every so many of the ground hatching's lines (SUN.hatch.gap
-//          apart); the line k with k % (2·every) = 0 stays when zoomed
-//          out, the others go
-//   cross  a second set of lines across the first, as darker ink
-//   turn   how far the crossing lines are turned from the first (degrees)
-//   step   along a line, the distance between its points (grid units):
-//          coarser than the shadows', as the lines are long and many
+//   lines   the whole sheet hatched over, the buildings too, like ink laid
+//           over the drawing: straight lines across the screen, at the
+//           angle of the shadows' hatching (SUN.hatch), as one tile of
+//           pen lines repeated (an SVG pattern – however dense, it costs
+//           the same), each line straying a little as it runs and broken
+//           now and then. Zoomed out, a sparser tile.
+//   invert  the scheme's colours turned to their negatives, lightness
+//           flipped and hue kept (theme.js nightPalette): pale ink on dark
+//           paper.
 //
-//   nightLines(box, sun, angle)  -> [tier 0, tier 1] world polylines
+// Settings:
+//   on      night at all
+//   style   'lines' or 'invert'
+//   every   lines: every so many of the shadows' line spacing apart
+//   far     lines: zoomed out (lod-1, lod-2), this many times sparser
+//   tone    invert: how far towards the negative, 0 (day) … 1
+//   cool    invert: how much the night's colours lean to blue, 0 … 1
+//
+//   showNight(renderer)        after a change to NIGHT: shows it
+//   nightTile(id, gap, h, px)  -> an SVG <pattern> of pen lines
 
-import { groundDir, hatchLine } from './shadows.js';
+import { hash } from './shadows.js';
+import { setNightTone } from '../theme.js';
 
 export const NIGHT = {
   on: false,
-  over: 'all',
-  every: 3,
-  cross: false,
-  turn: 75,
-  step: 0.3,
+  style: 'lines',
+  every: 2,
+  far: 2,
+  tone: 1,
+  cool: 0.4,
 };
 
-// The night's lines over the box [x0, y0, x1, y1] (world), for a view
-// turned `angle` (radians): as the ground's hatching (sun.hatch), every
-// `every`-th line, and with `cross` a second set turned `turn` degrees.
-export function nightLines([x0, y0, x1, y1], sun, angle = 0, opts = NIGHT) {
-  const h = sun.hatch, out = [[], []];
-  if (!h) return out;
-  const n = Math.max(1, Math.round(opts.every));
-  const sets = [h.angle, ...(opts.cross ? [h.angle + opts.turn] : [])];
-  const corners = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]];
-  for (const deg of sets) {
-    const u = groundDir(deg, angle), v = [-u[1], u[0]];
-    const cs = corners.map(([x, y]) => x * v[0] + y * v[1]);
-    for (let k = Math.ceil(Math.min(...cs) / h.gap / n) * n; k * h.gap <= Math.max(...cs); k += n) {
-      // where line k (p·v = c) crosses the box, as t along u
-      const c = k * h.gap, ts = [];
-      if (Math.abs(u[0]) > 1e-9) for (const x of [x0, x1]) ts.push((x - v[0] * c) / u[0]);
-      if (Math.abs(u[1]) > 1e-9) for (const y of [y0, y1]) ts.push((y - v[1] * c) / u[1]);
-      const inside = ts.filter((t) => {
-        const x = u[0] * t + v[0] * c, y = u[1] * t + v[1] * c;
-        return x >= x0 - 1e-6 && x <= x1 + 1e-6 && y >= y0 - 1e-6 && y <= y1 + 1e-6;
-      });
-      if (inside.length < 2) continue;
-      const t0 = Math.min(...inside), t1 = Math.max(...inside);
-      if (t1 - t0 < h.gap) continue;
-      out[k % (2 * n) === 0 ? 0 : 1].push(hatchLine(k, t0, t1, u, v, h, opts.step));
+// NIGHT as it is now, on the map: the lines drawn (Renderer.renderNight)
+// or the colours turned.
+export function showNight(renderer) {
+  setNightTone(NIGHT.on && NIGHT.style === 'invert' ? NIGHT.tone : 0, NIGHT.cool);
+  renderer?.dirty.add('night');
+}
+
+// The tile of the pattern, in grid units: the lines' waves go round in it
+// whole, so the tiles meet without a seam.
+const TILE = 8;
+const r2 = (n) => Math.round(n * 100) / 100;
+
+// A <pattern> of pen lines `gap` grid units apart (rounded so a whole
+// number fit the tile), along the pattern's x, turned to `h.angle` on
+// screen; `px` scene pixels to a grid unit. Each line waves by h.wave, two
+// waves over the tile of its own phase.
+export function nightTile(id, gap, h, px) {
+  const n = Math.max(1, Math.round(TILE / gap)), g = TILE / n, step = 0.25, m = TILE / step;
+  let d = '';
+  for (let k = -1; k <= n; k++) {
+    const j = ((k % n) + n) % n; // (the line over the edge is the first one again)
+    const p1 = hash(j, 1.7) * 6.283, p2 = hash(j, 4.1) * 6.283;
+    for (let i = 0; i <= m; i++) {
+      const x = i * step;
+      const y = k * g + h.wave * (0.6 * Math.sin((x / TILE) * 6.283 * 3 + p1) + 0.4 * Math.sin((x / TILE) * 6.283 * 8 + p2));
+      d += `${i ? 'L' : 'M'}${r2(x * px)} ${r2(y * px)}`;
     }
   }
-  return out;
+  const s = TILE * px;
+  return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${r2(s)}" height="${r2(s)}" patternTransform="rotate(${h.angle})"><path class="night-line" d="${d}"/></pattern>`;
 }

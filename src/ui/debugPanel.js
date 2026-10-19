@@ -7,7 +7,7 @@
 import { STYLE } from '../render/style.js';
 import { DRAW } from '../render/draw.js';
 import { DAY } from '../render/shadows.js';
-import { NIGHT } from '../render/night.js';
+import { NIGHT, showNight } from '../render/night.js';
 import { reveal, isShown } from './motion.js';
 
 // The classes of a tree's parts (features/trees.js), also where a building
@@ -55,9 +55,10 @@ export class DebugPanel {
       '<div class="svg-count">–</div>' +
       `<div class="sun-row"><span class="sun-at">Sun</span><input class="sun" type="range" min="0" max="${DAY.positions.length - 1}" step="1" value="${renderer.sunPos ?? 0}"></div>` +
       '<label><input type="checkbox" class="day-on" checked> The day goes on (unticked: the sun stays put)</label>' +
-      '<div class="sun-row"><span class="sun-at">Night</span><select class="night"><option value="">off</option><option value="ground">on the ground</option><option value="all">over everything</option></select></div>' +
-      `<div class="sun-row"><span class="sun-at night-every">Every 3rd line</span><input class="night-n" type="range" min="1" max="8" step="1" value="${NIGHT.every}"></div>` +
-      '<label><input type="checkbox" class="night-cross"> Night: crossed lines</label>' +
+      '<div class="sun-row"><span class="sun-at">Night</span><select class="night"><option value="">off</option><option value="lines">in lines, over everything</option><option value="invert">colours turned to their negatives</option></select></div>' +
+      `<div class="sun-row"><span class="sun-at night-every">Lines</span><input class="night-n" type="range" min="1" max="8" step="1" value="${NIGHT.every}"></div>` +
+      `<div class="sun-row"><span class="sun-at night-tone">Negative</span><input class="night-t" type="range" min="0" max="1" step="0.1" value="${NIGHT.tone}"></div>` +
+      `<div class="sun-row"><span class="sun-at night-cool">Blue</span><input class="night-c" type="range" min="0" max="1" step="0.1" value="${NIGHT.cool}"></div>` +
       toggles.map(([label], i) => `<label><input type="checkbox" data-i="${i}" checked> ${label}</label>`).join('');
     root.appendChild(this.el);
     this.el.addEventListener('change', (e) => {
@@ -89,77 +90,29 @@ export class DebugPanel {
     });
     setInterval(() => { if (this.open) showSun(); }, 500);
 
-    // the night (render/night.js), over the whole map for now
-    const night = this.el.querySelector('.night'), nightN = this.el.querySelector('.night-n');
-    const nightEvery = this.el.querySelector('.night-every'), nightCross = this.el.querySelector('.night-cross');
-    const nth = (k) => (k === 1 ? 'Every line' : `Every ${k}${k === 2 ? 'nd' : k === 3 ? 'rd' : 'th'} line`);
+    // the night (render/night.js): in lines (how dense) or in colours
+    // (how far to the negative, how blue)
+    const q = (c) => this.el.querySelector(c);
+    const night = q('.night'), nightN = q('.night-n'), nightT = q('.night-t'), nightC = q('.night-c');
+    const label = () => {
+      const k = NIGHT.every;
+      q('.night-every').textContent = `Lines: ${k === 1 ? 'every one' : `every ${k}${k === 2 ? 'nd' : k === 3 ? 'rd' : 'th'}`}`;
+      q('.night-tone').textContent = `Negative: ${Math.round(NIGHT.tone * 100)} %`;
+      q('.night-cool').textContent = `Blue: ${Math.round(NIGHT.cool * 100)} %`;
+    };
     const setNight = () => {
       NIGHT.on = !!night.value;
-      if (night.value) NIGHT.over = night.value;
+      if (night.value) NIGHT.style = night.value;
       NIGHT.every = +nightN.value;
-      NIGHT.cross = nightCross.checked;
-      nightEvery.textContent = nth(NIGHT.every);
-      renderer.dirty.add('night');
+      NIGHT.tone = +nightT.value;
+      NIGHT.cool = +nightC.value;
+      label();
+      showNight(renderer);
     };
-    night.value = NIGHT.on ? NIGHT.over : '';
-    nightCross.checked = NIGHT.cross;
-    nightEvery.textContent = nth(NIGHT.every);
+    night.value = NIGHT.on ? NIGHT.style : '';
+    label();
     night.addEventListener('change', setNight);
-    nightN.addEventListener('input', setNight);
-    nightCross.addEventListener('change', setNight);
-
-    // frame rate: frames per second, average and slowest frame, every half second
-    const fps = this.el.querySelector('.fps');
-    let n = 0, worst = 0, start = performance.now(), last = start;
-    const tick = (now) => {
-      requestAnimationFrame(tick);
-      if (!this.open) {
-        // closed: nothing to measure, start fresh when it opens again
-        n = 0; worst = 0; start = last = now;
-        return;
-      }
-      n++;
-      worst = Math.max(worst, now - last);
-      last = now;
-      if (now - start < 500) return;
-      const ms = (now - start) / n;
-      fps.textContent = `${Math.round(1000 / ms)} fps · ${ms.toFixed(1)} ms · worst ${worst.toFixed(0)} ms`;
-      n = 0;
-      worst = 0;
-      start = now;
-    };
-    requestAnimationFrame(tick);
-
-    // SVG elements: in the page, and shown (not in a hidden layer, a culled
-    // building or a hidden kind) by what they draw. Counted once a second
-    // while open, when the browser is idle, as it walks the whole drawing.
-    const count = this.el.querySelector('.svg-count');
-    const k = (n) => (n >= 10000 ? `${Math.round(n / 1000)}k` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
-    const idle = window.requestIdleCallback ?? ((f) => setTimeout(f, 0));
-    const tally = () => {
-      const all = (el) => el.getElementsByTagName('*').length;
-      const visible = (el) => getComputedStyle(el).display !== 'none'; // (the grid is hidden by a class)
-      const kinds = { s: 0, f: 0, k: 0 };
-      let yard = 0; // tree parts in buildings' drawings (hidden by CSS with the trees off)
-      let total = 0, other = 0;
-      for (const el of Object.values(renderer.layers)) total += all(el);
-      for (const e of renderer.objs.values()) {
-        if (e.shown === false) continue;
-        const n = (visible(layer('objects')) ? all(e.g) : 0) + (visible(layer('lots')) ? all(e.lg) : 0) + (visible(layer('shadows')) ? all(e.sg) : 0);
-        kinds[e.key[0]] = (kinds[e.key[0]] ?? 0) + n;
-        if (e.key[0] === 's' && visible(layer('objects'))) yard += e.g.querySelectorAll(TREE_PARTS).length;
-      }
-      kinds.s -= yard;
-      if (document.body.classList.contains('debug-no-trees')) yard = 0;
-      for (const [name, el] of Object.entries(renderer.layers)) {
-        if (['objects', 'lots', 'shadows'].includes(name) || !visible(el)) continue;
-        if (name === 'meadow') for (const chunk of renderer.meadow.values()) other += chunk.shown === false ? 0 : all(chunk.g);
-        else other += all(el);
-      }
-      const shown = kinds.s + yard + kinds.f + kinds.k + other;
-      count.textContent = `SVG: ${k(total)} in page · ${k(shown)} shown — buildings ${k(kinds.s)} · trees ${k(kinds.f)} + ${k(yard)} in yards · lamps ${k(kinds.k)} · rest ${k(other)}`;
-    };
-    setInterval(() => { if (this.open) idle(tally); }, 1000);
+    for (const el of [nightN, nightT, nightC]) el.addEventListener('input', setNight);
   }
 
   get open() {

@@ -88,7 +88,7 @@ import { mergeRuns, placeInOrder, isoSort } from './order.js';
 import { Camera } from './camera.js';
 import { SUN, DAY, sunFor, shadowSVG } from './shadows.js';
 import { HILL_SHADOWS, hillShade, hillShadowLines } from './hillShadows.js';
-import { NIGHT, nightLines } from './night.js';
+import { NIGHT, nightTile } from './night.js';
 import { findForests, forestSVG } from './forest.js';
 import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
 
@@ -97,7 +97,7 @@ export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
-const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'dusk', 'parked', 'trains', 'agents', 'mist', 'objects', 'night', 'notes', 'overlay'];
+const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'night', 'notes', 'overlay'];
 const TOP = ['mist', 'objects', 'night', 'notes', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -127,7 +127,7 @@ const OVERSCAN = 0.25;
 // While the view turns (Renderer.turnFrame): the layers turned as a sheet
 // of paper, drawn anew once it rests, and the lines on the ground drawn at
 // the turning angle every frame. Buildings, trees and lamps go their own way.
-const SHEET = ['forest', 'mist', 'dusk', 'night'];
+const SHEET = ['forest', 'mist'];
 const LINES = ['roads', 'paths', 'rails', 'fences', 'notes'];
 // The steps of a whole turn (Camera.STEP); the views an object keeps of
 // the steps it has been drawn at, at most (Renderer.swapIn); and ms the
@@ -2250,36 +2250,27 @@ export class Renderer {
     return true;
   }
 
-  // The night (night.js): hatched over the whole map, over everything
-  // (layer night, over the objects) or on the ground (dusk, under them).
-  // The lines for each turn of the view are kept, as the brows'. Both
-  // layers are drawn here, one of them empty.
+  // The night drawn in lines (night.js): one sheet over everything – a
+  // rect far larger than the map, about its middle, so the view turns
+  // under it – filled with a tile of pen lines straight across the screen,
+  // a sparser one zoomed out (styles.css). Drawn again only when its
+  // settings change.
   renderNight() {
     const { camera, world } = this;
-    const sun = sunFor(camera);
-    let svg = '';
-    if (NIGHT.on && sun.hatch) {
-      const m = 1.2; // (as the contours)
-      const box = [-m, -m, world.grid.width - 1 + m, world.grid.height - 1 + m];
-      const key = `${NIGHT.every}|${NIGHT.cross}|${NIGHT.turn}|${NIGHT.step}|${sun.hatch.angle}|${sun.hatch.gap}`;
-      if (this.nights?.key !== key || this.nights.lift !== camera.lift) this.nights = { key, lift: camera.lift, views: new Map() };
-      svg = this.nights.views.get(camera.angle);
-      if (svg == null) {
-        const [near, far] = nightLines(box, sun, camera.angle);
-        const paths = (lines, cls) => chunked(lines, CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
-        svg = paths(near, 'night-line') + paths(far, 'night-line ht1');
-        if (this.nights.views.size >= 4) this.nights.views.delete(this.nights.views.keys().next().value);
-        this.nights.views.set(camera.angle, svg);
-      }
+    const h = SUN.hatch;
+    const show = NIGHT.on && NIGHT.style === 'lines' && h;
+    const key = show ? `${NIGHT.every}|${NIGHT.far}|${h.angle}|${h.gap}|${h.wave}|${camera.tile}` : '';
+    if (key === this.nightKey) return;
+    this.nightKey = key;
+    if (!show) {
+      this.layers.night.innerHTML = '';
+      return;
     }
-    const over = NIGHT.over === 'ground' ? 'dusk' : 'night';
-    this.layers[over].innerHTML = svg;
-    this.layers[over === 'dusk' ? 'night' : 'dusk'].innerHTML = '';
-  }
-
-  // (the ground night is drawn with the night layer, renderNight)
-  renderDusk() {
-    this.renderNight();
+    const gap = h.gap * NIGHT.every, px = camera.tile;
+    const [mx, my] = this.project(camera.cx, camera.cy, 0);
+    const r = (Math.hypot(world.grid.width, world.grid.height) + 20) * px * 2;
+    this.layers.night.innerHTML = nightTile('night-near', gap, h, px) + nightTile('night-far', gap * NIGHT.far, h, px) +
+      `<rect class="night-veil" x="${Math.round(mx - r)}" y="${Math.round(my - r)}" width="${Math.round(2 * r)}" height="${Math.round(2 * r)}"/>`;
   }
 
   // Every object's shadow drawn again from its feet, with SUN as it is
