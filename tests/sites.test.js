@@ -113,9 +113,11 @@ test('a park beside a diagonal lane is not turned', async () => {
   const { STRUCTURE_TYPES, tiltOf } = await import('../structures/index.js');
   const w = flatWorld();
   w.buildNetwork('road', run(w, [2, 3], [8, 9]), { lane: true });
-  const s = w.placeStructure('green', w.grid.index(6, 5));
+  // (both right beside the lane, which would turn a house 45°: not just its
+  // look's small random tilt)
+  const s = w.placeStructure('green', w.grid.index(6, 6));
   assert.ok(s);
   assert.equal(tiltOf(STRUCTURE_TYPES.green, s, undefined, w), 0);
-  const h = w.placeStructure('house', w.grid.index(4, 7));
+  const h = w.placeStructure('house', w.grid.index(4, 6));
   assert.ok(h && Math.abs(tiltOf(STRUCTURE_TYPES.house, h, undefined, w)) > 0.1, 'a house still turns to it');
 });
