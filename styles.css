@@ -1740,6 +1740,9 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 .debug-no-trees #objects :is(.tree, .leaf, .trunk, .twig, .limb, .crown-line, .tree-foot) { display: none; }
 .debug-panel label { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
 .debug-panel input { accent-color: var(--fg); margin: 0; }
+.debug-panel .sun-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.debug-panel .sun-row .sun-at { min-width: 13em; font-variant-numeric: tabular-nums; }
+.debug-panel .sun-row input { flex: 1; }
 @media (max-width: 640px) {
   .debug-panel {
     top: calc(62px + var(--safe-t));

@@ -6,6 +6,7 @@
 
 import { STYLE } from '../render/style.js';
 import { DRAW } from '../render/draw.js';
+import { DAY } from '../render/shadows.js';
 import { reveal, isShown } from './motion.js';
 
 // The classes of a tree's parts (features/trees.js), also where a building
@@ -51,6 +52,8 @@ export class DebugPanel {
     this.el.innerHTML =
       '<div class="debug-head"><span>Debug</span><span class="fps">–</span><button class="close" aria-label="Close">×</button></div>' +
       '<div class="svg-count">–</div>' +
+      `<div class="sun-row"><span class="sun-at">Sun</span><input class="sun" type="range" min="0" max="${DAY.positions.length - 1}" step="1" value="${renderer.sunPos ?? 0}"></div>` +
+      '<label><input type="checkbox" class="day-on" checked> The day goes on (unticked: the sun stays put)</label>' +
       toggles.map(([label], i) => `<label><input type="checkbox" data-i="${i}" checked> ${label}</label>`).join('');
     root.appendChild(this.el);
     this.el.addEventListener('change', (e) => {
@@ -58,6 +61,29 @@ export class DebugPanel {
       if (i != null) toggles[i][1](e.target.checked);
     });
     this.el.querySelector('.close').addEventListener('click', () => this.toggle(false));
+
+    // the sun (DAY in render/shadows.js): moving the slider holds it at a
+    // position of the day, from the morning in the east to the evening in
+    // the west; ticking the box lets the day carry on from the clock
+    const sun = this.el.querySelector('.sun'), dayOn = this.el.querySelector('.day-on'), sunAt = this.el.querySelector('.sun-at');
+    const steps = DAY.positions.length, mid = (steps - 1) / 2;
+    const showSun = () => {
+      const i = renderer.sunPos ?? 0;
+      if (document.activeElement !== sun) sun.value = i;
+      const part = i < mid - 1 ? 'morning' : i > mid + 1 ? 'evening' : i === mid ? 'midday' : i < mid ? 'late morning' : 'afternoon';
+      sunAt.textContent = `Sun ${i + 1}/${steps} · ${part}`;
+      dayOn.checked = DAY.on;
+    };
+    sun.addEventListener('input', () => {
+      DAY.on = false;
+      renderer.setSun(+sun.value);
+      showSun();
+    });
+    dayOn.addEventListener('change', () => {
+      DAY.on = dayOn.checked;
+      showSun();
+    });
+    setInterval(() => { if (this.open) showSun(); }, 500);
 
     // frame rate: frames per second, average and slowest frame, every half second
     const fps = this.el.querySelector('.fps');
