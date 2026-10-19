@@ -7,8 +7,7 @@ import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { planRoute } from '../roads/routing.js';
 import { eraseTarget } from '../tools/erase.js';
 import { ROAD_MARK } from '../render/roadMarks.js';
-import { SUN, DAY, sunAt } from '../render/shadows.js';
-import { NIGHT, showNight } from '../render/night.js';
+import { SUN, DAY, sunAt, stepAt } from '../render/shadows.js';
 
 const STEP = 0.5; // simulated seconds per step while jumping
 
@@ -165,31 +164,22 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
       if (Object.keys(over).length) renderer?.invalidate();
       return structuredClone(SUN);
     },
-    // the sun through the day (DAY in render/shadows.js): a number holds it
-    // at that position (0 morning … the last evening), nothing lets the
-    // day go on; { day } sets how long a day lasts (simulated seconds)
-    day(at, over = {}) {
-      if (at && typeof at === 'object') [at, over] = [undefined, at];
+    // the day (DAY in render/shadows.js): an hour (0 … 24, e.g. 20.5)
+    // holds the time there – the sun, the dusk, the night – nothing lets
+    // the day go on; { day } sets how long a day lasts (simulated seconds)
+    day(hour, over = {}) {
+      if (hour && typeof hour === 'object') [hour, over] = [undefined, hour];
       Object.assign(DAY, over);
-      if (at == null) {
+      if (hour == null) {
         DAY.on = true;
         renderer?.setSun(sunAt(world.time));
       } else {
-        if (!(at >= 0 && at < DAY.positions.length)) throw new Error(`cmd.day: a position 0…${DAY.positions.length - 1}`);
+        if (!(hour >= 0 && hour <= 24)) throw new Error('cmd.day: an hour, 0 … 24');
         DAY.on = false;
-        renderer?.setSun(Math.round(at));
+        renderer?.setSun(stepAt(hour));
       }
-      return { on: DAY.on, at: renderer?.sunPos, day: DAY.day, positions: DAY.positions.length };
-    },
-    // the night (NIGHT in render/night.js): true / false, or settings,
-    // e.g. { style: 'lines', every: 1 } or { style: 'invert', tone: 0.6 }
-    night(over = {}) {
-      if (typeof over === 'boolean') over = { on: over };
-      else if (Object.keys(over).length && !('on' in over)) over = { on: true, ...over };
-      for (const k of Object.keys(over)) if (!(k in NIGHT)) throw new Error(`cmd.night: no setting '${k}' (${Object.keys(NIGHT).join(', ')})`);
-      Object.assign(NIGHT, over);
-      showNight(renderer);
-      return { ...NIGHT };
+      const [from, sun, dark] = DAY.steps[renderer?.dayStep ?? stepAt(hour ?? 12)];
+      return { on: DAY.on, from, sun, dark, day: DAY.day };
     },
     // the hand of the road marks on buildings nothing reaches (render/roadMarks.js)
     roadMark(style) {
@@ -216,8 +206,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',
-        "cmd.night(true) / cmd.night({ style: 'lines', every: 1 }) / cmd.night({ style: 'invert', tone: 0.6 })   the night",
-        'cmd.day(n) / cmd.day()   hold the sun at position n of the day / let the day go on; cmd.day({ day: 120 }) a shorter day',
+        'cmd.day(20.5) / cmd.day()   hold the time at 20:30 / let the day go on; cmd.day({ day: 120 }) a shorter day',
         `cmd.roadMark(${ROAD_MARK.styles.map((k) => `'${k}'`).join(' | ')})   now: '${ROAD_MARK.style}'`,
         'cmd.seed()                the map seed',
         'cmd.save()                download the town as a file',

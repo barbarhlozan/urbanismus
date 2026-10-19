@@ -15,7 +15,7 @@ import { World } from './core/world.js';
 import { generateWorld } from './terrain/generate.js';
 import { Camera } from './render/camera.js';
 import { Renderer } from './render/renderer.js';
-import { sunAt } from './render/shadows.js';
+import { DAY, sunAt } from './render/shadows.js';
 import { OverlayKit } from './render/overlay.js';
 import { AgentSystem } from './sim/agents.js';
 import { GrowthSystem } from './sim/growth.js';
@@ -151,6 +151,8 @@ let sunFor = null, gloomFor = null;
 let wind = 0;
 const showSun = ({ sun, gloom }) => {
   sun = Math.round(sun * 20) / 20;
+  // the night greys the map too (DAY.gloom), over the weather's
+  gloom = 1 - (1 - gloom) * (1 - (DAY.gloom[renderer.dark] ?? 0));
   gloom = Math.round(gloom * 50) / 50;
   if (sun !== sunFor) {
     sunFor = sun;

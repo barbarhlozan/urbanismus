@@ -56,90 +56,14 @@ export function applyTheme(choice = load(SCHEME_KEY) ?? 0, root = document.docum
   }
   schemeChoice = choice;
   const scheme = choice === 'custom' ? CUSTOM : SCHEMES[choice];
-  showPalette(nightTone.t ? nightPalette(scheme, nightTone.t, nightTone.cool) : scheme, root);
+  Object.assign(THEME.palette, scheme);
+  for (const name of COLOR_NAMES) root.style.setProperty(`--${name}`, scheme[name]);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', scheme.bg);
   save(SCHEME_KEY, String(choice));
   // the colours themselves too, for the opening cover (index.html), which
   // shows before any of this has loaded
   save(PALETTE_KEY, JSON.stringify({ bg: scheme.bg, main: scheme.main, detail: scheme.detail }));
   return scheme;
-}
-
-// The colours drawn with: on the page (the CSS variables) and for the
-// canvases (THEME.palette).
-function showPalette(colors, root = document.documentElement) {
-  Object.assign(THEME.palette, colors);
-  for (const name of COLOR_NAMES) root.style.setProperty(`--${name}`, colors[name]);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors.bg);
-}
-
-// ----- night, as the scheme's negative (render/night.js, style 'invert') -----
-
-// How far the colours are turned to the night (0 day … 1), and how much
-// they lean to blue there; set with setNightTone.
-const nightTone = { t: 0, cool: 0 };
-
-// The scheme in use, as the night makes it at `t` (0 … 1), in OKLab
-// (where lightness is lightness to the eye), in two parts, as a plain mix
-// would pass through a grey where paper and ink are the same and nothing
-// shows:
-//   dusk   (t up to ½) everything dims together, by up to DUSK of
-//          lightness: the paper greys, the ink stays darker than it
-//   night  (from ½) the lightness is turned over – the paper dark, each ink
-//          lighter than it by how much darker it was by day (as a share
-//          of the paper's lightness, its square root, so a mid-tone pen
-//          still stands off the paper), up to the palest ink. The paper
-//          starts at NIGHT_LIGHT[0] (a little darker than the dusk's, so
-//          there is room above it for the ink) and ends at [1], a dark
-//          grey rather than black; the palest ink is [2], short of white
-// The hue stays (a warm paper stays warm, a blue pen blue), leaning
-// `cool` to blue as it gets darker. A scheme whose paper is already the
-// darkest of its colours (Night) is a night already, and stays as it is.
-const DUSK = 0.3;
-const NIGHT_LIGHT = [0.42, 0.25, 0.92];
-export function nightPalette(scheme, t = 1, cool = 0) {
-  const out = {};
-  const lab = Object.fromEntries(COLOR_NAMES.map((n) => [n, toLab(scheme[n])]));
-  if (COLOR_NAMES.some((n) => lab[n][0] < lab.bg[0] - 1e-6) === false) return { ...scheme };
-  for (const name of COLOR_NAMES) {
-    const [L, a, b] = lab[name];
-    let L1;
-    if (t <= 0.5) L1 = Math.max(0.03, L - DUSK * (t / 0.5));
-    else {
-      const s = (t - 0.5) / 0.5, [from, to, top] = NIGHT_LIGHT;
-      const paper = from + (to - from) * s;
-      L1 = paper + (top - paper) * Math.sqrt(Math.max(0, (lab.bg[0] - L) / lab.bg[0]));
-    }
-    out[name] = fromLab([L1, a, b - 0.03 * cool * t]);
-  }
-  return out;
-}
-
-// Turn the scheme in use towards the night (t 0 … 1); 0 is the day.
-export function setNightTone(t, cool = 0) {
-  nightTone.t = Math.min(1, Math.max(0, t));
-  nightTone.cool = cool;
-  const scheme = schemeChoice === 'custom' ? CUSTOM : SCHEMES[schemeChoice];
-  showPalette(nightTone.t ? nightPalette(scheme, nightTone.t, cool) : scheme);
-}
-
-// #rrggbb <-> OKLab [L, a, b] (Björn Ottosson's).
-function toLab(hex) {
-  const n = parseInt(normalizeHex(hex).slice(1), 16);
-  const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => lin(c / 255));
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
-}
-
-function fromLab([L, a, b]) {
-  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
-  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
-  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
-  const rgb = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s];
-  const gam = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
-  return `#${rgb.map((c) => Math.round(Math.min(1, Math.max(0, gam(c))) * 255).toString(16).padStart(2, '0')).join('')}`;
 }
 
 // Set one color of the custom scheme (a hex code: #rgb or #rrggbb) and switch
@@ -149,7 +73,7 @@ export function setCustomColor(name, value) {
   const hex = normalizeHex(value);
   if (!hex || !COLOR_NAMES.includes(name)) return null;
   if (!customSaved && schemeChoice !== 'custom') {
-    for (const n of COLOR_NAMES) CUSTOM[n] = SCHEMES[schemeChoice][n]; // (the day's, whatever the night shows)
+    for (const n of COLOR_NAMES) CUSTOM[n] = THEME.palette[n];
   }
   CUSTOM[name] = hex;
   customSaved = true;

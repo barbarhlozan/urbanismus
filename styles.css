@@ -279,11 +279,10 @@ html, body {
    further out only every other of them */
 .hill-shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
 :is(.lod-1, .lod-2) .hill-shadow.ht1 { display: none; }
-/* the night in lines (render/night.js): a tile of pen lines over everything,
-   a sparser one zoomed out */
+/* the night (Renderer.renderNight): the paper's strokes (render/hatch.js)
+   over everything, as many of them as it is dark */
 .night-line { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
-.night-veil { fill: url(#night-near); pointer-events: none; }
-:is(.lod-1, .lod-2) .night-veil { fill: url(#night-far); }
+.night-veil { fill: url(#night-tile); pointer-events: none; }
 /* screen-facing line drawings (trees, see features/trees.js) */
 /* woods far out, one shape each (render/forest.js): as a tree's crown */
 .layer-forest .forest { fill: var(--bg); stroke: none; fill-rule: evenodd; }
@@ -1748,7 +1747,6 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 .debug-panel .sun-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
 .debug-panel .sun-row .sun-at { min-width: 13em; font-variant-numeric: tabular-nums; }
 .debug-panel .sun-row input { flex: 1; }
-.debug-panel .sun-row select { flex: 1; font: inherit; }
 @media (max-width: 640px) {
   .debug-panel {
     top: calc(62px + var(--safe-t));

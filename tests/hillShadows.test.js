@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SUN } from '../src/render/shadows.js';
-import { HILL_SHADOWS, hillShade, hillShadowLines } from '../src/render/hillShadows.js';
+import { HILL_SHADOWS, hillShade, hillShadowPaths } from '../src/render/hillShadows.js';
 
 // the sun casting along +x, a shadow as long as the ground is high times L
 const sun = (length = 1) => ({ ...SUN, cast: [length, 0] });
@@ -28,15 +28,15 @@ test('a gentle slope turned away stays lit by a high sun, not a low one', () => 
 
 test('the hatching covers the shade only, and none of the water', () => {
   const height = (x) => (x >= 5 && x <= 6 ? 1 : 0);
-  const shade = hillShade(height, box, sun(4), opts);
-  const [near, far] = hillShadowLines(shade, box, sun(4), 0, () => false, opts);
-  const pts = [...near, ...far].flat();
-  assert.ok(pts.length > 0);
-  const slack = SUN.hatch.wave + 0.1;
-  for (const [x] of pts) assert.ok(x > 6 - slack && x < 10 + slack, `at x ${x}`);
-  // the lines that stay further out are a share of them
-  assert.ok(near.length > 0 && far.length > 0);
-  const dry = hillShadowLines(shade, box, sun(4), 0, (x, y) => y < 5, opts).flat(2);
-  assert.ok(dry.length > 0);
-  for (const [, y] of dry) assert.ok(y > 5 - slack, `at y ${y}`);
+  const sh = { ...sun(4), screen: true, px: 32 };
+  const shade = hillShade(height, box, sh, opts);
+  const project = (x, y) => [x * 32, y * 32]; // (flat will do)
+  const pts = (d) => [...d.matchAll(/-?\d+(?:\.\d+)?/g)].map(Number).reduce((o, x, i) => (i % 2 ? o[o.length - 1].push(x) : o.push([x]), o), []);
+  const [near, far] = hillShadowPaths(shade, box, sh, project, () => false, opts);
+  assert.ok(near && far, 'both tiers');
+  const slack = 0.15;
+  for (const [x] of pts(near + far)) assert.ok(x / 32 > 6 - slack && x / 32 < 10 + slack, `at x ${x / 32}`);
+  const [dn, df] = hillShadowPaths(shade, box, sh, project, (x, y) => y < 5, opts);
+  assert.ok((dn + df).length > 0);
+  for (const [, y] of pts(dn + df)) assert.ok(y / 32 > 5 - slack, `at y ${y / 32}`);
 });

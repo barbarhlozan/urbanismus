@@ -87,8 +87,8 @@ import { carMark, personMark } from './marks.js';
 import { mergeRuns, placeInOrder, isoSort } from './order.js';
 import { Camera } from './camera.js';
 import { SUN, DAY, sunFor, shadowSVG } from './shadows.js';
-import { HILL_SHADOWS, hillShade, hillShadowLines } from './hillShadows.js';
-import { NIGHT, nightTile } from './night.js';
+import { HILL_SHADOWS, hillShade, hillShadowPaths } from './hillShadows.js';
+import { hatchTile } from './hatch.js';
 import { findForests, forestSVG } from './forest.js';
 import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
 
@@ -716,16 +716,15 @@ export class Renderer {
     if (!HILL_SHADOWS.on || !SUN.on || !SUN.hatch || this.contours) return '';
     const m = 1.2; // (as the contours)
     const box = [-m, -m, world.grid.width - 1 + m, world.grid.height - 1 + m];
-    const key = `${SUN.azimuth}|${SUN.length}|${SUN.hatch.angle}|${SUN.hatch.gap}`;
+    const key = `${SUN.azimuth}|${SUN.length}|${JSON.stringify(SUN.hatch)}`;
     const relief = world.relief();
     if (this.hills?.key !== key || this.hills.relief !== relief || this.hills.lift !== camera.lift) {
       this.hills = { key, relief, lift: camera.lift, shade: hillShade(this.groundHeight(), box, sunFor(camera)), views: new Map() };
     }
     let view = this.hills.views.get(camera.angle);
     if (view == null) {
-      const [near, far] = hillShadowLines(this.hills.shade, box, sunFor(camera), camera.angle, this.wetAt());
-      const paths = (lines, cls) => chunked(lines, CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
-      view = paths(near, 'hill-shadow') + paths(far, 'hill-shadow ht1');
+      const [near, far] = hillShadowPaths(this.hills.shade, box, sunFor(camera), (x, y) => this.project(x, y, 0), this.wetAt());
+      view = (near ? `<path class="hill-shadow" d="${near}"/>` : '') + (far ? `<path class="hill-shadow ht1" d="${far}"/>` : '');
       if (this.hills.views.size >= 6) this.hills.views.delete(this.hills.views.keys().next().value);
       this.hills.views.set(camera.angle, view);
     }
@@ -1808,6 +1807,7 @@ export class Renderer {
       s.classList.add(`lod-${level}`);
     }
     this.lodLevel = level;
+    if (this.dark) this.dirty.add('night'); // (fewer of its lines, or more)
   }
 
   // An object's detail at zoom z, a number made of four parts: its level
@@ -2227,18 +2227,27 @@ export class Renderer {
     return shade ? this.atDetail(shadowSVG(shade, sunFor(this.camera)), band) : '';
   }
 
-  // The sun steps to position i of the day (DAY.positions): what it lights
-  // is drawn anew – the walls turned away from it, the shadows, the trees'
-  // shaded sides, the hills' shadows. The objects in sight go by the
-  // rebuild budget, a few each frame (frame), as for a new level of
-  // detail; the rest once they come into sight (stale, cull()). Not
-  // mid-turn (the turn's views are drawn for the sun as it was): false if
-  // put off, to try again.
+  // The day steps to step i (DAY.steps): how dark it is (the night, drawn
+  // over everything, renderNight) and where the sun stands. A sun that
+  // moves – or sets, or rises – redraws what it lights: the walls turned
+  // away from it, the shadows, the trees' shaded sides, the hills'
+  // shadows. The objects in sight go by the rebuild budget, a few each
+  // frame (frame), as for a new level of detail; the rest once they come
+  // into sight (stale, cull()). Not mid-turn (the turn's views are drawn
+  // for the sun as it was): false if put off, to try again.
   setSun(i) {
-    if (i == null || i === this.sunPos) return true;
+    if (i == null || i === this.dayStep) return true;
     if (this.turning || this.bare) return false;
-    [SUN.azimuth, SUN.length] = DAY.positions[i];
-    this.sunPos = i;
+    const [, pos, dark] = DAY.steps[i];
+    this.dayStep = i;
+    if (dark !== this.dark) {
+      this.dark = dark;
+      this.dirty.add('night');
+    }
+    if (pos === this.sunPos) return true;
+    this.sunPos = pos;
+    SUN.on = pos != null;
+    if (pos != null) [SUN.azimuth, SUN.length] = DAY.positions[pos];
     for (const e of this.objs.values()) {
       e.views?.clear(); // (drawn for the old sun)
       e.stale = e.sunStale = true;
@@ -2250,26 +2259,27 @@ export class Renderer {
     return true;
   }
 
-  // The night drawn in lines (night.js): one sheet over everything – a
-  // rect far larger than the map, about its middle, so the view turns
-  // under it – filled with a tile of pen lines straight across the screen,
-  // a sparser one zoomed out (styles.css). Drawn again only when its
-  // settings change.
+  // The night (DAY: how dark, 1 … 4): one sheet over everything – a rect
+  // far larger than the map, about its middle, so the view turns under it
+  // – filled with the paper's strokes (hatch.js), the same as every
+  // shadow's: every 8th line at dusk, more as it darkens, every one at
+  // night; zoomed out, fewer (as the roofs' hatching thins out).
   renderNight() {
     const { camera, world } = this;
     const h = SUN.hatch;
-    const show = NIGHT.on && NIGHT.style === 'lines' && h;
-    const key = show ? `${NIGHT.every}|${NIGHT.far}|${h.angle}|${h.gap}|${h.wave}|${camera.tile}` : '';
+    const zoomTier = [3, 2, 1][this.lodLevel ?? 0] ?? 1;
+    const tier = this.dark && h ? Math.min(this.dark - 1, zoomTier) : -1;
+    const key = tier >= 0 ? `${tier}|${JSON.stringify(h)}|${camera.tile}` : '';
     if (key === this.nightKey) return;
     this.nightKey = key;
-    if (!show) {
+    if (tier < 0) {
       this.layers.night.innerHTML = '';
       return;
     }
-    const gap = h.gap * NIGHT.every, px = camera.tile;
+    const px = camera.tile;
     const [mx, my] = this.project(camera.cx, camera.cy, 0);
     const r = (Math.hypot(world.grid.width, world.grid.height) + 20) * px * 2;
-    this.layers.night.innerHTML = nightTile('night-near', gap, h, px) + nightTile('night-far', gap * NIGHT.far, h, px) +
+    this.layers.night.innerHTML = hatchTile('night-tile', tier, h, px) +
       `<rect class="night-veil" x="${Math.round(mx - r)}" y="${Math.round(my - r)}" width="${Math.round(2 * r)}" height="${Math.round(2 * r)}"/>`;
   }
 

@@ -12,9 +12,12 @@
 //             alone can be drawn again from them (shadowSVG). Trees cast theirs from
 //             the shapes they leave (Painter.casts, castShapes): a crown's
 //             round shadow, a spruce's pointed one, and a line from the
-//             trunk. The lines lie on one grid over the whole ground, each
-//             with the same wave wherever it is drawn, so where two shadows
-//             meet they read as one.
+//             trunk. The lines are the paper's hatching (hatch.js): straight
+//             across the screen, laid as strokes, the same wherever they are
+//             drawn – so where two shadows meet they read as one, and the
+//             night (the same strokes everywhere) fills in between them.
+//             (Photos, through a perspective camera, hatch the ground
+//             itself instead: lines on the ground, waving as they run.)
 //   strokes   on the wall itself: parallel strokes, leaning, evenly spaced
 //             up to just below the top (wallStrokes, drawn by Painter._shade
 //             with the painter's own wobble); the further the wall is
@@ -26,6 +29,10 @@
 // console. Both go by the roof hatching's density tiers
 // (rh1…rh3), so the map thins them out with the roofs, building by
 // building, as it zooms out.
+
+import { tierOf, hash, hatchFrame, hatchStrokes } from './hatch.js';
+
+export { tierOf, hash };
 
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -43,7 +50,8 @@ const r2 = (n) => Math.round(n * 100) / 100;
 //   angle    the lines' direction on screen, in degrees clockwise from
 //            screen right, so they lie the same way in every view
 //   gap      between the lines (grid units)
-//   wave     how far a line strays to either side as it runs (grid units)
+//   stroke, join, bow, drift   how the lines are laid as strokes (hatch.js)
+//   wave     in photos, how far a line strays to either side (grid units)
 //   ragged   how unevenly the lines stop at the shadow's edge (grid units)
 //   pen      which of the map's pens (1 finest … 5 thickest, styles.css)
 // strokes, on the wall (null: none):
@@ -60,16 +68,12 @@ export const SUN = {
   azimuth: 90,
   length: 1,
   low: 0.08,
-  hatch: { angle: 120, gap: 0.04, wave: 0.008, ragged: 0.02, pen: 2 },
+  hatch: { angle: 120, gap: 0.04, stroke: [0.9, 1.8], join: [-0.08, 0.06], bow: 0.01, drift: 0.016, wave: 0.008, ragged: 0.02, pen: 2 },
   strokes: { from: 0.05, full: 0.45, most: 1, gap: 0.045, lean: 70, ragged: 0.12, fade: 0, pen: 2 },
 };
 
 // The class of a pen (1…5) in styles.css.
 export const penClass = (pen) => ` p${Math.min(5, Math.max(1, Math.round(pen ?? 2)))}`;
-
-// The density tier of hatch line k: every 8th (0), every 4th (1), every
-// other (2), the rest (3) – the roof hatching's, see Renderer.atDetail.
-export const tierOf = (k) => (k % 8 === 0 ? 0 : k % 4 === 0 ? 1 : k % 2 === 0 ? 2 : 3);
 
 // The class of a stroke in tier n (`kind`: 'rh' for roofs and walls).
 export const tierClass = (n, kind) => (n ? ` ${kind}${n}` : '');
@@ -90,11 +94,12 @@ export function groundDir(deg, angle = 0) {
 }
 
 // The sun for a camera: `cast` is the ground shift per unit of height, in
-// world axes (the same in every view); `angle` the camera's turn, for the
-// hatching, which lies the same way on screen in every view.
+// world axes (the same in every view); `angle` the camera's turn; `screen`
+// whether the hatching is the paper's (hatch.js, not through a perspective
+// camera), with `px` scene pixels to a grid unit.
 export function sunFor(camera, sun = SUN) {
   const a = (sun.azimuth * Math.PI) / 180;
-  return { ...sun, angle: camera.angle ?? 0, cast: [Math.cos(a) * sun.length, Math.sin(a) * sun.length] };
+  return { ...sun, angle: camera.angle ?? 0, cast: [Math.cos(a) * sun.length, Math.sin(a) * sun.length], screen: !camera.perspective, px: camera.tile ?? 32 };
 }
 
 // Where the light comes from on screen, for a camera: a unit direction
@@ -108,25 +113,50 @@ export function screenLight(camera, sun = SUN) {
   return [-sx / l, sy / l];
 }
 
-// The sun through a day: its positions from morning to evening, each as
-// [azimuth, length] (as SUN's), and how long a day lasts (`day`, simulated
-// seconds). It rests at each position for an equal share of the day and
-// then steps to the next – each step draws the map anew – and after the
-// evening comes the next morning. The middle position is midday, SUN's
-// own; the shadows swing round it by a right angle and more each way, and
-// grow long as the sun sinks.
+// The day, all 24 hours of it: its steps, each from an hour on – where the
+// sun stands (an index into `positions`, [azimuth, length] as SUN's, from
+// morning to evening; null: below the horizon, no shadows) and how dark it
+// is (0 day … 4 night: the night's hatching over everything, every 8th of
+// the paper's lines at 1, every 4th at 2, every other at 3, every one at 4,
+// Renderer.renderNight; and a grey over the map, `gloom`, as under a storm
+// sky). At dusk the night comes in over the evening's long shadows, line
+// by line, until they are lost in it; at dawn it goes the same way.
+//   day     simulated seconds to 24 hours
+//   start   the hour at world time 0 (a new town starts in the morning)
+//   dusk    the hour the dusk begins (the Debug panel's day starts there)
+// Each step that moves the sun draws the map anew; one that only darkens
+// it changes the night's tile.
 export const DAY = {
   on: true,
-  day: 1200,
+  day: 1800,
+  start: 8,
+  dusk: 19.25,
   positions: [[170, 2.2], [150, 1.7], [130, 1.35], [110, 1.1], [90, 1], [70, 1.1], [50, 1.35], [30, 1.7], [10, 2.2]],
+  steps: [
+    [0, null, 4], [4, null, 3], [4.75, 0, 2], [5.5, 0, 1], [6.25, 0, 0],
+    [7.5, 1, 0], [9, 2, 0], [10.5, 3, 0], [12, 4, 0], [13.5, 5, 0], [15, 6, 0], [16.5, 7, 0], [18, 8, 0],
+    [19.25, 8, 1], [20, 8, 2], [20.75, null, 3], [21.5, null, 4],
+  ],
+  gloom: [0, 0.04, 0.08, 0.12, 0.16],
 };
 
-// The position (an index into DAY.positions) the sun stands at, at world
-// time t; null with the day off.
+// The hour of the day (0 … 24) at world time t.
+export function hourAt(t, day = DAY) {
+  return ((((t / day.day) * 24 + day.start) % 24) + 24) % 24;
+}
+
+// The step of the day (an index into DAY.steps) at an hour.
+export function stepAt(hour, day = DAY) {
+  const h = ((hour % 24) + 24) % 24;
+  let i = 0;
+  while (i + 1 < day.steps.length && day.steps[i + 1][0] <= h) i++;
+  return i;
+}
+
+// The step of the day at world time t; null with the day held (cmd.day,
+// the Debug panel).
 export function sunAt(t, day = DAY) {
-  if (!day.on || !day.positions.length) return null;
-  const n = day.positions.length, f = (((t % day.day) + day.day) % day.day) / day.day;
-  return Math.min(n - 1, Math.floor(f * n));
+  return day.on && day.steps.length ? stepAt(hourAt(t, day), day) : null;
 }
 
 // How far a wall with outward world normal n (unit, horizontal) is turned
@@ -134,14 +164,6 @@ export function sunAt(t, day = DAY) {
 export function awayFrom([nx, ny], sun) {
   const [sx, sy] = sun.cast;
   return (nx * sx + ny * sy) / (Math.hypot(sx, sy) || 1);
-}
-
-// Deterministic noise in [0, 1) from two numbers.
-export function hash(a, b) {
-  let h = Math.imul(Math.round(a * 1000) | 0, 0x27d4eb2d) ^ Math.imul(Math.round(b * 1000) | 0, 0x165667b1);
-  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 // The strips the feet cast on the ground, each a parallelogram in world
@@ -227,8 +249,9 @@ function across(poly, u, v, c) {
 // The hatching over a set of convex polygons (world points) as runs
 // [k, t0, t1]: line k of the ground's hatching (tierOf) from t0 to t1
 // along it. u: the lines' direction on the ground, v across them. Runs on
-// the same line that overlap are joined.
-export function hatchRuns(polys, u, v, gap) {
+// the same line that overlap (or come within `join` of each other) are
+// joined.
+export function hatchRuns(polys, u, v, gap, join = 0) {
   const lines = new Map();
   for (const poly of polys) {
     const cs = poly.map(([x, y]) => x * v[0] + y * v[1]);
@@ -244,7 +267,7 @@ export function hatchRuns(polys, u, v, gap) {
     rs.sort((a, b) => a[0] - b[0]);
     let [t0, t1] = rs[0];
     for (const [a, b] of rs.slice(1)) {
-      if (a <= t1) t1 = Math.max(t1, b);
+      if (a <= t1 + join) t1 = Math.max(t1, b);
       else { out.push([k, t0, t1]); [t0, t1] = [a, b]; }
     }
     out.push([k, t0, t1]);
@@ -257,14 +280,16 @@ export function hatchRuns(polys, u, v, gap) {
 // it drew (castShapes), with its trunks' lines in the first tier, so they
 // stay as far out as anything. shade = { feet, casts, project }
 // (Renderer.shadeOf); `project(x, y)`: a ground point -> scene px, with
-// the object's relief and warp. Each line is drawn through points a step
-// apart, so it follows the ground, and strays to the sides by a wave that
-// depends only on where it is, so two shadows' lines meet as one.
+// the object's relief and warp. On the map the shadow is projected and
+// hatched with the paper's strokes (hatch.js), which lie the same in
+// every shadow and in the night; in a photo (sun.screen false) the ground
+// itself is hatched, each line through points a step apart, so it follows
+// the ground, and straying to the sides by a wave that depends only on
+// where it is, so two shadows' lines meet as one.
 export function shadowPaths({ feet = [], casts = [], project }, sun, angle = 0) {
   const d = ['', '', '', ''];
   const h = sun.hatch;
   if (!sun.on || !h) return d;
-  const u = groundDir(h.angle, angle), v = [-u[1], u[0]];
   const step = 0.12;
   const { polys, lines } = castShapes(casts, sun);
   for (const [a, b] of lines) {
@@ -272,7 +297,19 @@ export function shadowPaths({ feet = [], casts = [], project }, sun, angle = 0) 
     const pts = Array.from({ length: n + 1 }, (_, i) => project(a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n));
     d[0] += `M${pts.map(([x, y]) => `${r2(x)} ${r2(y)}`).join('L')}`;
   }
-  for (const [k, a, b] of hatchRuns([...castStrips(feet, sun), ...polys], u, v, h.gap)) {
+  const shapes = [...castStrips(feet, sun), ...polys];
+  if (sun.screen) {
+    const px = sun.px, f = hatchFrame(h), gap = f.gap * px, rag = h.ragged * px;
+    const onScreen = shapes.map((poly) => poly.map(([x, y]) => project(x, y)));
+    for (const [k, a, b] of hatchRuns(onScreen, f.u, f.v, gap, 0.5)) {
+      const t0 = a + rag * hash(k, a / px), t1 = b - rag * hash(b / px, k);
+      if (t1 - t0 < gap) continue;
+      d[tierOf(k)] += hatchStrokes(k, t0, t1, h, px, f);
+    }
+    return d;
+  }
+  const u = groundDir(h.angle, angle), v = [-u[1], u[0]];
+  for (const [k, a, b] of hatchRuns(shapes, u, v, h.gap)) {
     const t0 = a + h.ragged * hash(k, a), t1 = b - h.ragged * hash(b, k);
     if (t1 - t0 < h.gap) continue;
     const pts = hatchLine(k, t0, t1, u, v, h, step).map(([x, y]) => project(x, y));

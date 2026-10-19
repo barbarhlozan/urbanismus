@@ -6,8 +6,7 @@
 
 import { STYLE } from '../render/style.js';
 import { DRAW } from '../render/draw.js';
-import { DAY } from '../render/shadows.js';
-import { NIGHT, showNight } from '../render/night.js';
+import { DAY, hourAt, stepAt } from '../render/shadows.js';
 import { reveal, isShown } from './motion.js';
 
 // The classes of a tree's parts (features/trees.js), also where a building
@@ -53,12 +52,8 @@ export class DebugPanel {
     this.el.innerHTML =
       '<div class="debug-head"><span>Debug</span><span class="fps">–</span><button class="close" aria-label="Close">×</button></div>' +
       '<div class="svg-count">–</div>' +
-      `<div class="sun-row"><span class="sun-at">Sun</span><input class="sun" type="range" min="0" max="${DAY.positions.length - 1}" step="1" value="${renderer.sunPos ?? 0}"></div>` +
-      '<label><input type="checkbox" class="day-on" checked> The day goes on (unticked: the sun stays put)</label>' +
-      '<div class="sun-row"><span class="sun-at">Night</span><select class="night"><option value="">off</option><option value="lines">in lines, over everything</option><option value="invert">colours turned to their negatives</option></select></div>' +
-      `<div class="sun-row"><span class="sun-at night-every">Lines</span><input class="night-n" type="range" min="1" max="8" step="1" value="${NIGHT.every}"></div>` +
-      `<div class="sun-row"><span class="sun-at night-tone">Negative</span><input class="night-t" type="range" min="0" max="1" step="0.1" value="${NIGHT.tone}"></div>` +
-      `<div class="sun-row"><span class="sun-at night-cool">Blue</span><input class="night-c" type="range" min="0" max="1" step="0.1" value="${NIGHT.cool}"></div>` +
+      '<div class="sun-row"><span class="sun-at">Day</span><input class="sun" type="range" min="0" max="23.75" step="0.25" value="0"></div>' +
+      '<label><input type="checkbox" class="day-on" checked> The day goes on (unticked: the time stays put)</label>' +
       toggles.map(([label], i) => `<label><input type="checkbox" data-i="${i}" checked> ${label}</label>`).join('');
     root.appendChild(this.el);
     this.el.addEventListener('change', (e) => {
@@ -67,52 +62,35 @@ export class DebugPanel {
     });
     this.el.querySelector('.close').addEventListener('click', () => this.toggle(false));
 
-    // the sun (DAY in render/shadows.js): moving the slider holds it at a
-    // position of the day, from the morning in the east to the evening in
-    // the west; ticking the box lets the day carry on from the clock
-    const sun = this.el.querySelector('.sun'), dayOn = this.el.querySelector('.day-on'), sunAt = this.el.querySelector('.sun-at');
-    const steps = DAY.positions.length, mid = (steps - 1) / 2;
-    const showSun = () => {
-      const i = renderer.sunPos ?? 0;
-      if (document.activeElement !== sun) sun.value = i;
-      const part = i < mid - 1 ? 'morning' : i > mid + 1 ? 'evening' : i === mid ? 'midday' : i < mid ? 'late morning' : 'afternoon';
-      sunAt.textContent = `Sun ${i + 1}/${steps} · ${part}`;
+    // the day (DAY in render/shadows.js), all 24 hours from the dusk
+    // round to just before the next: moving the slider holds the time
+    // there, ticking the box lets the day carry on from the clock
+    const sun = this.el.querySelector('.sun'), dayOn = this.el.querySelector('.day-on'), dayAt = this.el.querySelector('.sun-at');
+    let held = null; // the hour held at
+    const part = (hour, [, pos, dark]) => {
+      if (dark >= 4) return 'night';
+      if (dark) return pos == null ? (hour < 12 ? 'before dawn' : 'late dusk') : hour < 12 ? 'dawn' : 'dusk';
+      return hour < 10.5 ? 'morning' : hour < 13.5 ? 'midday' : hour < 16.5 ? 'afternoon' : 'evening';
+    };
+    const showDay = () => {
+      const hour = DAY.on || held == null ? hourAt(renderer.world.time) : held;
+      if (document.activeElement !== sun) sun.value = (((hour - DAY.dusk) % 24) + 24) % 24;
+      const hh = Math.floor(hour), mm = Math.floor((hour - hh) * 60);
+      dayAt.textContent = `Day ${hh}:${String(mm).padStart(2, '0')} · ${part(hour, DAY.steps[stepAt(hour)])}`;
       dayOn.checked = DAY.on;
     };
     sun.addEventListener('input', () => {
       DAY.on = false;
-      renderer.setSun(+sun.value);
-      showSun();
+      held = (DAY.dusk + +sun.value) % 24;
+      renderer.setSun(stepAt(held));
+      showDay();
     });
     dayOn.addEventListener('change', () => {
       DAY.on = dayOn.checked;
-      showSun();
+      if (DAY.on) held = null;
+      showDay();
     });
-    setInterval(() => { if (this.open) showSun(); }, 500);
-
-    // the night (render/night.js): in lines (how dense) or in colours
-    // (how far to the negative, how blue)
-    const q = (c) => this.el.querySelector(c);
-    const night = q('.night'), nightN = q('.night-n'), nightT = q('.night-t'), nightC = q('.night-c');
-    const label = () => {
-      const k = NIGHT.every;
-      q('.night-every').textContent = `Lines: ${k === 1 ? 'every one' : `every ${k}${k === 2 ? 'nd' : k === 3 ? 'rd' : 'th'}`}`;
-      q('.night-tone').textContent = `Negative: ${Math.round(NIGHT.tone * 100)} %`;
-      q('.night-cool').textContent = `Blue: ${Math.round(NIGHT.cool * 100)} %`;
-    };
-    const setNight = () => {
-      NIGHT.on = !!night.value;
-      if (night.value) NIGHT.style = night.value;
-      NIGHT.every = +nightN.value;
-      NIGHT.tone = +nightT.value;
-      NIGHT.cool = +nightC.value;
-      label();
-      showNight(renderer);
-    };
-    night.value = NIGHT.on ? NIGHT.style : '';
-    label();
-    night.addEventListener('change', setNight);
-    for (const el of [nightN, nightT, nightC]) el.addEventListener('input', setNight);
+    setInterval(() => { if (this.open) showDay(); }, 500);
   }
 
   get open() {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SUN, DAY, groundDir, sunFor, sunAt, screenLight, castStrips, castShapes, hatchRuns, shadowPaths, wallStrokes, strokeShare, tierOf } from '../src/render/shadows.js';
+import { SUN, DAY, groundDir, sunFor, sunAt, stepAt, hourAt, screenLight, castStrips, castShapes, hatchRuns, shadowPaths, wallStrokes, strokeShare, tierOf } from '../src/render/shadows.js';
 
 // the sun casting along +x
 const sun = (over = {}) => ({ ...SUN, ...over, cast: [SUN.length, 0] });
@@ -28,18 +28,26 @@ test('the sun stands over the world, not the screen', () => {
   assert.ok(Math.abs(u0 + u1) < 1e-9 && Math.abs(v0 + v1) < 1e-9);
 });
 
-test('the day steps the sun through its positions, morning to evening', () => {
-  const n = DAY.positions.length;
-  assert.equal(sunAt(0), 0);
-  assert.equal(sunAt(DAY.day - 1), n - 1);
-  assert.equal(sunAt(DAY.day / 2), Math.floor(n / 2));
-  assert.equal(sunAt(DAY.day * 3 + 1), 0); // the next morning
+test('the day goes round 24 hours: sun by day, night between', () => {
+  const step = (hour) => DAY.steps[stepAt(hour)];
+  // midday is SUN's own, with no night over it
+  assert.deepEqual(DAY.positions[step(12)[1]], [SUN.azimuth, SUN.length]);
+  assert.equal(step(12)[2], 0);
+  // the dead of night: no sun, all of the night
+  assert.deepEqual(step(2).slice(1), [null, 4]);
+  // every position of the sun is used, morning to evening, in order
+  const suns = DAY.steps.map((s) => s[1]).filter((p) => p != null);
+  assert.deepEqual([...new Set(suns)], DAY.positions.map((_, i) => i));
+  // at dusk and dawn the night comes in over the long shadows, step by step
+  const darks = DAY.steps.map((s) => s[2]);
+  for (let i = 1; i < darks.length; i++) assert.ok(Math.abs(darks[i] - darks[i - 1]) <= 1);
+  assert.ok(DAY.steps.some(([, p, d]) => p === DAY.positions.length - 1 && d > 0), 'dusk with the evening sun');
+  // the hours from world time: a whole day round, starting at DAY.start
+  assert.equal(hourAt(0), DAY.start);
+  assert.ok(Math.abs(hourAt(DAY.day) - DAY.start) < 1e-9);
+  assert.ok(Math.abs(hourAt(DAY.day / 4) - ((DAY.start + 6) % 24)) < 1e-9);
+  assert.equal(sunAt(0), stepAt(DAY.start));
   assert.equal(sunAt(5, { ...DAY, on: false }), null);
-  // midday is SUN's own, and the shadows are longest at either end
-  assert.deepEqual(DAY.positions[Math.floor(n / 2)], [SUN.azimuth, SUN.length]);
-  const lengths = DAY.positions.map(([, l]) => l);
-  assert.equal(Math.max(...lengths), lengths[0]);
-  assert.equal(Math.max(...lengths), lengths[n - 1]);
 });
 
 // a unit box's four walls, outward normals, 1 high
