@@ -24,7 +24,7 @@ test('a tributary\'s canoes carry on down the river it runs into', () => {
   }
 });
 
-test('canoes come in groups of one to five, stay on the water and leave at the end', () => {
+test('canoes come in groups no bigger than config.boats.group, stay on the water and leave at the end', () => {
   for (const size of ['river', 'stream']) {
     const world = riverWorld(size);
     const boats = new BoatSystem(world, CONFIG);
@@ -36,7 +36,7 @@ test('canoes come in groups of one to five, stay on the water and leave at the e
       sizes.add(boats.count);
       for (const b of boats.boats.values()) assert.ok(b.crew.length === 1 || b.crew.length === 2);
     }
-    assert.ok([...sizes].every((k) => k >= 1 && k <= 5), [...sizes].join());
+    assert.ok([...sizes].every((k) => k >= 1 && k <= CONFIG.boats.group[1]), [...sizes].join());
     // float them all the way down, checking they keep to the water
     let seen = 0;
     for (let t = 0; t < 2000 && boats.count; t++) {

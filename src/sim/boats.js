@@ -1,4 +1,4 @@
-// Canoes. Now and then a group of them (1–5) comes in where a river or
+// Canoes. Now and then a group of them (1–3) comes in where a river or
 // stream runs onto the map and floats down it, a little apart, each
 // drifting slowly from side to side across the water, until it leaves the
 // map. Sometimes instead one or two put in by a house near the water

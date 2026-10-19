@@ -149,10 +149,12 @@ export const CONFIG = {
 
   // canoes down the rivers and streams (sim/boats.js)
   boats: {
-    first: 20,           // seconds before the first group
-    interval: [60, 150], // seconds between groups, at random
-    group: [1, 5],       // canoes in a group (fewer more likely)
-    max: 12,             // on the map at once
+    // (a group takes some five minutes to float across the map: a quarter
+    // of the time or so there are canoes on the water, the rest it's empty)
+    first: 180,            // seconds before the first group
+    interval: [900, 1800], // seconds between groups, at random
+    group: [1, 3],         // canoes in a group (fewer more likely)
+    max: 6,                // on the map at once
     speed: 0.16,         // grid steps per second, about
     gap: 0.4,            // grid steps between canoes in a group, about
     pair: 0.65,          // share of canoes with two aboard (else one, at the back)
