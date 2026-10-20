@@ -103,8 +103,8 @@ export const cultureHouse = {
 };
 
 // The smaller house of culture on one row of two plots (x about -0.4 to
-// 1.4, y -0.4 to 0.4): the same three kinds, pressed into a single block
-// along the street.
+// 1.4, y -0.4 to 0.4), only ever the 60s kind: a glass pavilion under a
+// thin roof, a folded-roof hall beside it, a pylon with the sign.
 export const cultureHouseSmall = {
   ...cultureHouse,
   id: 'culture-house-small',
@@ -112,44 +112,8 @@ export const cultureHouseSmall = {
   footprint: [[0, 0], [1, 0]],
   stats: { jobs: 5 },
   agents: 1,
-  draw(g, s) {
-    const kind = kindOf(g, s, this.kinds);
-    if (kind === 'sorela') {
-      // two storeys under a hipped roof, a columned portico with a
-      // pediment and a star in the middle, a flag either side
-      const fh = 0.15, h = fh * 2, y = -0.05, py = -0.27, ph = 0.11;
-      g.roofed(-0.3, y, 0, 1.6, 0.42, h, { h: 0.11, hip: 0.2 });
-      g.windows(-0.3, y, 1.6, 0.42, 0, h, fh, 0.12, { w: 0.35, h: 0.6 });
-      door(g, 0.5, y, 0.09, 0.16);
-      g.box(0.22, py, 0, 0.56, y - py, 0.02); // steps
-      columns(g, 0.24, 0.76, py + 0.02, h - 0.05, 4);
-      g.box(0.22, py, h - 0.05, 0.56, y - py, 0.05);
-      g.solid(0.5, py, h + ph / 2);
-      g.face([[0.22, py, h], [0.78, py, h], [0.5, py, h + ph]]);
-      g.face([[0.22, py, h], [0.5, py, h + ph], [0.5, y, h + ph], [0.22, y, h]]);
-      g.face([[0.78, y, h], [0.5, y, h + ph], [0.5, py, h + ph], [0.78, py, h]]);
-      star(g, 0.5, py - 0.005, h + 0.045, 0.03);
-      flagpole(g, 0.08, -0.33, 0.42);
-      flagpole(g, 0.92, -0.33, 0.42);
-      return;
-    }
-    if (kind === 'brutalist') {
-      // a glass foyer under a heavy ribbed band, the hall beside it with
-      // the stage's fly tower at the far end
-      g.box(-0.3, -0.22, 0, 0.76, 0.42, 0.16);
-      g.windows(-0.3, -0.22, 0.76, 0.42, 0, 0.16, 0.16, 0.1, { ribbon: true, h: 0.75, skip: ['right'] });
-      g.box(-0.32, -0.25, 0.16, 0.78, 0.48, 0.12);
-      g.mullions(-0.32, -0.25, 0.78, 0.48, 0.16, 0.28, 0.07, { skip: ['right'] });
-      g.box(0.46, -0.2, 0, 0.84, 0.52, 0.36);
-      g.box(1.0, -0.14, 0.36, 0.26, 0.4, 0.18); // fly tower
-      g.box(0.56, -0.21, 0.24, 0.34, 0.01, 0.06); // name sign
-      planter(g, -0.18, -0.33);
-      planter(g, 0.2, -0.33);
-      sculpture(g, 1.3, -0.32);
-      return;
-    }
-    // 60s: a glass pavilion under a thin roof, a folded-roof hall beside
-    // it, a pylon with the sign
+  kinds: ['sixties'],
+  draw(g) {
     g.box(-0.28, -0.2, 0, 0.7, 0.42, 0.22);
     g.mullions(-0.28, -0.2, 0.7, 0.42, 0, 0.22, 0.05, { skip: ['right'] });
     g.box(-0.32, -0.24, 0.22, 0.78, 0.5, 0.018);
