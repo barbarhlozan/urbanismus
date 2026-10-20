@@ -5,7 +5,7 @@ import { Painter } from '../src/render/painter.js';
 import { STRUCTURE_TYPES } from '../structures/index.js';
 
 // A house drawn by the painter leaves its windows for the night, each with
-// a number 0–9 (so many tenths are lit), and the outlines of what it fills.
+// a number 0–99 (so many hundredths are lit), and the outlines of what it fills.
 test('a house keeps its windows, numbered, and what it covers on screen', () => {
   const camera = new Camera({ width: 30, height: 30 });
   const g = new Painter(camera, { x: 10, y: 10, z: 0 }, 0, 42);
@@ -14,7 +14,7 @@ test('a house keeps its windows, numbered, and what it covers on screen', () => 
   assert.ok(g.panes.length >= 2, `${g.panes.length} windows`);
   for (const w of g.panes) {
     assert.equal(w.pts.length, 4);
-    assert.ok(Number.isInteger(w.n) && w.n >= 0 && w.n <= 9);
+    assert.ok(Number.isInteger(w.n) && w.n >= 0 && w.n <= 99);
   }
   // the numbers spread over the tenths, not all the same
   assert.ok(new Set(g.panes.map((w) => w.n)).size > 1);

@@ -282,7 +282,7 @@ export class Painter {
     this._tc = 1;
     this._ts = 0;
     this.feet = [];       // walls' feet on the ground: { a, b, h, n } world, see render/shadows.js
-    this.panes = [];      // its windows drawn: { pts: 4 scene points, n: 0–9, spill }, for the night (Renderer.renderLights)
+    this.panes = [];      // its windows drawn: { pts: 4 scene points, n: 0–99, spill }, for the night (Renderer.renderLights)
     this.casts = [];      // other shapes that cast a shadow (trees), world, see Painter.cast
     this.casting = true;  // false: draw no shadows (icons)
   }
@@ -1273,14 +1273,14 @@ export class Painter {
     const [a, b, c, e] = points;
     const scr = (p) => this._project(...this._world(p[0], p[1], p[2]));
     const [sa, sb, sc] = [scr(a), scr(b), scr(c)];
-    // kept for the night, with its number, 0–9, seeded by where it is: the
-    // map lights so many tenths of its windows, the lowest numbers first;
+    // kept for the night, with its number, 0–99, seeded by where it is: the
+    // map lights so many hundredths of its windows, the lowest numbers first;
     // and one low on its wall the light it throws on the ground in front
     // (SPILL), out along the wall's normal and widening (opts.facing: the
     // wall's outward normal, as windows() gives it)
     if (!photo) {
       const mid = this._world((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (a[2] + c[2]) / 2);
-      const n = Math.min(9, Math.floor(hash(mid[0] * 31.7 + mid[2] * 13.1, mid[1] * 17.3) * 10));
+      const n = Math.min(99, Math.floor(hash(mid[0] * 31.7 + mid[2] * 13.1, mid[1] * 17.3) * 100));
       let spill = null;
       const f = opts.facing, ul = Math.hypot(b[0] - a[0], b[1] - a[1]);
       if (f && ul > 1e-6 && a[2] <= SPILL.below) {

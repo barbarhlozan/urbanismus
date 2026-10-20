@@ -138,12 +138,46 @@ const STEPS = Math.round((Math.PI * 2) / Camera.STEP);
 const VIEWS = 40;
 const PREPARE_REST = 400;
 const SETTLE_FADE = 260;
+// An object's light shapes as path data, for the night's mask
+// (renderLights), worked out once per drawing: its outline (Painter.covers)
+// and each window's glow (a little larger than the pane) and the light it
+// throws on the ground, all rings turned anticlockwise, so rings of one
+// colour add up where they overlap.
+function lightShapes(night, px) {
+  if (night.d?.px === px) return night.d;
+  const xy = ([x, y]) => `${r2(x)} ${r2(y)}`;
+  const ring = (pts) => {
+    let a = 0;
+    for (let i = 0; i < pts.length; i++) a += pts[i][0] * pts[(i + 1) % pts.length][1] - pts[(i + 1) % pts.length][0] * pts[i][1];
+    return `M${(a > 0 ? pts : [...pts].reverse()).map(xy).join('L')}Z`;
+  };
+  const grow = (pts, by) => {
+    const cx = pts.reduce((t, p) => t + p[0], 0) / pts.length, cy = pts.reduce((t, p) => t + p[1], 0) / pts.length;
+    return pts.map(([x, y]) => { const l = Math.hypot(x - cx, y - cy) || 1; return [x + ((x - cx) / l) * by, y + ((y - cy) / l) * by]; });
+  };
+  night.d = {
+    px,
+    cover: night.covers.map(ring).join(''),
+    wins: night.wins.map((w) => ({ n: w.n, glow: ring(grow(w.pts, 0.04 * px)), spill: w.spill ? ring(w.spill) : '' })).sort((p, q) => p.n - q.n),
+  };
+  return night.d;
+}
+
 // A number from a key ('v12'), to seed by (a beam's shape, headlights).
 const hashKey = (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7);
 // The densest tier of the paper's hatching (hatch.js) the shadows and the
 // night keep at each level of detail: every line close up (3), every other
 // further out, every 4th far out.
-const SHADE_TIERS = [3, 2, 1]; // ms the terrain as turned takes to fade, once the view rests (land)
+const SHADE_TIERS = [3, 2, 1];
+// Seconds the night's strokes take to be hatched in, a set at a time
+// (renderNightCanvases); a share of the windows going out (or coming on)
+// each second; ms the shadows take to be drawn anew as the sun moves
+// (sweepShadows).
+const NIGHT_IN = 2.4;
+const INK_STEP = 0.1;
+const INK_EVERY = 500;
+const WINDOWS_BY = 0.06;
+const SHADE_SWEEP = 2200; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -1499,6 +1533,7 @@ export class Renderer {
   // is) wait for it to end, and what is being erased goes at once.
   startTurn() {
     this.turning = true;
+    this.sweep?.end(); // (the shadows as they are now)
     this.renderLights(); // (the lamps' alone, turning as a sheet; the windows' once the view rests)
     this.layers.overlay.style.visibility = 'hidden';
     this.reapGhosts(true);
@@ -2074,6 +2109,9 @@ export class Renderer {
       // drawn bare for a turn (goBare), now whole: the pen draws in what
       // the bare drawing lacked
       const was = entry.redetail && entry.bare && animate && entry.shown !== false && !this.born.has(key) ? new Set(strokesOf(entry).map((el) => el.outerHTML)) : null;
+      // and as the sun moves, the walls turned from it: their hatching
+      const sunSketch = entry.sunSketch && animate && entry.shown !== false && !this.born.has(key);
+      entry.sunSketch = false;
       entry.g.innerHTML = built.svg;
       entry.lg.innerHTML = built.ground;
       entry.shade = built.shade;
@@ -2081,6 +2119,9 @@ export class Renderer {
       entry.sg.innerHTML = this.shadowSVG(entry.shade, built.band);
       if (was) {
         const only = new Set(strokesOf(entry).filter((el) => !was.has(el.outerHTML)));
+        if (only.size) sketch.push({ entry, only });
+      } else if (sunSketch) {
+        const only = new Set(entry.g.querySelectorAll('.wall-shade'));
         if (only.size) sketch.push({ entry, only });
       }
       entry.bare = entry.redetail = false;
@@ -2342,7 +2383,6 @@ export class Renderer {
     // the main ink going over to the secondary (styles.css --ink-night on
     // the map; the canvases', renderNightCanvases)
     this.inkNight = step.ink ?? 0;
-    for (const el of [this.svg, this.ground, this.top]) el.style.setProperty('--ink-night', `${Math.round(this.inkNight * 100)}%`);
     if ((step.windows ?? 0) !== this.litShare || !!step.night !== this.windowsDark) {
       this.litShare = step.windows ?? 0;
       this.windowsDark = !!step.night;
@@ -2368,10 +2408,20 @@ export class Renderer {
       SUN.length = Math.max(SUN.length, step.length ?? 0);
     }
     this.hillsEvery = step.hills ?? HILL_SHADOWS.every;
+    // (the first sun of all just is; the next ones are drawn in)
+    const drawn = this.sunDrawn;
+    this.sunDrawn = true;
+    if (drawn && drawEnabled()) this.sweepShadows();
+    // every shadow at once, from what each object keeps (Renderer.shadeOf):
+    // the objects themselves are drawn anew a few at a time
+    for (const e of this.objs.values()) if (e.sg && e.shade !== undefined) e.sg.innerHTML = this.shadowSVG(e.shade);
     for (const e of this.objs.values()) {
       e.views?.clear(); // (drawn for the old sun)
       e.stale = e.sunStale = true;
-      if (e.shown !== false) this.rebuildQueue.add(e.key);
+      if (e.shown !== false) {
+        this.rebuildQueue.add(e.key);
+        if (drawn) e.sunSketch = true; // (the pen draws in its new shaded walls, renderObjects)
+      }
     }
     this.rebuildOrder = null;
     this.dirty.add('hillshade');
@@ -2399,19 +2449,8 @@ export class Renderer {
     const px = this.camera.tile;
     const project = (x, y, z) => this.project(x, y, z);
     const turning = this.turning || !this.order;
-    const lit = this.dark && !turning ? Math.round((this.litShare ?? 0) * 10) : 0;
-    const xy = ([x, y]) => `${r2(x)} ${r2(y)}`;
-    // a ring, turned anticlockwise (as the covers are), so rings of one
-    // colour add up where they overlap
-    const ring = (pts) => {
-      let a = 0;
-      for (let i = 0; i < pts.length; i++) a += pts[i][0] * pts[(i + 1) % pts.length][1] - pts[(i + 1) % pts.length][0] * pts[i][1];
-      return `M${(a > 0 ? pts : [...pts].reverse()).map(xy).join('L')}Z`;
-    };
-    const grow = (pts, by) => {
-      const cx = pts.reduce((t, p) => t + p[0], 0) / pts.length, cy = pts.reduce((t, p) => t + p[1], 0) / pts.length;
-      return pts.map(([x, y]) => { const l = Math.hypot(x - cx, y - cy) || 1; return [x + ((x - cx) / l) * by, y + ((y - cy) / l) * by]; });
-    };
+    const lit = this.dark && !turning ? Math.round((this.litShown ?? this.litShare ?? 0) * 100) : 0;
+    this.litDrawn = Math.round((this.litShown ?? this.litShare ?? 0) * 100);
     const parts = []; // [light?, path data], in order
     const add = (light, d) => {
       if (!d) return;
@@ -2420,30 +2459,41 @@ export class Renderer {
       else parts.push([light, d]);
     };
     let pools = '', spills = '';
+    const view = `${this.camera.angle}|${px}`;
     for (const e of turning ? this.objs.values() : this.order) {
       const lamp = this.lampsOn && e.key?.[0] === 'k' && e.at?.points?.[0];
       let head = '';
       if (lamp) {
-        const [pool, h] = lampPool(lamp[0], lamp[1], project, px);
-        pools += pool;
-        head = h;
+        // (worked out once per view and lamp)
+        if (e.lampD?.view !== view || e.lampD.at !== lamp) {
+          const [pool, h] = lampPool(lamp[0], lamp[1], project, px);
+          e.lampD = { view, at: lamp, pool, head: h };
+        }
+        pools += e.lampD.pool;
+        head = e.lampD.head;
       }
       if (turning) continue;
-      if ((this.dark || this.gloom) && e.night?.covers.length) add(false, e.night.covers.map(ring).join(''));
+      const n = e.night && lightShapes(e.night, px);
+      if (n?.cover) add(false, n.cover); // (by day too, for the night as it comes in or lifts)
       if (head) add(true, head);
-      if (lit && e.night) {
-        for (const w of e.night.wins) {
+      if (lit && n) {
+        for (const w of n.wins) {
           if (w.n >= lit) continue;
-          add(true, ring(grow(w.pts, 0.04 * px)));
-          if (w.spill) spills += ring(w.spill);
+          add(true, w.glow);
+          if (w.spill) spills += w.spill;
         }
       }
     }
     this.topCover = parts.map(([light, d]) => [light, new Path2D(d)]);
     this.groundLight = pools || spills ? new Path2D(pools + spills) : null;
-    const cut = pools ? `<path class="light" d="${pools}"/>` : '';
-    for (const el of this.lightCuts) el.innerHTML = cut;
+    // (the shadows' masks, only when the pools change: a change repaints them)
+    if (pools !== this.poolsCut) {
+      this.poolsCut = pools;
+      const cut = pools ? `<path class="light" d="${pools}"/>` : '';
+      for (const el of this.lightCuts) el.innerHTML = cut;
+    }
   }
+
 
   // The lights of what moves, at night (with the lamps on): a beam on the
   // ground ahead of every car, bus, lorry and train (lights.js headBeam),
@@ -2483,22 +2533,102 @@ export class Renderer {
     return out;
   }
 
+  // The sun has moved: the shadows as they were stay, under a ragged front
+  // that goes across the view the way a hand hatches (across the lines),
+  // and the new ones come in behind it, over SHADE_SWEEP ms – the old
+  // shadows a copy of their sheet and masks, clipped to what the front
+  // has not reached, the new ones clipped to what it has (the objects
+  // drawn anew meanwhile go into those). A sweep still going ends at once.
+  sweepShadows() {
+    this.sweep?.end();
+    const veil = this.shadeVeil, h = SUN.hatch;
+    if (!veil || !h) return;
+    const old = veil.cloneNode(true);
+    for (const el of old.querySelectorAll('[id]')) el.id = `${el.id}-was`;
+    for (const el of old.querySelectorAll('[fill^="url(#"], [mask^="url(#"]')) {
+      for (const a of ['fill', 'mask']) {
+        const v = el.getAttribute(a);
+        if (v?.startsWith('url(#')) el.setAttribute(a, v.replace(/\)$/, '-was)'));
+      }
+    }
+    veil.parentNode.insertBefore(old, veil);
+    const defs = this.svg.querySelector('defs');
+    defs.insertAdjacentHTML('beforeend', '<clipPath id="sweep-new" clipPathUnits="userSpaceOnUse"><path/></clipPath><clipPath id="sweep-old" clipPathUnits="userSpaceOnUse"><path/></clipPath>');
+    const [pNew, pOld] = ['#sweep-new path', '#sweep-old path'].map((q) => defs.querySelector(q));
+    veil.setAttribute('clip-path', 'url(#sweep-new)');
+    old.setAttribute('clip-path', 'url(#sweep-old)');
+    // the map in the front's axes: u along the hatching, v across it
+    const a = ((h.angle + 90) * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a);
+    // (across what is in view, so it is seen going all the way)
+    const cam = this.camera, px = cam.tile, m = 80;
+    const corners = [[-m, -m], [innerWidth + m, -m], [-m, innerHeight + m], [innerWidth + m, innerHeight + m]].map(([x, y]) => [(x - cam.panX) / cam.zoom, (y - cam.panY) / cam.zoom]);
+    const us = corners.map(([x, y]) => -x * sn + y * c), vs = corners.map(([x, y]) => x * c + y * sn);
+    const u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs);
+    const jag = px * 0.9, n = Math.max(8, Math.ceil((u1 - u0) / (px * 0.7)));
+    const off = Array.from({ length: n + 1 }, (_, i) => (hashKey(`sweep${i}`) % 1000) / 1000 * jag);
+    const at = (u, v) => `${r2(v * c - u * sn)} ${r2(v * sn + u * c)}`;
+    const start = performance.now();
+    const step = () => {
+      const t = Math.min(1, (performance.now() - start) / SHADE_SWEEP), e = t * t * (3 - 2 * t);
+      const f = v0 - jag + (v1 - v0 + 2 * jag) * e;
+      const front = off.map((o, i) => [u0 + ((u1 - u0) * i) / n, f + o - jag / 2]);
+      pNew.setAttribute('d', `M${at(u0, v0 - jag * 2)}L${at(u1, v0 - jag * 2)}${front.slice().reverse().map(([u, v]) => `L${at(u, v)}`).join('')}Z`);
+      pOld.setAttribute('d', `M${at(u0, v1 + jag * 2)}L${at(u1, v1 + jag * 2)}${front.slice().reverse().map(([u, v]) => `L${at(u, v)}`).join('')}Z`);
+      if (t < 1) this.sweep.raf = requestAnimationFrame(step);
+      else this.sweep.end();
+    };
+    this.sweep = {
+      end: () => {
+        cancelAnimationFrame(this.sweep?.raf);
+        old.remove();
+        veil.removeAttribute('clip-path');
+        defs.querySelector('#sweep-new')?.remove();
+        defs.querySelector('#sweep-old')?.remove();
+        this.sweep = null;
+      },
+    };
+    step();
+  }
+
   // The night, every frame (nightCanvas.js): its grey easing to the
   // hour's (this.gloom, a little each frame), the paper's strokes at night
   // – every line close up, fewer further out, as the shadows' – and the
   // lights rubbed out: on the ground, the lamps' pools, the windows' light
   // and the beams of what moves; over the objects, their lit windows.
   renderNightCanvases(dt) {
-    const { camera } = this;
+    const { camera } = this, now = performance.now();
     this.inkShown = (this.inkShown ?? 0) + ((this.inkNight ?? 0) - (this.inkShown ?? 0)) * Math.min(1, dt / 1.6);
+    if (Math.abs(this.inkShown - (this.inkNight ?? 0)) < 0.01) this.inkShown = this.inkNight ?? 0;
+    // the map's main ink (styles.css --ink-night) in steps of INK_STEP, at
+    // most every INK_EVERY ms – each change restyles the whole map
+    const ink = Math.round(this.inkShown / INK_STEP) * INK_STEP;
+    if (ink !== this.inkSet && (now - (this.inkAt ?? 0) > INK_EVERY || this.inkSet == null || this.inkShown === this.inkNight)) {
+      this.inkSet = ink;
+      this.inkAt = now;
+      for (const el of [this.svg, this.ground, this.top]) el.style.setProperty('--ink-night', `${Math.round(ink * 100)}%`);
+    }
     this.nightGrey += ((this.gloom ?? 0) - this.nightGrey) * Math.min(1, dt / 1.6);
     if (Math.abs(this.nightGrey - (this.gloom ?? 0)) < 0.004) this.nightGrey = this.gloom ?? 0;
     const pal = THEME.palette;
+    // each set of the night's strokes hatched in (or rubbed out) over
+    // NIGHT_IN seconds as the night deepens (or lifts)
+    const want = [this.dark ? 1 : 0, this.dark && (this.nightDepth ?? 1) >= 2 ? 1 : 0, this.dark && (this.nightDepth ?? 1) >= 3 ? 1 : 0];
+    this.reveal ??= [...want];
+    this.reveal = this.reveal.map((r, i) => (r < want[i] ? Math.min(want[i], r + dt / NIGHT_IN) : Math.max(want[i], r - dt / NIGHT_IN)));
+    // the windows going out (or coming on) one by one, not a tenth at once
+    const target = this.litShare ?? 0;
+    this.litShown = (this.litShown ?? target) + Math.max(-dt * WINDOWS_BY, Math.min(dt * WINDOWS_BY, target - (this.litShown ?? target)));
+    if (Math.round(this.litShown * 100) !== this.litDrawn && now - (this.litAt ?? 0) > 150) {
+      this.litAt = now;
+      this.dirty.add('lights');
+    }
     const look = {
       grey: this.nightGrey,
       colour: pal.detail,
-      depth: this.nightDepth ?? 1,
-      tier: this.dark && SUN.hatch ? SHADE_TIERS[this.lodLevel ?? 0] ?? 1 : -1,
+      // (in steps, ten a second, as stop-motion: each step repaints both
+      // canvases whole)
+      reveal: this.reveal.map((r) => Math.round(r * NIGHT_IN * 10) / (NIGHT_IN * 10)),
+      tier: SUN.hatch && this.reveal.some((r) => r > 0) ? SHADE_TIERS[this.lodLevel ?? 0] ?? 1 : -1,
       hatch: SUN.hatch,
       px: camera.tile,
       stroke: this.strokeK ?? 1,

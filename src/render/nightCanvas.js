@@ -15,7 +15,7 @@
 //   draw(camera, { grey, colour, tier, hatch, px, stroke, lights, sheet, beams })
 
 import { THEME } from '../theme.js';
-import { hatchFrame, hatchTileLines } from './hatch.js';
+import { hatchFrame, hatchTileLines, hash } from './hatch.js';
 
 // The ragged edge of a light, as the night's masks have it (styles.css
 // mask .light): a dashed line round it, rubbing a little further out in
@@ -25,6 +25,30 @@ const EDGE = { width: 2.5, dash: [3, 2, 1.5, 3.5, 2.5, 1, 4, 2.5, 1, 3] };
 // How far the third set of the night's strokes is turned from the first
 // (degrees), at its deepest.
 const CROSS = -68;
+
+// A set of strokes part laid (`r`, 0 … 1) as a hand hatches a page: in
+// bands across the lines (SWEEP.band window px wide), from one side to the
+// other, each drawn along the lines' way from one end, the next starting
+// before the last is done – the canvas clipped to what is laid so far.
+// Rubbing out (r going down) goes back the same way.
+const SWEEP = { band: 22, overlap: 0.55 };
+function sweep(ctx, w, h, angle, r, seed) {
+  const a = (angle * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+  const corners = [[0, 0], [w, 0], [0, h], [w, h]];
+  const us = corners.map(([x, y]) => x * c + y * s), vs = corners.map(([x, y]) => -x * s + y * c);
+  const u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs);
+  const band = SWEEP.band * (devicePixelRatio || 1), n = Math.ceil((v1 - v0) / band);
+  ctx.setTransform(c, s, -s, c, 0, 0); // (u, v) -> the window
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    // each band's start, a little uneven
+    const at = (i / n + (hash(seed * 7.3, i) - 0.5) * 0.04) * SWEEP.overlap;
+    const q = Math.min(1, Math.max(0, (r - at) / (1 - SWEEP.overlap)));
+    if (q > 0) ctx.rect(u0, v0 + i * band, (u1 - u0) * q, band + 1);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clip();
+}
 
 export class NightCanvas {
   constructor(canvas) {
@@ -47,13 +71,14 @@ export class NightCanvas {
   // Over the objects (`cover` given) the night lies only where they stand:
   // `cover` is [[light?, Path2D]…] in scene px, in order, from the
   // furthest object to the nearest – an object's outline, where the night
-  // goes, then its lights, rubbed out of it (Renderer.renderLights); with
-  // `all`, the night over everything (while the view turns). It is drawn
-  // again only when something changes.
-  // `depth` (1–3): the strokes laid once, twice (the second time between
-  // the first's lines, and along them a way, so their breaks don't line
-  // up) or three times (the third across them, CROSS).
-  draw(camera, { grey = 0, colour, tier = -1, depth = 1, hatch, px, stroke, lights = null, sheet = null, beams = [], cover = null, all = false }) {
+  // goes, then its lights, rubbed out of it (Renderer.renderLights). It
+  // is drawn again only when something changes.
+  // `reveal`: how much of each of the three sets of strokes is laid (0 …
+  // 1) – once, again between the first's lines (and along them a way, so
+  // their breaks don't line up), and across them (CROSS); one coming or
+  // going is hatched in, or rubbed out, band by band across the page
+  // (sweep).
+  draw(camera, { grey = 0, colour, tier = -1, reveal = [1, 0, 0], hatch, px, stroke, lights = null, sheet = null, beams = [], cover = null }) {
     const { canvas, ctx } = this;
     const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
     const w = Math.round(W * dpr), h = Math.round(H * dpr);
@@ -66,7 +91,7 @@ export class NightCanvas {
       this.empty = true;
       resized = true;
     }
-    const on = grey > 0.002 || tier >= 0;
+    const on = grey > 0.002 || (tier >= 0 && reveal.some((r) => r > 0));
     if (!on) {
       if (!this.empty) {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -78,7 +103,7 @@ export class NightCanvas {
     }
     const view = new DOMMatrix([dpr * camera.zoom, 0, 0, dpr * camera.zoom, dpr * camera.panX, dpr * camera.panY]);
     const lightsAt = lights ? (sheet ? view.multiply(sheet) : view) : null;
-    const state = { grey: Math.round(grey * 1000), colour, tier, depth, hatch, px, stroke, lights, view: view.toString(), lightsAt: lightsAt?.toString(), cover };
+    const state = { grey: Math.round(grey * 1000), colour, tier, reveal: reveal.map((r) => Math.round(r * 1000)).join(), hatch, px, stroke, lights, view: view.toString(), lightsAt: lightsAt?.toString(), cover };
     // the beams as window boxes, padded for their ragged edges
     const boxes = beams.map((poly) => {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -114,14 +139,20 @@ export class NightCanvas {
       const t = this.tileFor(tier, hatch, px, stroke, dpr * camera.zoom);
       // the pattern's own px -> scene px (turned to the lines' angle) -> the window
       const gap = hatchFrame(hatch).gap * px;
-      const lay = (angle, along, across) => {
+      const lay = (angle, along, across, r, seed) => {
+        if (r <= 0) return;
+        if (r < 1) {
+          ctx.save();
+          sweep(ctx, w, h, angle, r, seed);
+        }
         t.pattern.setTransform(view.rotate(angle).translate(along, across).scale(1 / t.scale));
         ctx.fillStyle = t.pattern;
         ctx.fillRect(0, 0, w, h);
+        if (r < 1) ctx.restore();
       };
-      lay(hatch.angle, 0, 0);
-      if (depth >= 2) lay(hatch.angle, 3.7 * px, gap / 2);
-      if (depth >= 3) lay(hatch.angle + CROSS, 1.3 * px, gap / 3);
+      lay(hatch.angle, 0, 0, reveal[0], 1);
+      lay(hatch.angle, 3.7 * px, gap / 2, reveal[1], 2);
+      lay(hatch.angle + CROSS, 1.3 * px, gap / 3, reveal[2], 3);
     }
     // the lights rubbed out of it, edges ragged
     const cut = (path, m, c = ctx) => {
@@ -134,22 +165,29 @@ export class NightCanvas {
       c.setLineDash([]);
     };
     if (cover) {
-      // over the objects: kept only where the mask has it
+      // over the objects: kept only where the mask has it (drawn again only
+      // when the objects, their lights or the view change – not as the
+      // night's strokes are hatched in)
       const m = this.mask?.width === w && this.mask?.height === h ? this.mask : (this.mask = new OffscreenCanvas(w, h));
-      const mc = m.getContext('2d');
-      mc.setTransform(1, 0, 0, 1, 0, 0);
-      mc.globalCompositeOperation = 'source-over';
-      mc.clearRect(0, 0, w, h);
-      mc.fillStyle = mc.strokeStyle = '#000';
-      for (const [light, path] of cover) {
-        mc.globalCompositeOperation = light ? 'destination-out' : 'source-over';
-        if (light) cut(path, view, mc);
-        else {
-          mc.setTransform(view);
-          mc.fill(path);
+      const maskKey = `${state.view}|${w}|${h}`;
+      if (this.maskOf !== cover || this.maskKey !== maskKey) {
+        this.maskOf = cover;
+        this.maskKey = maskKey;
+        const mc = m.getContext('2d');
+        mc.setTransform(1, 0, 0, 1, 0, 0);
+        mc.globalCompositeOperation = 'source-over';
+        mc.clearRect(0, 0, w, h);
+        mc.fillStyle = mc.strokeStyle = '#000';
+        for (const [light, path] of cover) {
+          mc.globalCompositeOperation = light ? 'destination-out' : 'source-over';
+          if (light) cut(path, view, mc);
+          else {
+            mc.setTransform(view);
+            mc.fill(path);
+          }
         }
+        mc.globalCompositeOperation = 'source-over';
       }
-      mc.globalCompositeOperation = 'source-over';
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = 'destination-in';
       ctx.drawImage(m, 0, 0);
