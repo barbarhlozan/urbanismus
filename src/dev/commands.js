@@ -7,7 +7,7 @@ import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { planRoute } from '../roads/routing.js';
 import { eraseTarget } from '../tools/erase.js';
 import { ROAD_MARK } from '../render/roadMarks.js';
-import { SUN, DAY, sunAt, stepAt } from '../render/shadows.js';
+import { SUN, DAY, sunAt, stepAt, holdDay, goOnDay, dayLength } from '../render/shadows.js';
 
 const STEP = 0.5; // simulated seconds per step while jumping
 
@@ -166,16 +166,19 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
     },
     // the day (DAY in render/shadows.js): an hour (0 … 24, e.g. 20.5)
     // holds the time there – the sun, the dusk, the night – nothing lets
-    // the day go on; { day } sets how long a day lasts (simulated seconds)
+    // the day go on from there; { day } sets how long a day lasts
+    // (simulated seconds), the hour kept
     day(hour, over = {}) {
       if (hour && typeof hour === 'object') [hour, over] = [undefined, hour];
-      Object.assign(DAY, over);
+      const { day: seconds, ...rest } = over;
+      Object.assign(DAY, rest);
+      if (seconds) dayLength(seconds, world.time);
       if (hour == null) {
-        DAY.on = true;
+        goOnDay(world.time); // (from where it was held)
         renderer?.setSun(sunAt(world.time));
       } else {
         if (!(hour >= 0 && hour <= 24)) throw new Error('cmd.day: an hour, 0 … 24');
-        DAY.on = false;
+        holdDay(hour);
         renderer?.setSun(stepAt(hour));
       }
       return { on: DAY.on, ...DAY.steps[renderer?.dayStep ?? stepAt(hour ?? 12)], day: DAY.day };

@@ -165,9 +165,32 @@ export const DAY = {
   ],
 };
 
-// The hour of the day (0 … 24) at world time t.
+// The hour of the day (0 … 24) at world time t (`shift`: hours the day
+// was moved on by, holdDay / goOnDay; not kept with the town).
 export function hourAt(t, day = DAY) {
-  return ((((t / day.day) * 24 + day.start) % 24) + 24) % 24;
+  return ((((t / day.day) * 24 + day.start + (day.shift ?? 0)) % 24) + 24) % 24;
+}
+
+// Hold the day at an hour (the Debug panel's slider, cmd.day): the sun,
+// the dusk, the night stay as they are then.
+export function holdDay(hour, day = DAY) {
+  day.on = false;
+  day.held = ((hour % 24) + 24) % 24;
+}
+
+// Let the day go on from where it was held (or from the clock, if it
+// wasn't), at world time t.
+export function goOnDay(t, day = DAY) {
+  if (day.held != null) day.shift = (day.shift ?? 0) + day.held - hourAt(t, day);
+  day.held = null;
+  day.on = true;
+}
+
+// A day `seconds` long (simulated), the hour at world time t kept.
+export function dayLength(seconds, t, day = DAY) {
+  const hour = hourAt(t, day);
+  day.day = seconds;
+  day.shift = (day.shift ?? 0) + hour - hourAt(t, day);
 }
 
 // The step of the day (an index into DAY.steps) at an hour.

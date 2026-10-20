@@ -1759,6 +1759,7 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 .debug-panel .sun-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
 .debug-panel .sun-row .sun-at { min-width: 13em; font-variant-numeric: tabular-nums; }
 .debug-panel .sun-row input { flex: 1; }
+.debug-panel .sun-row select { flex: 1; font: inherit; }
 @media (max-width: 640px) {
   .debug-panel {
     top: calc(62px + var(--safe-t));

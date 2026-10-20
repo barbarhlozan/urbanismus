@@ -146,3 +146,16 @@ test('a roof casts its own outline, and a gable end wall its point', () => {
   const [strip] = castStrips([{ a: [1, 0], b: [1, 1], h: 1.5, level: 1, n: [1, 0] }], s);
   assert.equal(Math.max(...strip.map(([x]) => x)), 1 + SUN.length);
 });
+
+test('a day held at an hour goes on from that hour, and keeps it when shortened', async () => {
+  const { holdDay, goOnDay, dayLength } = await import('../src/render/shadows.js');
+  const day = { ...DAY, shift: 0, held: null };
+  holdDay(21.5, day);
+  assert.equal(day.on, false);
+  goOnDay(1234, day);
+  assert.ok(day.on && Math.abs(hourAt(1234, day) - 21.5) < 1e-9);
+  // and on it goes, an hour every day/24 seconds
+  assert.ok(Math.abs(hourAt(1234 + day.day / 24, day) - 22.5) < 1e-9);
+  dayLength(60, 1234, day);
+  assert.ok(Math.abs(hourAt(1234, day) - 21.5) < 1e-9 && Math.abs(hourAt(1234 + 2.5, day) - 22.5) < 1e-9);
+});
