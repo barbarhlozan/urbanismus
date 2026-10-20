@@ -269,7 +269,12 @@ html, body {
    by main.js, on a photo by photo.js); under a grey sky they fade almost
    away */
 @property --sun { syntax: '<number>'; inherits: true; initial-value: 1; }
-#ground, #world, #objects { transition: --sun 4s; }
+/* at night the map's main ink goes over to the secondary (--ink-night, set
+   by Renderer.setSun from DAY.steps `ink`): in the dead of night the whole
+   drawing is in the one ink, the night's lines' */
+@property --ink-night { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
+.view { --main-day: var(--main); }
+#ground, #world, #objects { --main: color-mix(in srgb, var(--detail) var(--ink-night), var(--main-day)); --fg: var(--main); transition: --sun 4s, --ink-night 4s; }
 .shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
 .layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-opacity: var(--sun); }
 :is(.shadow, .layer-objects .wall-shade).p1 { stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }

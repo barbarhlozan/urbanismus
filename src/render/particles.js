@@ -344,7 +344,7 @@ export class ParticleCanvas {
     const keepWorks = Math.min(1, draw.most / Math.max(1, fixed));
 
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * panX, dpr * panY);
-    paintParticles(ctx, shown, { time, env, tile: T, zScale: camera.zScale, unit: stroke ?? 1 / zoom, style: draw.style, keep: keepHouses, keepFixed: keepWorks });
+    paintParticles(ctx, shown, { time, env, tile: T, zScale: camera.zScale, unit: stroke ?? 1 / zoom, style: draw.style, keep: keepHouses, keepFixed: keepWorks, pal: this.pal ?? THEME.palette });
     this.drawnCount = shown.length;
     this.empty = false;
   }

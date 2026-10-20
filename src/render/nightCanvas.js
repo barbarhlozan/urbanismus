@@ -15,12 +15,16 @@
 //   draw(camera, { grey, colour, tier, hatch, px, stroke, lights, sheet, beams })
 
 import { THEME } from '../theme.js';
-import { hatchTileLines } from './hatch.js';
+import { hatchFrame, hatchTileLines } from './hatch.js';
 
 // The ragged edge of a light, as the night's masks have it (styles.css
 // mask .light): a dashed line round it, rubbing a little further out in
 // places (scene px).
 const EDGE = { width: 2.5, dash: [3, 2, 1.5, 3.5, 2.5, 1, 4, 2.5, 1, 3] };
+
+// How far the third set of the night's strokes is turned from the first
+// (degrees), at its deepest.
+const CROSS = -68;
 
 export class NightCanvas {
   constructor(canvas) {
@@ -46,7 +50,10 @@ export class NightCanvas {
   // goes, then its lights, rubbed out of it (Renderer.renderLights); with
   // `all`, the night over everything (while the view turns). It is drawn
   // again only when something changes.
-  draw(camera, { grey = 0, colour, tier = -1, hatch, px, stroke, lights = null, sheet = null, beams = [], cover = null, all = false }) {
+  // `depth` (1–3): the strokes laid once, twice (the second time between
+  // the first's lines, and along them a way, so their breaks don't line
+  // up) or three times (the third across them, CROSS).
+  draw(camera, { grey = 0, colour, tier = -1, depth = 1, hatch, px, stroke, lights = null, sheet = null, beams = [], cover = null, all = false }) {
     const { canvas, ctx } = this;
     const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
     const w = Math.round(W * dpr), h = Math.round(H * dpr);
@@ -71,7 +78,7 @@ export class NightCanvas {
     }
     const view = new DOMMatrix([dpr * camera.zoom, 0, 0, dpr * camera.zoom, dpr * camera.panX, dpr * camera.panY]);
     const lightsAt = lights ? (sheet ? view.multiply(sheet) : view) : null;
-    const state = { grey: Math.round(grey * 1000), colour, tier, hatch, px, stroke, lights, view: view.toString(), lightsAt: lightsAt?.toString(), cover, all };
+    const state = { grey: Math.round(grey * 1000), colour, tier, depth, hatch, px, stroke, lights, view: view.toString(), lightsAt: lightsAt?.toString(), cover, all };
     // the beams as window boxes, padded for their ragged edges
     const boxes = beams.map((poly) => {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -106,9 +113,15 @@ export class NightCanvas {
     if (tier >= 0 && hatch) {
       const t = this.tileFor(tier, hatch, px, stroke, dpr * camera.zoom);
       // the pattern's own px -> scene px (turned to the lines' angle) -> the window
-      t.pattern.setTransform(view.rotate(hatch.angle).scale(1 / t.scale));
-      ctx.fillStyle = t.pattern;
-      ctx.fillRect(0, 0, w, h);
+      const gap = hatchFrame(hatch).gap * px;
+      const lay = (angle, along, across) => {
+        t.pattern.setTransform(view.rotate(angle).translate(along, across).scale(1 / t.scale));
+        ctx.fillStyle = t.pattern;
+        ctx.fillRect(0, 0, w, h);
+      };
+      lay(hatch.angle, 0, 0);
+      if (depth >= 2) lay(hatch.angle, 3.7 * px, gap / 2);
+      if (depth >= 3) lay(hatch.angle + CROSS, 1.3 * px, gap / 3);
     }
     // the lights rubbed out of it, edges ragged
     const cut = (path, m, c = ctx) => {

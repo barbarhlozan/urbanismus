@@ -127,13 +127,13 @@ export function screenLight(camera, sun = SUN) {
 //           the shadows (lights.js)
 //   windows the share of the windows lit at night (0 … 1): most in the
 //           evening, a few in the small hours, some again before dawn
-//   gloom   a grey over the map, as under a storm sky (with the weather's),
-//           left out where the lights are:
-//           the paper and the ink both go towards the secondary ink, so
-//           the picture loses its contrast – most of all in the small
-//           hours, the night's darkest
-//   ink     how much of the main ink is in that grey (0 … 1), at its
-//           darkest
+//   depth   how deep the night is, in the paper's strokes (Renderer,
+//           nightCanvas.js): 1 its lines, 2 as many again between them,
+//           3 and a set across them
+//   ink     how far the main ink has gone over to the secondary (0 … 1):
+//           in the dead of night the whole drawing is in the one ink, the
+//           night's lines' – so the dark is the lines alone, and where a
+//           light shines there are none
 //   day     simulated seconds to 24 hours
 //   start   the hour at world time 0 (a new town starts in the morning)
 //   dawn    the hour the sun rises (the Debug panel's day starts there)
@@ -146,22 +146,22 @@ export const DAY = {
   dawn: 4.25,
   positions: [[170, 2.2], [150, 1.7], [130, 1.35], [110, 1.1], [90, 1], [70, 1.1], [50, 1.35], [30, 1.7], [10, 2.2]],
   steps: [
-    { at: 0, night: true, lamps: true, windows: 0.2, gloom: 0.3, ink: 0.15 },
-    { at: 1, night: true, lamps: true, windows: 0.1, gloom: 0.38, ink: 0.25 },
-    { at: 2.5, night: true, lamps: true, windows: 0.1, gloom: 0.3, ink: 0.15 },
-    { at: 3.25, night: true, lamps: true, windows: 0.2, gloom: 0.22 },
-    { at: 4.25, sun: 0, length: 12, hills: 1, lamps: true, windows: 0.3, gloom: 0.12 },
-    { at: 4.75, sun: 0, length: 6, hills: 1, gloom: 0.08 },
-    { at: 5.5, sun: 0, length: 3.5, hills: 1, gloom: 0.04 },
+    { at: 0, night: true, lamps: true, windows: 0.2, depth: 2, ink: 0.85 },
+    { at: 1, night: true, lamps: true, windows: 0.1, depth: 3, ink: 1 },
+    { at: 2.5, night: true, lamps: true, windows: 0.1, depth: 2, ink: 0.85 },
+    { at: 3.25, night: true, lamps: true, windows: 0.2, depth: 1, ink: 0.6 },
+    { at: 4.25, sun: 0, length: 12, hills: 1, lamps: true, windows: 0.3, ink: 0.3 },
+    { at: 4.75, sun: 0, length: 6, hills: 1, ink: 0.15 },
+    { at: 5.5, sun: 0, length: 3.5, hills: 1 },
     { at: 6.25, sun: 0 },
     { at: 7.5, sun: 1 }, { at: 9, sun: 2 }, { at: 10.5, sun: 3 }, { at: 12, sun: 4 },
     { at: 13.5, sun: 5 }, { at: 15, sun: 6 }, { at: 16.5, sun: 7 }, { at: 18, sun: 8 },
-    { at: 19.25, sun: 8, length: 3.5, hills: 1, gloom: 0.04 },
-    { at: 20, sun: 8, length: 6, hills: 1, gloom: 0.08 },
-    { at: 20.75, sun: 8, length: 12, hills: 1, lamps: true, windows: 0.6, gloom: 0.12 },
-    { at: 21.5, night: true, lamps: true, windows: 0.7, gloom: 0.16 },
-    { at: 22.5, night: true, lamps: true, windows: 0.5, gloom: 0.22 },
-    { at: 23.25, night: true, lamps: true, windows: 0.3, gloom: 0.3, ink: 0.15 },
+    { at: 19.25, sun: 8, length: 3.5, hills: 1 },
+    { at: 20, sun: 8, length: 6, hills: 1, ink: 0.15 },
+    { at: 20.75, sun: 8, length: 12, hills: 1, lamps: true, windows: 0.6, ink: 0.3 },
+    { at: 21.5, night: true, lamps: true, windows: 0.7, depth: 1, ink: 0.4 },
+    { at: 22.5, night: true, lamps: true, windows: 0.5, depth: 1, ink: 0.6 },
+    { at: 23.25, night: true, lamps: true, windows: 0.3, depth: 2, ink: 0.75 },
   ],
 };
 

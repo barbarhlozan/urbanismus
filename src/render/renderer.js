@@ -561,6 +561,11 @@ export class Renderer {
     if (this.showAgents) {
       this.pen.begin(this.camera, this.strokeK);
       this.penTop.begin(this.camera, this.strokeK);
+      // at night what moves is drawn in the main ink gone over to the
+      // secondary, as the map (setSun)
+      const pal = (this.inkShown ?? 0) > 0.005 ? { ...THEME.palette, main: mixColour(THEME.palette.main, THEME.palette.detail, this.inkShown) } : null;
+      if (pal) this.pen.pal = this.penTop.pal = pal;
+      this.smoke.pal = pal; // (the chimneys' smoke too, smokeFrame)
       this.renderBoats();  // on the water, under everything else that moves
       this.renderAnimals();
       this.renderTrains(); // under the people and cars (or over everything)
@@ -2333,7 +2338,11 @@ export class Renderer {
     this.dayStep = i;
     if (!!(step.gloom ?? 0) !== !!this.gloom) this.dirty.add('lights'); // (the objects' outlines, for the grey)
     this.gloom = step.gloom ?? 0;
-    this.nightInk = step.ink ?? 0;
+    this.nightDepth = step.depth ?? 1;
+    // the main ink going over to the secondary (styles.css --ink-night on
+    // the map; the canvases', renderNightCanvases)
+    this.inkNight = step.ink ?? 0;
+    for (const el of [this.svg, this.ground, this.top]) el.style.setProperty('--ink-night', `${Math.round(this.inkNight * 100)}%`);
     if ((step.windows ?? 0) !== this.litShare || !!step.night !== this.windowsDark) {
       this.litShare = step.windows ?? 0;
       this.windowsDark = !!step.night;
@@ -2483,12 +2492,14 @@ export class Renderer {
   // and the beams of what moves; over the objects, their lit windows.
   renderNightCanvases(dt) {
     const { camera } = this;
+    this.inkShown = (this.inkShown ?? 0) + ((this.inkNight ?? 0) - (this.inkShown ?? 0)) * Math.min(1, dt / 1.6);
     this.nightGrey += ((this.gloom ?? 0) - this.nightGrey) * Math.min(1, dt / 1.6);
     if (Math.abs(this.nightGrey - (this.gloom ?? 0)) < 0.004) this.nightGrey = this.gloom ?? 0;
     const pal = THEME.palette;
     const look = {
       grey: this.nightGrey,
-      colour: mixColour(pal.detail, pal.main, this.nightInk ?? 0),
+      colour: pal.detail,
+      depth: this.nightDepth ?? 1,
       tier: this.dark && SUN.hatch ? SHADE_TIERS[this.lodLevel ?? 0] ?? 1 : -1,
       hatch: SUN.hatch,
       px: camera.tile,

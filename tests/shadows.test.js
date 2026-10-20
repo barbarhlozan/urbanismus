@@ -32,7 +32,7 @@ test('the day goes round 24 hours: sun by day, night between', () => {
   const step = (hour) => DAY.steps[stepAt(hour)];
   // midday is SUN's own, with no night over it and no grey
   assert.deepEqual(DAY.positions[step(12).sun], [SUN.azimuth, SUN.length]);
-  assert.ok(!step(12).night && !step(12).gloom && !step(12).length);
+  assert.ok(!step(12).night && !step(12).length);
   // the dead of night: the night, no sun
   assert.ok(step(2).night && step(2).sun == null);
   // every position of the sun is used, morning to evening, in order
@@ -46,11 +46,14 @@ test('the day goes round 24 hours: sun by day, night between', () => {
   for (let i = 1; i < dusk.length; i++) assert.ok(dusk[i] > dusk[i - 1]);
   for (let i = 1; i < dawn.length; i++) assert.ok(dawn[i] < dawn[i - 1]);
   assert.ok(Math.min(...dusk) > Math.max(...DAY.positions.map(([, l]) => l)));
-  // the night deepens to its greyest in the small hours, and lifts again
-  const grey = (hour) => step(hour).gloom ?? 0;
-  const deepest = Math.max(...DAY.steps.map((s) => s.gloom ?? 0));
-  assert.ok(grey(1.5) === deepest && grey(22) < deepest && grey(3.5) < deepest && grey(12) === 0);
-  assert.ok(grey(22) < grey(0) && grey(0) <= grey(1.5) && grey(1.5) >= grey(3));
+  // the night deepens in the small hours – more lines, the main ink all
+  // the way over to the secondary – and lifts again; no grey over it
+  const deep = (hour) => step(hour).depth ?? 0, ink = (hour) => step(hour).ink ?? 0;
+  assert.equal(deep(1.5), 3);
+  assert.equal(ink(1.5), 1);
+  assert.ok(deep(22) < deep(1.5) && deep(3.5) < deep(1.5) && ink(22) < ink(0) && ink(3.5) < ink(1.5));
+  assert.ok(!ink(12) && !deep(12));
+  for (const s of DAY.steps) if (s.night) assert.ok(!s.gloom, `no grey at ${s.at}`);
   assert.equal(step(DAY.dawn).sun, 0);
   assert.ok(step(DAY.dawn - 0.1).night);
   // the hours from world time: a whole day round, starting at DAY.start
