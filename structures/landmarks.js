@@ -5,7 +5,7 @@
 //
 // 2×2 ones: local area covers x, y from about -0.4 to 1.4, front on -y.
 
-import { door, panel, flagpole, star, sculpture, bench, lamp, floodlight, pitch, planter, tree, transformer, FRAME, roundWindows, kindOf } from './kit.js';
+import { door, panel, flagpole, sculpture, bench, lamp, floodlight, pitch, planter, tree, transformer, FRAME, roundWindows, kindOf } from './kit.js';
 
 const FRONT = [0, -1, 0];
 
@@ -17,17 +17,6 @@ const common = {
   sim: { destinations: ['residential'] },
   plot: { props: 'green', boundary: 0.3, kinds: ['hedge'], density: 0.35 },
 };
-
-// Columns in front of a facade, from x0 to x1 at depth y, n + 1 of them.
-function columns(g, x0, x1, y, h, n) {
-  g.detailed(1, () => {
-    g.solid((x0 + x1) / 2, y, h / 2);
-    for (let i = 0; i <= n; i++) {
-      const x = x0 + ((x1 - x0) * i) / n;
-      g.line([[x, y, 0], [x, y, h]], { width: 2.2 });
-    }
-  });
-}
 
 // ----- house of culture -----
 
@@ -45,29 +34,9 @@ export const cultureHouse = {
   stats: { jobs: 10 },
   agents: 2,
   yards: ['plaza', 'forecourt'],
-  kinds: ['sorela', 'brutalist', 'sixties'],
+  kinds: ['brutalist', 'sixties'],
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
-    if (kind === 'sorela') {
-      // 50s socialist realism: a symmetrical block, a columned portico
-      // with a pediment and a star, flags either side of the steps
-      const fh = 0.16, h = fh * 3;
-      g.roofed(-0.32, 0.12, 0, 1.64, 0.95, h, { h: 0.12, hip: 0.3 });
-      g.windows(-0.32, 0.12, 1.64, 0.95, 0, h, fh, 0.12, { w: 0.35, h: 0.6 });
-      g.box(0.18, -0.12, 0, 0.64, 0.24, 0.02); // steps
-      columns(g, 0.2, 0.8, -0.1, h - 0.06, 5);
-      g.box(0.18, -0.12, h - 0.06, 0.64, 0.24, 0.06);
-      g.solid(0.5, -0.12, h + 0.06);
-      g.face([[0.18, -0.12, h], [0.82, -0.12, h], [0.5, -0.12, h + 0.14]]);
-      g.face([[0.82, 0.12, h], [0.18, 0.12, h], [0.5, 0.12, h + 0.14]]);
-      g.face([[0.18, -0.12, h], [0.5, -0.12, h + 0.14], [0.5, 0.12, h + 0.14], [0.18, 0.12, h]]);
-      g.face([[0.82, 0.12, h], [0.5, 0.12, h + 0.14], [0.5, -0.12, h + 0.14], [0.82, -0.12, h]]);
-      star(g, 0.5, -0.125, h + 0.06, 0.035);
-      door(g, 0.5, 0.12, 0.1, 0.18);
-      flagpole(g, 0.05, -0.3, 0.5);
-      flagpole(g, 0.95, -0.3, 0.5);
-      return;
-    }
     if (kind === 'brutalist') {
       // 70s: a glass foyer under a heavy ribbed concrete band, the
       // auditorium behind with the stage's fly tower rising over it,
