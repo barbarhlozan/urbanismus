@@ -55,15 +55,15 @@ export const cultureHouse = {
       planter(g, 0.15, -0.36);
       return;
     }
-    // 60s, Brussels Expo style: a glass pavilion under a thin roof, a
-    // folded-roof hall behind, a pylon with the sign
+    // 60s, Brussels Expo style: a glass pavilion under a thin roof, the
+    // hall behind a plain box under a thin flat roof, a pylon with the sign
     g.box(-0.25, -0.18, 0, 1.0, 0.55, 0.24);
     g.mullions(-0.25, -0.18, 1.0, 0.55, 0, 0.24, 0.05);
     g.box(-0.29, -0.22, 0.24, 1.08, 0.63, 0.018);
     door(g, 0.25, -0.18, 0.12, 0.14);
-    const n = 5, w = 1.5 / n;
-    for (let i = 0; i < n; i++) g.gableY(-0.25 + i * w, 0.45, 0, w, 0.85, 0.32, 0.1);
-    g.windows(-0.25, 0.45, 1.5, 0.85, 0, 0.32, 0.32, 0.13, { skip: ['front'], w: 0.3, h: 0.7 });
+    g.box(-0.25, 0.45, 0, 1.5, 0.85, 0.38);
+    g.windows(-0.25, 0.45, 1.5, 0.85, 0, 0.38, 0.38, 0.13, { skip: ['front'], w: 0.3, h: 0.7 });
+    g.box(-0.28, 0.42, 0.38, 1.56, 0.91, 0.02);
     g.box(1.08, -0.3, 0, 0.08, 0.04, 0.62);
     g.box(1.05, -0.31, 0.46, 0.14, 0.06, 0.1);
     bench(g, 0.1, -0.36);
@@ -73,7 +73,7 @@ export const cultureHouse = {
 
 // The smaller house of culture on one row of two plots (x about -0.4 to
 // 1.4, y -0.4 to 0.4), only ever the 60s kind: a glass pavilion under a
-// thin roof, a folded-roof hall beside it, a pylon with the sign.
+// thin roof, the boxy hall beside it, a pylon with the sign.
 export const cultureHouseSmall = {
   ...cultureHouse,
   id: 'culture-house-small',
@@ -87,9 +87,9 @@ export const cultureHouseSmall = {
     g.mullions(-0.28, -0.2, 0.7, 0.42, 0, 0.22, 0.05, { skip: ['right'] });
     g.box(-0.32, -0.24, 0.22, 0.78, 0.5, 0.018);
     door(g, 0.07, -0.2, 0.1, 0.13);
-    const n = 3, w = 0.86 / n;
-    for (let i = 0; i < n; i++) g.gableY(0.44 + i * w, -0.16, 0, w, 0.46, 0.28, 0.09);
-    g.windows(0.44, -0.16, 0.86, 0.46, 0, 0.28, 0.28, 0.13, { skip: ['left'], w: 0.3, h: 0.7 });
+    g.box(0.44, -0.16, 0, 0.86, 0.46, 0.32);
+    g.windows(0.44, -0.16, 0.86, 0.46, 0, 0.32, 0.32, 0.13, { skip: ['left'], w: 0.3, h: 0.7 });
+    g.box(0.42, -0.18, 0.32, 0.9, 0.5, 0.018);
     g.box(1.32, -0.3, 0, 0.05, 0.04, 0.5);
     g.box(1.3, -0.31, 0.37, 0.09, 0.06, 0.09);
     bench(g, -0.12, -0.33);
