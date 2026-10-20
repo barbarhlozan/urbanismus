@@ -186,11 +186,12 @@ edge (along the top on a phone) open its parts:
 - **Kronika** – the houses (each of the first ten, with where it stands – by the church, by the
   river – then round numbers of them), every first (the first road, the first panel block, the
   railway arriving), every landmark, the residents passing round numbers, a new name, whatever
-  the story writes in it (`chronicle:` lines, set as paragraphs), and every photo taken, pasted
-  in with corner mounts under its day. A ribbon lies in the newest pages.
-- **Fotografie** – the photos again, two to a page. Each is captioned with the one building that
-  stands out in it, or the village's name. The prints are kept in the browser's IndexedDB, apart
-  from the save (`src/ui/prints.js`); a downloaded city carries them along.
+  the story writes in it (`chronicle:` lines, set as paragraphs), and the last five photos taken
+  (`chronicle.photos` in the config; older ones go, prints and all), pasted in with corner mounts
+  under their day. A ribbon lies in the newest pages.
+- **Fotografie** – the photos again, two to a page, each captioned with the village's name. The
+  prints are kept in the browser's IndexedDB, apart from the save (`src/ui/prints.js`); a
+  downloaded city carries them along.
 - **Stav obce** – the ledger: the town as it stands today, written out by hand as a municipal
   register would have it – a rubric in the ruled margin and the number in words ("Lidé –
   šedesát", "Domy – padesát šest", "Práce – sedm"), then what stands in the village, one thing

@@ -167,9 +167,18 @@ export class Chronicle {
     this.add({ day: this.day(), text, kind }, notify);
   }
 
-  // A photo pasted in: its print's id (ui/prints.js) and caption.
+  // A photo pasted in: its print's id (ui/prints.js) and caption. Only the
+  // last config.photos are kept: returns the prints of those taken out.
   photo(print, caption) {
+    // (room made first: the book redraws as the new one goes in)
+    const photos = this.entries.filter((e) => e.kind === 'photo');
+    const out = new Set(photos.slice(0, Math.max(0, photos.length + 1 - (this.config.photos ?? Infinity))));
+    if (out.size) {
+      this.data.seen = this.entries.slice(0, this.data.seen).filter((e) => !out.has(e)).length;
+      this.data.entries = this.entries.filter((e) => !out.has(e));
+    }
     this.add({ day: this.day(), text: caption, kind: 'photo', print });
+    return [...out].map((e) => e.print);
   }
 
   add(entry, notify = true) {

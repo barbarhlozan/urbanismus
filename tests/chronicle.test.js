@@ -116,3 +116,16 @@ test('what has been read is kept, and photos are entries too', () => {
   const again = World.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
   assert.equal(again.chronicle.seen, c.entries.length);
 });
+
+test('only the last few photos are kept', () => {
+  const w = flatWorld();
+  const c = new Chronicle(w, CONFIG);
+  const keep = CONFIG.chronicle.photos;
+  c.read();
+  const gone = [];
+  for (let i = 0; i < keep + 2; i++) gone.push(...c.photo(`p${i}`, 'Testov'));
+  assert.deepEqual(gone, ['p0', 'p1']);
+  assert.deepEqual(c.entries.filter((e) => e.kind === 'photo').map((e) => e.print), Array.from({ length: keep }, (_, i) => `p${i + 2}`));
+  assert.match(texts(c)[0], /chronicle of Testov was begun/); // (the lines stay)
+  assert.equal(c.data.seen, 1);                               // (what was read stays read)
+});

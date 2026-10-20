@@ -492,6 +492,7 @@ export const CONFIG = {
     residents: [25, 50, 100, 250, 500, 1000, 2000, 3500, 5000, 7500, 10000], // worth a line when passed
     houses: [15, 20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000], // after the first ten, each its own line
     check: 5,             // real seconds between counts of the residents
+    photos: 5,            // photos kept in it: the oldest go when there are more
   },
 
   storageKey: 'urbanismus.save.v1',

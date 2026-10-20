@@ -37,8 +37,7 @@ import { createPhotoTool } from './tools/photo.js';
 import { contoursSetting } from './tools/terrain.js';
 import { takePhoto } from './render/photo.js';
 import { PhotoPrint } from './ui/photoPrint.js';
-import { printImage, putPrint, newPrintId, subjectOf, clearPrints } from './ui/prints.js';
-import { nameOf } from './ui/names.js';
+import { printImage, putPrint, deletePrint, newPrintId, clearPrints } from './ui/prints.js';
 import { Popup } from './ui/popup.js';
 import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
@@ -207,9 +206,8 @@ const photoPrint = new PhotoPrint(uiRoot, {
 });
 tools.register(createPhotoTool(ctx, {
   shoot: (shot) => {
-    // captioned with the one building that stands out in it, if one does
-    const subject = subjectOf(world, shot);
-    const caption = subject ? nameOf(subject) : world.name;
+    // captioned with the town's name
+    const caption = world.name;
     photoPrint.show(takePhoto(renderer, shot), caption);
     world.story.vars.photos_taken = (world.story.vars.photos_taken ?? 0) + 1;
     pasteIn(photoPrint.photo, caption);
@@ -218,6 +216,8 @@ tools.register(createPhotoTool(ctx, {
 
 // Every photo goes into the chronicle: its print kept (ui/prints.js), then
 // its entry written, so the book never shows an entry before its picture.
+// The chronicle keeps only the last few (config.chronicle.photos): the
+// oldest go, prints and all.
 async function pasteIn(svg, caption) {
   const id = newPrintId();
   try {
@@ -226,7 +226,7 @@ async function pasteIn(svg, caption) {
   } catch (err) {
     console.warn('The print could not be kept.', err);
   }
-  chronicle.photo(id, caption);
+  for (const old of chronicle.photo(id, caption)) deletePrint(old);
 }
 
 const actions = {

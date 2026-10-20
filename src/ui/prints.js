@@ -8,13 +8,6 @@
 //
 // Without IndexedDB (a private window, storage blocked) the entry is still
 // written; the book then shows an empty mount where the print would be.
-//
-// subjectOf() picks what a photo is of, for its caption: the one building
-// that stands out in it, or none.
-
-import { PerspectiveCamera } from '../render/perspective.js';
-import { PHOTO } from '../render/photo.js';
-import { STRUCTURE_TYPES, matches } from '../../structures/index.js';
 
 const DB = 'urbanismus';
 const STORE = 'prints';
@@ -73,9 +66,10 @@ async function run(mode, fn) {
   });
 }
 
-// Each resolves even when there is no IndexedDB: put/clear with false,
+// Each resolves even when there is no IndexedDB: put/delete/clear with false,
 // get with null, all with [].
 export const putPrint = (id, blob) => run('readwrite', (s) => s.put(blob, id)).then(() => true, () => false);
+export const deletePrint = (id) => run('readwrite', (s) => s.delete(id)).then(() => true, () => false);
 export const getPrint = (id) => run('readonly', (s) => s.get(id)).then((b) => (b instanceof Blob ? b : null), () => null);
 export const clearPrints = () => run('readwrite', (s) => s.clear()).then(() => true, () => false);
 
@@ -97,31 +91,4 @@ const urls = new Map();
 export async function printURL(id) {
   if (!urls.has(id)) urls.set(id, getPrint(id).then((blob) => (blob ? URL.createObjectURL(blob) : null)));
   return urls.get(id);
-}
-
-// ---------- what a photo is of ----------
-
-// Not what a photo is "of": homes, and what lies flat on the ground.
-const BACKGROUND = ['residential', 'park', 'square', 'cemetery', 'bus-stop', 'stop'];
-// How wide (a share of the picture) a building must look to stand out.
-const STANDS_OUT = 0.12;
-
-// The one building that stands out in the photo `shot` ({ x, y, yaw, fov }),
-// as its structure definition – or null when none does, or several do.
-export function subjectOf(world, shot) {
-  const cam = new PerspectiveCamera({ x: shot.x, y: shot.y, z: 0, yaw: shot.yaw, fov: shot.fov, width: PHOTO.width, height: PHOTO.height });
-  const half = Math.tan((shot.fov * Math.PI) / 360);
-  const found = [];
-  for (const s of world.structures.values()) {
-    const def = STRUCTURE_TYPES[s.type];
-    if (!def || BACKGROUND.some((tag) => matches(def, tag))) continue;
-    const [cx, cy] = world.centerOf(s);
-    const ahead = cam.ahead(cx, cy);
-    if (ahead < PHOTO.clear || ahead > PHOTO.range) continue;
-    const side = (cx - shot.x) * cam.rx + (cy - shot.y) * cam.ry;
-    if (Math.abs(side) > ahead * half) continue; // (its middle out of the picture)
-    const wide = (Math.sqrt(world.nodesOf(s).length) * cam.focal) / ahead;
-    if (wide >= PHOTO.width * STANDS_OUT) found.push(def);
-  }
-  return found.length === 1 ? found[0] : null;
 }
