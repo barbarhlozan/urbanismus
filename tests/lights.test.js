@@ -16,9 +16,10 @@ test('a lamp lights a ragged pool round its foot, and its head', () => {
   assert.ok(Math.max(...r) - Math.min(...r) > LIGHTS.pool * 0.05, 'not a perfect circle');
   // the same lamp, the same pool
   assert.equal(lampPool(3, 4, project, px)[0], pool);
-  // its head, up the post
-  const [hx, hy] = points(head);
-  assert.ok(Math.abs(hy / px - (4 - LIGHTS.high)) < 1e-6 && hx / px < 3);
+  // its head, up the post: a round about it
+  const hp = points(head), hx = hp.filter((_, i) => i % 2 === 0), hy = hp.filter((_, i) => i % 2 === 1);
+  const mx = hx.reduce((a, b) => a + b) / hx.length / px, my = hy.reduce((a, b) => a + b) / hy.length / px;
+  assert.ok(Math.abs(mx - 3) < 0.01 && Math.abs(my - (4 - LIGHTS.high)) < 0.01);
 });
 
 test("the pools of a street's lamps, a step apart, leave night between", () => {

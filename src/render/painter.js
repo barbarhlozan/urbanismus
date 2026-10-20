@@ -92,6 +92,12 @@ const r2 = (n) => Math.round(n * 100) / 100;
 // their glazing bars from this many px wide
 const PHOTO_HATCH = 5;
 const PHOTO_PANE = 7;
+// The light a lit window low on its wall throws on the ground in front of
+// it at night (Painter._window, Renderer.renderLights): from windows whose
+// sill is at most `below` up the wall (grid units), `reach` out from the
+// wall, widening by `widen` of the window's width to each side.
+const SPILL = { below: 0.2, reach: 0.22, widen: 0.6 };
+
 // The map (LOOK.open): glazing bars in windows from this many scene px wide
 // (at zoom 1; they show only close up, see Painter._window)
 const MAP_PANE = 1.2;
@@ -276,7 +282,7 @@ export class Painter {
     this._tc = 1;
     this._ts = 0;
     this.feet = [];       // walls' feet on the ground: { a, b, h, n } world, see render/shadows.js
-    this.panes = [];      // its windows drawn: { pts: 4 scene points, n: 0–9 }, for the night (Renderer.renderWindows)
+    this.panes = [];      // its windows drawn: { pts: 4 scene points, n: 0–9, spill }, for the night (Renderer.renderLights)
     this.casts = [];      // other shapes that cast a shadow (trees), world, see Painter.cast
     this.casting = true;  // false: draw no shadows (icons)
   }
@@ -1268,10 +1274,29 @@ export class Painter {
     const scr = (p) => this._project(...this._world(p[0], p[1], p[2]));
     const [sa, sb, sc] = [scr(a), scr(b), scr(c)];
     // kept for the night, with its number, 0–9, seeded by where it is: the
-    // map lights so many tenths of its windows, the lowest numbers first
+    // map lights so many tenths of its windows, the lowest numbers first;
+    // and one low on its wall the light it throws on the ground in front
+    // (SPILL), out along the wall's normal and widening (opts.facing: the
+    // wall's outward normal, as windows() gives it)
     if (!photo) {
       const mid = this._world((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (a[2] + c[2]) / 2);
-      this.panes.push({ pts: [sa, sb, sc, scr(e)], n: Math.min(9, Math.floor(hash(mid[0] * 31.7 + mid[2] * 13.1, mid[1] * 17.3) * 10)) });
+      const n = Math.min(9, Math.floor(hash(mid[0] * 31.7 + mid[2] * 13.1, mid[1] * 17.3) * 10));
+      let spill = null;
+      const f = opts.facing, ul = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (f && ul > 1e-6 && a[2] <= SPILL.below) {
+        const fl = Math.hypot(f[0], f[1]) || 1, [nx, ny] = [f[0] / fl, f[1] / fl], [ux, uy] = [(b[0] - a[0]) / ul, (b[1] - a[1]) / ul];
+        // out from the wall's foot under it, the far edge bowed and uneven
+        // (seeded by where the window is), as a hand rounds it off
+        const reach = SPILL.reach, wide = ul * SPILL.widen, far = [];
+        for (let i = 0; i <= 6; i++) {
+          const t = i / 6, r = reach * (1 + 0.35 * Math.sin(Math.PI * t) + 0.18 * (hash(mid[0] + i, mid[1] * 3.1) - 0.5));
+          const along = -wide + (ul + 2 * wide) * (1 - t); // from b's side round to a's
+          const base = [a[0] + ux * along, a[1] + uy * along];
+          far.push([base[0] + nx * r, base[1] + ny * r, 0]);
+        }
+        spill = [[a[0], a[1], 0], [b[0], b[1], 0], ...far].map(scr);
+      }
+      this.panes.push({ pts: [sa, sb, sc, scr(e)], n, spill });
     }
     const wide = Math.hypot(sb[0] - sa[0], sb[1] - sa[1]), high = Math.hypot(sc[0] - sb[0], sc[1] - sb[1]);
     const out = this.current.parts;

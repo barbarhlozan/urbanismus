@@ -3,11 +3,10 @@
 // shadows' are, so the night's strokes stop unevenly there – and the lamp's
 // head is left out too. The pools are holes in the night's mask (and in
 // the shadows', at the dusk they come on in, DAY.steps `lamps`), drawn by
-// Renderer.renderLights; one path for all the pools, one for the heads.
+// Renderer.renderLights.
 //
-//   lampPool(x, y, project, px)  -> [the pool, the lamp's head] as path data
-//                                   (apart: each path's rounds turn one way,
-//                                   so where they overlap they add up)
+//   lampPool(x, y, project, px)  -> [the pool, the lamp's head] as path data,
+//                                   each turned anticlockwise (ring)
 
 import { hash } from './hatch.js';
 
@@ -26,6 +25,14 @@ export const LIGHTS = {
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
+// A closed ring as path data, turned anticlockwise on screen, so that rings
+// of one colour in a mask add up where they overlap rather than cancel.
+function ring(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) a += pts[i][0] * pts[(i + 1) % pts.length][1] - pts[(i + 1) % pts.length][0] * pts[i][1];
+  return `M${(a > 0 ? pts : [...pts].reverse()).map(([x, y]) => `${r2(x)} ${r2(y)}`).join('L')}Z`;
+}
+
 // The light of a street lamp standing at world (x, y): the pool, a ring of
 // ground points projected (`project(x, y, z)` -> scene px, with the
 // relief), each a little further out or in, seeded by where the lamp
@@ -39,8 +46,6 @@ export function lampPool(x, y, project, px, opts = LIGHTS) {
     pts.push(project(x + Math.cos(a) * r, y + Math.sin(a) * r, 0));
   }
   const [hx, hy] = project(x, y, opts.high), hr = opts.head * px;
-  return [
-    `M${pts.map(([sx, sy]) => `${r2(sx)} ${r2(sy)}`).join('L')}Z`,
-    `M${r2(hx - hr)} ${r2(hy)}a${r2(hr)} ${r2(hr)} 0 1 0 ${r2(2 * hr)} 0a${r2(hr)} ${r2(hr)} 0 1 0 ${r2(-2 * hr)} 0Z`,
-  ];
+  const head = Array.from({ length: 10 }, (_, i) => [hx + Math.cos((i / 10) * 2 * Math.PI) * hr, hy + Math.sin((i / 10) * 2 * Math.PI) * hr]);
+  return [ring(pts), ring(head)];
 }

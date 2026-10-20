@@ -282,11 +282,10 @@ export class Renderer {
     const night = this.layers.night;
     night.innerHTML = '<defs class="night-tiles"></defs>' +
       '<mask id="night-mask" class="light-mask" maskUnits="userSpaceOnUse"><rect class="mask-all"/><g class="night-lights"></g></mask>' +
-      '<rect class="night-grey" mask="url(#night-mask)"/><rect class="night-veil" mask="url(#night-mask)"/><g class="night-windows"></g>';
+      '<rect class="night-grey" mask="url(#night-mask)"/><rect class="night-veil" mask="url(#night-mask)"/>';
     this.layers.lights.remove();
     this.layers.lights = night.querySelector('.night-lights');
     this.lightCuts = [...veil.querySelectorAll('.lights-cut')];
-    this.nightWindows = night.querySelector('.night-windows');
     // hover rings and tags on their way out, over the overlay (see letGo)
     this.leaving = this.layers.overlay.parentNode.appendChild(document.createElementNS(SVGNS, 'g'));
     this.leaving.setAttribute('class', 'overlay leaving');
@@ -1485,7 +1484,7 @@ export class Renderer {
   // is) wait for it to end, and what is being erased goes at once.
   startTurn() {
     this.turning = true;
-    this.nightWindows.innerHTML = ''; // (drawn again once the view rests, renderWindows)
+    this.renderLights(); // (the lamps' alone, turning as a sheet; the windows' once the view rests)
     this.layers.overlay.style.visibility = 'hidden';
     this.reapGhosts(true);
   }
@@ -1758,7 +1757,6 @@ export class Renderer {
       this.dirty.add(l);
     }
     for (const el of this.lightCuts) el.removeAttribute('transform');
-    this.dirty.add('windows');
     if (this.linesAngle !== a) {
       this.roadLines = null;
       for (const l of LINES) {
@@ -1985,7 +1983,7 @@ export class Renderer {
     this.free = freeTest(world, this.config);
     this.lampRoom = null; // (buildStreet: worked out again when needed)
     if (this.lampsOn && [...keys].some((k) => k[0] === 'k')) this.dirty.add('lights'); // (lamps come and go)
-    if (this.dark && keys.size) this.dirty.add('windows'); // (windows come and go, or are hidden anew)
+    if (this.dark && keys.size) this.dirty.add('lights'); // (windows come and go, or are hidden anew)
     if (this.objsAll) this.reapGhosts(true); // drawn for the old view
 
     const now = performance.now();
@@ -2327,7 +2325,7 @@ export class Renderer {
     if ((step.windows ?? 0) !== this.litShare || !!step.night !== this.windowsDark) {
       this.litShare = step.windows ?? 0;
       this.windowsDark = !!step.night;
-      this.dirty.add('windows');
+      this.dirty.add('lights');
     }
     if (!!step.lamps !== !!this.lampsOn) {
       this.lampsOn = !!step.lamps;
@@ -2384,79 +2382,90 @@ export class Renderer {
     for (const el of night.querySelectorAll('mask, rect')) for (const [k, v] of Object.entries(box)) el.setAttribute(k, v);
   }
 
-  // The windows lit at night (DAY.steps `windows`: so many tenths of them,
-  // by each window's number, Painter._window): drawn over the night as
-  // paper panes, but only where nothing nearer hides them – the objects
-  // gone through from the furthest to the nearest (this.order), a window
-  // left out when its middle lies under the outline of something nearer
-  // (Painter.covers). Drawn again when the share changes, when objects are
-  // drawn anew, and once a turn of the view rests.
-  renderWindows() {
-    const el = this.nightWindows;
-    const share = this.dark ? this.litShare ?? 0 : 0;
-    if (!share || this.turning || !this.order) {
-      el.innerHTML = '';
-      return;
-    }
-    const order = this.order.filter((e) => e.shown !== false && e.night);
-    // what covers what, in cells of the screen (scene px)
-    const CELL = 48, cells = new Map();
-    const at = (x, y) => `${Math.floor(x / CELL)},${Math.floor(y / CELL)}`;
-    order.forEach((e, i) => {
-      for (const c of e.night.covers) {
-        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-        for (const [x, y] of c) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
-        for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
-          for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++) {
-            const k = `${cx},${cy}`;
-            (cells.get(k) ?? cells.set(k, []).get(k)).push({ i, c, x0, y0, x1, y1 });
-          }
+  // The lights (lights.js), left out of the night's mask: with the lamps
+  // on (DAY.steps `lamps`), a pool under every street lamp and a round at
+  // its head; at night, the windows lit (`windows`: so many tenths of
+  // them, by each window's number, Painter._window) – a hole a little
+  // larger than the pane, so its own paper shows with a glow about it, and
+  // for one low on its wall the light it throws on the ground before it.
+  // Painted from the furthest object to the nearest (this.order), each
+  // putting the night back over what it covers of the light behind it
+  // (Painter.covers) before adding its own – so a house hides the windows
+  // and the lamps behind it, a tree the light under it. The lamps' pools
+  // are cut out of the shadows' masks too, as they are (lightCuts).
+  // Drawn again when the lamps come on or go off, the share of windows
+  // changes, objects are drawn anew, and once a turn of the view rests;
+  // while it turns, the lamps' alone, turning as a sheet.
+  renderLights() {
+    const px = this.camera.tile;
+    const project = (x, y, z) => this.project(x, y, z);
+    const lit = this.dark && !this.turning ? Math.round((this.litShare ?? 0) * 10) : 0;
+    const xy = ([x, y]) => `${r2(x)} ${r2(y)}`;
+    // a ring, turned anticlockwise (as the covers are), so rings of one
+    // colour add up where they overlap
+    const ring = (pts) => {
+      let a = 0;
+      for (let i = 0; i < pts.length; i++) a += pts[i][0] * pts[(i + 1) % pts.length][1] - pts[(i + 1) % pts.length][0] * pts[i][1];
+      return `M${(a > 0 ? pts : [...pts].reverse()).map(xy).join('L')}Z`;
+    };
+    const grow = (pts, by) => {
+      const cx = pts.reduce((t, p) => t + p[0], 0) / pts.length, cy = pts.reduce((t, p) => t + p[1], 0) / pts.length;
+      return pts.map(([x, y]) => { const l = Math.hypot(x - cx, y - cy) || 1; return [x + ((x - cx) / l) * by, y + ((y - cy) / l) * by]; });
+    };
+    const parts = []; // [light?, path data], in order
+    const add = (light, d) => {
+      if (!d) return;
+      const last = parts[parts.length - 1];
+      if (last && last[0] === light) last[1] += d;
+      else parts.push([light, d]);
+    };
+    // where there is light so far, in cells of the screen
+    const CELL = 48, held = new Set();
+    const cellsOf = (pts, fn) => {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+      for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
+        for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++) if (fn(`${cx},${cy}`)) return true;
+      }
+      return false;
+    };
+    let pools = '';
+    const order = this.order && !this.turning ? this.order : [...this.objs.values()];
+    for (const e of order) {
+      if (e.shown === false) continue;
+      const own = [];
+      if (this.lampsOn && e.key?.[0] === 'k' && e.at?.points?.[0]) {
+        const [x, y] = e.at.points[0];
+        const [pool, head] = lampPool(x, y, project, px);
+        pools += pool + head;
+        own.push(pool, head);
+      }
+      if (lit && e.night) {
+        for (const w of e.night.wins) {
+          if (w.n >= lit) continue;
+          own.push(grow(w.pts, 0.04 * px));
+          if (w.spill) own.push(w.spill);
         }
       }
-    });
-    // inside a convex outline (anticlockwise, or the other way round)
-    const inside = (c, x, y) => {
-      let pos = false, neg = false;
-      for (let j = 0; j < c.length; j++) {
-        const [ax, ay] = c[j], [bx, by] = c[(j + 1) % c.length];
-        const cr = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
-        if (cr > 0) pos = true; else if (cr < 0) neg = true;
-        if (pos && neg) return false;
+      // the night back over what it covers of the light behind
+      if (lit && e.night?.covers.length && held.size) {
+        for (const c of e.night.covers) if (cellsOf(c, (k) => held.has(k))) add(false, ring(c));
       }
-      return true;
-    };
-    const lit = Math.round(share * 10);
-    let d = '';
-    order.forEach((e, i) => {
-      for (const w of e.night.wins) {
-        if (w.n >= lit) continue;
-        const x = (w.pts[0][0] + w.pts[2][0]) / 2, y = (w.pts[0][1] + w.pts[2][1]) / 2;
-        const hid = cells.get(at(x, y))?.some((o) => o.i > i && x >= o.x0 && x <= o.x1 && y >= o.y0 && y <= o.y1 && inside(o.c, x, y));
-        if (!hid) d += `M${w.pts.map(([px, py]) => `${r2(px)} ${r2(py)}`).join('L')}Z`;
+      for (const o of own) {
+        if (typeof o === 'string') add(true, o);
+        else {
+          add(true, ring(o));
+          if (lit) cellsOf(o, (k) => { held.add(k); });
+        }
       }
-    });
-    el.innerHTML = d ? `<path class="lit-window" d="${d}"/>` : '';
-  }
-
-  // The lights (lights.js): with the lamps on (DAY.steps `lamps`), a pool
-  // under every street lamp and a round at its head, left out of the
-  // night (its mask) and of the shadows (theirs). Drawn again when the
-  // lamps come on or go off, when streets change, and for each turn of
-  // the view.
-  renderLights() {
-    let pools = '', heads = '';
-    if (this.lampsOn) {
-      const project = (x, y, z) => this.project(x, y, z);
-      for (const e of this.objs.values()) {
-        const at = e.key[0] === 'k' && e.at?.points?.[0];
-        if (!at) continue;
-        const [p, h] = lampPool(at[0], at[1], project, this.camera.tile);
-        pools += p;
-        heads += h;
+      if (lit && own.length && typeof own[0] === 'string') {
+        const [x, y] = e.at.points[0];
+        cellsOf([project(x - 0.5, y - 0.5, 0), project(x + 0.5, y + 0.5, 0), project(x + 0.5, y - 0.5, 0), project(x - 0.5, y + 0.5, 0)], (k) => { held.add(k); });
       }
     }
-    const svg = pools ? `<path class="light" d="${pools}"/><path class="light" d="${heads}"/>` : '';
-    for (const el of [this.layers.lights, ...this.lightCuts]) el.innerHTML = svg;
+    this.layers.lights.innerHTML = parts.map(([light, d]) => `<path class="${light ? 'light' : 'unlit'}" d="${d}"/>`).join('');
+    const cut = pools ? `<path class="light" d="${pools}"/>` : '';
+    for (const el of this.lightCuts) el.innerHTML = cut;
   }
 
   // Every object's shadow drawn again from its feet, with SUN as it is
