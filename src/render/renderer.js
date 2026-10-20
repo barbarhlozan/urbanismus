@@ -302,15 +302,14 @@ export class Renderer {
     this.scenes = [ground, svg, this.top].map((s) => s.querySelector('.scene'));
     this.layers = Object.fromEntries(LAYERS.map((l) => [l, svgOf(l).querySelector(`.layer-${l}`)]));
     // the shadows (shadows.js shadowMask, hillShadows.js): one sheet of the
-    // paper's strokes (hatch.js) shown through a mask of every object's
-    // shadow, another, sparser by day, through a mask of the hills'; the
-    // layers 'shadows' and 'hillshade' are those masks' shapes
-    // (renderShadeTiles draws the sheets)
+    // paper's strokes (hatch.js) shown through one mask of every object's
+    // shadow and the hills' – the same strokes, so where a tree stands in a
+    // hill's shadow the two are one; the layers 'shadows' and 'hillshade'
+    // are the mask's shapes (renderShadeTiles draws the sheet)
     const veil = this.layers.shadows;
     veil.innerHTML = '<defs class="shade-tiles"></defs>' +
-      '<mask id="hill-mask" class="shade-mask" maskUnits="userSpaceOnUse"><g class="hill-shapes"></g><g class="lights-cut"></g></mask>' +
-      '<mask id="shade-mask" class="shade-mask" maskUnits="userSpaceOnUse"><g class="shade-shapes"></g><g class="lights-cut"></g></mask>' +
-      '<rect class="shade-veil" fill="url(#hill-tile)" mask="url(#hill-mask)"/><rect class="shade-veil" fill="url(#shade-tile)" mask="url(#shade-mask)"/>';
+      '<mask id="shade-mask" class="shade-mask" maskUnits="userSpaceOnUse"><g class="hill-shapes"></g><g class="shade-shapes"></g><g class="lights-cut"></g></mask>' +
+      '<rect class="shade-veil" fill="url(#shade-tile)" mask="url(#shade-mask)"/>';
     this.shadeVeil = veil;
     this.layers.shadows = veil.querySelector('.shade-shapes');
     this.layers.hillshade.remove();
@@ -827,24 +826,20 @@ export class Renderer {
     el.innerHTML = view;
   }
 
-  // The sheets of the paper's strokes the shadows' masks show (see the
-  // constructor): the objects' every line close up, fewer further out, as
-  // the night's; the hills' every 4th by day (HILL_SHADOWS.every, a hill's
-  // shadow is a large thing, and the paper should still show through it),
-  // as dense as the rest at dusk. Each a rect far larger than the map, as
-  // the night's. Drawn again only when they change.
+  // The sheet of the paper's strokes the shadows' mask shows (see the
+  // constructor): every line close up, fewer further out, as the night's;
+  // a rect far larger than the map, as the night's. Drawn again only when
+  // it changes.
   renderShadeTiles() {
     const { camera, world } = this;
     const h = SUN.hatch;
     if (!h) return;
     const most = SHADE_TIERS[this.lodLevel ?? 0] ?? 1;
-    const every = this.hillsEvery ?? HILL_SHADOWS.every;
-    const hills = Math.min(most, every >= 8 ? 0 : every >= 4 ? 1 : every >= 2 ? 2 : 3);
-    const key = `${most}|${hills}|${JSON.stringify(h)}|${camera.tile}`;
+    const key = `${most}|${JSON.stringify(h)}|${camera.tile}`;
     if (key === this.shadeKey) return;
     this.shadeKey = key;
     const px = camera.tile;
-    this.shadeVeil.querySelector('.shade-tiles').innerHTML = hatchTile('shade-tile', most, h, px, 'shade-line') + hatchTile('hill-tile', hills, h, px, 'hill-line');
+    this.shadeVeil.querySelector('.shade-tiles').innerHTML = hatchTile('shade-tile', most, h, px, 'shade-line');
     const [mx, my] = this.project(camera.cx, camera.cy, 0);
     const r = (Math.hypot(world.grid.width, world.grid.height) + 20) * px * 2;
     const box = { x: Math.round(mx - r), y: Math.round(my - r), width: Math.round(2 * r), height: Math.round(2 * r) };
@@ -2418,7 +2413,6 @@ export class Renderer {
       [SUN.azimuth, SUN.length] = DAY.positions[pos];
       SUN.length = Math.max(SUN.length, step.length ?? 0);
     }
-    this.hillsEvery = step.hills ?? HILL_SHADOWS.every;
     // (the first sun of all just is; the next ones are drawn in)
     const drawn = this.sunDrawn;
     this.sunDrawn = true;

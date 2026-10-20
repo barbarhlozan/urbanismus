@@ -1,10 +1,9 @@
 // The shadows the hills cast: where the ground lies below the sun's light
 // – behind a rise, or on a slope turned away from a low sun – it is
 // hatched as the buildings' shadows are (shadows.js), on the very same
-// lines of the ground's hatching, so a house's shadow and the hill's it
-// stands in read as one. Only every few of those lines, though, and with
-// a finer pen: a hill's shadow is a large thing, and the paper should
-// still show through it.
+// strokes, in the same mask (Renderer: its outline traced on the ground,
+// hillShadeRings), so a house's shadow and the hill's it stands in read as
+// one, as dense as each other.
 //
 //   hillShade(height, box, sun)            -> the shade, (x, y) -> depth
 //   hillShadeRings(shade, box, wet)        -> the shade's outlines, world rings
@@ -44,7 +43,7 @@ export const HILL_SHADOWS = {
   grid: 0.125,
   deep: 0.02,
   every: 4,
-  cell: 0.15,
+  cell: 0.1,
   ragged: 0.18,
   min: 0.25,
 };
