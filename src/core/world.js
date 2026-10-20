@@ -21,6 +21,7 @@ import { NetworkLayer } from '../roads/layer.js';
 import { validateRoute } from '../roads/routing.js';
 import { STRUCTURE_TYPES, footprintOffsets, newSeed } from '../../structures/index.js';
 import { mulberry32 } from './random.js';
+import { smoothLine } from './geom2d.js';
 import { upgrade, upgradeMarks, unretire, regroup } from './legacy.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { History } from './history.js';
@@ -126,12 +127,15 @@ export class World {
 
   // Where a railway runs at dense dot f. Track drawn as a staircase of
   // dense dots (bends of 45° close together) is smoothed along each run
-  // into one even curve: every dot where the line just passes through is
-  // eased towards its neighbours a few times, then kept within MAX_SHIFT of
-  // its dot. Junctions, ends, bridges and the track in front of stations
-  // stay put (and straight stretches stay straight). Trains, the drawing
-  // and level crossings all use these positions; the rules (sharpest bend,
-  // straight bridges) use the dots.
+  // into one even curve: the dots where the line just passes through are
+  // fitted with the line that bends least while staying near them
+  // (smoothLine), none more than MAX_SHIFT off its dot – a dot that would
+  // be is held at that distance and the rest fitted round it, so the curve
+  // has no kink there. Junctions, ends, bridges and the track in front of
+  // stations stay put, and the curve leaves them in line with the track
+  // carrying on beyond (straight stretches stay straight). Trains, the
+  // drawing and level crossings all use these positions; the rules
+  // (sharpest bend, straight bridges) use the dots.
   railPos(f) {
     const layer = this.networks.rail;
     const key = `${layer.version}|${this.structureVersion ?? 0}`;
@@ -140,7 +144,10 @@ export class World {
   }
 
   smoothRails() {
-    const RUNS = 6, MAX_SHIFT = 0.2;
+    // STIFF: how hard the fit resists bending; dots inside a straight run of
+    // at least LONG steps, EASE steps from its ends, are held HOLD times
+    // harder (the track keeps to them instead of swinging out before a bend)
+    const STIFF = 10, MAX_SHIFT = 0.25, LONG = 8, EASE = 3, HOLD = 20;
     const layer = this.networks.rail;
     const graph = layer.graph;
     const pinned = new Set();
@@ -155,22 +162,85 @@ export class World {
         }
       }
     }
-    const free = [];
+    const free = (f) => graph.degree(f) === 2 && !pinned.has(f) && !layer.bridge.water(f);
     const pos = new Map();
-    for (const f of graph.nodes()) {
-      pos.set(f, layer.dot(f));
-      if (graph.degree(f) === 2 && !pinned.has(f) && !layer.bridge.water(f)) free.push(f);
-    }
-    for (let k = 0; k < RUNS; k++) {
-      const next = new Map();
-      for (const f of free) {
-        const [a, b] = [...graph.neighbors(f)].map((m) => pos.get(m));
-        const p = pos.get(f);
-        next.set(f, [(a[0] + 2 * p[0] + b[0]) / 4, (a[1] + 2 * p[1] + b[1]) / 4]);
+    for (const f of graph.nodes()) pos.set(f, layer.dot(f));
+
+    // the run's dots fitted, the over-shifted ones held at MAX_SHIFT
+    const fit = (nodes, fixed) => {
+      const dots = nodes.map((n) => layer.dot(n));
+      const want = dots.map((p) => [...p]);
+      fixed = [...fixed];
+      const weight = dots.map(() => 1);
+      const step = (k) => [dots[k + 1][0] - dots[k][0], dots[k + 1][1] - dots[k][1]];
+      for (let i = 0, j; i < dots.length - 1; i = j) {
+        const [sx, sy] = step(i);
+        for (j = i + 1; j < dots.length - 1 && step(j)[0] === sx && step(j)[1] === sy; j++);
+        if (j - i >= LONG) for (let k = i + EASE; k <= j - EASE; k++) weight[k] = HOLD;
       }
-      for (const [f, p] of next) pos.set(f, p);
+      let p = smoothLine(want, fixed, STIFF, weight);
+      for (let round = 0; round < 8; round++) {
+        let held = false;
+        p.forEach(([x, y], i) => {
+          const [dx, dy] = dots[i], d = Math.hypot(x - dx, y - dy);
+          if (fixed[i] || d <= MAX_SHIFT) return;
+          want[i] = [dx + ((x - dx) * MAX_SHIFT) / d, dy + ((y - dy) * MAX_SHIFT) / d];
+          fixed[i] = held = true;
+        });
+        if (!held) break;
+        p = smoothLine(want, fixed, STIFF, weight);
+      }
+      return p;
+    };
+    // beyond a fixed end: the neighbour the track runs straightest on to
+    const beyond = (end, inner) => {
+      const [ex, ey] = layer.dot(end), [ix, iy] = layer.dot(inner);
+      let best = null, most = -Infinity;
+      for (const m of graph.neighbors(end)) {
+        if (m === inner) continue;
+        const [mx, my] = layer.dot(m);
+        const along = ((ex - ix) * (mx - ex) + (ey - iy) * (my - ey)) / Math.hypot(mx - ex, my - ey);
+        if (along > most) [best, most] = [m, along];
+      }
+      return best;
+    };
+
+    const done = new Set();
+    for (const f of graph.nodes()) {
+      if (!free(f) || done.has(f)) continue;
+      // the run of free dots through f, out to a fixed dot each way
+      const walk = (first) => {
+        const out = [];
+        for (let prev = f, cur = first; ; ) {
+          out.push(cur);
+          if (cur === f || !free(cur)) return out;
+          done.add(cur);
+          const next = [...graph.neighbors(cur)].find((m) => m !== prev);
+          [prev, cur] = [cur, next];
+        }
+      };
+      done.add(f);
+      const [a, b] = [...graph.neighbors(f)];
+      const ahead = walk(a);
+      if (ahead[ahead.length - 1] === f) {
+        // a loop with nothing fixed on it: fitted three times round, the
+        // middle time kept
+        const loop = [f, ...ahead.slice(0, -1)], m = loop.length;
+        const p = fit([...loop, ...loop, ...loop], new Array(3 * m).fill(false));
+        loop.forEach((n, i) => pos.set(n, p[m + i]));
+        continue;
+      }
+      const nodes = [...walk(b).reverse(), f, ...ahead];
+      const head = beyond(nodes[0], nodes[1]), tail = beyond(nodes[nodes.length - 1], nodes[nodes.length - 2]);
+      if (head != null) nodes.unshift(head);
+      if (tail != null) nodes.push(tail);
+      const p = fit(nodes, nodes.map((n, i) => !free(n) || (i === 0 && head != null) || (i === nodes.length - 1 && tail != null)));
+      nodes.forEach((n, i) => {
+        if (free(n)) pos.set(n, p[i]);
+      });
     }
-    for (const f of free) {
+    // (rounds run out: no dot further than MAX_SHIFT all the same)
+    for (const f of done) {
       const [x, y] = layer.dot(f), [px, py] = pos.get(f);
       const d = Math.hypot(px - x, py - y);
       if (d > MAX_SHIFT) pos.set(f, [x + ((px - x) * MAX_SHIFT) / d, y + ((py - y) * MAX_SHIFT) / d]);

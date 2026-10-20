@@ -81,6 +81,55 @@ export function castRay(o, d, segments, maxDist) {
   return best;
 }
 
+// A line through points that bends as little as it can while staying close
+// to them (a Whittaker smoother): the p minimising Σ weight[i]·|p[i] − pts[i]|²
+// + stiff · Σ|p[i−1] − 2p[i] + p[i+1]|² (weight 1 where not given), with
+// fixed[i] points kept where they are. Straight runs stay straight; the bigger `stiff`, the smoother. A
+// banded (five-wide) linear solve, both coordinates at once.
+export function smoothLine(pts, fixed, stiff, weight = null) {
+  const n = pts.length;
+  const a = new Float64Array(n * 5); // A[i][j] at a[i * 5 + j - i + 2]
+  const at = (i, j) => i * 5 + j - i + 2;
+  const w = (i) => weight?.[i] ?? 1;
+  for (let i = 0; i < n; i++) a[at(i, i)] += w(i);
+  const r = [1, -2, 1];
+  for (let k = 1; k < n - 1; k++) {
+    for (let u = 0; u < 3; u++) for (let v = 0; v < 3; v++) a[at(k - 1 + u, k - 1 + v)] += stiff * r[u] * r[v];
+  }
+  const bx = pts.map((q, i) => w(i) * q[0]), by = pts.map((q, i) => w(i) * q[1]);
+  // fixed points: their rows say p = pt, their columns move to the right side
+  for (let i = 0; i < n; i++) {
+    for (let j = Math.max(0, i - 2); j <= Math.min(n - 1, i + 2); j++) {
+      if (fixed[i]) a[at(i, j)] = i === j ? 1 : 0;
+      else if (fixed[j] && j !== i) {
+        bx[i] -= a[at(i, j)] * pts[j][0];
+        by[i] -= a[at(i, j)] * pts[j][1];
+        a[at(i, j)] = 0;
+      }
+    }
+  }
+  // elimination (symmetric positive definite: no pivoting), then back
+  for (let i = 0; i < n; i++) {
+    for (let k = i + 1; k <= Math.min(n - 1, i + 2); k++) {
+      const f = a[at(k, i)] / a[at(i, i)];
+      if (!f) continue;
+      for (let j = i; j <= Math.min(n - 1, i + 2); j++) a[at(k, j)] -= f * a[at(i, j)];
+      bx[k] -= f * bx[i];
+      by[k] -= f * by[i];
+    }
+  }
+  const out = new Array(n);
+  for (let i = n - 1; i >= 0; i--) {
+    let x = bx[i], y = by[i];
+    for (let j = i + 1; j <= Math.min(n - 1, i + 2); j++) {
+      x -= a[at(i, j)] * out[j][0];
+      y -= a[at(i, j)] * out[j][1];
+    }
+    out[i] = [x / a[at(i, i)], y / a[at(i, i)]];
+  }
+  return out;
+}
+
 const cellKey = (cx, cy) => (cx + 2048) * 8192 + (cy + 2048);
 
 // Buckets line segments by grid cell for quick "what's near here" queries.
