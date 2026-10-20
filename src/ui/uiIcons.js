@@ -23,6 +23,8 @@ export const ICONS = {
   newmap: 'Menu: Nová mapa / New map',
   fullscreen: 'Menu: Celá obrazovka / Full screen, going in',
   'fullscreen-exit': 'Menu: Celá obrazovka / Full screen, coming back',
+  sound: 'Menu: Zvuk / Sound, while it\'s on (the village loudspeaker calling out)',
+  'sound-off': 'Menu: Zvuk / Sound, while it\'s off (the loudspeaker silent)',
   'lang-cs': 'Menu: Čeština, shown while the game is in English',
   'lang-en': 'Menu: English, shown while the game is in Czech',
   rename: 'Top left: beside the town\'s name, to rename it',

@@ -1400,6 +1400,9 @@ body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 4
 /* full screen: going in, or coming back (icons.js menuIcon) */
 .controls [data-act="fullscreen"] .fs-exit, .controls [data-act="fullscreen"].full .fs-enter { display: none; }
 .controls [data-act="fullscreen"].full .fs-exit { display: inline; }
+/* sound: on or off (icons.js menuIcon) */
+.controls [data-act="sound"] .snd-off, .controls [data-act="sound"].off .snd-on { display: none; }
+.controls [data-act="sound"].off .snd-off { display: inline; }
 .controls button[hidden] { display: none !important; }
 
 .color-panel {

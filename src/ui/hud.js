@@ -87,6 +87,7 @@ export class Hud {
         ${control('export')}
         ${control('import')}
         ${control('newMap')}
+        ${control('sound', t('sound.off'), t('sound.off'))}
         ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
         ${control('language', `${t('control.language')}: ${LANGUAGES[otherLanguage()]}`, LANGUAGES[otherLanguage()], `flag${otherLanguage()}`)}
         <span class="imprint"><span>${CONFIG.app.name} v${CONFIG.app.version}</span> <span>${CONFIG.app.author}</span></span>

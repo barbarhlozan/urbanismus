@@ -29,7 +29,7 @@ drawing written in the code, the one each file was first exported from.
   it when it's pointed at or held.
 - A drawing that changes with what's going on has a file for each look: `menu.svg` and
   `menu-close.svg`, `fullscreen.svg` and `fullscreen-exit.svg`, `bend-diagonal.svg` and
-  `bend-straight.svg`, `lang-cs.svg` and `lang-en.svg`. The Menu button's two share one box,
+  `bend-straight.svg`, `sound.svg` and `sound-off.svg`, `lang-cs.svg` and `lang-en.svg`. The Menu button's two share one box,
   `menu.svg`'s.
 - `more.svg`, the dialogue's ›, is drawn in by the pen each time it shows, line by line.
 
@@ -45,6 +45,8 @@ drawing written in the code, the one each file was first exported from.
 | `newmap.svg` | Menu: Nová mapa / New map (a rolled survey plan) |
 | `fullscreen.svg` | Menu: Celá obrazovka / Full screen, going in (a big picture frame) |
 | `fullscreen-exit.svg` | Menu: Full screen, coming back (the small picture back on its nail) |
+| `sound.svg` | Menu: Zvuk / Sound, while it's on (the village loudspeaker calling out) |
+| `sound-off.svg` | Menu: Zvuk / Sound, while it's off (the loudspeaker silent) |
 | `lang-cs.svg` | Menu: Čeština (the Czech flag), shown while the game is in English |
 | `lang-en.svg` | Menu: English (the Union Jack), shown while the game is in Czech |
 | `rename.svg` | Top left: the pencil beside the town's name, to rename it |

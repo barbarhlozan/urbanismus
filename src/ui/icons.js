@@ -206,6 +206,10 @@ const CONTROLS = {
   // as a band, the saltire's lines)
   flagcs: '<path d="M1.5 3.6 L14.6 3.4 L14.4 12.6 L1.6 12.5 Z M1.6 3.6 L8.1 8 L1.6 12.4 M8.2 8 H14.5 M9.6 11.8 L11 9.2 M11.7 11.8 L13 9.3 M13.5 11.7 L14.1 10.4"/>',
   flagen: '<path d="M1.5 3.2 L14.5 3.4 L14.4 12.7 L1.6 12.6 Z M7 3.3 V7 H1.6 M7 12.6 V9 H1.6 M9 3.4 V7 H14.5 M9 12.7 V9 H14.4 M1.7 3.4 L6.8 6.9 M14.4 3.5 L9.2 6.9 M1.7 12.5 L6.8 9.1 M14.3 12.6 L9.2 9.1"/>',
+  // the village loudspeaker on its pole (an amplion, the obecní rozhlas)
+  // calling out, or silent; the button shows one or the other (styles.css)
+  sound: '<path d="M2.4 6.6 L4.6 6.5 L4.7 9.6 L2.5 9.5 Z M4.6 6.6 L10.4 3.4 M4.7 9.5 L10.5 12.7 M10.4 3.2 C11.4 5.4 11.5 10.6 10.5 12.8 M12.6 6.4 C13.2 7.4 13.2 8.8 12.6 9.8 M14 5 C15 6.8 15 9.4 14 11.2"/>',
+  soundOff: '<path d="M2.4 6.6 L4.6 6.5 L4.7 9.6 L2.5 9.5 Z M4.6 6.6 L10.4 3.4 M4.7 9.5 L10.5 12.7 M10.4 3.2 C11.4 5.4 11.5 10.6 10.5 12.8"/>',
   // a folded map, and a plus: a new one
   newMap: '<path d="M1.5 4 L5 2.5 L8.5 4 L12 2.5 V8 M1.5 4 V12.5 L5 11 L8.5 12.5 M5 2.5 V11 M8.5 4 V12.5 M12.5 10 V15 M10 12.5 H15"/>',
 };
@@ -232,6 +236,8 @@ const MENU_FILES = {
   newMap: ['newmap', 'newMap'],
   fullscreen: ['fullscreen', 'fullscreen'],
   fullscreenExit: ['fullscreen-exit', 'fullscreen'],
+  sound: ['sound', 'sound'],
+  soundOff: ['sound-off', 'soundOff'],
   flagcs: ['lang-cs', 'flagcs'],
   flagen: ['lang-en', 'flagen'],
 };
@@ -247,12 +253,14 @@ function menuPart(id, cls = '') {
 }
 
 // A Menu item's drawing as an <svg>. Full screen has two, going in and
-// coming back, and the button shows one or the other (styles.css). (Where
+// coming back, and Sound two, on and off; the button shows one or the
+// other (styles.css). (Where
 // the stand-in is drawn for one, it carries both of its own; the same rule
 // hides the one that doesn't belong.)
 export function menuIcon(id) {
   const inner = id === 'fullscreen'
     ? menuPart('fullscreen', 'fs-enter') + menuPart('fullscreenExit', 'fs-exit')
+    : id === 'sound' ? menuPart('sound', 'snd-on') + menuPart('soundOff', 'snd-off')
     : menuPart(id);
   return `<svg class="icon ctl-icon menu-art" viewBox="0 0 1 1" aria-hidden="true">${inner}</svg>`;
 }

@@ -21,6 +21,7 @@ import { AgentSystem } from './sim/agents.js';
 import { GrowthSystem } from './sim/growth.js';
 import { SimClock } from './sim/clock.js';
 import { WeatherSystem, mistRisen } from './sim/weather.js';
+import { Ambience } from './audio/ambience.js';
 import { RainCanvas } from './render/rain.js';
 import { CloudShadows } from './render/cloudShadows.js';
 import { ParkingSystem } from './sim/parking.js';
@@ -138,6 +139,7 @@ const deer = new DeerSystem(world, CONFIG, agents);
 const livestock = new LivestockSystem(world, CONFIG);
 const weather = new WeatherSystem(world, CONFIG);
 const rain = new RainCanvas(document.getElementById('rain'));
+const ambience = new Ambience(); // (the weather's sound: the wind and the rain)
 const cloudShadows = new CloudShadows(document.getElementById('cloud-shadows'), world.seed);
 // the shadows follow the sun (styles.css --sun), and a grey sky
 // shades the whole map (#gloom) and, a little less, the UI's paper (--gloom)
@@ -248,6 +250,7 @@ const actions = {
   export: () => exportCity(world),
   import: () => importCity(),
   fullscreen: () => toggleFullscreen(),
+  sound: () => ambience.toggle(),
   chronicle: () => { if (UNLOCKS.allowsControl('chronicle')) chronicleBook.toggle(); },
   language: () => switchLanguage(Object.keys(LANGUAGES).find((code) => code !== language())),
 };
@@ -395,6 +398,17 @@ story.onScheme = () => colorMenu.refresh();
   };
   document.addEventListener('fullscreenchange', show);
   document.addEventListener('webkitfullscreenchange', show);
+}
+// the Sound button: its icon and name following whether there is sound
+{
+  const btn = uiRoot.querySelector('[data-act="sound"]');
+  const show = (on) => {
+    btn.classList.toggle('off', !on);
+    btn.title = btn.querySelector('.label').textContent = t(on ? 'sound.off' : 'sound.on');
+    btn.setAttribute('aria-label', btn.title);
+  };
+  ambience.changed = show;
+  show(ambience.on);
 }
 const debugPanel = new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
 const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"]'));
@@ -658,6 +672,7 @@ function loop(now) {
     // (no sun at night, so no cloud shadows: they fade away)
     cloudShadows.frame(simDt, camera, renderer.dark ? 0 : sky.cover, { hatch: SUN.hatch, stroke: renderer.strokeK });
     rain.frame(simDt, camera, sky.rain);
+    ambience.frame(dt, sky);
     showSun(sky);
     renderer.setSun(sunAt(world.time)); // (the sun steps through the day, shadows.js DAY)
     renderer.setMist(mistRisen(world.weather, world.time, CONFIG.weather.mist));

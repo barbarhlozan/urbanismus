@@ -76,6 +76,15 @@ control.language
   cs: Jazyk
   en: Language
 
+# the Sound button names what it will do
+sound.on
+  cs: Zapnout zvuk
+  en: Turn the sound on
+
+sound.off
+  cs: Vypnout zvuk
+  en: Turn the sound off
+
 fullscreen
   cs: Celá obrazovka
   en: Full screen
