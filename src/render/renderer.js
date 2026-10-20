@@ -48,7 +48,7 @@
 
 import { THEME } from '../theme.js';
 import { STYLE } from './style.js';
-import { MIST, mistLevel, mistSurface, mistSVG, coverSVG, mistIn, mistOut } from './mist.js';
+import { MIST, mistLevel, mistSurface, mistSVG, mistTile, coverSVG, mistIn, mistOut } from './mist.js';
 import { Painter, LOOK, wobble } from './painter.js';
 import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex } from './vehicles.js';
 import { PEOPLE, bodyFor, walkerSVG, cyclistSVG, canoeSVG, canoeMarkSVG } from './people.js';
@@ -3326,6 +3326,13 @@ export class Renderer {
     const animate = drawEnabled() && level !== this.mistLevel && this.mistLevel !== undefined;
     const seed = Math.round((level ?? 0) * 1000) ^ world.seed;
     let svg = '';
+    // the paper's strokes it is filled with (mistTile), in the objects'
+    // <svg>, as are its covers
+    const tileKey = `${JSON.stringify(SUN.hatch)}|${camera.tile}`;
+    if (level != null && SUN.hatch && tileKey !== this.mistTileKey) {
+      this.mistTileKey = tileKey;
+      (this.mistDefs ??= this.top.insertBefore(document.createElementNS(SVGNS, 'defs'), this.top.firstChild)).innerHTML = mistTile(SUN.hatch, camera.tile);
+    }
     if (level != null) {
       const { grid } = world;
       const m = 1.2; // (as the contours: the ground is drawn a little past the map)

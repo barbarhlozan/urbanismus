@@ -179,7 +179,7 @@
 #   lock debug
 #   lock assets
 # the chronicle waits for a part in the game's story; it keeps writing meanwhile
-lock chronicle
+# lock chronicle
 #
 # As it is, everything is open.
 

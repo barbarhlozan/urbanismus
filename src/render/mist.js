@@ -1,8 +1,11 @@
 // Mist lying in the valleys (weather 'mist', config.weather.mist), drawn as
 // on old Japanese screens of a town seen from above (the kasumi bands,
-// mist.html option E): a flat top at one height, plain paper, that hides
-// whatever is below it – the ground and its drawing, roads, people, the
-// lower part of every house standing in it. Its far shore, where it lies
+// mist.html option E): a flat top at one height, that hides whatever is
+// below it – the ground and its drawing, roads, people, the
+// lower part of every house standing in it. It is laid as every shadow
+// and the night are, in the paper's strokes (hatch.js), only in the
+// paper's own colour and broad: they rub out what is under them, a sliver
+// of it showing between each two (mistTile). Its far shore, where it lies
 // against a hillside, stands up in long shallow lobes drawn in the pen with
 // one line inside along it; its near edge, where the ground in front comes
 // out of it, is a plain pen line; and where it closes round a roof or a
@@ -15,6 +18,8 @@
 //                     column from the front back, the mist shows where it
 //                     is above all the nearer ground and mist seen so far
 //   mistSVG(surface, camera, seed)   the paper, the lobes and the lines
+//   mistTile(h, px)   the paper's strokes it is filled with: an SVG <pattern>
+//                     #mist-tile, in scene px (h: SUN.hatch)
 //   coverSVG(camera, at, base, height, level, seed)   what an object standing in it
 //                     gets drawn over itself: paper over its front below
 //                     the top, lumps along where it is cut; or 'under' when
@@ -28,6 +33,7 @@
 // followed (STYLE.warp is 0).
 
 import { mulberry32 } from '../core/random.js';
+import { hatchFrame, hatchTile } from './hatch.js';
 
 const COS30 = Math.cos(Math.PI / 6);
 
@@ -41,7 +47,11 @@ const COS30 = Math.cos(Math.PI / 6);
 //   lump       the lumps where it closes round an object: each this long…
 //   lumpRise   …over its height
 //   fade       ms a step of it takes to come or go (mistIn, mistOut)
-//   paper      how much it hides (opacity; styles.css .layer-mist, keep the two alike)
+//   paper      how much it hides an object sunk in it altogether (opacity;
+//              styles.css .mist-under, keep the two alike)
+//   gap        its strokes: the paper's (hatch.js), this far apart (grid
+//              units; made to fit its repeat)…
+//   broad      …each as broad as this share of the space between two
 export const MIST = {
   du: 0.08,
   dt: 0.04,
@@ -54,6 +64,8 @@ export const MIST = {
   lumpRise: [2.4, 3.6],
   fade: 7000,
   paper: 0.9,
+  gap: 0.11,
+  broad: 0.72,
 };
 
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -173,6 +185,11 @@ export function mistSVG({ runs, far, near, level, du }, camera, seed = 1) {
     }
   }
   return `<path class="mist" d="${fill}"/><path class="mist" d="${lobeFill}"/>${lines}`;
+}
+
+export function mistTile(h, px) {
+  const lines = { ...h, gap: MIST.gap }, width = MIST.broad * hatchFrame(lines).gap * px;
+  return hatchTile('mist-tile', 3, lines, px, 'mist-hatch').replace('<path ', `<path stroke-width="${r2(width)}" `);
 }
 
 // An object's cover. `at`: its place (Renderer.placeOf: world `points`,

@@ -15,7 +15,7 @@ import { World } from './core/world.js';
 import { generateWorld } from './terrain/generate.js';
 import { Camera } from './render/camera.js';
 import { Renderer } from './render/renderer.js';
-import { sunAt } from './render/shadows.js';
+import { SUN, sunAt } from './render/shadows.js';
 import { OverlayKit } from './render/overlay.js';
 import { AgentSystem } from './sim/agents.js';
 import { GrowthSystem } from './sim/growth.js';
@@ -653,7 +653,8 @@ function loop(now) {
     renderer.hovered = hovered ? `s${hovered.id}` : null;
     renderer.frame((dots ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
     const sky = weather.sky();
-    cloudShadows.frame(simDt, camera, sky.cover);
+    // (no sun at night, so no cloud shadows: they fade away)
+    cloudShadows.frame(simDt, camera, renderer.dark ? 0 : sky.cover, { hatch: SUN.hatch, stroke: renderer.strokeK });
     rain.frame(simDt, camera, sky.rain);
     showSun(sky);
     renderer.setSun(sunAt(world.time)); // (the sun steps through the day, shadows.js DAY)

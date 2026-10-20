@@ -16,6 +16,11 @@
 // the cloud's edge is where the lines happen to stop. The lines are kept
 // as a path in scene units and stroked every frame at one width on the
 // screen, so they stay sharp at any zoom.
+// With `look: 'hatch'` a cloud's shadow is drawn as every other shadow is:
+// the paper's own strokes (hatch.js, the shadows' and the night's) where
+// it lies – the strokes stay put on the map and the cloud, drifting over,
+// picks out the ones under it; its edge broken, so they stop unevenly
+// there, as the shadows' masks have it.
 //
 // The clouds live in scene units (the map's own px at zoom 1), so they stay
 // put on the map as it is panned or zoomed; each is squashed onto the
@@ -28,6 +33,7 @@
 
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
+import { hatchFrame, hatchTileLines } from './hatch.js';
 
 export const CLOUD_SHADOWS = {
   // grid units² of map per cloud under a cloudy sky (cover 1; config
@@ -38,7 +44,7 @@ export const CLOUD_SHADOWS = {
   lumps: [2, 4],      // blobs of wash in one cloud
   squash: 0.58,       // on the ground: height per width (isometric)
   wind: 0.22,         // grid units per simulated second
-  look: 'wash',       // 'wash' (watercolour) or 'pen' (hatched lines)
+  look: 'hatch',      // 'hatch' (the paper's strokes), 'wash' (watercolour) or 'pen' (hatched lines)
   tone: 0.001,          // how strong the wash is put down
   // the wash: layers laid over each other, each this opaque; how many
   // times the outline's edges are split, and how far a split may wander
@@ -60,6 +66,11 @@ export const CLOUD_SHADOWS = {
     gap: 0.1, width: 0.6, tone: 0.55, slant: -0.62, tilt: 0.08,
     bow: 0.03, ends: 1.2, long: [0.5, 1.3], skip: 0.1,
   },
+  // the paper's strokes (look 'hatch'): every line up to this density tier
+  // (hatch.js tierOf: 2 every other one), fewer where they would lie closer
+  // than `least` window px; drawn with this pen (styles.css --pen-n), this
+  // strong
+  hatch: { tier: 2, least: 3, pen: 1, tone: 1 },
   fade: 6,            // seconds to fade in or out
   most: 80,           // clouds kept at most (far zoomed out)
 };
@@ -67,6 +78,10 @@ export const CLOUD_SHADOWS = {
 const between = (rnd, [a, b]) => a + rnd() * (b - a);
 // a number about 0 – roughly bell-shaped, so most nudges are small
 const nudge = (rnd) => (rnd() + rnd() + rnd() - 1.5) / 1.5;
+
+// The ragged edge of a shadow, as the shadows' masks have it (styles.css
+// .shade-mask .shade): a dashed line round it (scene px).
+const EDGE = { width: 2.5, dash: [3, 2, 1.5, 3.5, 2.5, 1, 4, 2.5, 1, 3] };
 
 // Split every edge of a closed outline at its middle, nudged sideways by up
 // to `wander` of its length – `times` over, each time a little less.
@@ -100,8 +115,10 @@ export class CloudShadows {
   }
 
   // One frame: `dt` simulated seconds, `cover` how cloudy (config.weather
-  // .cover: 1 cloudy, 0 none).
-  frame(dt, camera, cover) {
+  // .cover: 1 cloudy, 0 none); `paper`: the map's hatching and --stroke
+  // ({ hatch: SUN.hatch, stroke }), for look 'hatch'.
+  frame(dt, camera, cover, paper = {}) {
+    this.paper = paper;
     const C = CLOUD_SHADOWS;
     const tile = camera.tile, zoom = camera.zoom;
     const W = innerWidth, H = innerHeight;
@@ -302,6 +319,7 @@ export class CloudShadows {
     ctx.setTransform(z, 0, 0, z, dpr * camera.panX, dpr * camera.panY);
     const color = THEME.palette.detail;
     const { squash, res, look, pen } = CLOUD_SHADOWS;
+    if (look === 'hatch' && this.paper?.hatch) return this.drawHatch(camera, color);
     const tone = look === 'pen' ? pen.tone : CLOUD_SHADOWS.tone;
     ctx.strokeStyle = color;
     ctx.lineCap = 'round';
@@ -320,6 +338,82 @@ export class CloudShadows {
     }
     ctx.globalAlpha = 1;
     this.empty = false;
+  }
+
+  // Look 'hatch': each cloud's outline filled, and its edge stroked
+  // broken, with a sheet of the paper's strokes laid as the map's (turned
+  // to their angle about the scene's origin), so they are the very strokes
+  // the shadows and the night have there.
+  drawHatch(camera, color) {
+    const { ctx } = this, H = CLOUD_SHADOWS.hatch;
+    const { hatch, stroke = 1 } = this.paper;
+    const dpr = devicePixelRatio || 1, z = dpr * camera.zoom, px = camera.tile;
+    if (!(z > 0 && px > 0)) return; // (the view not set up yet)
+    // the densest tier whose lines are at least H.least apart on the screen
+    const gap = hatchFrame(hatch).gap * px * z;
+    let tier = H.tier;
+    while (tier > 0 && gap * 2 ** (3 - tier) < H.least * dpr) tier--;
+    const t = this.tileFor(tier, hatch, px, stroke, z, color);
+    const view = new DOMMatrix([z, 0, 0, z, dpr * camera.panX, dpr * camera.panY]);
+    ctx.lineWidth = EDGE.width;
+    ctx.setLineDash(EDGE.dash);
+    ctx.lineJoin = 'round';
+    ctx.fillStyle = ctx.strokeStyle = t.pattern;
+    for (const c of this.clouds) {
+      c.shape ??= this.outline(c);
+      ctx.globalAlpha = H.tone * Math.max(0, Math.min(1, c.a));
+      ctx.setTransform(view.translate(c.x, c.y));
+      t.pattern.setTransform(new DOMMatrix().translate(-c.x, -c.y).rotate(hatch.angle).scale(1 / t.scale));
+      ctx.fill(c.shape);
+      ctx.stroke(c.shape);
+    }
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    this.empty = false;
+  }
+
+  // A cloud's outline (look 'hatch'): each lump's, roughened, as a path in
+  // scene units about its middle – turned with the wind, squashed.
+  outline(c) {
+    const C = CLOUD_SHADOWS, rnd = Math.random;
+    const cos = Math.cos(this.windAngle), sin = Math.sin(this.windAngle);
+    const path = new Path2D();
+    for (const { u, v, ru, rv } of c.lumps) {
+      const pts = [];
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2, r = 0.8 + rnd() * 0.35;
+        pts.push([u + Math.cos(a) * ru * r, v + Math.sin(a) * rv * r]);
+      }
+      rough(rnd, pts, C.splits - 1, C.wander * 0.6).forEach(([a, b], i) => {
+        const x = a * cos - b * sin, y = (a * sin + b * cos) * C.squash;
+        if (i) path.lineTo(x, y);
+        else path.moveTo(x, y);
+      });
+      path.closePath();
+    }
+    return path;
+  }
+
+  // The paper's strokes up to `tier` as a pattern, drawn at `scale` window
+  // px to a scene px (in steps of a quarter of a doubling, so zooming
+  // redraws it only now and then), in the pen H.pen times --stroke, as the
+  // map's hatching (as NightCanvas.tileFor).
+  tileFor(tier, hatch, px, stroke, scale, color) {
+    const q = 2 ** (Math.round(Math.log2(scale) * 4) / 4);
+    const H = CLOUD_SHADOWS.hatch;
+    const pen = this.pen ??= parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--pen-${H.pen}`)) || 0.5;
+    const key = `${tier}|${JSON.stringify(hatch)}|${px}|${stroke}|${q}|${color}|${pen}`;
+    if (this.tile?.key === key) return this.tile;
+    const { d, size } = hatchTileLines(tier, hatch, px);
+    const n = Math.max(1, Math.round(size * q));
+    const off = new OffscreenCanvas(n, n), c = off.getContext('2d');
+    c.scale(n / size, n / size);
+    c.strokeStyle = color;
+    c.lineWidth = pen * stroke;
+    c.lineCap = c.lineJoin = 'round';
+    c.stroke(new Path2D(d));
+    this.tile = { key, pattern: this.ctx.createPattern(off, 'repeat'), scale: n / size };
+    return this.tile;
   }
 
   clear() {
