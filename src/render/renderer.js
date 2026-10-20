@@ -86,8 +86,8 @@ import { STEEP_LINES, steepLines } from './steep.js';
 import { carMark, personMark } from './marks.js';
 import { mergeRuns, placeInOrder, isoSort } from './order.js';
 import { Camera } from './camera.js';
-import { SUN, DAY, sunFor, shadowSVG } from './shadows.js';
-import { HILL_SHADOWS, hillShade, hillShadowPaths } from './hillShadows.js';
+import { SUN, DAY, sunFor, shadowMask } from './shadows.js';
+import { HILL_SHADOWS, hillShade, hillShadeRings } from './hillShadows.js';
 import { hatchTile } from './hatch.js';
 import { findForests, forestSVG } from './forest.js';
 import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
@@ -97,7 +97,7 @@ export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
-const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'night', 'notes', 'overlay'];
+const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'hillshade', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'night', 'notes', 'overlay'];
 const TOP = ['mist', 'objects', 'night', 'notes', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -127,7 +127,7 @@ const OVERSCAN = 0.25;
 // While the view turns (Renderer.turnFrame): the layers turned as a sheet
 // of paper, drawn anew once it rests, and the lines on the ground drawn at
 // the turning angle every frame. Buildings, trees and lamps go their own way.
-const SHEET = ['forest', 'mist'];
+const SHEET = ['forest', 'mist', 'hillshade'];
 const LINES = ['roads', 'paths', 'rails', 'fences', 'notes'];
 // The steps of a whole turn (Camera.STEP); the views an object keeps of
 // the steps it has been drawn at, at most (Renderer.swapIn); and ms the
@@ -151,7 +151,7 @@ const SQUASH = { ms: 300, down: 0.3, press: 0.07, spread: 0.035 };
 // The shapes an object is drawn with, its garden and shadow (not the mist
 // over it, coverMist).
 function strokesOf(e) {
-  return [e.lg, e.g, e.sg].flatMap((g) => [...g.querySelectorAll('path,polygon,polyline,circle,ellipse,line,rect')]).filter((el) => !el.closest('.mist-cover'));
+  return [e.lg, e.g].flatMap((g) => [...g.querySelectorAll('path,polygon,polyline,circle,ellipse,line,rect')]).filter((el) => !el.closest('.mist-cover'));
 }
 // Points every `step` along a polyline, from half a step in, with the
 // direction there: [{ p, dir }] (a track's sleepers).
@@ -260,6 +260,20 @@ export class Renderer {
     const svgOf = (l) => (l === 'terrain' ? ground : TOP.includes(l) ? this.top : svg);
     this.scenes = [ground, svg, this.top].map((s) => s.querySelector('.scene'));
     this.layers = Object.fromEntries(LAYERS.map((l) => [l, svgOf(l).querySelector(`.layer-${l}`)]));
+    // the shadows (shadows.js shadowMask, hillShadows.js): one sheet of the
+    // paper's strokes (hatch.js) shown through a mask of every object's
+    // shadow, another, sparser by day, through a mask of the hills'; the
+    // layers 'shadows' and 'hillshade' are those masks' shapes
+    // (renderShadeTiles draws the sheets)
+    const veil = this.layers.shadows;
+    veil.innerHTML = '<defs class="shade-tiles"></defs>' +
+      '<mask id="hill-mask" class="shade-mask" maskUnits="userSpaceOnUse"><g class="hill-shapes"></g></mask>' +
+      '<mask id="shade-mask" class="shade-mask" maskUnits="userSpaceOnUse"><g class="shade-shapes"></g></mask>' +
+      '<rect class="shade-veil" fill="url(#hill-tile)" mask="url(#hill-mask)"/><rect class="shade-veil" fill="url(#shade-tile)" mask="url(#shade-mask)"/>';
+    this.shadeVeil = veil;
+    this.layers.shadows = veil.querySelector('.shade-shapes');
+    this.layers.hillshade.remove();
+    this.layers.hillshade = veil.querySelector('.hill-shapes');
     // hover rings and tags on their way out, over the overlay (see letGo)
     this.leaving = this.layers.overlay.parentNode.appendChild(document.createElementNS(SVGNS, 'g'));
     this.leaving.setAttribute('class', 'overlay leaving');
@@ -490,6 +504,7 @@ export class Renderer {
     else {
       for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
       this.dirty.clear();
+      this.renderShadeTiles(); // (only when they change)
       if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
       if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
       // a new level of detail: the objects in sight, as many as fit in
@@ -709,30 +724,60 @@ export class Renderer {
   }
 
   renderTerrain() {
-    this.layers.terrain.innerHTML = this.renderHillShadows() + (this.contours ? this.renderContours() : this.renderSteep()) + this.renderBrows() + this.renderWater();
+    this.layers.terrain.innerHTML = (this.contours ? this.renderContours() : this.renderSteep()) + this.renderBrows() + this.renderWater();
   }
 
-  // The shadows the hills cast (hillShadows.js): the shade worked out once
-  // per sun and relief, its hatching for each turn of the view (the last
-  // few kept, as the brows').
-  renderHillShadows() {
+  // The shadows the hills cast (hillShadows.js): the shade and its
+  // outlines worked out once per sun and relief, projected for each turn of
+  // the view (the last few kept, as the brows'), as shapes in the hills'
+  // mask (the shadows' layer, see the constructor).
+  renderHillshade() {
     const { camera, world } = this;
-    if (!HILL_SHADOWS.on || !SUN.on || !SUN.hatch || this.contours) return '';
+    const el = this.layers.hillshade;
+    if (!HILL_SHADOWS.on || !SUN.on || !SUN.hatch || this.contours) {
+      el.innerHTML = '';
+      return;
+    }
     const m = 1.2; // (as the contours)
     const box = [-m, -m, world.grid.width - 1 + m, world.grid.height - 1 + m];
-    const key = `${SUN.azimuth}|${SUN.length}|${this.hillsEvery}|${JSON.stringify(SUN.hatch)}`;
+    const key = `${SUN.azimuth}|${SUN.length}`;
     const relief = world.relief();
     if (this.hills?.key !== key || this.hills.relief !== relief || this.hills.lift !== camera.lift) {
-      this.hills = { key, relief, lift: camera.lift, shade: hillShade(this.groundHeight(), box, sunFor(camera)), views: new Map() };
+      const shade = hillShade(this.groundHeight(), box, sunFor(camera));
+      this.hills = { key, relief, lift: camera.lift, rings: hillShadeRings(shade, box, this.wetAt()), views: new Map() };
     }
     let view = this.hills.views.get(camera.angle);
     if (view == null) {
-      const [near, far] = hillShadowPaths(this.hills.shade, box, sunFor(camera), (x, y) => this.project(x, y, 0), this.wetAt(), HILL_SHADOWS, this.hillsEvery ?? HILL_SHADOWS.every);
-      view = (near ? `<path class="hill-shadow" d="${near}"/>` : '') + (far ? `<path class="hill-shadow ht1" d="${far}"/>` : '');
+      const d = this.hills.rings.length ? this.pathData(this.hills.rings, false) : '';
+      view = d ? `<path class="shade" fill-rule="evenodd" d="${d}"/>` : '';
       if (this.hills.views.size >= 6) this.hills.views.delete(this.hills.views.keys().next().value);
       this.hills.views.set(camera.angle, view);
     }
-    return view;
+    el.innerHTML = view;
+  }
+
+  // The sheets of the paper's strokes the shadows' masks show (see the
+  // constructor): the objects' every line close up, fewer further out, as
+  // the night's; the hills' every 4th by day (HILL_SHADOWS.every, a hill's
+  // shadow is a large thing, and the paper should still show through it),
+  // as dense as the rest at dusk. Each a rect far larger than the map, as
+  // the night's. Drawn again only when they change.
+  renderShadeTiles() {
+    const { camera, world } = this;
+    const h = SUN.hatch;
+    if (!h) return;
+    const most = SHADE_TIERS[this.lodLevel ?? 0] ?? 1;
+    const every = this.hillsEvery ?? HILL_SHADOWS.every;
+    const hills = Math.min(most, every >= 8 ? 0 : every >= 4 ? 1 : every >= 2 ? 2 : 3);
+    const key = `${most}|${hills}|${JSON.stringify(h)}|${camera.tile}`;
+    if (key === this.shadeKey) return;
+    this.shadeKey = key;
+    const px = camera.tile;
+    this.shadeVeil.querySelector('.shade-tiles').innerHTML = hatchTile('shade-tile', most, h, px, 'shade-line') + hatchTile('hill-tile', hills, h, px, 'hill-line');
+    const [mx, my] = this.project(camera.cx, camera.cy, 0);
+    const r = (Math.hypot(world.grid.width, world.grid.height) + 20) * px * 2;
+    const box = { x: Math.round(mx - r), y: Math.round(my - r), width: Math.round(2 * r), height: Math.round(2 * r) };
+    for (const el of this.shadeVeil.querySelectorAll('.shade-veil, .shade-mask')) for (const [k, v] of Object.entries(box)) el.setAttribute(k, v);
   }
 
   // What the camera sees of the ground, the brows (brows.js) and the rock
@@ -2051,8 +2096,11 @@ export class Renderer {
     const tile = this.camera.tile, scale = this.drawn.zoom;
     sketch.sort((a, b) => !!b.reverse - !!a.reverse); // erasing first: a swap waits for it
     for (const { entry, key, reverse, drawnFor, then, only } of sketch) {
-      const groups = [entry.lg, entry.g, entry.sg];
+      // (the shadow is shapes in a mask, not pen lines: it goes as the pen
+      // starts erasing, and comes once the pen is done)
+      const groups = [entry.lg, entry.g], sg = entry.sg;
       if (reverse) {
+        sg.style.display = 'none';
         const left = eraseOut(groups, { drawn: drawnFor, tile, scale, speed: then ? DRAW.swap : 1 });
         entry.until = now + left;
         if (then) {
@@ -2062,8 +2110,11 @@ export class Renderer {
         }
       } else if (only) {
         drawIn(groups, { tile, scale, only, speed: DRAW.detail });
-      } else if (drawIn(groups, { elapsed: now - this.born.get(key), tile, scale }) <= 0) {
-        this.born.delete(key); // done
+      } else {
+        const left = drawIn(groups, { elapsed: now - this.born.get(key), tile, scale });
+        if (left <= 0) this.born.delete(key); // done
+        sg.style.display = left > 0 ? 'none' : '';
+        if (left > 0) setTimeout(() => { sg.style.display = ''; }, left);
       }
     }
     this.renderParked();
@@ -2227,10 +2278,9 @@ export class Renderer {
     return painter.feet.length || painter.casts.length ? { feet: painter.feet, casts: painter.casts, project: painter.groundProjector() } : null;
   }
 
-  // (as dense as the night: every line close up, fewer further out, by
-  // the object's level of detail – not the roofs' hatching's tiers)
-  shadowSVG(shade, band) {
-    return shade ? this.atDetail(shadowSVG(shade, sunFor(this.camera), SHADE_TIERS[(band >> 4) & 3] ?? 1), band) : '';
+  // (its shapes, for the shadows' mask: the strokes are the sheet's)
+  shadowSVG(shade) {
+    return shade ? shadowMask(shade, sunFor(this.camera)) : '';
   }
 
   // The day steps to step i (DAY.steps): the night or not (drawn over
@@ -2248,6 +2298,7 @@ export class Renderer {
     const step = DAY.steps[i];
     this.dayStep = i;
     this.gloom = step.gloom ?? 0;
+    this.gloomInk = step.ink ?? 0;
     const dark = step.night ? 1 : 0;
     if (dark !== this.dark) {
       this.dark = dark;
@@ -2270,7 +2321,7 @@ export class Renderer {
       if (e.shown !== false) this.rebuildQueue.add(e.key);
     }
     this.rebuildOrder = null;
-    this.dirty.add('terrain');
+    this.dirty.add('hillshade');
     this.dirty.add('forest');
     return true;
   }

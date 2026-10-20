@@ -7,6 +7,7 @@
 // still show through it.
 //
 //   hillShade(height, box, sun)            -> the shade, (x, y) -> depth
+//   hillShadeRings(shade, box, wet)        -> the shade's outlines, world rings
 //   hillShadowPaths(shade, box, sun, project, wet)  -> [tier 0, tier 1] path data
 //
 // The light is swept across the map along the sun, once for each position
@@ -18,6 +19,7 @@
 // from the same shade.
 
 import { hash, hatchRuns } from './shadows.js';
+import { contours } from '../terrain/elevation.js';
 import { hatchFrame, hatchStrokes } from './hatch.js';
 
 //   on      draw them
@@ -79,6 +81,17 @@ export function hillShade(height, [x0, y0, x1, y1], sun, opts = HILL_SHADOWS) {
     const i = Math.floor(fa), j = Math.floor(fb), ta = fa - i, tb = fb - j, c = j * na + i;
     return (depth[c] * (1 - ta) + depth[c + 1] * ta) * (1 - tb) + (depth[c + na] * (1 - ta) + depth[c + na + 1] * ta) * tb;
   };
+}
+
+// The shade's outlines over the box, where it is deeper than `deep` and
+// not on water (`wet(x, y)`): closed rings of world points, traced every
+// `cell` grid units, the lit places inside the shade rings of their own
+// (to be filled even-odd). Outside the box it is lit, so every ring
+// closes.
+export function hillShadeRings(shade, [x0, y0, x1, y1], wet = () => false, opts = HILL_SHADOWS) {
+  const g = opts.cell;
+  const f = (x, y) => (x < x0 || x > x1 || y < y0 || y > y1 || wet(x, y) ? -1 : shade(x, y) - opts.deep);
+  return contours(f, [x0 - g, y0 - g, x1 + g, y1 + g], { step: g, interval: 1, index: 1, only: 0 }).map((c) => c.points);
 }
 
 // The hatching over the shade in the box, as path data in two tiers (the

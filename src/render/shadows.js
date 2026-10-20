@@ -123,7 +123,12 @@ export function screenLight(camera, sun = SUN) {
 //           the night; at dawn they shrink back the same way
 //   night   the night: the paper's strokes over everything, every one of
 //           them (Renderer.renderNight), and no sun
-//   gloom   a grey over the map, as under a storm sky (over the weather's)
+//   gloom   a grey over the map, as under a storm sky (over the weather's):
+//           the paper and the ink both go towards the secondary ink, so
+//           the picture loses its contrast – most of all in the small
+//           hours, the night's darkest
+//   ink     how much of the main ink is in that grey (0 … 1), at its
+//           darkest
 //   day     simulated seconds to 24 hours
 //   start   the hour at world time 0 (a new town starts in the morning)
 //   dawn    the hour the sun rises (the Debug panel's day starts there)
@@ -136,7 +141,10 @@ export const DAY = {
   dawn: 4.25,
   positions: [[170, 2.2], [150, 1.7], [130, 1.35], [110, 1.1], [90, 1], [70, 1.1], [50, 1.35], [30, 1.7], [10, 2.2]],
   steps: [
-    { at: 0, night: true, gloom: 0.16 },
+    { at: 0, night: true, gloom: 0.3, ink: 0.15 },
+    { at: 1, night: true, gloom: 0.38, ink: 0.25 },
+    { at: 2.5, night: true, gloom: 0.3, ink: 0.15 },
+    { at: 3.25, night: true, gloom: 0.22 },
     { at: 4.25, sun: 0, length: 12, hills: 1, gloom: 0.12 },
     { at: 4.75, sun: 0, length: 6, hills: 1, gloom: 0.08 },
     { at: 5.5, sun: 0, length: 3.5, hills: 1, gloom: 0.04 },
@@ -147,6 +155,8 @@ export const DAY = {
     { at: 20, sun: 8, length: 6, hills: 1, gloom: 0.08 },
     { at: 20.75, sun: 8, length: 12, hills: 1, gloom: 0.12 },
     { at: 21.5, night: true, gloom: 0.16 },
+    { at: 22.5, night: true, gloom: 0.22 },
+    { at: 23.25, night: true, gloom: 0.3, ink: 0.15 },
   ],
 };
 
@@ -341,6 +351,39 @@ export function hatchLine(k, t0, t1, u, v, h, step = 0.12) {
     pts.push([u[0] * t + v[0] * c, u[1] * t + v[1] * c]);
   }
   return pts;
+}
+
+// An object's cast shadow on the map, as shapes for the shadows' mask
+// (Renderer: one sheet of the paper's strokes, hatch.js, shows through
+// it): the strips its feet cast and the shapes of what else it drew
+// (castShapes), projected – `project(x, y)`: a ground point -> scene px,
+// with the object's relief – each edge through points `step` apart on the
+// ground, so a long shadow bends over the hills; all turned the same way,
+// so where they overlap they add up. Its trunks' shadows as lines.
+export function shadowMask({ feet = [], casts = [], project }, sun, step = 0.25) {
+  if (!sun.on || !sun.hatch) return '';
+  const { polys, lines } = castShapes(casts, sun);
+  const xy = ([x, y]) => `${r2(x)} ${r2(y)}`;
+  const along = (a, b, close) => {
+    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+    const out = [];
+    for (let i = 0; i < (close ? n : n + 1); i++) out.push(project(a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n));
+    return out;
+  };
+  let d = '';
+  for (const poly of [...castStrips(feet, sun), ...polys]) {
+    let pts = poly.flatMap((p, i) => along(p, poly[(i + 1) % poly.length], true));
+    let area = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
+      area += ax * by - bx * ay;
+    }
+    if (Math.abs(area) < 1e-6) continue;
+    if (area < 0) pts = pts.reverse();
+    d += `M${pts.map(xy).join('L')}Z`;
+  }
+  const l = lines.map(([a, b]) => `M${along(a, b, false).map(xy).join('L')}`).join('');
+  return (d ? `<path class="shade" d="${d}"/>` : '') + (l ? `<path class="shade-line" d="${l}"/>` : '');
 }
 
 // An object's cast shadow as SVG markup, its lines up to density tier

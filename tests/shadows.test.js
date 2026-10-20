@@ -46,6 +46,11 @@ test('the day goes round 24 hours: sun by day, night between', () => {
   for (let i = 1; i < dusk.length; i++) assert.ok(dusk[i] > dusk[i - 1]);
   for (let i = 1; i < dawn.length; i++) assert.ok(dawn[i] < dawn[i - 1]);
   assert.ok(Math.min(...dusk) > Math.max(...DAY.positions.map(([, l]) => l)));
+  // the night deepens to its greyest in the small hours, and lifts again
+  const grey = (hour) => step(hour).gloom ?? 0;
+  const deepest = Math.max(...DAY.steps.map((s) => s.gloom ?? 0));
+  assert.ok(grey(1.5) === deepest && grey(22) < deepest && grey(3.5) < deepest && grey(12) === 0);
+  assert.ok(grey(22) < grey(0) && grey(0) <= grey(1.5) && grey(1.5) >= grey(3));
   assert.equal(step(DAY.dawn).sun, 0);
   assert.ok(step(DAY.dawn - 0.1).night);
   // the hours from world time: a whole day round, starting at DAY.start

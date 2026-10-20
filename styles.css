@@ -91,7 +91,7 @@ html, body {
 }
 #agents, #trains-top, #smoke, #cloud-shadows, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
 /* a grey sky's shade over the whole map (config.weather.gloom) */
-#gloom { position: fixed; inset: 0; pointer-events: none; background: var(--detail); opacity: 0; transition: opacity 4s; }
+#gloom { position: fixed; inset: 0; pointer-events: none; background-color: color-mix(in srgb, var(--main) var(--gloom-ink, 0%), var(--detail)); opacity: 0; transition: opacity 4s, background-color 4s; }
 /* mist in the valleys (src/render/mist.js): paper over what is under it, its
    shores and the cuts round what stands in it drawn in the pen; the paper a
    little thin, so what is under it shows faintly (MIST.paper) */
@@ -275,10 +275,16 @@ html, body {
 :is(.shadow, .layer-objects .wall-shade).p3 { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 :is(.shadow, .layer-objects .wall-shade).p4 { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
 :is(.shadow, .layer-objects .wall-shade).p5 { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
-/* the hills' shadows (render/hillShadows.js): the same lines, fewer and finer;
-   further out only every other of them */
-.hill-shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
-:is(.lod-1, .lod-2) .hill-shadow.ht1 { display: none; }
+/* the shadows on the map (Renderer.renderShadeTiles): sheets of the paper's
+   strokes (render/hatch.js) shown through masks of the shadows' shapes – the
+   objects' in the shadows' pen, the hills' in the finest. A shape's edge is
+   drawn into the mask too, broken, so the strokes stop unevenly there, as a
+   hand's do */
+.shade-veil { pointer-events: none; opacity: var(--sun); }
+.shade-line { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
+.hill-line { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
+.shade-mask .shade { fill: #fff; stroke: #fff; stroke-width: 2.5px; stroke-dasharray: 3 2 1.5 3.5 2.5 1 4 2.5 1 3; stroke-linejoin: round; }
+.shade-mask .shade-line { fill: none; stroke: #fff; stroke-width: 2.2px; stroke-linecap: round; }
 /* the night (Renderer.renderNight): the paper's strokes (render/hatch.js)
    over everything, as many of them as it is dark */
 .night-line { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
