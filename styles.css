@@ -1886,4 +1886,5 @@ svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: calc(v
 svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
 svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 svg.photo .photo-hatch { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
-svg.photo .photo-ripples { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.8; }
+svg.photo .photo-ripples { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.8; }
+svg.photo .photo-shore { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }

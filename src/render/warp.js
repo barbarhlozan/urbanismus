@@ -12,7 +12,8 @@ import { valueNoise2D } from '../core/random.js';
 // `relief` is the lift, in grid steps, between the lowest and the highest
 // possible ground (terrain/elevation.js); the middle stays put. Elevation is
 // sampled once over `box` and interpolated, as this runs for every point drawn.
-// The function carries `range`: [lowest, highest] lift (for Camera.unproject).
+// The function carries `range`: [lowest, highest] lift (for Camera.unproject),
+// and `of(metres)`: the lift of a height (as a river's surface, photo.js).
 export function makeLift(elevation, maxElevation, relief, [x0, y0, x1, y1], step = 0.25) {
   if (!relief) return null;
   const nx = Math.ceil((x1 - x0) / step) + 1;
@@ -31,6 +32,7 @@ export function makeLift(elevation, maxElevation, relief, [x0, y0, x1, y1], step
   let lo = Infinity, hi = -Infinity;
   for (const h of v) { lo = Math.min(lo, h); hi = Math.max(hi, h); }
   lift.range = [lo, hi];
+  lift.of = (metres) => (metres / maxElevation - 0.5) * relief; // the lift of a height in metres
   return lift;
 }
 

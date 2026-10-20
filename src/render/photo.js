@@ -12,10 +12,11 @@
 // (pencil strokes, ripples, meadow tufts, lot drawing, roads). Bands and
 // solids are drawn together far to near, so a hill hides what is behind it.
 // Past the last band a skyline of the terrain closes the picture. Lakes
-// are flat: the ground under a lake's water level is drawn at that level
-// (lakeSurface). Mist (render/mist.js) is flat too: paper at its top over
-// each band where the ground is under it, nearer than what stands on that
-// band, so it hides the ground and cuts what stands in it (photoMist).
+// and rivers are flat: the ground under the water is drawn at its surface
+// (waterSurface), its edge a firm line (shoreLines). Mist (render/mist.js)
+// is flat too: paper at its top over each band where the ground is under
+// it, nearer than what stands on that band, so it hides the ground and
+// cuts what stands in it (photoMist).
 
 import { PerspectiveCamera } from './perspective.js';
 import { meadowGround, plant } from './meadow.js';
@@ -60,9 +61,15 @@ export const PHOTO = {
   // only ever gets lighter, so up close it stays fine.
   weight: { at: 2, min: 0.5, max: 2 },
   // the pencil strokes: `gap` px apart along a band, about `len` px long;
-  // nearer than `blank` steps only one in `sparse` of them, so the
-  // foreground is left mostly bare
+  // nearer than `blank` steps only one in `sparse` of them (and of the
+  // ripples), so the foreground is left mostly bare
   hatch: { gap: 30, len: 16, blank: 1.2, sparse: 4 },
+  // the ripples on the water: small waves about `len` px long `at` steps
+  // away, shorter further off (down to `min` times) and longer up close (up
+  // to `max` times), as high as `rise` of their length there – and flatter
+  // as they go off, as the water is seen ever more edge on, till far out
+  // they are level strokes. A share `skip` of the places for them left out
+  ripples: { len: 18, at: 2, min: 0.45, max: 1.4, rise: 0.09, skip: 0.75 },
   // a little ground right in front, nearer than `reach` steps: patches of
   // cobbles on roads and paths, a few pebbles on bare ground, and the top
   // edge of a street's kerb (`kerb` high) with the joints between its stones
@@ -79,7 +86,7 @@ const TREE = /class="[^"]*\b(tree|crown-line|leaf|hedge)\b/;
 const TUFT = /class="[^"]*\btuft\b/;
 const pt = (p) => `${r2(p[0])} ${r2(p[1])}`;
 // how ink items are layered, back to front (as on the map)
-const NET_ORDER = ['footpath', 'fence-post', 'fence-pillar', 'fence', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
+const NET_ORDER = ['photo-shore', 'footpath', 'fence-post', 'fence-pillar', 'fence', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
 
 // shot: { x, y, yaw (radians), fov (degrees), eye? }
 export function takePhoto(renderer, shot) {
@@ -89,8 +96,9 @@ export function takePhoto(renderer, shot) {
   const { width, height, range } = PHOTO;
   const { x, y, yaw, fov } = shot;
   const lift = base.lift;
-  const raise = lakeSurface(renderer, lift);
-  // height of the ground (or a lake's surface) above the drawing's zero,
+  const water = waterSurface(renderer, lift);
+  const raise = water.raise;
+  // height of the ground (or the water's surface) above the drawing's zero,
   // and a point of it on the picture
   const groundAt = (px, py) => terrain.heightAt(px, py) + (lift ? lift(px, py) : 0) + raise(px, py);
   const cam = new PerspectiveCamera({
@@ -199,7 +207,8 @@ export function takePhoto(renderer, shot) {
     if (cls === 'kerb') kerbTop(cam, bands, pts);
   }
 
-  groundMarks(world, renderer.config, cam, bands, seen, onGround, groundAt, renderer.wetAt());
+  groundMarks(world, renderer.config, cam, bands, seen, onGround, groundAt, water.wet);
+  shoreLines(renderer, cam, bands, onGround);
 
   // ----- together, far to near -----
 
@@ -351,6 +360,38 @@ function kerbTop(cam, bands, pts) {
   flush();
 }
 
+// Where the water starts: the map's lake shores and river banks
+// (Renderer.traceWater) on the ground, one firm line, cut up between the
+// bands as the roads are (each piece on the band of its nearer end).
+function shoreLines(renderer, cam, bands, onGround) {
+  const { shore, bank } = renderer.traceWater();
+  const far = bands.d[bands.n];
+  for (const line of [...shore, ...bank]) {
+    const pts = line.map(([x, y]) => {
+      const ahead = cam.ahead(x, y);
+      return ahead < cam.near || ahead > far ? null : [...onGround(x, y), ahead];
+    });
+    let run = [], band = -1;
+    for (let i = 1; i < pts.length; i++) {
+      const p = pts[i - 1], q = pts[i];
+      if (!p || !q) {
+        if (run.length > 1) bands.line(band, 'photo-shore', run);
+        run = [];
+        continue;
+      }
+      const b = bands.of(Math.min(p[2], q[2]));
+      if (run.length && b !== band) {
+        bands.line(band, 'photo-shore', run);
+        run = [];
+      }
+      if (!run.length) run.push(p);
+      band = b;
+      run.push(q);
+    }
+    if (run.length > 1) bands.line(band, 'photo-shore', run);
+  }
+}
+
 // The pen for something `dist` steps away (PHOTO.weight): a factor on
 // every line width, a whole number of √2 pen steps.
 function penAt(dist) {
@@ -432,7 +473,7 @@ function makeBands(cam, onGround) {
 //   hatch    short level pencil strokes on all the ground but roads and
 //            paths (buildings cover their own), in rows along the bands,
 //            about the same distance apart on the picture near and far
-//   ripples  longer ones on lakes and rivers
+//   ripples  small waves on lakes and rivers (ripple)
 //   meadow   the map's own tufts and flowers (meadow.js), near the camera
 // Seeded by the spot, so the same photo comes out the same.
 function groundMarks(world, config, cam, bands, seen, onGround, groundAt, wetAt) {
@@ -445,22 +486,25 @@ function groundMarks(world, config, cam, bands, seen, onGround, groundAt, wetAt)
   for (let k = 0; k < bands.n; k++) {
     const d = (bands.d[k] + bands.d[k + 1]) / 2, scale = cam.focal / d;
     const half = d * spread + 0.2;
+    const { len: wave, at, min, max, rise } = PHOTO.ripples;
+    const waves = wave * Math.min(max, Math.max(min, Math.sqrt(at / d)));
+    const crest = rise * Math.min(1, (at / d) ** 1.5);
     let hatch = '', ripples = '';
     for (let w = -half + rnd() * gap / scale; w < half; w += (gap * (0.6 + rnd() * 0.8)) / scale) {
       const dd = bands.d[k] + (bands.d[k + 1] - bands.d[k]) * rnd();
       const px = cam.ex + cam.fx * dd + cam.rx * w, py = cam.ey + cam.fy * dd + cam.ry * w;
       const wet = wetAt(px, py);
-      if (rnd() < (wet ? 0.5 : 0.35) || (!wet && !offRoad(px, py))) continue;
-      if (!wet && dd < blank && rnd() * sparse > 1) continue;
+      if (rnd() < (wet ? PHOTO.ripples.skip : 0.35) || (!wet && !offRoad(px, py))) continue;
+      if (dd < blank && rnd() * sparse > 1) continue;
       // level on the picture: along the camera's right, a touch askew
-      const l = (len * (wet ? 1.6 : 1) * (0.5 + rnd())) / scale / 2;
+      const l = ((wet ? waves : len) * (0.5 + rnd())) / scale / 2;
       const tilt = (rnd() - 0.5) * 0.25;
       const dx = (cam.rx + cam.fx * tilt) * l, dy = (cam.ry + cam.fy * tilt) * l;
       if (!cam.isAhead(px - dx, py - dy) || !cam.isAhead(px + dx, py + dy)) continue;
       if (wet && !(wetAt(px - dx, py - dy) && wetAt(px + dx, py + dy))) continue; // within the banks
-      const seg = `M${pt(onGround(px - dx, py - dy))}L${pt(onGround(px + dx, py + dy))}`;
-      if (wet) ripples += seg;
-      else hatch += seg;
+      const a = onGround(px - dx, py - dy), b = onGround(px + dx, py + dy);
+      if (wet) ripples += ripple(a, b, crest * (rnd() < 0.5 ? -1 : 1));
+      else hatch += `M${pt(a)}L${pt(b)}`;
     }
     bands.add(k, 'hatch', hatch);
     bands.add(k, 'ripples', ripples);
@@ -487,6 +531,16 @@ function groundMarks(world, config, cam, bands, seen, onGround, groundAt, wetAt)
       }
     }
   }
+}
+
+// A ripple on the water from a to b (on the picture): a small wave, a
+// crest and then a trough, standing up off the water `rise` of its length
+// (below 0: a trough first).
+function ripple(a, b, rise) {
+  const vx = b[0] - a[0], vy = b[1] - a[1];
+  // (a cubic's control points stand out about 3.5 times the curve's height)
+  const h = Math.hypot(vx, vy) * rise * 3.5;
+  return `M${pt(a)}C${pt([a[0] + vx / 3, a[1] + vy / 3 - h])} ${pt([a[0] + (2 * vx) / 3, a[1] + (2 * vy) / 3 + h])} ${pt(b)}`;
 }
 
 // The ground right in front of the photographer (PHOTO.ground), drawn as
@@ -756,16 +810,20 @@ function bridgeDecks(renderer, cam, seen) {
   return out;
 }
 
-// Lakes as flat water: (x, y) -> how far to raise the ground there to the
-// surface of the lake it lies in (0 elsewhere). Each lake's level is found
-// as on the map (Renderer.waterLevel: halfway from its highest dot up to the
-// lowest dry ground next to it), but in the relief's own height, so the
-// surface meets the drawn shore. Points within REACH of a lake dot belong to
-// it; the ground is only ever raised, so the banks above the level stay.
-// Rivers keep following their valley.
-function lakeSurface(renderer, lift) {
-  if (!lift) return () => 0;
-  const { grid, terrain } = renderer.world;
+// Lakes and rivers as flat water: { raise(x, y) -> how far to raise the
+// ground there to the surface of the water it lies in (0 elsewhere),
+// wet(x, y) -> whether it is in the water, within the drawn shore }.
+// Each lake's level is found as on the map (Renderer.waterLevel: halfway
+// from its highest dot up to the lowest dry ground next to it), but in the
+// relief's own height, so the surface meets the drawn shore. Points within
+// REACH of a lake dot belong to it. A river is level across, at the height
+// of its water on the centreline nearest by (terrain/rivers.js), so it falls
+// only along its way; within its banks, which are cut at that height
+// (terrain/elevation.js). The ground is only ever raised, so the banks
+// above the water stay.
+function waterSurface(renderer, lift) {
+  const { grid, terrain, riverField: field } = renderer.world;
+  if (!lift) return { raise: () => 0, wet: renderer.wetAt() };
   const REACH = 0.9;
   const level = new Float32Array(grid.size).fill(NaN);
   for (const cells of renderer.waterBodies()) {
@@ -781,8 +839,10 @@ function lakeSurface(renderer, lift) {
     const l = rim > top && rim < Infinity ? (top + rim) / 2 : top;
     for (const [cx, cy] of cells) level[grid.nodeAt(cx, cy)] = l;
   }
-  return (x, y) => {
-    let best = -Infinity;
+  const river = (x, y) => field && field.depth(x, y) > 0;
+  // the surface's height at (x, y), -Infinity off the water
+  const surface = (x, y) => {
+    let best = river(x, y) ? lift.of(field.at(x, y).z) : -Infinity;
     const rx = Math.round(x), ry = Math.round(y);
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
@@ -791,7 +851,12 @@ function lakeSurface(renderer, lift) {
         best = Math.max(best, level[n]);
       }
     }
-    return best === -Infinity ? 0 : Math.max(0, best - lift(x, y));
+    return best;
+  };
+  return {
+    raise: (x, y) => Math.max(0, surface(x, y) - lift(x, y)),
+    // (a river's bed lies at its surface where the valley was cut down to it)
+    wet: (x, y) => river(x, y) || surface(x, y) > lift(x, y),
   };
 }
 
