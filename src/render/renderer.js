@@ -90,6 +90,8 @@ import { SUN, DAY, sunFor, shadowMask } from './shadows.js';
 import { HILL_SHADOWS, hillShade, hillShadeRings } from './hillShadows.js';
 import { hatchTile } from './hatch.js';
 import { lampPool, headBeam } from './lights.js';
+import { SUN_FREE, sunStyle } from './sunFree.js';
+import { treeLightSector } from '../../features/trees.js';
 import { NightCanvas, mixColour } from './nightCanvas.js';
 import { findForests, forestSVG } from './forest.js';
 import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
@@ -177,7 +179,8 @@ const NIGHT_IN = 2.4;
 const INK_STEP = 0.1;
 const INK_EVERY = 500;
 const WINDOWS_BY = 0.06;
-const SHADE_SWEEP = 2200; // ms the terrain as turned takes to fade, once the view rests (land)
+const SHADE_SWEEP = 1600;
+const SWEEP_STEPS = 6; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -321,6 +324,12 @@ export class Renderer {
     // (topCover); the lamps' pools are cut out of the shadows' masks too
     // (lightCuts). While the view turns the objects' night lies over
     // everything, as it can't follow them.
+    // the map's drawings hold for any sun (sunFree.js): a stylesheet shows
+    // what the light has now (updateSunStyle)
+    SUN_FREE.on = true;
+    this.sunCss = document.head.appendChild(document.createElement('style'));
+    this.sunCss.id = 'sun-free';
+    this.sunKey = 0; // which sun the objects' shadows are drawn for (setSun, swapIn)
     this.nightPen = new NightCanvas(document.getElementById('night-ground'));
     this.nightTop = new NightCanvas(document.getElementById('night-top'));
     this.groundLight = null;
@@ -555,6 +564,7 @@ export class Renderer {
     // waits until the view rests
     if (this.turning) this.turnFrame();
     else {
+      if (this.camera.angle !== this.styleAngle) this.updateSunStyle(); // (the trees' light on screen turns with the view)
       for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
       this.dirty.clear();
       this.renderShadeTiles(); // (only when they change)
@@ -1696,7 +1706,7 @@ export class Renderer {
       g.innerHTML = built.svg;
       lg.innerHTML = built.ground;
       sg.innerHTML = this.shadowSVG(built.shade, built.detail);
-      return { k, angle: cam.angle, bare: true, g, lg, sg, shade: built.shade, night: built.night, band: built.band, vents: built.vents?.length ? built.vents : null, ventsTurn: cam.angle, bounds: built.bounds, box: built.box, at: built.at };
+      return { k, angle: cam.angle, bare: true, g, lg, sg, sunKey: this.sunKey, shade: built.shade, night: built.night, band: built.band, vents: built.vents?.length ? built.vents : null, ventsTurn: cam.angle, bounds: built.bounds, box: built.box, at: built.at };
     } finally {
       cam.angle = live;
       this.drawBare = false;
@@ -1708,10 +1718,15 @@ export class Renderer {
   swapIn(e, view) {
     e.views ??= new Map();
     if (e.k != null && e.bare && !e.views.has(e.k)) {
-      const { k, angle, bare, g, lg, sg, shade, night, band, vents, ventsTurn, bounds, box, at } = e;
-      e.views.set(e.k, { k, angle, bare, g, lg, sg, shade, night, band, vents, ventsTurn, bounds, box, at });
+      const { k, angle, bare, g, lg, sg, sunKey, shade, night, band, vents, ventsTurn, bounds, box, at } = e;
+      e.views.set(e.k, { k, angle, bare, g, lg, sg, sunKey, shade, night, band, vents, ventsTurn, bounds, box, at });
     }
     e.views.delete(view.k);
+    // (its shadow drawn for another sun: drawn again, setSun)
+    if (view.sunKey !== this.sunKey) {
+      view.sg.innerHTML = this.shadowSVG(view.shade);
+      view.sunKey = this.sunKey;
+    }
     for (const n of ['g', 'lg', 'sg']) {
       e[n].removeAttribute('transform');
       e[n].parentNode?.replaceChild(view[n], e[n]);
@@ -2109,19 +2124,15 @@ export class Renderer {
       // drawn bare for a turn (goBare), now whole: the pen draws in what
       // the bare drawing lacked
       const was = entry.redetail && entry.bare && animate && entry.shown !== false && !this.born.has(key) ? new Set(strokesOf(entry).map((el) => el.outerHTML)) : null;
-      // and as the sun moves, the walls turned from it: their hatching
-      const sunSketch = entry.sunSketch && animate && entry.shown !== false && !this.born.has(key);
-      entry.sunSketch = false;
+
       entry.g.innerHTML = built.svg;
       entry.lg.innerHTML = built.ground;
       entry.shade = built.shade;
       entry.night = built.night;
+      entry.sunKey = this.sunKey;
       entry.sg.innerHTML = this.shadowSVG(entry.shade, built.band);
       if (was) {
         const only = new Set(strokesOf(entry).filter((el) => !was.has(el.outerHTML)));
-        if (only.size) sketch.push({ entry, only });
-      } else if (sunSketch) {
-        const only = new Set(entry.g.querySelectorAll('.wall-shade'));
         if (only.size) sketch.push({ entry, only });
       }
       entry.bare = entry.redetail = false;
@@ -2412,21 +2423,42 @@ export class Renderer {
     const drawn = this.sunDrawn;
     this.sunDrawn = true;
     if (drawn && drawEnabled()) this.sweepShadows();
-    // every shadow at once, from what each object keeps (Renderer.shadeOf):
-    // the objects themselves are drawn anew a few at a time
-    for (const e of this.objs.values()) if (e.sg && e.shade !== undefined) e.sg.innerHTML = this.shadowSVG(e.shade);
+    // nothing is drawn anew for it (sunFree.js): every shadow at once, from
+    // what each object keeps (Renderer.shadeOf) – those of the views kept
+    // for a turn as they come back (swapIn) – and the stylesheet that shows
+    // the walls' hatching and the trees' shaded sides the light has now,
+    // the pen drawing in what comes into sight
+    this.sunKey++;
     for (const e of this.objs.values()) {
-      e.views?.clear(); // (drawn for the old sun)
-      e.stale = e.sunStale = true;
-      if (e.shown !== false) {
-        this.rebuildQueue.add(e.key);
-        if (drawn) e.sunSketch = true; // (the pen draws in its new shaded walls, renderObjects)
-      }
+      if (e.sg && e.shade !== undefined) e.sg.innerHTML = this.shadowSVG(e.shade);
+      e.sunKey = this.sunKey;
     }
-    this.rebuildOrder = null;
+    this.updateSunStyle(drawn && drawEnabled());
     this.dirty.add('hillshade');
-    this.dirty.add('forest');
     return true;
+  }
+
+  // The stylesheet for the sun and the view as they are (sunFree.js); with
+  // `pen`, what it shows that it didn't is drawn in by the pen, on the
+  // objects in sight.
+  updateSunStyle(pen = false) {
+    const sun = sunFor(this.camera), sector = treeLightSector(this.camera);
+    const key = `${sun.on}|${sun.cast.map((c) => c.toFixed(3))}|${sector}`;
+    if (key === this.sunStyleKey) return;
+    this.sunStyleKey = key;
+    this.styleAngle = this.camera.angle;
+    const { css, shown } = sunStyle(sun, sector);
+    const was = new Set(this.sunShown ?? []);
+    this.sunShown = shown;
+    this.sunCss.textContent = css;
+    const fresh = shown.filter((s) => !was.has(s));
+    if (!pen || !fresh.length || this.turning) return;
+    const sel = fresh.join(', '), tile = this.camera.tile, scale = this.drawn.zoom;
+    for (const e of this.objs.values()) {
+      if (e.shown === false || !e.g?.isConnected || (e.box && !this.inView(e.box))) continue;
+      const only = new Set(e.g.querySelectorAll(sel));
+      if (only.size) drawIn([e.g], { tile, scale, only, speed: DRAW.detail });
+    }
   }
 
   // The lights (lights.js), left out of the night (see the constructor).
@@ -2567,9 +2599,18 @@ export class Renderer {
     const jag = px * 0.9, n = Math.max(8, Math.ceil((u1 - u0) / (px * 0.7)));
     const off = Array.from({ length: n + 1 }, (_, i) => (hashKey(`sweep${i}`) % 1000) / 1000 * jag);
     const at = (u, v) => `${r2(v * c - u * sn)} ${r2(v * sn + u * c)}`;
+    // in SWEEP_STEPS steps, as stop-motion: each moves the front over a
+    // block of the view (and repaints the shadows whole)
     const start = performance.now();
+    let shown = -1;
     const step = () => {
-      const t = Math.min(1, (performance.now() - start) / SHADE_SWEEP), e = t * t * (3 - 2 * t);
+      const i = Math.min(SWEEP_STEPS, Math.floor(((performance.now() - start) / SHADE_SWEEP) * SWEEP_STEPS) + 1);
+      if (i === shown) {
+        this.sweep.raf = requestAnimationFrame(step);
+        return;
+      }
+      shown = i;
+      const t = i / SWEEP_STEPS, e = t * t * (3 - 2 * t);
       const f = v0 - jag + (v1 - v0 + 2 * jag) * e;
       const front = off.map((o, i) => [u0 + ((u1 - u0) * i) / n, f + o - jag / 2]);
       pNew.setAttribute('d', `M${at(u0, v0 - jag * 2)}L${at(u1, v0 - jag * 2)}${front.slice().reverse().map(([u, v]) => `L${at(u, v)}`).join('')}Z`);

@@ -85,6 +85,7 @@ import { mulberry32 } from '../core/random.js';
 import { MinHeap } from '../core/heap.js';
 import { siteWalks } from '../roads/siteWalks.js';
 import { SUN, sunFor, tierOf, tierClass, penClass, awayFrom, strokeShare, wallStrokes, hash } from './shadows.js';
+import { SUN_FREE, wallDir, strokeLevel } from './sunFree.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 // Photos (a perspective camera): roof hatching at most this many px apart
@@ -251,6 +252,8 @@ export class Painter {
   constructor(camera, origin, rotation = 0, seed = 1) {
     this.camera = camera;
     this.random = mulberry32(seed);
+    // drawn to hold for any sun (sunFree.js): the map's, not a photo's
+    this.sunFree = SUN_FREE.on && !camera.perspective;
     this.ox = origin.x;
     this.oy = origin.y;
     this.oz = origin.z ?? 0;
@@ -673,12 +676,17 @@ export class Painter {
   // what is drawn on it later (ink windows) covers them; by the roof
   // hatching's density tiers, and hidden with the facade detail when far.
   _shade(points, n) {
-    if (!SUN.on || !SUN.strokes || !this.casting) return;
+    if (!SUN.strokes || !this.casting || (!this.sunFree && !SUN.on)) return;
     const w = this._wallNormal(n);
     if (!w) return;
-    this._sun ??= sunFor(this.camera);
-    const share = strokeShare(awayFrom(w, this._sun), this._sun);
-    if (share <= 0) return;
+    // for the sun as it is; or, sun-free, all of the wall's strokes, each
+    // tagged with the share of them from which it shows (sunFree.js)
+    let share = 1;
+    if (!this.sunFree) {
+      this._sun ??= sunFor(this.camera);
+      share = strokeShare(awayFrom(w, this._sun), this._sun);
+      if (share <= 0) return;
+    }
     // the wall in its own plane: u along it from points[0], w up
     const o = points[0];
     const e = points.map((p) => [p[0] - o[0], p[1] - o[1]]).find(([dx, dy]) => Math.hypot(dx, dy) > 1e-6);
@@ -687,14 +695,22 @@ export class Painter {
     const flat = points.map((p) => [(p[0] - o[0]) * ex + (p[1] - o[1]) * ey, p[2]]);
     const back = ([u, z]) => [o[0] + ex * u, o[1] + ey * u, z];
     const [wx, wy] = this.toWorld(o[0], o[1]);
-    const d = ['', '', '', ''];
-    for (const [a, b, k] of wallStrokes(flat, SUN.strokes, share, (wx * 13.1 + wy * 7.7) % 97)) {
-      if (tierOf(k) <= this.keepTier) d[tierOf(k)] += this._sketch([back(a), back(b)], false, 0.7).d;
+    const seed = (wx * 13.1 + wy * 7.7) % 97;
+    const d = new Map(); // `${tier}|${level}` -> path data
+    for (const [a, b, k] of wallStrokes(flat, SUN.strokes, share, seed)) {
+      if (tierOf(k) > this.keepTier) continue;
+      // (sun-free, by level alone: the tiers the band leaves out are not
+      // drawn at all, keepTier, and a path for each would be many)
+      const key = this.sunFree ? `0|${strokeLevel(k, seed)}` : `${tierOf(k)}|`;
+      d.set(key, (d.get(key) ?? '') + this._sketch([back(a), back(b)], false, 0.7).d);
     }
-    d.forEach((path, t) => {
-      if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln wall-shade${penClass(SUN.strokes.pen)}${tierClass(t, 'rh')}`)}/>`);
-    });
+    const dir = this.sunFree ? ` sf wd${wallDir(w[0], w[1])}` : '';
+    for (const [key, path] of d) {
+      const [t, b] = key.split('|');
+      this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln wall-shade${penClass(SUN.strokes.pen)}${tierClass(+t, 'rh')}${dir}${b !== '' ? ` wl${b}` : ''}`)}/>`);
+    }
   }
+
 
   // The outward world normal (unit, horizontal) of a wall with local normal
   // n; null for what is not a wall (roofs, floors).

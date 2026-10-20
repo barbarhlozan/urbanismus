@@ -29,6 +29,8 @@
 // from a broadleaf or a shrub, a pointed one from a spruce.
 
 import { SUN, screenLight } from '../src/render/shadows.js';
+import { SUN_FREE, sectorLight, lightSector } from '../src/render/sunFree.js';
+import { mulberry32 } from '../src/core/random.js';
 
 export const TREE_KINDS = ['spruce', 'sapling', 'spreading'];
 
@@ -100,7 +102,7 @@ export function drawShrub(g, x, y, height) {
     pen.push([[s1[0], s1[1]], [s1[0] + (s0[0] - s1[0]) * run, Math.min(s0[1], s1[1]) * g.range(0.3, 0.7)]]);
     g.shape(x, y, 0, fill, { smooth: true, cls: 'tree crown' });
     g.strokes(x, y, 0, pen, { cls: 'crown-line' });
-    g.strokes(x, y, 0, innerCurls(g, at, a0, a1, false, true), { cls: 'leaf' });
+    shaded(g, x, y, (light) => innerCurls(g, at, a0, a1, false, true, light), { cls: 'leaf' });
     return;
   }
   const lines = [];
@@ -235,7 +237,7 @@ function drawLeafy(g, x, y, kind, H, simple) {
   g.shape(x, y, 0, fill, { smooth: true, cls: 'tree crown' });
   g.strokes(x, y, 0, pen, { cls: 'crown-line' });
 
-  g.strokes(x, y, 0, innerCurls(g, at, a0, a1, key === 'poplar', simple), { cls: 'leaf', lod: 1 });
+  shaded(g, x, y, (light) => innerCurls(g, at, a0, a1, key === 'poplar', simple, light), { cls: 'leaf', lod: 1 });
 }
 
 // One pen line round lopsided lobes from a0 to a1, with loops back on
@@ -362,13 +364,15 @@ function sketchSpruce(g, x, y, H, simple) {
   g.shape(x, y, 0, fill, { smooth: true, cls: 'tree crown' });
   g.strokes(x, y, 0, [pen], { cls: 'crown-line' });
   // short hanging tier strokes inside, on the side away from the light
-  const dir = ballLight(g.camera)[0] > 0 ? -1 : 1, marks = [];
-  for (let i = simple ? 1 : g.int(2, 3); i > 0; i--) {
-    const t = g.range(0.12, 0.6), w = width(t), v = crown0 + t * ch;
-    const u0 = dir * w * g.range(0.1, 0.25), u1 = dir * w * g.range(0.55, 0.75);
-    marks.push([at(u0, v), at((u0 + u1) / 2, v - ch * 0.01), at(u1, v - ch * g.range(0.03, 0.06))]);
-  }
-  g.strokes(x, y, 0, marks, { cls: 'leaf', lod: 1 });
+  shaded(g, x, y, (light) => {
+    const dir = light[0] > 0 ? -1 : 1, marks = [];
+    for (let i = simple ? 1 : g.int(2, 3); i > 0; i--) {
+      const t = g.range(0.12, 0.6), w = width(t), v = crown0 + t * ch;
+      const u0 = dir * w * g.range(0.1, 0.25), u1 = dir * w * g.range(0.55, 0.75);
+      marks.push([at(u0, v), at((u0 + u1) / 2, v - ch * 0.01), at(u1, v - ch * g.range(0.03, 0.06))]);
+    }
+    return marks;
+  }, { cls: 'leaf', lod: 1 });
 }
 
 // A tall oval with a ragged outline: short straight pen jabs in and out.
@@ -384,8 +388,8 @@ function raggedCrown(g, at, a0, a1, simple) {
 // A few short lines inside the crown on the side away from the
 // light, as a sketcher marks the lobes in shade – small arcs with a bump or
 // two, or on a poplar short zigzags up and down.
-function innerCurls(g, at, a0, a1, ragged, simple) {
-  const light = ballLight(g.camera), shadeAt = Math.atan2(-light[0], -light[1]);
+function innerCurls(g, at, a0, a1, ragged, simple, light) {
+  const shadeAt = Math.atan2(-light[0], -light[1]);
   const out = [];
   for (let i = simple ? 1 : g.int(2, 3); i > 0; i--) {
     // (every choice made before any is skipped: the light moves with the
@@ -453,6 +457,30 @@ function ballLight(camera) {
     lit = { key, at: [u / n, v / n] };
   }
   return lit.at;
+}
+
+// The marks a tree makes on its side away from the light (`make(light)` ->
+// lines), drawn for the light as it is; or, on the map (sun-free,
+// src/render/sunFree.js), for each way the light can come from, the same
+// marks each time (one draw from the painter's randomness seeds them all,
+// so the tree and what is drawn after it are the same whatever the light),
+// tagged with its sector – the map's stylesheet shows the one the light has.
+function shaded(g, x, y, make, opts) {
+  if (!g.sunFree) {
+    g.strokes(x, y, 0, make(ballLight(g.camera)), opts);
+    return;
+  }
+  const seed = Math.floor(g.random() * 4294967296), keep = g.random;
+  for (const s of SUN_FREE.drawn) {
+    g.random = mulberry32(seed);
+    g.strokes(x, y, 0, make(sectorLight(s)), { ...opts, cls: `${opts.cls} tq tq${s}` });
+  }
+  g.random = keep;
+}
+
+// The sector of the light on a round crown now (sunFree.js).
+export function treeLightSector(camera) {
+  return lightSector(ballLight(camera));
 }
 
 // A short stroke on the ground at a tree's foot, a little aslant, as each
