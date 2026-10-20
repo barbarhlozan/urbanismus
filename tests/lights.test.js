@@ -33,3 +33,18 @@ test('the lamps are lit all night and from the deepest dusk to the deepest dawn'
   assert.ok(DAY.steps.some((s) => s.lamps && !s.night && s.at < 12), 'at dawn');
   assert.ok(!DAY.steps.some((s) => s.lamps && !s.night && !s.length), 'not by day');
 });
+
+test('headlights throw a beam ahead, widening, a train\'s further', async () => {
+  const { headBeam } = await import('../src/render/lights.js');
+  const car = headBeam(0, 0, 1, 0, false, 3), train = headBeam(0, 0, 1, 0, true, 3);
+  const xs = (p) => p.map(([x]) => x), ys = (p) => p.map(([, y]) => y);
+  // ahead (+x), none behind
+  assert.ok(Math.min(...xs(car)) >= -1e-9 && Math.max(...xs(car)) > LIGHTS.beam.reach * 0.9);
+  // narrow at the lamps, wide at the far end
+  const near = car.filter(([x]) => x < 0.01), far = car.filter(([x]) => x > LIGHTS.beam.reach * 0.6);
+  const span = (p) => Math.max(...ys(p)) - Math.min(...ys(p));
+  assert.ok(span(far) > span(near) * 3);
+  assert.ok(Math.max(...xs(train)) > Math.max(...xs(car)) * 1.3);
+  // the same vehicle, the same beam
+  assert.deepEqual(headBeam(0, 0, 1, 0, false, 3), car);
+});

@@ -65,8 +65,9 @@ html, body {
 /* ---------- World ---------- */
 
 /* The map, back to front: #view (terrain, then the map's linework), the
+   night on the ground (#night-ground, nightCanvas.js), the
    <canvas> with the moving people, vehicles and trains, #view-top (the
-   buildings, trees and tool previews), then #trains-top: train carriages
+   buildings, trees and tool previews), the night over them (#night-top), then #trains-top: train carriages
    with nothing nearer in front of them, so they pass in front of stations
    and buildings behind the track, #smoke: chimney smoke (particles.js),
    over the roofs it comes from, and the weather over all of it:
@@ -89,7 +90,7 @@ html, body {
   display: block;
   user-select: none;
 }
-#agents, #trains-top, #smoke, #cloud-shadows, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
+#night-ground, #agents, #night-top, #trains-top, #smoke, #cloud-shadows, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
 /* a grey sky's shade over the whole map (config.weather.gloom) */
 #gloom { position: fixed; inset: 0; pointer-events: none; background: var(--detail); opacity: 0; transition: opacity 4s; }
 /* mist in the valleys (src/render/mist.js): paper over what is under it, its
@@ -285,19 +286,9 @@ html, body {
 .hill-line { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
 .shade-mask .shade { fill: #fff; stroke: #fff; stroke-width: 2.5px; stroke-dasharray: 3 2 1.5 3.5 2.5 1 4 2.5 1 3; stroke-linejoin: round; }
 .shade-mask .shade-line { fill: none; stroke: #fff; stroke-width: 2.2px; stroke-linecap: round; }
-/* the night (Renderer.renderNight): the paper's strokes (render/hatch.js)
-   over everything, as many of them as it is dark */
-.night-line { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
-.night-veil { fill: url(#night-tile); pointer-events: none; }
-/* the night's grey (DAY.steps gloom, ink), as #gloom's but drawn with the
-   night, so the lights are left out of it */
-.night-grey { fill: color-mix(in srgb, var(--main) var(--night-ink, 0%), var(--detail)); opacity: var(--night-grey, 0); pointer-events: none; transition: opacity 4s; }
-/* the masks that leave the lights out (render/lights.js): everything shown
-   but the lights, their edges broken as the shadows' */
-.light-mask .mask-all { fill: #fff; }
-/* in the night's mask, what is nearer than a light puts the night back over
-   it (Renderer.renderLights) */
-.light-mask .unlit { fill: #fff; }
+/* the night itself is drawn on canvases (#night-ground, #night-top,
+   render/nightCanvas.js) */
+/* the lamps' light cut out of the shadows' masks (render/lights.js), its edge broken as the shadows' */
 mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3 2 1.5 3.5 2.5 1 4 2.5 1 3; stroke-linejoin: round; }
 /* screen-facing line drawings (trees, see features/trees.js) */
 /* woods far out, one shape each (render/forest.js): as a tree's crown */

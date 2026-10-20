@@ -7,6 +7,7 @@
 //
 //   lampPool(x, y, project, px)  -> [the pool, the lamp's head] as path data,
 //                                   each turned anticlockwise (ring)
+//   headBeam(x, y, dx, dy, train, seed) -> a vehicle's beam, world points
 
 import { hash } from './hatch.js';
 
@@ -15,7 +16,11 @@ import { hash } from './hatch.js';
 //   points  points round its edge
 //   high    the lamp's head above the ground (structures/kit.js lamp)
 //   head    the radius of the light round the head (grid units)
+//   beam    a vehicle's headlights: how far ahead they reach, how wide
+//           they are at the lamps and at the far end (grid units); a
+//           train's reach `train` times as far
 export const LIGHTS = {
+  beam: { reach: 1.0, near: 0.04, far: 0.3, train: 1.5 },
   pool: 0.3,
   ragged: 0.18,
   points: 20,
@@ -48,4 +53,21 @@ export function lampPool(x, y, project, px, opts = LIGHTS) {
   const [hx, hy] = project(x, y, opts.high), hr = opts.head * px;
   const head = Array.from({ length: 10 }, (_, i) => [hx + Math.cos((i / 10) * 2 * Math.PI) * hr, hy + Math.sin((i / 10) * 2 * Math.PI) * hr]);
   return [ring(pts), ring(head)];
+}
+
+// A vehicle's headlights at world (x, y), going (dx, dy) (unit): a beam on
+// the ground widening ahead, its far end rounded and a little uneven,
+// seeded by the vehicle (`seed`), so it keeps its shape as it goes; a
+// train's reaching further. World points, for the caller to project.
+export function headBeam(x, y, dx, dy, train = false, seed = 0, opts = LIGHTS.beam) {
+  const reach = opts.reach * (train ? opts.train : 1), [nx, ny] = [-dy, dx];
+  const out = [[x + nx * opts.near, y + ny * opts.near]];
+  const n = 6;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, side = opts.far * (1 - 2 * t);
+    const r = reach * (1 + 0.12 * Math.sin(Math.PI * t) + 0.08 * (hash(seed, i + 0.5) - 0.5));
+    out.push([x + dx * r * (1 - 0.25 * Math.abs(1 - 2 * t) ** 2) + nx * side, y + dy * r * (1 - 0.25 * Math.abs(1 - 2 * t) ** 2) + ny * side]);
+  }
+  out.push([x - nx * opts.near, y - ny * opts.near]);
+  return out;
 }

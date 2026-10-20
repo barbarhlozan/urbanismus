@@ -89,7 +89,8 @@ import { Camera } from './camera.js';
 import { SUN, DAY, sunFor, shadowMask } from './shadows.js';
 import { HILL_SHADOWS, hillShade, hillShadeRings } from './hillShadows.js';
 import { hatchTile } from './hatch.js';
-import { lampPool } from './lights.js';
+import { lampPool, headBeam } from './lights.js';
+import { NightCanvas, mixColour } from './nightCanvas.js';
 import { findForests, forestSVG } from './forest.js';
 import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
 
@@ -98,8 +99,8 @@ export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
-const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'hillshade', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'night', 'lights', 'notes', 'overlay'];
-const TOP = ['mist', 'objects', 'night', 'lights', 'notes', 'overlay']; // in the #objects <svg>, see the constructor
+const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'hillshade', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'notes', 'overlay'];
+const TOP = ['mist', 'objects', 'notes', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
 // redrawn, and how far past each window edge the map is drawn.
@@ -137,6 +138,8 @@ const STEPS = Math.round((Math.PI * 2) / Camera.STEP);
 const VIEWS = 40;
 const PREPARE_REST = 400;
 const SETTLE_FADE = 260;
+// A number from a key ('v12'), to seed by (a beam's shape, headlights).
+const hashKey = (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7);
 // The densest tier of the paper's hatching (hatch.js) the shadows and the
 // night keep at each level of detail: every line close up (3), every other
 // further out, every 4th far out.
@@ -275,16 +278,20 @@ export class Renderer {
     this.layers.shadows = veil.querySelector('.shade-shapes');
     this.layers.hillshade.remove();
     this.layers.hillshade = veil.querySelector('.hill-shapes');
-    // the night (renderNight): a grey and a sheet of the paper's strokes
-    // over everything, both through a mask that leaves out the lights; the
-    // layer 'lights' is the lights in that mask (renderLights), cut out of
-    // the shadows' masks too (lightCuts)
-    const night = this.layers.night;
-    night.innerHTML = '<defs class="night-tiles"></defs>' +
-      '<mask id="night-mask" class="light-mask" maskUnits="userSpaceOnUse"><rect class="mask-all"/><g class="night-lights"></g></mask>' +
-      '<rect class="night-grey" mask="url(#night-mask)"/><rect class="night-veil" mask="url(#night-mask)"/>';
-    this.layers.lights.remove();
-    this.layers.lights = night.querySelector('.night-lights');
+    // the night (nightCanvas.js), on two canvases drawn every frame
+    // (renderNightCanvases): a grey and a sheet of the paper's strokes on
+    // the ground, under the cars and trains, and over the objects, only
+    // where they stand (their outlines, Painter.covers) – each leaving out
+    // the lights (renderLights): the ground's a path the canvas rubs out
+    // (groundLight), the objects' their outlines and lights in order
+    // (topCover); the lamps' pools are cut out of the shadows' masks too
+    // (lightCuts). While the view turns the objects' night lies over
+    // everything, as it can't follow them.
+    this.nightPen = new NightCanvas(document.getElementById('night-ground'));
+    this.nightTop = new NightCanvas(document.getElementById('night-top'));
+    this.groundLight = null;
+    this.topCover = [];
+    this.nightGrey = 0; // the grey as shown, easing to this.gloom
     this.lightCuts = [...veil.querySelectorAll('.lights-cut')];
     // hover rings and tags on their way out, over the overlay (see letGo)
     this.leaving = this.layers.overlay.parentNode.appendChild(document.createElementNS(SVGNS, 'g'));
@@ -548,6 +555,9 @@ export class Renderer {
       this.prepareTurn();
     }
     if (this.ghosts.size) this.reapGhosts();
+    const now = performance.now();
+    this.renderNightCanvases(Math.min(0.1, (now - (this.nightAt ?? now)) / 1000));
+    this.nightAt = now;
     if (this.showAgents) {
       this.pen.begin(this.camera, this.strokeK);
       this.penTop.begin(this.camera, this.strokeK);
@@ -1520,6 +1530,7 @@ export class Renderer {
     const turn = this.sheet(this.drawn.angle, a);
     for (const l of SHEET) this.layers[l].setAttribute('transform', turn);
     for (const el of this.lightCuts) el.setAttribute('transform', turn); // (as the lights)
+    this.nightSheet = new DOMMatrix(this.sheet(this.drawn.angle, a, true)); // (and the ground's, nightCanvas.js)
     // the terrain, the largest of them, turned whole on the GPU: its <svg>
     // about the middle of the map as drawn (the scene's origin)
     const { ground } = this, d = this.drawn;
@@ -1757,6 +1768,7 @@ export class Renderer {
       this.dirty.add(l);
     }
     for (const el of this.lightCuts) el.removeAttribute('transform');
+    this.nightSheet = null;
     if (this.linesAngle !== a) {
       this.roadLines = null;
       for (const l of LINES) {
@@ -1871,7 +1883,7 @@ export class Renderer {
       s.classList.add(`lod-${level}`);
     }
     this.lodLevel = level;
-    if (this.dark) this.dirty.add('night'); // (fewer of its lines, or more)
+
   }
 
   // An object's detail at zoom z, a number made of four parts: its level
@@ -1983,7 +1995,7 @@ export class Renderer {
     this.free = freeTest(world, this.config);
     this.lampRoom = null; // (buildStreet: worked out again when needed)
     if (this.lampsOn && [...keys].some((k) => k[0] === 'k')) this.dirty.add('lights'); // (lamps come and go)
-    if (this.dark && keys.size) this.dirty.add('lights'); // (windows come and go, or are hidden anew)
+    if ((this.dark || this.gloom) && keys.size) this.dirty.add('lights'); // (windows come and go, or are hidden anew)
     if (this.objsAll) this.reapGhosts(true); // drawn for the old view
 
     const now = performance.now();
@@ -2319,9 +2331,9 @@ export class Renderer {
     if (this.turning || this.bare) return false;
     const step = DAY.steps[i];
     this.dayStep = i;
+    if (!!(step.gloom ?? 0) !== !!this.gloom) this.dirty.add('lights'); // (the objects' outlines, for the grey)
     this.gloom = step.gloom ?? 0;
-    this.layers.night.style.setProperty('--night-grey', this.gloom);
-    this.layers.night.style.setProperty('--night-ink', `${Math.round((step.ink ?? 0) * 100)}%`);
+    this.nightInk = step.ink ?? 0;
     if ((step.windows ?? 0) !== this.litShare || !!step.night !== this.windowsDark) {
       this.litShare = step.windows ?? 0;
       this.windowsDark = !!step.night;
@@ -2334,7 +2346,7 @@ export class Renderer {
     const dark = step.night ? 1 : 0;
     if (dark !== this.dark) {
       this.dark = dark;
-      this.dirty.add('night');
+      this.dirty.add('lights');
     }
     const pos = step.night ? null : step.sun;
     const sun = pos == null ? 'none' : `${pos}|${step.length ?? ''}|${step.hills ?? ''}`;
@@ -2358,48 +2370,27 @@ export class Renderer {
     return true;
   }
 
-  // The night (DAY.steps): a grey over everything (from the dusk on,
-  // deepest in the small hours: renderer.gloom, the --night-grey and
-  // --night-ink on the layer, set by setSun) and at night a sheet over
-  // everything filled with the paper's strokes (hatch.js), the same as
-  // every shadow's, every one of them, fewer zoomed out (as the shadows',
-  // renderShadeTiles) – both through a mask that leaves out the lights
-  // (renderLights). Each a rect far larger than the map, about its middle,
-  // so the view turns under it. Drawn again only when it changes.
-  renderNight() {
-    const { camera, world } = this;
-    const h = SUN.hatch;
-    const tier = this.dark && h ? SHADE_TIERS[this.lodLevel ?? 0] ?? 1 : -1;
-    const key = `${tier}|${JSON.stringify(h)}|${camera.tile}`;
-    if (key === this.nightKey) return;
-    this.nightKey = key;
-    const night = this.layers.night, px = camera.tile;
-    night.querySelector('.night-tiles').innerHTML = tier >= 0 ? hatchTile('night-tile', tier, h, px) : '';
-    night.querySelector('.night-veil').style.display = tier >= 0 ? '' : 'none';
-    const [mx, my] = this.project(camera.cx, camera.cy, 0);
-    const r = (Math.hypot(world.grid.width, world.grid.height) + 20) * px * 2;
-    const box = { x: Math.round(mx - r), y: Math.round(my - r), width: Math.round(2 * r), height: Math.round(2 * r) };
-    for (const el of night.querySelectorAll('mask, rect')) for (const [k, v] of Object.entries(box)) el.setAttribute(k, v);
-  }
-
-  // The lights (lights.js), left out of the night's mask: with the lamps
-  // on (DAY.steps `lamps`), a pool under every street lamp and a round at
-  // its head; at night, the windows lit (`windows`: so many tenths of
-  // them, by each window's number, Painter._window) – a hole a little
-  // larger than the pane, so its own paper shows with a glow about it, and
-  // for one low on its wall the light it throws on the ground before it.
-  // Painted from the furthest object to the nearest (this.order), each
-  // putting the night back over what it covers of the light behind it
-  // (Painter.covers) before adding its own – so a house hides the windows
-  // and the lamps behind it, a tree the light under it. The lamps' pools
-  // are cut out of the shadows' masks too, as they are (lightCuts).
-  // Drawn again when the lamps come on or go off, the share of windows
-  // changes, objects are drawn anew, and once a turn of the view rests;
-  // while it turns, the lamps' alone, turning as a sheet.
+  // The lights (lights.js), left out of the night (see the constructor).
+  // On the ground: with the lamps on (DAY.steps `lamps`), a pool under
+  // every street lamp, and at night the light a lit window low on its
+  // wall throws on the ground before it – the objects, drawn over the
+  // ground, hide what of it lies behind them. Over the objects, the night
+  // is their outlines (Painter.covers), painted from the furthest to the
+  // nearest (this.order), each with its own lights left out after it: the
+  // windows lit (`windows`: so many tenths of them, by each window's
+  // number, Painter._window), a hole a little larger than the pane, so its
+  // own paper shows with a glow about it, and the lamps' heads – so a house
+  // hides the windows behind it along its outline. The lamps' pools are cut
+  // out of the shadows' masks too (lightCuts). Drawn again when the lamps
+  // come on or go off, the share of windows changes, objects are drawn
+  // anew, and once a turn of the view rests; while it turns, the objects'
+  // night lies over everything (it can't follow them), and the ground's
+  // pools turn as a sheet.
   renderLights() {
     const px = this.camera.tile;
     const project = (x, y, z) => this.project(x, y, z);
-    const lit = this.dark && !this.turning ? Math.round((this.litShare ?? 0) * 10) : 0;
+    const turning = this.turning || !this.order;
+    const lit = this.dark && !turning ? Math.round((this.litShare ?? 0) * 10) : 0;
     const xy = ([x, y]) => `${r2(x)} ${r2(y)}`;
     // a ring, turned anticlockwise (as the covers are), so rings of one
     // colour add up where they overlap
@@ -2419,53 +2410,92 @@ export class Renderer {
       if (last && last[0] === light) last[1] += d;
       else parts.push([light, d]);
     };
-    // where there is light so far, in cells of the screen
-    const CELL = 48, held = new Set();
-    const cellsOf = (pts, fn) => {
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
-      for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
-        for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++) if (fn(`${cx},${cy}`)) return true;
+    let pools = '', spills = '';
+    for (const e of turning ? this.objs.values() : this.order) {
+      const lamp = this.lampsOn && e.key?.[0] === 'k' && e.at?.points?.[0];
+      let head = '';
+      if (lamp) {
+        const [pool, h] = lampPool(lamp[0], lamp[1], project, px);
+        pools += pool;
+        head = h;
       }
-      return false;
-    };
-    let pools = '';
-    const order = this.order && !this.turning ? this.order : [...this.objs.values()];
-    for (const e of order) {
-      if (e.shown === false) continue;
-      const own = [];
-      if (this.lampsOn && e.key?.[0] === 'k' && e.at?.points?.[0]) {
-        const [x, y] = e.at.points[0];
-        const [pool, head] = lampPool(x, y, project, px);
-        pools += pool + head;
-        own.push(pool, head);
-      }
+      if (turning) continue;
+      if ((this.dark || this.gloom) && e.night?.covers.length) add(false, e.night.covers.map(ring).join(''));
+      if (head) add(true, head);
       if (lit && e.night) {
         for (const w of e.night.wins) {
           if (w.n >= lit) continue;
-          own.push(grow(w.pts, 0.04 * px));
-          if (w.spill) own.push(w.spill);
+          add(true, ring(grow(w.pts, 0.04 * px)));
+          if (w.spill) spills += ring(w.spill);
         }
-      }
-      // the night back over what it covers of the light behind
-      if (lit && e.night?.covers.length && held.size) {
-        for (const c of e.night.covers) if (cellsOf(c, (k) => held.has(k))) add(false, ring(c));
-      }
-      for (const o of own) {
-        if (typeof o === 'string') add(true, o);
-        else {
-          add(true, ring(o));
-          if (lit) cellsOf(o, (k) => { held.add(k); });
-        }
-      }
-      if (lit && own.length && typeof own[0] === 'string') {
-        const [x, y] = e.at.points[0];
-        cellsOf([project(x - 0.5, y - 0.5, 0), project(x + 0.5, y + 0.5, 0), project(x + 0.5, y - 0.5, 0), project(x - 0.5, y + 0.5, 0)], (k) => { held.add(k); });
       }
     }
-    this.layers.lights.innerHTML = parts.map(([light, d]) => `<path class="${light ? 'light' : 'unlit'}" d="${d}"/>`).join('');
+    // (turning, or before anything is in order: the night over everything)
+    this.topAll = turning;
+    this.topCover = parts.map(([light, d]) => [light, new Path2D(d)]);
+    this.groundLight = pools || spills ? new Path2D(pools + spills) : null;
     const cut = pools ? `<path class="light" d="${pools}"/>` : '';
     for (const el of this.lightCuts) el.innerHTML = cut;
+  }
+
+  // The lights of what moves, at night (with the lamps on): a beam on the
+  // ground ahead of every car, bus, lorry and train (lights.js headBeam),
+  // as polygons in scene px, for the night's canvas to rub out
+  // (renderNightGround) – over the map's drawing, under what moves and
+  // under the buildings in front.
+  headlights() {
+    const out = [];
+    if (!this.lampsOn || !this.showAgents) return out;
+    const beam = (x, y, dx, dy, long, seed) => {
+      const pts = headBeam(x, y, dx, dy, long, seed).map(([px, py]) => this.projectDeck(px, py, 0.02));
+      if (pts.some(([sx, sy]) => this.pen.onScreen(sx, sy))) out.push(pts);
+    };
+    for (const a of this.agents.visible()) {
+      if (!(a.bus || a.truck || a.trip?.mode === 'drive')) continue;
+      let dx, dy;
+      if (a.bus || a.truck) {
+        const l = Math.hypot(a.x - a.tx, a.y - a.ty);
+        if (l < 1e-4) continue;
+        [dx, dy] = [(a.x - a.tx) / l, (a.y - a.ty) / l];
+      } else {
+        const h = this.agentEls.get(a.id)?.heading;
+        if (h == null) continue;
+        const t = (h / VEHICLES.headings) * Math.PI * 2;
+        [dx, dy] = [Math.cos(t), Math.sin(t)];
+      }
+      const [wx, wy] = wobble(a.x, a.y);
+      beam(a.x + wx + dx * 0.08, a.y + wy + dy * 0.08, dx, dy, false, typeof a.id === 'number' ? a.id : hashKey(a.id));
+    }
+    const half = this.config.trains.length / 2;
+    for (const t of this.trains.visible()) {
+      const [x, y, dx, dy] = t.points[0] ?? [];
+      if (x == null) continue;
+      const l = Math.hypot(dx, dy) || 1;
+      beam(x + (dx / l) * half, y + (dy / l) * half, dx / l, dy / l, true, hashKey(String(t.id)));
+    }
+    return out;
+  }
+
+  // The night, every frame (nightCanvas.js): its grey easing to the
+  // hour's (this.gloom, a little each frame), the paper's strokes at night
+  // – every line close up, fewer further out, as the shadows' – and the
+  // lights rubbed out: on the ground, the lamps' pools, the windows' light
+  // and the beams of what moves; over the objects, their lit windows.
+  renderNightCanvases(dt) {
+    const { camera } = this;
+    this.nightGrey += ((this.gloom ?? 0) - this.nightGrey) * Math.min(1, dt / 1.6);
+    if (Math.abs(this.nightGrey - (this.gloom ?? 0)) < 0.004) this.nightGrey = this.gloom ?? 0;
+    const pal = THEME.palette;
+    const look = {
+      grey: this.nightGrey,
+      colour: mixColour(pal.detail, pal.main, this.nightInk ?? 0),
+      tier: this.dark && SUN.hatch ? SHADE_TIERS[this.lodLevel ?? 0] ?? 1 : -1,
+      hatch: SUN.hatch,
+      px: camera.tile,
+      stroke: this.strokeK ?? 1,
+    };
+    this.nightPen.draw(camera, { ...look, lights: this.groundLight, sheet: this.nightSheet, beams: this.headlights() });
+    this.nightTop.draw(camera, { ...look, cover: this.topCover, all: this.topAll || this.turning });
   }
 
   // Every object's shadow drawn again from its feet, with SUN as it is

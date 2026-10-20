@@ -28,6 +28,7 @@
 //   hatchFrame(h)                        -> { u, v, gap } (gap in grid units)
 //   hatchStrokes(k, t0, t1, h, px)       -> path data, line k from t0 to t1 px
 //   hatchTile(id, tier, h, px, cls)      -> an SVG <pattern>, lines up to tier
+//   hatchTileLines(tier, h, px)          -> { d, size }: the same tile's strokes
 //   hatchPoints(k, t, h, px)             -> line k's points at t, one a stroke
 
 // The repeat, in grid units: long enough that the tiles don't show as
@@ -137,8 +138,15 @@ export function hatchPoints(k, t, h, px, frame = hatchFrame(h)) {
 // The night's tile: every line up to density tier `tier` (0 every 8th … 3
 // all), as strokes, over one repeat each way, turned to the lines' angle.
 export function hatchTile(id, tier, h, px, cls = 'night-line') {
-  const frame = hatchFrame(h), { gap, n } = frame;
-  const s = TILE * px;
+  const { d, size } = hatchTileLines(tier, h, px);
+  return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${r2(size)}" height="${r2(size)}" patternTransform="rotate(${h.angle})"><path class="${cls}" d="${d}"/></pattern>`;
+}
+
+// The tile's strokes as path data, in its own axes (before it is turned to
+// the lines' angle), and its size: scene px (the night's canvas draws it
+// as a pattern of its own, NightCanvas).
+export function hatchTileLines(tier, h, px) {
+  const frame = hatchFrame(h), { n } = frame;
   let d = '';
   // the tile in the lines' own axes: line j at j·gap, along it 0 … TILE;
   // the strokes running past the far end are drawn again from the near
@@ -148,5 +156,5 @@ export function hatchTile(id, tier, h, px, cls = 'night-line') {
     if (tierOf(((k % n) + n) % n) > tier) continue;
     d += hatchStrokes(k, -TILE * px * 0.5, TILE * px * 1.5, h, px, flat);
   }
-  return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${r2(s)}" height="${r2(s)}" patternTransform="rotate(${h.angle})"><path class="${cls}" d="${d}"/></pattern>`;
+  return { d, size: TILE * px };
 }
