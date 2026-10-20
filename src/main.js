@@ -147,26 +147,24 @@ const groundSvg = document.getElementById('ground'); // (the hills' shadows, ren
 const gloomEl = document.getElementById('gloom');
 // As the weather turns these go over gradually (WeatherSystem.sky), but in
 // steps – each new --sun repaints the whole map – and the CSS eases between.
-let sunFor = null, gloomFor = null, inkFor = null;
+let sunFor = null, gloomFor = null, uiGloomFor = null;
 let wind = 0;
 const showSun = ({ sun, gloom }) => {
   sun = Math.round(sun * 20) / 20;
-  // the dusk and the night grey the map too (DAY.steps), over the weather's
-  gloom = 1 - (1 - gloom) * (1 - (renderer.gloom ?? 0));
+  // the dusk and the night grey the map too (DAY.steps), drawn with the
+  // night itself, so the lights are left out of it (Renderer.renderNight);
+  // the UI's paper takes some of both
+  const ui = Math.round((1 - (1 - gloom) * (1 - (renderer.gloom ?? 0))) * 50) / 50;
   gloom = Math.round(gloom * 50) / 50;
   if (sun !== sunFor) {
     sunFor = sun;
     for (const el of [groundSvg, svg, objectsSvg]) el.style.setProperty('--sun', sun);
   }
-  // (in the small hours with some of the main ink in it, DAY.steps `ink`)
-  if ((renderer.gloomInk ?? 0) !== inkFor) {
-    inkFor = renderer.gloomInk ?? 0;
-    gloomEl.style.setProperty('--gloom-ink', `${Math.round(inkFor * 100)}%`);
-  }
-  if (gloom !== gloomFor) {
+  if (gloom !== gloomFor || ui !== uiGloomFor) {
     gloomFor = gloom;
+    uiGloomFor = ui;
     gloomEl.style.opacity = gloom;
-    uiRoot.style.setProperty('--gloom', `${Math.round(gloom * 100)}%`);
+    uiRoot.style.setProperty('--gloom', `${Math.round(ui * 100)}%`);
   }
 };
 agents.trains = trains;
