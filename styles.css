@@ -659,7 +659,6 @@ body:not(.touch) .controls button:hover > .label, .controls button.telling > .la
   .controls .label { right: auto; left: 50%; top: calc(100% + 9px); transform: translateX(-50%); }
 }
 
-.bm-held .camera-icon path { stroke-width: calc(1.1px * var(--stroke, 1)); }
 
 
 .popup {
@@ -1268,9 +1267,8 @@ body.loading #ui { visibility: hidden; }
 }
 .bm-toggle::before { content: "+"; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
 .build-menu.has-tool .bm-toggle::before { display: none; }
-#ui .build-menu.has-tool .bm-toggle { padding: 0 12px 0 6px; }
-.bm-held { display: none; width: calc(var(--bar-h) - 6px); height: calc(var(--bar-h) - 6px); }
-.build-menu.has-tool .bm-held { display: flex; }
+/* the tool in hand: just its name, no drawing and no box round it */
+.bm-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .bm-opts { display: none; }
 .build-menu.has-tool .bm-opts { display: flex; }
 /* the options, each with its key under it (not on touch screens) */
@@ -1623,9 +1621,8 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 .pm-rel { position: relative; }
 /* each mark shows only in its state; the line under a word is drawn on
    from the left */
-.pm :is(.pm-crop, .pm-u, .pm-chosen, .pm-tick, .pm-x, .pm-held, .pm-strike) { display: none; }
+.pm :is(.pm-crop, .pm-u, .pm-chosen, .pm-tick, .pm-x, .pm-strike) { display: none; }
 .pm .pm-u { display: inline; stroke-dasharray: 1 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset 140ms cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0s 140ms; }
-.pm .pm-held { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
 .pm .pm-strike { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 .pm :is(.pm-box, .pm-x) { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* chosen: hatched like a roof, in the detail colour, under the control's
@@ -1647,12 +1644,8 @@ body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
 #ui .scheme.on > .pm .pm-tick { display: inline; }
 /* a setting: its box, crossed while on */
 #ui :is(.bm-opts, .bm-loose) [aria-pressed="true"] > .pm .pm-x { display: inline; }
-/* the tool in hand: its name boxed in the thick pen */
-#ui .build-menu.has-tool .bm-toggle > .pm .pm-held { display: inline; }
-/* …but an action leading the dock (photo mode's Take a picture) is a word
-   like the options beside it, not a tool held */
-#ui .build-menu.has-lead .bm-toggle > .pm .pm-held { display: none; }
-.build-menu.has-lead .bm-held { display: none; }
+/* an action leading the dock (photo mode's Take a picture) is a word like
+   the options beside it, not a tool held */
 #ui .build-menu.has-lead .bm-toggle { padding: 0 14px; font-weight: normal; }
 /* can't be done here: struck through */
 #ui .popup button:disabled:not(.info):not(.heading) > .pm .pm-strike,
@@ -1711,12 +1704,10 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 
   .build-menu { bottom: calc(10px + var(--safe-b)); }
   /* with a tool in hand the dock grows: it keeps to the width of the
-     screen, in its middle, the tool shown by its drawing alone (no room
-     for names) */
+     screen, in its middle, the tool's name cut short if there's no room */
   .build-menu.folded.has-tool:not(.folding) { left: calc(8px + var(--safe-l)); right: calc(8px + var(--safe-r)); transform: none; }
   .bm-dock { max-width: 100%; }
-  .build-menu.has-tool:not(.has-lead) .bm-label { display: none; }
-  #ui .build-menu.has-tool .bm-toggle { padding: 0 4px; }
+  #ui .build-menu.has-tool .bm-toggle { min-width: 0; padding: 0 10px; }
   #ui .bm-opts button, #ui .bm-history button, #ui .bm-drop { padding: 0 8px; }
   .bm-panel { width: calc(100vw - 16px - var(--safe-l) - var(--safe-r)); }
   /* Erase, Terrain, the camera: a third of a phone each – room for the

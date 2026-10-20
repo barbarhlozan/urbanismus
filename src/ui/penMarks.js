@@ -23,8 +23,6 @@
 //                    colour scheme)
 //   setting          a small box in the corner, crossed while it's on
 //                    (Terrain, beside Erase)
-//   in hand          the name of the tool in hand boxed in the thick pen,
-//                    a little askew, each tool at its own angle
 //   can't            struck through (a popup's choice, Zpět with nothing
 //                    to take back)
 //   keyboard focus   crop marks at the four corners, as a printer marks
@@ -50,7 +48,6 @@ const CELLS = '.close, .bm-tab, .bm-tool, .bm-act, .bm-toggle, .bm-opts button, 
 const CHOSEN = '.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab';
 const TICKED = '.scheme';
 const SETTING = '.bm-opts button[aria-pressed], .bm-act[aria-pressed]';
-const HELD = '.bm-toggle';
 const STRUCK = '.popup button, .bm-act';
 // not part of the word that's underlined (a key, a value, a number, a Menu
 // item's name written beside its drawing)
@@ -60,7 +57,7 @@ const IN = -3;  // …or inside a cell, or a box that would clip them
 const ARM = 6;  // px: each arm of a crop mark
 
 let count = 0;
-const parts = ['crop', 'u', 'chosen', 'tick', 'box', 'x', 'held', 'strike'];
+const parts = ['crop', 'u', 'chosen', 'tick', 'box', 'x', 'strike'];
 
 export function penMarks(root) {
   const resized = new ResizeObserver((entries) => {
@@ -103,7 +100,7 @@ export function penMarks(root) {
       }
       // a control whose contents were written over has lost its marks
       if (r.target.pmSvg && r.target.pmSvg.parentNode !== r.target) r.target.appendChild(r.target.pmSvg);
-      if (host) redraw.add(host); // (its word changed: the tool in hand)
+      if (host) redraw.add(host); // (its word changed: the underline follows it)
       for (const n of r.addedNodes) {
         if (n.nodeType !== 1 || n.classList.contains('pm')) continue;
         if (n.matches(CONTROLS)) mark(n);
@@ -209,19 +206,6 @@ function draw(el) {
     const z = 7, x = 6, y = 6; // (clear of the dock's frame along the edge)
     set('box', sketchBox(x, y, z, z, s, { over: 1.2, waver: 0.4, slip: 0.5 }));
     set('x', sketchLine([x - 1, y - 1], [x + z + 1.5, y + z + 1], s, { over: 0.8 }) + sketchLine([x + z + 1, y - 1.5], [x - 1, y + z + 1], s + 3, { over: 0.8 }));
-  }
-  if (el.matches(HELD)) {
-    // round the tool's name (or its drawing, where a phone leaves the name
-    // out), at an angle that's its own: the same tool sits the same way
-    // each time it's picked up
-    const label = el.querySelector('.bm-label');
-    const what = [label, el.querySelector('.bm-held')].find((x) => x?.offsetWidth);
-    const t = seedOf(...[...(label?.textContent ?? '')].map((ch) => ch.charCodeAt(0)));
-    const a = ((t % 5) - 2) * 0.5;
-    const b = what ? { x: what.offsetLeft, y: what.offsetTop, w: what.offsetWidth, h: what.offsetHeight } : c;
-    const [px, py] = what === label ? [6, 4] : [-2, -2]; // (a drawing fills its cell: inside it)
-    set('held', sketchBox(b.x - px, b.y - py, b.w + 2 * px, b.h + 2 * py, t, { over: 3, waver: 1, slip: 0.8 }),
-      { transform: `rotate(${a} ${b.x + b.w / 2} ${b.y + b.h / 2})` });
   }
   if (el.matches(STRUCK)) {
     const label = el.querySelector('.label');

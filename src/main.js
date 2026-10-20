@@ -413,7 +413,8 @@ penMarks(document.getElementById('intro'));
 
 // Terrain contour lines: off unless switched on with the Terrain button beside
 // Erase (tools/terrain.js), then on until switched off, whatever is in hand
-// (remembered in this browser).
+// (remembered in this browser); shown anyway while building, once Terrain is
+// unlocked.
 contours.start();
 // The dots around the pointer (OverlayKit.nearDots): only while building,
 // Select and Photo show the bare map; only those the tool can use (with a
@@ -422,6 +423,7 @@ let dots = null;
 tools.onChange((tool) => {
   dots = tool.id === 'inspect' || tool.id === 'photo' ? null
     : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: tool.id === 'road' || tool.id === 'lane' };
+  contours.lend(!!dots && tool.id !== 'bulldoze' && UNLOCKS.allowsControl('terrain'));
   // the road marks (render/roadMarks.js): firmer while the player can mend
   // them, gone while composing a photo
   renderer.setNotes(tool.id === 'photo' ? 'off' : tool.id.startsWith('build:') || ['road', 'lane', 'path'].includes(tool.id) ? 'strong' : 'quiet');

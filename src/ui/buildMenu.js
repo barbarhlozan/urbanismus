@@ -136,7 +136,7 @@ export class BuildMenu {
         </div>
       </div>
       <div class="bm-dock">
-        <button class="bm-toggle" aria-label="${t('build.open')}"><span class="bm-held"></span><span class="bm-label">${t('build')}</span></button>
+        <button class="bm-toggle" aria-label="${t('build.open')}"><span class="bm-label">${t('build')}</span></button>
         <span class="bm-opts"></span>
         <span class="bm-history">
           <button data-act="undo" hidden title="${t('undo')}" aria-label="${t('undo')}">${option('undo')}<span>${t('undo')}</span></button>
@@ -148,7 +148,6 @@ export class BuildMenu {
     this.panelEl = this.el.querySelector('.bm-panel');
     this.dockEl = this.el.querySelector('.bm-dock');
     this.toggleEl = this.el.querySelector('.bm-toggle');
-    this.heldEl = this.el.querySelector('.bm-held');
     this.labelEl = this.el.querySelector('.bm-label');
     this.optsEl = this.el.querySelector('.bm-opts');
     this.undoEl = this.el.querySelector('.bm-dock [data-act="undo"]');
@@ -209,7 +208,6 @@ export class BuildMenu {
       const picked = tool.id !== tools.defaultId;
       this.cameraEl.classList.toggle('on', tool.id === 'photo');
       this.cameraEl.setAttribute('aria-pressed', String(tool.id === 'photo'));
-      this.heldEl.innerHTML = picked && !tool.lead ? toolIcon(tool) : '';
       this.labelEl.textContent = tool.lead?.label ?? (picked ? tool.label : t('build'));
       this.el.classList.toggle('has-lead', !!tool.lead);
       this.toggleEl.setAttribute('aria-label', tool.lead?.label ?? t('build.open'));
