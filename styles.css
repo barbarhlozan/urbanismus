@@ -295,6 +295,9 @@ html, body {
 /* the masks that leave the lights out (render/lights.js): everything shown
    but the lights, their edges broken as the shadows' */
 .light-mask .mask-all { fill: #fff; }
+/* the windows lit at night (Renderer.renderWindows): paper panes over the
+   night, framed in the finest pen */
+.lit-window { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; pointer-events: none; }
 mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3 2 1.5 3.5 2.5 1 4 2.5 1 3; stroke-linejoin: round; }
 /* screen-facing line drawings (trees, see features/trees.js) */
 /* woods far out, one shape each (render/forest.js): as a tree's crown */

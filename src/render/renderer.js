@@ -282,10 +282,11 @@ export class Renderer {
     const night = this.layers.night;
     night.innerHTML = '<defs class="night-tiles"></defs>' +
       '<mask id="night-mask" class="light-mask" maskUnits="userSpaceOnUse"><rect class="mask-all"/><g class="night-lights"></g></mask>' +
-      '<rect class="night-grey" mask="url(#night-mask)"/><rect class="night-veil" mask="url(#night-mask)"/>';
+      '<rect class="night-grey" mask="url(#night-mask)"/><rect class="night-veil" mask="url(#night-mask)"/><g class="night-windows"></g>';
     this.layers.lights.remove();
     this.layers.lights = night.querySelector('.night-lights');
     this.lightCuts = [...veil.querySelectorAll('.lights-cut')];
+    this.nightWindows = night.querySelector('.night-windows');
     // hover rings and tags on their way out, over the overlay (see letGo)
     this.leaving = this.layers.overlay.parentNode.appendChild(document.createElementNS(SVGNS, 'g'));
     this.leaving.setAttribute('class', 'overlay leaving');
@@ -1484,6 +1485,7 @@ export class Renderer {
   // is) wait for it to end, and what is being erased goes at once.
   startTurn() {
     this.turning = true;
+    this.nightWindows.innerHTML = ''; // (drawn again once the view rests, renderWindows)
     this.layers.overlay.style.visibility = 'hidden';
     this.reapGhosts(true);
   }
@@ -1644,7 +1646,7 @@ export class Renderer {
       g.innerHTML = built.svg;
       lg.innerHTML = built.ground;
       sg.innerHTML = this.shadowSVG(built.shade, built.detail);
-      return { k, angle: cam.angle, bare: true, g, lg, sg, shade: built.shade, band: built.band, vents: built.vents?.length ? built.vents : null, ventsTurn: cam.angle, bounds: built.bounds, box: built.box, at: built.at };
+      return { k, angle: cam.angle, bare: true, g, lg, sg, shade: built.shade, night: built.night, band: built.band, vents: built.vents?.length ? built.vents : null, ventsTurn: cam.angle, bounds: built.bounds, box: built.box, at: built.at };
     } finally {
       cam.angle = live;
       this.drawBare = false;
@@ -1656,8 +1658,8 @@ export class Renderer {
   swapIn(e, view) {
     e.views ??= new Map();
     if (e.k != null && e.bare && !e.views.has(e.k)) {
-      const { k, angle, bare, g, lg, sg, shade, band, vents, ventsTurn, bounds, box, at } = e;
-      e.views.set(e.k, { k, angle, bare, g, lg, sg, shade, band, vents, ventsTurn, bounds, box, at });
+      const { k, angle, bare, g, lg, sg, shade, night, band, vents, ventsTurn, bounds, box, at } = e;
+      e.views.set(e.k, { k, angle, bare, g, lg, sg, shade, night, band, vents, ventsTurn, bounds, box, at });
     }
     e.views.delete(view.k);
     for (const n of ['g', 'lg', 'sg']) {
@@ -1756,6 +1758,7 @@ export class Renderer {
       this.dirty.add(l);
     }
     for (const el of this.lightCuts) el.removeAttribute('transform');
+    this.dirty.add('windows');
     if (this.linesAngle !== a) {
       this.roadLines = null;
       for (const l of LINES) {
@@ -1982,6 +1985,7 @@ export class Renderer {
     this.free = freeTest(world, this.config);
     this.lampRoom = null; // (buildStreet: worked out again when needed)
     if (this.lampsOn && [...keys].some((k) => k[0] === 'k')) this.dirty.add('lights'); // (lamps come and go)
+    if (this.dark && keys.size) this.dirty.add('windows'); // (windows come and go, or are hidden anew)
     if (this.objsAll) this.reapGhosts(true); // drawn for the old view
 
     const now = performance.now();
@@ -2058,6 +2062,7 @@ export class Renderer {
       entry.g.innerHTML = built.svg;
       entry.lg.innerHTML = built.ground;
       entry.shade = built.shade;
+      entry.night = built.night;
       entry.sg.innerHTML = this.shadowSVG(entry.shade, built.band);
       if (was) {
         const only = new Set(strokesOf(entry).filter((el) => !was.has(el.outerHTML)));
@@ -2207,7 +2212,7 @@ export class Renderer {
     if (!out) return null;
     const { painter, x, y } = out;
     const band = this.bandFor(`k${key}`), detail = this.drawBare ? bareOf(band) : band;
-    return { band, detail, svg: mergeRuns(this.atDetail(painter.toSVG(), detail)), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
+    return { band, detail, svg: mergeRuns(this.atDetail(painter.toSVG(), detail)), ground: '', shade: this.shadeOf(painter), night: this.nightOf(painter), ...this.placeOf({ points: [[x, y]], pad: 0.05, top: painter.top }) };
   }
 
   // The painters behind buildStreet / buildFeature / buildStructure, for any
@@ -2239,7 +2244,7 @@ export class Renderer {
     const out = this.paintFeature(f, this.camera, detail & 3);
     if (!out) return null;
     const { painter, x, y } = out;
-    return { band, detail, svg: mergeRuns(this.atDetail(painter.toSVG(), detail)), ground: '', shade: this.shadeOf(painter), ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
+    return { band, detail, svg: mergeRuns(this.atDetail(painter.toSVG(), detail)), ground: '', shade: this.shadeOf(painter), night: this.nightOf(painter), ...this.placeOf({ points: [[x, y]], pad: FEATURE_PAD, top: painter.top }) };
   }
 
   // The detail (bandOf) an object is drawn with now: as it was drawn last
@@ -2282,13 +2287,17 @@ export class Renderer {
     if (!out) return null;
     const { painter, points } = out;
     const band = this.bandFor(`s${s.id}`), detail = this.drawBare ? bareOf(band) : band;
-    return { band, detail, svg: mergeRuns(this.atDetail(painter.toSVG(), detail)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), detail)), shade: this.shadeOf(painter), vents: painter.vents, ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top, anchor: painter.rigid }) };
+    return { band, detail, svg: mergeRuns(this.atDetail(painter.toSVG(), detail)), ground: mergeRuns(this.atDetail(painter.toGroundSVG(), detail)), shade: this.shadeOf(painter), night: this.nightOf(painter), vents: painter.vents, ...this.placeOf({ points, pad: STRUCTURE_PAD, top: painter.top, anchor: painter.rigid }) };
   }
 
   // An object's shadow (shadows.js): the feet of its walls and the other
   // shapes it casts from, in world points, and how its ground projects –
   // kept on the object's entry, so the shadow alone can be drawn again for
   // another sun (renderShadows).
+  nightOf(painter) {
+    return { wins: painter.panes, covers: painter.covers() };
+  }
+
   shadeOf(painter) {
     return painter.feet.length || painter.casts.length ? { feet: painter.feet, casts: painter.casts, project: painter.groundProjector() } : null;
   }
@@ -2315,6 +2324,11 @@ export class Renderer {
     this.gloom = step.gloom ?? 0;
     this.layers.night.style.setProperty('--night-grey', this.gloom);
     this.layers.night.style.setProperty('--night-ink', `${Math.round((step.ink ?? 0) * 100)}%`);
+    if ((step.windows ?? 0) !== this.litShare || !!step.night !== this.windowsDark) {
+      this.litShare = step.windows ?? 0;
+      this.windowsDark = !!step.night;
+      this.dirty.add('windows');
+    }
     if (!!step.lamps !== !!this.lampsOn) {
       this.lampsOn = !!step.lamps;
       this.dirty.add('lights');
@@ -2368,6 +2382,60 @@ export class Renderer {
     const r = (Math.hypot(world.grid.width, world.grid.height) + 20) * px * 2;
     const box = { x: Math.round(mx - r), y: Math.round(my - r), width: Math.round(2 * r), height: Math.round(2 * r) };
     for (const el of night.querySelectorAll('mask, rect')) for (const [k, v] of Object.entries(box)) el.setAttribute(k, v);
+  }
+
+  // The windows lit at night (DAY.steps `windows`: so many tenths of them,
+  // by each window's number, Painter._window): drawn over the night as
+  // paper panes, but only where nothing nearer hides them – the objects
+  // gone through from the furthest to the nearest (this.order), a window
+  // left out when its middle lies under the outline of something nearer
+  // (Painter.covers). Drawn again when the share changes, when objects are
+  // drawn anew, and once a turn of the view rests.
+  renderWindows() {
+    const el = this.nightWindows;
+    const share = this.dark ? this.litShare ?? 0 : 0;
+    if (!share || this.turning || !this.order) {
+      el.innerHTML = '';
+      return;
+    }
+    const order = this.order.filter((e) => e.shown !== false && e.night);
+    // what covers what, in cells of the screen (scene px)
+    const CELL = 48, cells = new Map();
+    const at = (x, y) => `${Math.floor(x / CELL)},${Math.floor(y / CELL)}`;
+    order.forEach((e, i) => {
+      for (const c of e.night.covers) {
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const [x, y] of c) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+        for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
+          for (let cy = Math.floor(y0 / CELL); cy <= Math.floor(y1 / CELL); cy++) {
+            const k = `${cx},${cy}`;
+            (cells.get(k) ?? cells.set(k, []).get(k)).push({ i, c, x0, y0, x1, y1 });
+          }
+        }
+      }
+    });
+    // inside a convex outline (anticlockwise, or the other way round)
+    const inside = (c, x, y) => {
+      let pos = false, neg = false;
+      for (let j = 0; j < c.length; j++) {
+        const [ax, ay] = c[j], [bx, by] = c[(j + 1) % c.length];
+        const cr = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+        if (cr > 0) pos = true; else if (cr < 0) neg = true;
+        if (pos && neg) return false;
+      }
+      return true;
+    };
+    const lit = Math.round(share * 10);
+    let d = '';
+    order.forEach((e, i) => {
+      for (const w of e.night.wins) {
+        if (w.n >= lit) continue;
+        const x = (w.pts[0][0] + w.pts[2][0]) / 2, y = (w.pts[0][1] + w.pts[2][1]) / 2;
+        const hid = cells.get(at(x, y))?.some((o) => o.i > i && x >= o.x0 && x <= o.x1 && y >= o.y0 && y <= o.y1 && inside(o.c, x, y));
+        if (!hid) d += `M${w.pts.map(([px, py]) => `${r2(px)} ${r2(py)}`).join('L')}Z`;
+      }
+    });
+    el.innerHTML = d ? `<path class="lit-window" d="${d}"/>` : '';
   }
 
   // The lights (lights.js): with the lamps on (DAY.steps `lamps`), a pool

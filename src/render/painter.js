@@ -84,7 +84,7 @@ import { color } from '../theme.js';
 import { mulberry32 } from '../core/random.js';
 import { MinHeap } from '../core/heap.js';
 import { siteWalks } from '../roads/siteWalks.js';
-import { SUN, sunFor, tierOf, tierClass, penClass, awayFrom, strokeShare, wallStrokes } from './shadows.js';
+import { SUN, sunFor, tierOf, tierClass, penClass, awayFrom, strokeShare, wallStrokes, hash } from './shadows.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 // Photos (a perspective camera): roof hatching at most this many px apart
@@ -214,6 +214,22 @@ function attrs(opts, lod = 0, base = '') {
   return (style ? ` style="${style}"` : '') + (cls ? ` class="${cls}"` : '');
 }
 
+// The convex hull of 2D points, anticlockwise (monotone chain).
+function hull2(pts) {
+  pts = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list) => {
+    const out = [];
+    for (const p of list) {
+      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], p) <= 0) out.pop();
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return [...half(pts), ...half([...pts].reverse())];
+}
+
 // The four walls of a box as { n: outward normal, a, b: ends along the wall }.
 // skip: side names to leave out ('front', 'right', 'back', 'left').
 function boxSides(x, y, w, d, inset, skip = []) {
@@ -260,6 +276,7 @@ export class Painter {
     this._tc = 1;
     this._ts = 0;
     this.feet = [];       // walls' feet on the ground: { a, b, h, n } world, see render/shadows.js
+    this.panes = [];      // its windows drawn: { pts: 4 scene points, n: 0–9 }, for the night (Renderer.renderWindows)
     this.casts = [];      // other shapes that cast a shadow (trees), world, see Painter.cast
     this.casting = true;  // false: draw no shadows (icons)
   }
@@ -316,6 +333,7 @@ export class Painter {
   // little, like a line drawn by hand. Closed outlines big enough also get
   // LOOK.overshoot: their edges run on a little past the corners.
   _outline(points, closed, opts, lod) {
+    if (closed) this._cover(this._screenRuns(points, closed).flat());
     if (!LOOK.sketch) {
       return this._screenRuns(points, closed)
         .map((run) => `<${closed ? 'polygon' : 'polyline'} points="${run.map(([x, y]) => `${r2(x)},${r2(y)}`).join(' ')}"${attrs(opts, lod)}/>`)
@@ -517,6 +535,22 @@ export class Painter {
 
   _ensure(x, y, z) {
     if (!this.current) this.solid(x, y, z);
+  }
+
+  // What a solid hides on screen: the points of the shapes it fills (scene
+  // px), gathered as it draws them; covers() makes them outlines.
+  _cover(pts) {
+    if (!this.current || !pts.length) return;
+    (this.current.cover ??= []).push(...pts);
+  }
+
+  // The outline on screen of each solid drawn (the convex hull of what it
+  // fills), for what stands behind it: a window lit at night is not seen
+  // through it (Renderer.renderWindows).
+  covers() {
+    const out = [];
+    for (const s of this.solids) if (s.cover?.length >= 3) out.push(hull2(s.cover));
+    return out;
   }
 
   _walls(base, z0, z1, opts) {
@@ -1197,6 +1231,7 @@ export class Painter {
     if (aside) for (const solid of other.solids) solid.aside = true;
     this.feet.push(...other.feet);
     this.casts.push(...other.casts);
+    this.panes.push(...other.panes);
     this.top = Math.max(this.top, other.top + other.oz - this.oz);
     this.solids.push(...other.solids);
     this.ground.push(...other.ground);
@@ -1232,6 +1267,12 @@ export class Painter {
     const [a, b, c, e] = points;
     const scr = (p) => this._project(...this._world(p[0], p[1], p[2]));
     const [sa, sb, sc] = [scr(a), scr(b), scr(c)];
+    // kept for the night, with its number, 0–9, seeded by where it is: the
+    // map lights so many tenths of its windows, the lowest numbers first
+    if (!photo) {
+      const mid = this._world((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, (a[2] + c[2]) / 2);
+      this.panes.push({ pts: [sa, sb, sc, scr(e)], n: Math.min(9, Math.floor(hash(mid[0] * 31.7 + mid[2] * 13.1, mid[1] * 17.3) * 10)) });
+    }
     const wide = Math.hypot(sb[0] - sa[0], sb[1] - sa[1]), high = Math.hypot(sc[0] - sb[0], sc[1] - sb[1]);
     const out = this.current.parts;
     out.push(this._outline(points, false, { ...opts, cls: 'pane' }, lod));
@@ -1267,6 +1308,7 @@ export class Painter {
     if (!a) return this;
     const [sx, sy, t] = a;
     const p = points.map(([u, v]) => [r2(sx + u * t), r2(sy - v * t)]);
+    this._cover(p);
     if (!opts.smooth) {
       this.current.parts.push(`<polygon points="${p.map((q) => q.join(',')).join(' ')}"${attrs(opts, this._lod(opts))}/>`);
       return this;

@@ -125,6 +125,8 @@ export function screenLight(camera, sun = SUN) {
 //           them (Renderer.renderNight), and no sun
 //   lamps   the street lamps lit, their light left out of the night and
 //           the shadows (lights.js)
+//   windows the share of the windows lit at night (0 … 1): most in the
+//           evening, a few in the small hours, some again before dawn
 //   gloom   a grey over the map, as under a storm sky (with the weather's),
 //           left out where the lights are:
 //           the paper and the ink both go towards the secondary ink, so
@@ -144,11 +146,11 @@ export const DAY = {
   dawn: 4.25,
   positions: [[170, 2.2], [150, 1.7], [130, 1.35], [110, 1.1], [90, 1], [70, 1.1], [50, 1.35], [30, 1.7], [10, 2.2]],
   steps: [
-    { at: 0, night: true, lamps: true, gloom: 0.3, ink: 0.15 },
-    { at: 1, night: true, lamps: true, gloom: 0.38, ink: 0.25 },
-    { at: 2.5, night: true, lamps: true, gloom: 0.3, ink: 0.15 },
-    { at: 3.25, night: true, lamps: true, gloom: 0.22 },
-    { at: 4.25, sun: 0, length: 12, hills: 1, lamps: true, gloom: 0.12 },
+    { at: 0, night: true, lamps: true, windows: 0.2, gloom: 0.3, ink: 0.15 },
+    { at: 1, night: true, lamps: true, windows: 0.1, gloom: 0.38, ink: 0.25 },
+    { at: 2.5, night: true, lamps: true, windows: 0.1, gloom: 0.3, ink: 0.15 },
+    { at: 3.25, night: true, lamps: true, windows: 0.2, gloom: 0.22 },
+    { at: 4.25, sun: 0, length: 12, hills: 1, lamps: true, windows: 0.3, gloom: 0.12 },
     { at: 4.75, sun: 0, length: 6, hills: 1, gloom: 0.08 },
     { at: 5.5, sun: 0, length: 3.5, hills: 1, gloom: 0.04 },
     { at: 6.25, sun: 0 },
@@ -156,10 +158,10 @@ export const DAY = {
     { at: 13.5, sun: 5 }, { at: 15, sun: 6 }, { at: 16.5, sun: 7 }, { at: 18, sun: 8 },
     { at: 19.25, sun: 8, length: 3.5, hills: 1, gloom: 0.04 },
     { at: 20, sun: 8, length: 6, hills: 1, gloom: 0.08 },
-    { at: 20.75, sun: 8, length: 12, hills: 1, lamps: true, gloom: 0.12 },
-    { at: 21.5, night: true, lamps: true, gloom: 0.16 },
-    { at: 22.5, night: true, lamps: true, gloom: 0.22 },
-    { at: 23.25, night: true, lamps: true, gloom: 0.3, ink: 0.15 },
+    { at: 20.75, sun: 8, length: 12, hills: 1, lamps: true, windows: 0.6, gloom: 0.12 },
+    { at: 21.5, night: true, lamps: true, windows: 0.7, gloom: 0.16 },
+    { at: 22.5, night: true, lamps: true, windows: 0.5, gloom: 0.22 },
+    { at: 23.25, night: true, lamps: true, windows: 0.3, gloom: 0.3, ink: 0.15 },
   ],
 };
 
