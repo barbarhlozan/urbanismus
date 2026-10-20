@@ -78,7 +78,7 @@ export class NightCanvas {
     }
     const view = new DOMMatrix([dpr * camera.zoom, 0, 0, dpr * camera.zoom, dpr * camera.panX, dpr * camera.panY]);
     const lightsAt = lights ? (sheet ? view.multiply(sheet) : view) : null;
-    const state = { grey: Math.round(grey * 1000), colour, tier, depth, hatch, px, stroke, lights, view: view.toString(), lightsAt: lightsAt?.toString(), cover, all };
+    const state = { grey: Math.round(grey * 1000), colour, tier, depth, hatch, px, stroke, lights, view: view.toString(), lightsAt: lightsAt?.toString(), cover };
     // the beams as window boxes, padded for their ragged edges
     const boxes = beams.map((poly) => {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -141,15 +141,12 @@ export class NightCanvas {
       mc.globalCompositeOperation = 'source-over';
       mc.clearRect(0, 0, w, h);
       mc.fillStyle = mc.strokeStyle = '#000';
-      if (all) mc.fillRect(0, 0, w, h);
-      else {
-        for (const [light, path] of cover) {
-          mc.globalCompositeOperation = light ? 'destination-out' : 'source-over';
-          if (light) cut(path, view, mc);
-          else {
-            mc.setTransform(view);
-            mc.fill(path);
-          }
+      for (const [light, path] of cover) {
+        mc.globalCompositeOperation = light ? 'destination-out' : 'source-over';
+        if (light) cut(path, view, mc);
+        else {
+          mc.setTransform(view);
+          mc.fill(path);
         }
       }
       mc.globalCompositeOperation = 'source-over';

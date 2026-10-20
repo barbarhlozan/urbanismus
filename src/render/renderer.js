@@ -129,7 +129,7 @@ const OVERSCAN = 0.25;
 // While the view turns (Renderer.turnFrame): the layers turned as a sheet
 // of paper, drawn anew once it rests, and the lines on the ground drawn at
 // the turning angle every frame. Buildings, trees and lamps go their own way.
-const SHEET = ['forest', 'mist', 'hillshade', 'lights'];
+const SHEET = ['forest', 'mist', 'hillshade'];
 const LINES = ['roads', 'paths', 'rails', 'fences', 'notes'];
 // The steps of a whole turn (Camera.STEP); the views an object keeps of
 // the steps it has been drawn at, at most (Renderer.swapIn); and ms the
@@ -2439,8 +2439,6 @@ export class Renderer {
         }
       }
     }
-    // (turning, or before anything is in order: the night over everything)
-    this.topAll = turning;
     this.topCover = parts.map(([light, d]) => [light, new Path2D(d)]);
     this.groundLight = pools || spills ? new Path2D(pools + spills) : null;
     const cut = pools ? `<path class="light" d="${pools}"/>` : '';
@@ -2506,7 +2504,10 @@ export class Renderer {
       stroke: this.strokeK ?? 1,
     };
     this.nightPen.draw(camera, { ...look, lights: this.groundLight, sheet: this.nightSheet, beams: this.headlights() });
-    this.nightTop.draw(camera, { ...look, cover: this.topCover, all: this.topAll || this.turning });
+    // (while the view turns the objects' night can't follow them: they go
+    // without, bare paper, as they are drawn bare – the lights on the ground
+    // stay; renderLights left the cover empty)
+    this.nightTop.draw(camera, { ...look, cover: this.turning ? [] : this.topCover });
   }
 
   // Every object's shadow drawn again from its feet, with SUN as it is
