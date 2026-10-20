@@ -85,7 +85,7 @@ export const BUILD_FAMILIES = [
   [business.postOffice], [business.hotel, business.hotelWide],
   [services.fireHouse, services.fireStation, services.fireStationLarge], [services.police],
   [services.healthCentre], [services.clinic], [services.hospital], [services.school],
-  [landmarks.cultureHouse], [pool], [grounds.cemetery],
+  [landmarks.cultureHouse, landmarks.cultureHouseSmall], [pool], [grounds.cemetery],
   // Výroba
   [industry.autoopravna, industry.autoopravnaMedium], [industry.kovarna, industry.kovarnaMedium],
   [industry.truhlarna, industry.truhlarnaMedium], [industry.komunalniPodnik],

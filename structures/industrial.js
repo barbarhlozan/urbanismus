@@ -14,7 +14,7 @@
 // STS machine station, the cukrovar. Coal mines are in mine.js. All are
 // tagged 'industrial', so trucks and trips treat them the same.
 
-import { stack, door, panel, timber, heap, tank, barrels, gantry, pipes, transformer, gallery, crates, roundWindows, hoops, fenceAlong, wagons, woodpile, trailer, bricks, concreteRings, tractor, kindOf, FRAME } from './kit.js';
+import { stack, chimney, door, panel, timber, heap, tank, barrels, gantry, pipes, transformer, gallery, crates, roundWindows, hoops, fenceAlong, wagons, woodpile, trailer, bricks, concreteRings, tractor, kindOf, FRAME } from './kit.js';
 
 // Water tower: a drum on a column (the mushroom kind).
 function waterTower(g, x, y, h) {
@@ -304,8 +304,8 @@ export const komunalniPodnik = {
 
 // ----- Food -----
 
-// Pekárna, the bakery: two storeys, hipped roof, the oven's chimney at the
-// back.
+// Pekárna, the bakery: two storeys, hipped roof, the oven's brick flue up
+// the back wall.
 export const pekarna = {
   ...SMALL,
   id: 'pekarna',
@@ -318,7 +318,7 @@ export const pekarna = {
     g.windows(-w / 2, y, w, d, 0, h, fh, 0.09, { from: 1 });
     loadingDoor(g, -0.2, y, 0.16, 0.11);
     panel(g, 0.0, 0.2, y, 0.03, 0.1);
-    stack(g, 0.2, 0.3, 0.62, 0.045);
+    chimney(g, 0.13, y + d + 0.035, 0, h + 0.22, 0.07);
   },
 };
 

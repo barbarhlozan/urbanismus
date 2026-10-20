@@ -76,7 +76,7 @@
 #     polyclinic         clinic
 #     hospital           hospital
 #     school             school
-#     house_of_culture   culture_house
+#     house_of_culture   culture_house, culture_house_small
 #     swimming_pool      pool
 #     cemetery           cemetery
 #   Výroba
