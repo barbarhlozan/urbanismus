@@ -202,16 +202,19 @@ const common = {
 };
 
 // The station building: a taller hall with a clock gable between two lower
-// wings, doors front and back, from x0 to x1 at depth y…y + d.
+// wings, doors front and back, from x0 to x1 at depth y…y + d. Each wing's
+// windows go right after it (they sort with the last solid drawn), none on
+// the wall it shares with the hall; the hall's sides get a row above the
+// wings' eaves.
 function stationHouse(g, x0, x1, y, d) {
   const h = 0.24, hall = Math.min(0.7, (x1 - x0) * 0.4), wing = (x1 - x0 - hall) / 2;
   const cx = (x0 + x1) / 2;
   g.roofed(x0, y, 0, wing, d, h, { h: 0.16, hip: 0.14 });
+  g.windows(x0, y, wing, d, 0, h, h / 2, 0.11, { skip: ['right'] });
   g.roofed(x1 - wing, y, 0, wing, d, h, { h: 0.16, hip: 0.14 });
+  g.windows(x1 - wing, y, wing, d, 0, h, h / 2, 0.11, { skip: ['left'] });
   g.roofed(cx - hall / 2, y, 0, hall, d, h + 0.12, { h: 0.2, ridge: 'y' });
-  g.windows(x0, y, wing, d, 0, h, h / 2, 0.11);
-  g.windows(x1 - wing, y, wing, d, 0, h, h / 2, 0.11);
-  g.windows(cx - hall / 2, y, hall, d, h / 2, h + 0.12, h / 2, 0.13, { skip: ['front', 'back'] });
+  g.windows(cx - hall / 2, y, hall, d, h, h + 0.12, 0.12, 0.13, { skip: ['front', 'back'] });
   door(g, cx - 0.1, y, 0.08, 0.15);
   door(g, cx + 0.1, y, 0.08, 0.15);
   backDoor(g, cx - 0.1, y + d, 0.08, 0.15);
