@@ -30,18 +30,24 @@ test('the sun stands over the world, not the screen', () => {
 
 test('the day goes round 24 hours: sun by day, night between', () => {
   const step = (hour) => DAY.steps[stepAt(hour)];
-  // midday is SUN's own, with no night over it
-  assert.deepEqual(DAY.positions[step(12)[1]], [SUN.azimuth, SUN.length]);
-  assert.equal(step(12)[2], 0);
-  // the dead of night: no sun, all of the night
-  assert.deepEqual(step(2).slice(1), [null, 4]);
+  // midday is SUN's own, with no night over it and no grey
+  assert.deepEqual(DAY.positions[step(12).sun], [SUN.azimuth, SUN.length]);
+  assert.ok(!step(12).night && !step(12).gloom && !step(12).length);
+  // the dead of night: the night, no sun
+  assert.ok(step(2).night && step(2).sun == null);
   // every position of the sun is used, morning to evening, in order
-  const suns = DAY.steps.map((s) => s[1]).filter((p) => p != null);
+  const suns = DAY.steps.filter((s) => !s.night).map((s) => s.sun);
   assert.deepEqual([...new Set(suns)], DAY.positions.map((_, i) => i));
-  // at dusk and dawn the night comes in over the long shadows, step by step
-  const darks = DAY.steps.map((s) => s[2]);
-  for (let i = 1; i < darks.length; i++) assert.ok(Math.abs(darks[i] - darks[i - 1]) <= 1);
-  assert.ok(DAY.steps.some(([, p, d]) => p === DAY.positions.length - 1 && d > 0), 'dusk with the evening sun');
+  // at dusk the evening's shadows spread, longer and longer, until the
+  // night; at dawn the morning's shrink back from it
+  const dusk = DAY.steps.filter((s) => s.sun === DAY.positions.length - 1 && s.length).map((s) => s.length);
+  const dawn = DAY.steps.filter((s) => s.sun === 0 && s.length).map((s) => s.length);
+  assert.ok(dusk.length >= 2 && dawn.length >= 2);
+  for (let i = 1; i < dusk.length; i++) assert.ok(dusk[i] > dusk[i - 1]);
+  for (let i = 1; i < dawn.length; i++) assert.ok(dawn[i] < dawn[i - 1]);
+  assert.ok(Math.min(...dusk) > Math.max(...DAY.positions.map(([, l]) => l)));
+  assert.equal(step(DAY.dawn).sun, 0);
+  assert.ok(step(DAY.dawn - 0.1).night);
   // the hours from world time: a whole day round, starting at DAY.start
   assert.equal(hourAt(0), DAY.start);
   assert.ok(Math.abs(hourAt(DAY.day) - DAY.start) < 1e-9);

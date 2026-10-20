@@ -113,31 +113,41 @@ export function screenLight(camera, sun = SUN) {
   return [-sx / l, sy / l];
 }
 
-// The day, all 24 hours of it: its steps, each from an hour on – where the
-// sun stands (an index into `positions`, [azimuth, length] as SUN's, from
-// morning to evening; null: below the horizon, no shadows) and how dark it
-// is (0 day … 4 night: the night's hatching over everything, every 8th of
-// the paper's lines at 1, every 4th at 2, every other at 3, every one at 4,
-// Renderer.renderNight; and a grey over the map, `gloom`, as under a storm
-// sky). At dusk the night comes in over the evening's long shadows, line
-// by line, until they are lost in it; at dawn it goes the same way.
+// The day, all 24 hours of it: its steps, each from an hour on (`at`):
+//   sun     where the sun stands, an index into `positions` ([azimuth,
+//           length] as SUN's, from morning to evening)
+//   length  the shadows' length, if longer than the position's own: at
+//           dusk the sun sinks and the shadows spread – longer, the hills'
+//           as dense as the buildings' (`hills`: every so many of the
+//           paper's lines, HILL_SHADOWS.every by day) – until they meet as
+//           the night; at dawn they shrink back the same way
+//   night   the night: the paper's strokes over everything, every one of
+//           them (Renderer.renderNight), and no sun
+//   gloom   a grey over the map, as under a storm sky (over the weather's)
 //   day     simulated seconds to 24 hours
 //   start   the hour at world time 0 (a new town starts in the morning)
-//   dusk    the hour the dusk begins (the Debug panel's day starts there)
-// Each step that moves the sun draws the map anew; one that only darkens
-// it changes the night's tile.
+//   dawn    the hour the sun rises (the Debug panel's day starts there)
+// Each step that moves the sun or stretches the shadows draws the map
+// anew.
 export const DAY = {
   on: true,
   day: 1800,
   start: 8,
-  dusk: 19.25,
+  dawn: 4.25,
   positions: [[170, 2.2], [150, 1.7], [130, 1.35], [110, 1.1], [90, 1], [70, 1.1], [50, 1.35], [30, 1.7], [10, 2.2]],
   steps: [
-    [0, null, 4], [4, null, 3], [4.75, 0, 2], [5.5, 0, 1], [6.25, 0, 0],
-    [7.5, 1, 0], [9, 2, 0], [10.5, 3, 0], [12, 4, 0], [13.5, 5, 0], [15, 6, 0], [16.5, 7, 0], [18, 8, 0],
-    [19.25, 8, 1], [20, 8, 2], [20.75, null, 3], [21.5, null, 4],
+    { at: 0, night: true, gloom: 0.16 },
+    { at: 4.25, sun: 0, length: 12, hills: 1, gloom: 0.12 },
+    { at: 4.75, sun: 0, length: 6, hills: 1, gloom: 0.08 },
+    { at: 5.5, sun: 0, length: 3.5, hills: 1, gloom: 0.04 },
+    { at: 6.25, sun: 0 },
+    { at: 7.5, sun: 1 }, { at: 9, sun: 2 }, { at: 10.5, sun: 3 }, { at: 12, sun: 4 },
+    { at: 13.5, sun: 5 }, { at: 15, sun: 6 }, { at: 16.5, sun: 7 }, { at: 18, sun: 8 },
+    { at: 19.25, sun: 8, length: 3.5, hills: 1, gloom: 0.04 },
+    { at: 20, sun: 8, length: 6, hills: 1, gloom: 0.08 },
+    { at: 20.75, sun: 8, length: 12, hills: 1, gloom: 0.12 },
+    { at: 21.5, night: true, gloom: 0.16 },
   ],
-  gloom: [0, 0.04, 0.08, 0.12, 0.16],
 };
 
 // The hour of the day (0 … 24) at world time t.
@@ -149,7 +159,7 @@ export function hourAt(t, day = DAY) {
 export function stepAt(hour, day = DAY) {
   const h = ((hour % 24) + 24) % 24;
   let i = 0;
-  while (i + 1 < day.steps.length && day.steps[i + 1][0] <= h) i++;
+  while (i + 1 < day.steps.length && day.steps[i + 1].at <= h) i++;
   return i;
 }
 
@@ -333,11 +343,12 @@ export function hatchLine(k, t0, t1, u, v, h, step = 0.12) {
   return pts;
 }
 
-// An object's cast shadow as SVG markup (Renderer.atDetail thins it out by
-// the tier classes).
-export function shadowSVG(shade, sun) {
+// An object's cast shadow as SVG markup, its lines up to density tier
+// `most` (3: all of them).
+export function shadowSVG(shade, sun, most = 3) {
   const pen = penClass(sun.hatch?.pen);
-  return shadowPaths(shade, sun, sun.angle).map((d, t) => (d ? `<path d="${d}" class="shadow${pen}${tierClass(t, 'rh')}"/>` : '')).join('');
+  const d = shadowPaths(shade, sun, sun.angle).slice(0, most + 1).join('');
+  return d ? `<path d="${d}" class="shadow${pen}"/>` : '';
 }
 
 // How many of a wall's strokes to draw (0..1), from how far it is turned

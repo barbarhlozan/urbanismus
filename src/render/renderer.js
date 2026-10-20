@@ -135,7 +135,11 @@ const LINES = ['roads', 'paths', 'rails', 'fences', 'notes'];
 const STEPS = Math.round((Math.PI * 2) / Camera.STEP);
 const VIEWS = 40;
 const PREPARE_REST = 400;
-const SETTLE_FADE = 260; // ms the terrain as turned takes to fade, once the view rests (land)
+const SETTLE_FADE = 260;
+// The densest tier of the paper's hatching (hatch.js) the shadows and the
+// night keep at each level of detail: every line close up (3), every other
+// further out, every 4th far out.
+const SHADE_TIERS = [3, 2, 1]; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -716,14 +720,14 @@ export class Renderer {
     if (!HILL_SHADOWS.on || !SUN.on || !SUN.hatch || this.contours) return '';
     const m = 1.2; // (as the contours)
     const box = [-m, -m, world.grid.width - 1 + m, world.grid.height - 1 + m];
-    const key = `${SUN.azimuth}|${SUN.length}|${JSON.stringify(SUN.hatch)}`;
+    const key = `${SUN.azimuth}|${SUN.length}|${this.hillsEvery}|${JSON.stringify(SUN.hatch)}`;
     const relief = world.relief();
     if (this.hills?.key !== key || this.hills.relief !== relief || this.hills.lift !== camera.lift) {
       this.hills = { key, relief, lift: camera.lift, shade: hillShade(this.groundHeight(), box, sunFor(camera)), views: new Map() };
     }
     let view = this.hills.views.get(camera.angle);
     if (view == null) {
-      const [near, far] = hillShadowPaths(this.hills.shade, box, sunFor(camera), (x, y) => this.project(x, y, 0), this.wetAt());
+      const [near, far] = hillShadowPaths(this.hills.shade, box, sunFor(camera), (x, y) => this.project(x, y, 0), this.wetAt(), HILL_SHADOWS, this.hillsEvery ?? HILL_SHADOWS.every);
       view = (near ? `<path class="hill-shadow" d="${near}"/>` : '') + (far ? `<path class="hill-shadow ht1" d="${far}"/>` : '');
       if (this.hills.views.size >= 6) this.hills.views.delete(this.hills.views.keys().next().value);
       this.hills.views.set(camera.angle, view);
@@ -2223,31 +2227,43 @@ export class Renderer {
     return painter.feet.length || painter.casts.length ? { feet: painter.feet, casts: painter.casts, project: painter.groundProjector() } : null;
   }
 
+  // (as dense as the night: every line close up, fewer further out, by
+  // the object's level of detail – not the roofs' hatching's tiers)
   shadowSVG(shade, band) {
-    return shade ? this.atDetail(shadowSVG(shade, sunFor(this.camera)), band) : '';
+    return shade ? this.atDetail(shadowSVG(shade, sunFor(this.camera), SHADE_TIERS[(band >> 4) & 3] ?? 1), band) : '';
   }
 
-  // The day steps to step i (DAY.steps): how dark it is (the night, drawn
-  // over everything, renderNight) and where the sun stands. A sun that
-  // moves – or sets, or rises – redraws what it lights: the walls turned
-  // away from it, the shadows, the trees' shaded sides, the hills'
-  // shadows. The objects in sight go by the rebuild budget, a few each
-  // frame (frame), as for a new level of detail; the rest once they come
-  // into sight (stale, cull()). Not mid-turn (the turn's views are drawn
-  // for the sun as it was): false if put off, to try again.
+  // The day steps to step i (DAY.steps): the night or not (drawn over
+  // everything, renderNight), how grey, where the sun stands and how long
+  // the shadows are. A sun that moves – or sets, or rises – or shadows
+  // that stretch redraw what the sun lights: the walls turned away from
+  // it, the shadows, the trees' shaded sides, the hills' shadows. The
+  // objects in sight go by the rebuild budget, a few each frame (frame),
+  // as for a new level of detail; the rest once they come into sight
+  // (stale, cull()). Not mid-turn (the turn's views are drawn for the sun
+  // as it was): false if put off, to try again.
   setSun(i) {
     if (i == null || i === this.dayStep) return true;
     if (this.turning || this.bare) return false;
-    const [, pos, dark] = DAY.steps[i];
+    const step = DAY.steps[i];
     this.dayStep = i;
+    this.gloom = step.gloom ?? 0;
+    const dark = step.night ? 1 : 0;
     if (dark !== this.dark) {
       this.dark = dark;
       this.dirty.add('night');
     }
-    if (pos === this.sunPos) return true;
+    const pos = step.night ? null : step.sun;
+    const sun = pos == null ? 'none' : `${pos}|${step.length ?? ''}|${step.hills ?? ''}`;
+    if (sun === this.sunAt) return true;
+    this.sunAt = sun;
     this.sunPos = pos;
     SUN.on = pos != null;
-    if (pos != null) [SUN.azimuth, SUN.length] = DAY.positions[pos];
+    if (pos != null) {
+      [SUN.azimuth, SUN.length] = DAY.positions[pos];
+      SUN.length = Math.max(SUN.length, step.length ?? 0);
+    }
+    this.hillsEvery = step.hills ?? HILL_SHADOWS.every;
     for (const e of this.objs.values()) {
       e.views?.clear(); // (drawn for the old sun)
       e.stale = e.sunStale = true;
@@ -2259,16 +2275,14 @@ export class Renderer {
     return true;
   }
 
-  // The night (DAY: how dark, 1 … 4): one sheet over everything – a rect
-  // far larger than the map, about its middle, so the view turns under it
-  // – filled with the paper's strokes (hatch.js), the same as every
-  // shadow's: every 8th line at dusk, more as it darkens, every one at
-  // night; zoomed out, fewer (as the roofs' hatching thins out).
+  // The night (DAY.steps): one sheet over everything – a rect far larger
+  // than the map, about its middle, so the view turns under it – filled
+  // with the paper's strokes (hatch.js), the same as every shadow's, every
+  // one of them; zoomed out, fewer (as the shadows', shadowSVG).
   renderNight() {
     const { camera, world } = this;
     const h = SUN.hatch;
-    const zoomTier = [3, 2, 1][this.lodLevel ?? 0] ?? 1;
-    const tier = this.dark && h ? Math.min(this.dark - 1, zoomTier) : -1;
+    const tier = this.dark && h ? SHADE_TIERS[this.lodLevel ?? 0] ?? 1 : -1;
     const key = tier >= 0 ? `${tier}|${JSON.stringify(h)}|${camera.tile}` : '';
     if (key === this.nightKey) return;
     this.nightKey = key;

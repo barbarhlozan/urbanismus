@@ -178,8 +178,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         DAY.on = false;
         renderer?.setSun(stepAt(hour));
       }
-      const [from, sun, dark] = DAY.steps[renderer?.dayStep ?? stepAt(hour ?? 12)];
-      return { on: DAY.on, from, sun, dark, day: DAY.day };
+      return { on: DAY.on, ...DAY.steps[renderer?.dayStep ?? stepAt(hour ?? 12)], day: DAY.day };
     },
     // the hand of the road marks on buildings nothing reaches (render/roadMarks.js)
     roadMark(style) {

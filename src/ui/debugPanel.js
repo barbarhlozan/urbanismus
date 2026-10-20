@@ -62,26 +62,26 @@ export class DebugPanel {
     });
     this.el.querySelector('.close').addEventListener('click', () => this.toggle(false));
 
-    // the day (DAY in render/shadows.js), all 24 hours from the dusk
+    // the day (DAY in render/shadows.js), all 24 hours from the sunrise
     // round to just before the next: moving the slider holds the time
     // there, ticking the box lets the day carry on from the clock
     const sun = this.el.querySelector('.sun'), dayOn = this.el.querySelector('.day-on'), dayAt = this.el.querySelector('.sun-at');
     let held = null; // the hour held at
-    const part = (hour, [, pos, dark]) => {
-      if (dark >= 4) return 'night';
-      if (dark) return pos == null ? (hour < 12 ? 'before dawn' : 'late dusk') : hour < 12 ? 'dawn' : 'dusk';
+    const part = (hour, step) => {
+      if (step.night) return 'night';
+      if (step.length) return hour < 12 ? 'dawn' : 'dusk';
       return hour < 10.5 ? 'morning' : hour < 13.5 ? 'midday' : hour < 16.5 ? 'afternoon' : 'evening';
     };
     const showDay = () => {
       const hour = DAY.on || held == null ? hourAt(renderer.world.time) : held;
-      if (document.activeElement !== sun) sun.value = (((hour - DAY.dusk) % 24) + 24) % 24;
+      if (document.activeElement !== sun) sun.value = (((hour - DAY.dawn) % 24) + 24) % 24;
       const hh = Math.floor(hour), mm = Math.floor((hour - hh) * 60);
       dayAt.textContent = `Day ${hh}:${String(mm).padStart(2, '0')} · ${part(hour, DAY.steps[stepAt(hour)])}`;
       dayOn.checked = DAY.on;
     };
     sun.addEventListener('input', () => {
       DAY.on = false;
-      held = (DAY.dusk + +sun.value) % 24;
+      held = (DAY.dawn + +sun.value) % 24;
       renderer.setSun(stepAt(held));
       showDay();
     });

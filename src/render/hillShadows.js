@@ -29,15 +29,16 @@ import { hatchFrame, hatchStrokes } from './hatch.js';
 //   grid    the step the light is swept in (grid units)
 //   deep    how far below the light the ground must lie to be in shadow
 //           (grid units of height)
-//   every   every so many of the paper's lines; the line k with
-//           k % (2·every) = 0 stays when zoomed out, the others go
+//   every   every so many of the paper's lines (by day: at dusk they
+//           thicken, DAY.steps `hills`); the line k with k % (2·every) = 0
+//           stays when zoomed out, the others go
 //   cell    the step the shade is traced in, for the screen (grid units)
 //   ragged  how unevenly a line stops at the shadow's edge (grid units)
 //   min     the shortest piece of line drawn (grid units)
 export const HILL_SHADOWS = {
   on: true,
   low: 3,
-  most: 6,
+  most: 40,
   grid: 0.125,
   deep: 0.02,
   every: 4,
@@ -87,10 +88,10 @@ export function hillShade(height, [x0, y0, x1, y1], sun, opts = HILL_SHADOWS) {
 // is deeper than `deep` – a cell's part in shadow cut along its edges, as
 // contours are – and projected (`project(x, y)`: a ground point -> scene
 // px, with the relief); `wet(x, y)`: water, which has its own lines.
-export function hillShadowPaths(shade, [x0, y0, x1, y1], sun, project, wet = () => false, opts = HILL_SHADOWS) {
+export function hillShadowPaths(shade, [x0, y0, x1, y1], sun, project, wet = () => false, opts = HILL_SHADOWS, every = opts.every) {
   const h = sun.hatch, out = ['', ''];
   if (!h) return out;
-  const px = sun.px ?? 32, f = hatchFrame(h), gap = f.gap * px, n = opts.every;
+  const px = sun.px ?? 32, f = hatchFrame(h), gap = f.gap * px, n = every;
   const g = opts.cell, nx = Math.ceil((x1 - x0) / g), ny = Math.ceil((y1 - y0) / g);
   // the lattice: how deep in shade, and where on screen
   const val = new Float32Array((nx + 1) * (ny + 1)), scr = new Float64Array((nx + 1) * (ny + 1) * 2);
