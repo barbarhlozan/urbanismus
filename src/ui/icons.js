@@ -1,8 +1,7 @@
-// Small line drawings for the Build menu. Each tool has a sprite of its own
-// in icons/sprites/ (uiIcons.js sprite()): the structure kept to what makes it
-// that one, seen from the front. A tool without one falls back on its
-// building drawn with its own draw() through the same Painter as the map
-// (with a fixed seed), or on the lines below; the eraser is hand drawn.
+// Small line drawings for the Build menu. Buildings are drawn with their own
+// draw() through the same Painter as the map (with a fixed seed), so the
+// icons always match what gets built; lines and the eraser are hand drawn.
+// The tabs have sprites of their own (icons/ui/tab-…, buildMenu.js).
 // The other drawings here (the camera, the HUD's, the Menu's, the New map
 // settings') are files of their own in icons/ui/, read at startup
 // (uiIcons.js); the ones written below stand in for a file that can't be
@@ -15,7 +14,7 @@ import { vehicleSVG } from '../render/vehicles.js';
 import { drawSeed, footprintOffsets } from '../../structures/index.js';
 import { sampleSitePaths } from '../roads/siteWalks.js';
 import { sketchLine, sketchRect, sketchEllipse } from '../render/sketch.js';
-import { drawing, iconSvg, sprite } from './uiIcons.js';
+import { drawing, iconSvg } from './uiIcons.js';
 
 const ICON_SEED = 12345;
 const PAD = 3;
@@ -35,18 +34,32 @@ function measureSvg() {
   return measure;
 }
 
-// How many ways into a park or square drawn on its own: two (a walkway
-// across) for the icons, a mix on the Assets page.
-const ways = (seed) => (seed === ICON_SEED ? 2 : [2, 1, 3, 4, 0][seed % 5]);
+// How many ways into a park or square drawn on its own: none for the
+// icons (a path across would outweigh the park at that size), a mix on the
+// Assets page.
+const ways = (seed) => (seed === ICON_SEED ? 0 : [2, 1, 3, 4, 0][seed % 5]);
+
+// How plainly a structure is drawn for its tile, by how big its drawing
+// is (in px at the icon's scale): the bigger, the smaller it ends up in
+// the tile, so the more of its fine detail is left out, as the map leaves
+// it out when zoomed out – facade lines and glazing bars, the denser
+// hatching, the trees' twigs (Painter keep, keepTier, near, detail).
+const PLAIN = [[100, 2], [60, 1]];
+const PLAINNESS = [
+  null,
+  { keep: 1, keepTier: 2, near: false, detail: 1 },
+  { keep: 1, keepTier: 1, near: false, detail: 2 },
+];
 
 // The structure's drawing (ground + solids) as SVG markup, on its own.
-function paint(def, seed, camera) {
+function paint(def, seed, camera, plain = 0) {
   try {
     camera.cx = camera.cy = 0;
     // facing the viewer, as they come when picked up (tools/build.js)
     const rotation = camera.facingViewer();
     const instance = { id: -1, type: def.id, node: 0, rotation, seed, data: {} };
     const g = new Painter(camera, { x: 0, y: 0, z: 0 }, rotation, drawSeed(instance));
+    if (PLAINNESS[plain]) Object.assign(g, PLAINNESS[plain]);
     if (def.site) {
       // a lot just around the footprint, no roads
       const offs = footprintOffsets(def, rotation);
@@ -66,7 +79,11 @@ function paint(def, seed, camera) {
 export function structureIcon(def, { seed = ICON_SEED } = {}) {
   const key = `${def.id}:${seed}`;
   if (cache.has(key)) return cache.get(key);
-  const body = paint(def, seed, new Camera({ width: 1, height: 1 }, { tile: 32, zScale: 0.9 }));
+  const camera = new Camera({ width: 1, height: 1 }, { tile: 32, zScale: 0.9 });
+  let body = paint(def, seed, camera);
+  const { width, height } = boxOf(`<g>${body}</g>`);
+  const plain = PLAIN.find(([px]) => Math.max(width, height) > px)?.[1] ?? 0;
+  if (plain) body = paint(def, seed, camera, plain);
   const svg = fit(`<g class="icon-art">${body}</g>`, 'icon lod-1', PAD);
   cache.set(key, svg);
   return svg;
@@ -95,8 +112,8 @@ export function vehicleDrawing(parts) {
   return fit(`<g class="scene"><g class="agent car">${body}</g></g>`, 'drawing', 4);
 }
 
-// Wrap a drawing in an <svg> whose viewBox hugs it.
-function fit(inner, cls, pad) {
+// The box a drawing (one element's markup) takes up.
+function boxOf(inner) {
   const m = measureSvg();
   m.innerHTML = inner;
   let box = { x: -16, y: -16, width: 32, height: 32 };
@@ -105,6 +122,12 @@ function fit(inner, cls, pad) {
     if (b.width && b.height) box = b;
   } catch { /* not measurable: keep the default */ }
   m.innerHTML = '';
+  return box;
+}
+
+// Wrap a drawing in an <svg> whose viewBox hugs it.
+function fit(inner, cls, pad) {
+  const box = boxOf(inner);
   const size = Math.max(box.width, box.height) + pad * 2;
   const x = box.x + box.width / 2 - size / 2, y = box.y + box.height / 2 - size / 2;
   return `<svg class="${cls}" viewBox="${x.toFixed(1)} ${y.toFixed(1)} ${size.toFixed(1)} ${size.toFixed(1)}" aria-hidden="true">${inner}</svg>`;
@@ -123,8 +146,6 @@ const LINES = {
 };
 
 export function toolIcon(tool) {
-  const own = sprite(tool.id.replace(/^build:/, ''));
-  if (own) return `<svg class="icon sprite" viewBox="${own.viewBox}" aria-hidden="true">${own.art}</svg>`;
   if (tool.defs) return structureIcon(tool.defs[0]);
   if (tool.id === 'photo') return cameraIcon();
   const art = LINES[tool.id];

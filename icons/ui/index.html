@@ -18,6 +18,10 @@
     .row { display: grid; grid-template-columns: 24px 96px 1fr; gap: 20px; align-items: center; padding: 14px 0 12px; }
     .row svg.drawing { display: block; overflow: visible; color: var(--main); }
     .row svg.drawing * { vector-effect: non-scaling-stroke; }
+    /* the tabs' sprites: as styles.css draws .icon.sprite */
+    .row svg.drawing .ink { fill: currentColor; }
+    .row svg.drawing .p { fill: var(--bg); stroke: none; }
+    .row svg.drawing .h { stroke-width: 0.5; }
     .name { font-size: 16px; }
     .where { color: color-mix(in srgb, var(--main) 70%, var(--bg)); }
     .missing { color: var(--detail); font-style: italic; }

@@ -17,6 +17,12 @@ drawing written in the code, the one each file was first exported from.
   box or use `0 0 24 24`; keep it inside the box, about an eighth of it from the edge.
 - **Lines only**, no fills: `fill="none"` and `stroke="currentColor"` on the `<svg>`. The
   one exception is the die (`dice.svg`), whose five pips are dots of ink.
+- **The Build menu's tabs** (`tab-….svg`) are little sprites rather than single drawings:
+  each group shown by one building seen from the front, on a `0 0 24 24` box with the ground
+  at y = 21. They may use three classes: `class="ink"` for a shape filled with the pen (the
+  windows), `class="h"` for the finer pen (hatching, small detail) and `class="p"` for a shape
+  filled with the paper and no line, to hide what's behind something standing in front.
+  Everything else is a line in the tab's pen.
 - **Only what's inside the `<svg>` reaches the game.** The attributes on the `<svg>` itself
   (`fill`, `stroke`, `stroke-width`…) are only for looking at the file on its own. In the game
   each line is drawn in the colour scheme in use and at the pen's weight of its place
@@ -69,16 +75,22 @@ drawing written in the code, the one each file was first exported from.
 | `forest.svg` | New map: Lesy / Forests |
 | `river.svg` | New map: Řeka / River |
 | `more.svg` | Dialogue: › to go on, once the line is all written |
+| `tab-transport.svg` | Build menu tab: Doprava / Transport (a road going away) |
+| `tab-housing.svg` | Build menu tab: Bydlení / Housing (the cube house) |
+| `tab-amenities.svg` | Build menu tab: Občanská vybavenost / Amenities (the Jednota shop) |
+| `tab-work.svg` | Build menu tab: Výroba / Work (the textile mill's sawtooth roof) |
+| `tab-farming.svg` | Build menu tab: Zemědělství / Farming (the JZD cowshed and silo) |
+| `tab-spaces.svg` | Build menu tab: Prostranství / Spaces (a tree, a bush) |
+| `tab-heritage.svg` | Build menu tab: Památky / Heritage (the chapel) |
 
 The list is the loader's own (`ICONS` in `src/ui/uiIcons.js`): a new file is only read once
 it's added there.
 
 ## Not here
 
-- **The Build menu's tiles and tabs**: they have a folder of their own, `icons/sprites/`, one
-  sprite per tool, written by `icons/sprites/make.js` and shown at
-  <http://localhost:8173/icons/sprites/>. A tool without a sprite falls back on its building drawn
-  by its own draw code (`src/ui/icons.js` toolIcon).
+- **The Build menu's tiles**, the buildings, roads, fences and the eraser: each building's is
+  drawn from its own draw code with the map's pen (`src/ui/icons.js` toolIcon), so it always
+  matches what gets built.
 - **The map's own marks**: the photographer's camera on the map, the cursor's crosses and
   signs, the road marks (`src/render/`).
 - **Pen frames and marks drawn to size**: the boxes round the panels (`sketchFrame.js`), what

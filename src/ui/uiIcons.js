@@ -9,9 +9,10 @@
 // own. A file that's missing, or isn't an SVG, leaves its place the drawing
 // in the code, which each caller passes along as its stand-in.
 //
-// The Build menu's tiles and tabs have sprites of their own, one file per
-// tool in icons/sprites/ (listed in its list.json, written by its make.js),
-// read here too (sprite()). Not here: the marks on the map.
+// Not here: the Build menu's tiles (icons.js toolIcon, drawn by each
+// building's own draw code) and the marks on the map. The menu's tabs are
+// here: each group has a little sprite of its own (tab-…), drawn with the
+// classes .ink, .h and .p (see the README).
 
 // Every file in icons/ui/, by name, and where the game shows it (the
 // reference sheet, icons/ui/index.html, lists them with this).
@@ -48,20 +49,20 @@ export const ICONS = {
   forest: 'New map: Lesy / Forests',
   river: 'New map: Řeka / River',
   more: 'Dialogue: › to go on, once the line is all written',
+  'tab-transport': 'Build menu tab: Doprava / Transport',
+  'tab-housing': 'Build menu tab: Bydlení / Housing',
+  'tab-amenities': 'Build menu tab: Občanská vybavenost / Amenities',
+  'tab-work': 'Build menu tab: Výroba / Work',
+  'tab-farming': 'Build menu tab: Zemědělství / Farming',
+  'tab-spaces': 'Build menu tab: Prostranství / Spaces',
+  'tab-heritage': 'Build menu tab: Památky / Heritage',
 };
 
 // what was read: name → { viewBox, art }
 const loaded = new Map();
 
 export async function loadIcons() {
-  await Promise.all([
-    ...Object.keys(ICONS).map((name) => read(`ui/${name}`, name)),
-    // the sprites, once their list is in
-    fetch(new URL('../../icons/sprites/list.json', import.meta.url))
-      .then((res) => res.json())
-      .then((names) => Promise.all(names.map((name) => read(`sprites/${name}`, `sprites/${name}`))))
-      .catch((err) => console.warn(`icons/sprites/list.json: ${err.message}; the Build menu draws its buildings instead`)),
-  ]);
+  await Promise.all(Object.keys(ICONS).map((name) => read(`ui/${name}`, name)));
 }
 
 // One file, icons/<path>.svg, kept as `name`.
@@ -77,12 +78,6 @@ async function read(path, name) {
   } catch (err) {
     console.warn(`icons/${path}.svg: ${err.message}; the drawing in the code stands in`);
   }
-}
-
-// A Build menu sprite (icons/sprites/<name>.svg) as { viewBox, art }, or
-// null if there's none.
-export function sprite(name) {
-  return loaded.get(`sprites/${name}`) ?? null;
 }
 
 // A drawing as { viewBox, art, file }: its file's, or else the stand-in

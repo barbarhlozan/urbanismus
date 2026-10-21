@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-  <!-- JZD: the long cowshed with its roof vents, the tower silo -->
+  <!-- Build menu tab: Zemědělství / Farming (the JZD cowshed and its tower silo) -->
   <path d="M1.65 21.15Q1.78 17.25 1.64 13.35M15.86 21.15Q15.88 17.2 16.03 13.26"/>
   <path class="p" fill="#fff" stroke="none" d="M1.4 13.4L1.8 9.6L16 9.6L16.4 13.4Z"/>
   <path d="M1.54 13.65Q1.6 11.56 1.77 9.49M1.67 9.72Q8.89 9.79 16.1 9.41M16.09 9.51Q16.12 11.58 16.28 13.64M16.51 13.31Q8.88 13.45 1.26 13.35"/>

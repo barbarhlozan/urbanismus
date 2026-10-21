@@ -42,7 +42,7 @@
 
 import { CATEGORIES } from '../../structures/index.js';
 import { toolIcon, cameraIcon } from './icons.js';
-import { iconSvg } from './uiIcons.js';
+import { iconSvg, drawing } from './uiIcons.js';
 import { historyOffer } from './historyOffer.js';
 import { isNarrow, isWide } from './device.js';
 import { keyLabel, GROUP_KEYS, slotKey } from './keys.js';
@@ -55,7 +55,8 @@ const groupName = (c) => t(`group.${c.id}`);
 const FOLD_KEY = 'urbanismus.buildMenuFolded';
 const GROUP_KEY = 'urbanismus.buildMenuGroup';
 
-// the tool whose drawing stands for each group on its tab
+// Each group's tab shows its sprite, icons/ui/tab-<group>.svg; without
+// one, the drawing of the tool here
 const TAB_ICON = { transport: 'road', housing: 'build:house', work: 'build:textilka', farming: 'build:jzd', amenities: 'build:jednota', spaces: 'build:green', heritage: 'build:chapel' };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -103,6 +104,8 @@ export class BuildMenu {
         <span class="bm-name">${esc(label)}</span>
       </button>`;
     const tabIcon = (c) => {
+      const d = drawing(`tab-${c.id}`, '');
+      if (d.file) return `<svg class="icon sprite" viewBox="${d.viewBox}" aria-hidden="true">${d.art}</svg>`;
       const t = tools.list().find((x) => x.id === TAB_ICON[c.id]) ?? shown.find((x) => x.group === c.id);
       return t ? toolIcon(t) : '';
     };
