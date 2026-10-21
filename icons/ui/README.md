@@ -29,8 +29,9 @@ drawing written in the code, the one each file was first exported from.
   (styles.css), whatever width the file gives it. So keep to plain lines (`path`, `line`,
   `polyline`, `circle`…), not filled shapes or thick strokes. A circle is drawn over the
   paper in most places (it hides what's behind it), a path never is.
-- **Drawn by hand, in the map's pen**: lines a little uneven, running a touch past the
-  corners. Simple enough to read at 16 px, where most of them are shown.
+- **Drawn by hand**: lines a little uneven, running a touch past the corners. The Menu's
+  items and the Build menu's tabs are in a thick round marker instead (soft corners, few
+  strokes, dots for windows), and are drawn with it in the game. Simple enough to read at 16 px, where most of them are shown.
 - **No text** in a drawing: the button's name is its title and, in the Menu, is written beside
   it when it's pointed at or held.
 - A drawing that changes with what's going on has a file for each look: `menu.svg` and
@@ -49,8 +50,8 @@ drawing written in the code, the one each file was first exported from.
 | `export.svg` | Menu: Uložit do souboru / Save to a file (an arrow coming up out of a box) |
 | `import.svg` | Menu: Otevřít ze souboru / Open from a file (an arrow going down into a box) |
 | `newmap.svg` | Menu: Nová mapa / New map (a blank sheet with a plus) |
-| `fullscreen.svg` | Menu: Celá obrazovka / Full screen, going in (a big picture frame) |
-| `fullscreen-exit.svg` | Menu: Full screen, coming back (the small picture back on its nail) |
+| `fullscreen.svg` | Menu: Celá obrazovka / Full screen, going in (four corners pointing out) |
+| `fullscreen-exit.svg` | Menu: Full screen, coming back (four corners pointing in) |
 | `sound.svg` | Menu: Zvuk / Sound, while it's on (the village loudspeaker calling out) |
 | `sound-off.svg` | Menu: Zvuk / Sound, while it's off (the loudspeaker silent) |
 | `lang-cs.svg` | Menu: Čeština (the Czech flag), shown while the game is in English |

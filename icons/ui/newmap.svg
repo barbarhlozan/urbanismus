@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-  <!-- New map: a blank sheet with a plus in the middle -->
-  <path d="M2.8 5.0 L21.3 4.7 M21.0 4.3 L20.8 19.4 M21.2 19.1 L3.2 19.4 M3.5 19.8 L3.2 4.6"/>
-  <path d="M12.1 8.1 L11.9 15.9 M8.1 12.1 L15.9 11.9"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- New map: a blank sheet with soft corners and a plus in the middle -->
+  <path d="M5.34 4.77Q11.89 4.23 18.43 4.77Q20.58 4.66 20.59 6.19Q20.16 11.93 20.76 17.66Q20.43 19.68 18.5 19.48Q11.89 19.99 5.27 19.51Q3.72 19.69 3.69 17.8Q4.06 12.01 3.49 6.23Q3.44 4.68 5.57 4.4Q5.52 4.66 5.51 4.93l0.57 -0.17"/>
+  <path d="M11.89 8.7Q12.16 12.12 12.06 15.56M8.46 12.27Q11.99 12.32 15.53 12.2"/>
 </svg>

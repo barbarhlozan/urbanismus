@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-  <!-- Sound, off: the village loudspeaker silent -->
-  <path d="M3.4 9.8 L6.9 9.6 L7.1 14.5 L3.6 14.4 Z"/>
-  <path d="M6.8 9.9 L15.7 4.9 M7.0 14.3 L15.9 19.2"/>
-  <path d="M15.5 4.6 C17.2 8.0 17.3 15.9 15.8 19.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Sound, off: the village loudspeaker, silent -->
+  <path d="M3.78 9.93Q5.02 9.99 6.26 10.03Q9.85 7.64 13.37 5.16Q15.16 11.9 13.48 18.97Q9.86 16.45 6.15 14.06Q4.81 14.06 3.48 14.24Q3.76 12.13 3.71 10.01l-0.25 0.55"/>
+  <path d="M17.18 9.64Q18.98 11.89 20.95 13.99M21.18 9.66Q19.13 11.95 17.27 14.4"/>
 </svg>
