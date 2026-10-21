@@ -30,8 +30,8 @@ drawing written in the code, the one each file was first exported from.
   `polyline`, `circle`…), not filled shapes or thick strokes. A circle is drawn over the
   paper in most places (it hides what's behind it), a path never is.
 - **Drawn by hand**: lines a little uneven, running a touch past the corners. The Menu's
-  items and the Build menu's tabs are in a thick round marker instead (soft corners, few
-  strokes, dots for windows), and are drawn with it in the game. Simple enough to read at 16 px, where most of them are shown.
+  items and the Build menu's tabs are rounder, like a marker doodle (soft corners, few
+  strokes, dots for windows), drawn in the game in the pen of the UI's frames. Simple enough to read at 16 px, where most of them are shown.
 - **No text** in a drawing: the button's name is its title and, in the Menu, is written beside
   it when it's pointed at or held.
 - A drawing that changes with what's going on has a file for each look: `menu.svg` and

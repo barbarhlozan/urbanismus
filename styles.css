@@ -598,7 +598,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 .controls .menu-art { flex: 0 0 22px; width: 22px; height: 22px; color: var(--fg); }
 /* a drawing read from its file: the pen's own weight, never filled; one
    left from icons.js keeps that file's lighter line */
-.controls .menu-art .from-file * { fill: none !important; stroke: currentColor; stroke-width: calc(1.9px * var(--stroke, 1)) !important; stroke-linecap: round; stroke-linejoin: round; }
+.controls .menu-art .from-file * { fill: none !important; stroke: currentColor; stroke-width: calc(1.3px * var(--stroke, 1)) !important; stroke-linecap: round; stroke-linejoin: round; }
 .controls .menu-art :not(.from-file) > :is(path, circle) { fill: none !important; stroke-width: 1.1 !important; }
 /* the groups: Colours | save, open, a new map | the screen, the language –
    a wider gap before each, not an even row */
@@ -1409,9 +1409,9 @@ body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 4
 .icon .i-rail-dash { stroke: var(--bg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-dasharray: calc(3.5px * var(--stroke, 1)) calc(3.5px * var(--stroke, 1)); stroke-linecap: butt; stroke-linejoin: round; }
 .icon .i-eraser { stroke-width: calc(1.4px * var(--stroke, 1)); stroke-linejoin: round; }
 .icon .i-smudge { stroke-width: calc(1.2px * var(--stroke, 1)); stroke-dasharray: calc(2px * var(--stroke, 1)) calc(2px * var(--stroke, 1)); }
-/* the Build menu tabs' sprites (icons/ui/tab-…): a thick round marker, the hatching
+/* the Build menu tabs' sprites (icons/ui/tab-…): the frames' pen, round, the hatching
    finer, windows dots of ink, paper behind what stands in front */
-.icon.sprite :is(path, line, polyline, polygon, rect, circle, ellipse) { fill: none; stroke: currentColor; stroke-width: calc(1.8px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.icon.sprite :is(path, line, polyline, polygon, rect, circle, ellipse) { fill: none; stroke: currentColor; stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .icon.sprite .h { stroke-width: calc(0.6px * var(--stroke, 1)); }
 .icon.sprite .ink { fill: currentColor; stroke-width: calc(0.4px * var(--stroke, 1)); }
 .icon.sprite .p { fill: var(--bg); stroke: none; }
