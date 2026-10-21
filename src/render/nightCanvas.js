@@ -14,7 +14,6 @@
 //   new NightCanvas(canvas)
 //   draw(camera, { grey, colour, tier, hatch, px, stroke, lights, sheet, beams })
 
-import { canvasRatio } from './pixels.js';
 import { THEME } from '../theme.js';
 import { hatchFrame, hatchTileLines, hash } from './hatch.js';
 
@@ -38,7 +37,7 @@ function sweep(ctx, w, h, angle, r, seed) {
   const corners = [[0, 0], [w, 0], [0, h], [w, h]];
   const us = corners.map(([x, y]) => x * c + y * s), vs = corners.map(([x, y]) => -x * s + y * c);
   const u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs);
-  const band = SWEEP.band * canvasRatio(), n = Math.ceil((v1 - v0) / band);
+  const band = SWEEP.band * (devicePixelRatio || 1), n = Math.ceil((v1 - v0) / band);
   ctx.setTransform(c, s, -s, c, 0, 0); // (u, v) -> the window
   ctx.beginPath();
   for (let i = 0; i < n; i++) {
@@ -81,7 +80,7 @@ export class NightCanvas {
   // (sweep).
   draw(camera, { grey = 0, colour, tier = -1, reveal = [1, 0, 0], hatch, px, stroke, lights = null, sheet = null, beams = [], cover = null }) {
     const { canvas, ctx } = this;
-    const dpr = canvasRatio(), W = innerWidth, H = innerHeight;
+    const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
     const w = Math.round(W * dpr), h = Math.round(H * dpr);
     let resized = false;
     if (canvas.width !== w || canvas.height !== h) {

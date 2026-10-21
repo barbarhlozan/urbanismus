@@ -90,7 +90,7 @@ export class ShadeCanvas {
   // turned with it in the mask, the strokes not. Held (`hold`: hidden), it
   // waits.
   draw({ view, hatch, tier, px, stroke, sheet = null, hold = false }) {
-    const dpr = devicePixelRatio || 1; // (drawn seldom: always as sharp as the screen, pixels.js)
+    const dpr = devicePixelRatio || 1;
     const w = Math.round((view.W + 2 * view.ox) * dpr), h = Math.round((view.H + 2 * view.oy) * dpr);
     const colour = THEME.palette.detail;
     const key = `${view.zoom}|${view.panX}|${view.panY}|${view.angle}|${w}|${h}|${tier}|${JSON.stringify(hatch)}|${px}|${stroke}|${colour}`;

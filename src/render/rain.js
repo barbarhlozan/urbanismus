@@ -9,7 +9,6 @@
 // comes on and goes off gradually (`level`) as the weather turns; a storm is
 // the same rain, harder: more drops, falling faster and slanting more.
 
-import { canvasRatio } from './pixels.js';
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
 import { Follow } from './follow.js';
@@ -51,7 +50,7 @@ export class RainCanvas {
     if (!this.level && !this.drops.length) return this.clear();
 
     const { canvas, ctx } = this;
-    const dpr = canvasRatio();
+    const dpr = devicePixelRatio || 1;
     const W = innerWidth, H = innerHeight;
     if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
       canvas.width = Math.round(W * dpr);
@@ -94,7 +93,7 @@ export class RainCanvas {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     ctx.strokeStyle = THEME.palette.detail;
-    ctx.lineWidth = (RAIN.width * (CONFIG.render.lineWeight ?? 1)) / (devicePixelRatio || 1); // (device px of the screen)
+    ctx.lineWidth = (RAIN.width * (CONFIG.render.lineWeight ?? 1)) / dpr;
     ctx.lineCap = 'round';
     ctx.globalAlpha = RAIN.alpha;
     ctx.beginPath();
