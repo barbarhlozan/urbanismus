@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Úzká silnice: a narrow road going away -->
+  <path d="M6.44 21.33Q8.42 12.79 10.68 4.32M17.52 21.11Q15.13 12.76 13.19 4.29"/>
+  <path class="h" stroke-width="0.8" d="M2.75 21Q2.39 20.31 1.98 19.63M2.92 21.05Q3.02 20.17 3.19 19.29M3.72 21.13Q4.02 20.5 4.31 19.86M19.8 21Q19.36 20.36 18.91 19.72M19.91 21.02Q20.01 20.17 20.04 19.31M20.53 21Q20.8 20.37 21.08 19.76"/>
+</svg>

@@ -1,6 +1,8 @@
-// Small line drawings for the Build menu. Buildings are drawn with their own
-// draw() through the same Painter as the map (with a fixed seed), so the
-// icons always match what gets built; lines and the eraser are hand drawn.
+// Small line drawings for the Build menu. Each tool has a sprite of its own
+// in icons/sprites/ (uiIcons.js sprite()): the structure kept to what makes it
+// that one, seen from the front. A tool without one falls back on its
+// building drawn with its own draw() through the same Painter as the map
+// (with a fixed seed), or on the lines below; the eraser is hand drawn.
 // The other drawings here (the camera, the HUD's, the Menu's, the New map
 // settings') are files of their own in icons/ui/, read at startup
 // (uiIcons.js); the ones written below stand in for a file that can't be
@@ -13,7 +15,7 @@ import { vehicleSVG } from '../render/vehicles.js';
 import { drawSeed, footprintOffsets } from '../../structures/index.js';
 import { sampleSitePaths } from '../roads/siteWalks.js';
 import { sketchLine, sketchRect, sketchEllipse } from '../render/sketch.js';
-import { drawing, iconSvg } from './uiIcons.js';
+import { drawing, iconSvg, sprite } from './uiIcons.js';
 
 const ICON_SEED = 12345;
 const PAD = 3;
@@ -121,6 +123,8 @@ const LINES = {
 };
 
 export function toolIcon(tool) {
+  const own = sprite(tool.id.replace(/^build:/, ''));
+  if (own) return `<svg class="icon sprite" viewBox="${own.viewBox}" aria-hidden="true">${own.art}</svg>`;
   if (tool.defs) return structureIcon(tool.defs[0]);
   if (tool.id === 'photo') return cameraIcon();
   const art = LINES[tool.id];
@@ -189,10 +193,11 @@ const CONTROLS = {
   terrain: '<path d="M5 12.5 C7 5.5 10.5 4 13.8 12.5 M1.8 12.5 C3.4 8.6 6.4 8.2 8.6 12.5 M1 12.5 H15"/>',
   assets: '<path d="M2.5 2.5 H7 V7 H2.5 Z M9 2.5 H13.5 V7 H9 Z M2.5 9 H7 V13.5 H2.5 Z M9 9 H13.5 V13.5 H9 Z"/>',
   debug: '<path d="M5.5 6.6 C5.5 3.8 10.5 3.8 10.5 6.6 V10 C10.5 13.6 5.5 13.6 5.5 10 Z M8 6.6 V13.2 M5.5 8.2 H2.6 M10.5 8.2 H13.4 M5.5 10.8 L3.2 12.6 M10.5 10.8 L12.8 12.6 M6.4 4.8 L4.6 2.8 M9.6 4.8 L11.4 2.8"/>',
-  // three rings, as the three colours of a scheme
-  colors: '<circle cx="3.4" cy="8.2" r="2"/><circle cx="8" cy="7.8" r="2"/><circle cx="12.6" cy="8.1" r="2"/>',
-  export: '<path d="M8 2.5 V10 M5 7 L8 10 L11 7 M2.5 10.5 V13.5 H13.5 V10.5"/>',
-  import: '<path d="M8 10 V2.5 M5 5.5 L8 2.5 L11 5.5 M2.5 10.5 V13.5 H13.5 V10.5"/>',
+  // a painter's palette: its thumb hole and three dabs, the three colours of a scheme
+  colors: '<path d="M8.2 2 C4.3 2 1.7 4.7 1.9 8.1 C2.1 11.6 5.1 14 8.5 13.8 C9.8 13.7 10.2 12.8 9.7 11.9 C9.1 11 9.6 10 10.8 10.1 C12.3 10.1 14.2 9.5 14.1 7.1 C14.1 4.1 11.4 2.1 8.2 2 Z"/><circle cx="6.8" cy="10.8" r="0.9"/><circle cx="4.7" cy="7" r="0.8"/><circle cx="7.1" cy="4.4" r="0.8"/><circle cx="10.4" cy="4.9" r="0.8"/>',
+  // an arrow coming up out of an open box, or going down into it
+  export: '<path d="M2.4 7.4 V13.7 H13.6 V7.4 M2.4 7.4 L1.2 5.8 M13.6 7.4 L14.8 5.8 M8 11 V2 M5.6 4.4 L8 2 L10.4 4.4"/>',
+  import: '<path d="M2.4 7.4 V13.7 H13.6 V7.4 M2.4 7.4 L1.2 5.8 M13.6 7.4 L14.8 5.8 M8 2 V11 M5.6 8.6 L8 11 L10.4 8.6"/>',
   // for the New map settings: a pond with ripples, a pine, a river's two banks
   lakes: '<path d="M1.8 9.6 C1.8 6.2 14.2 6.2 14.2 9.6 C14.2 13 1.8 13 1.8 9.6 Z M5.2 9.4 H7.8 M9.4 10.6 H11.2"/>',
   forest: '<path d="M8 1.8 L4.4 7 H6.4 L3.4 11.2 H12.6 L9.6 7 H11.6 Z M8 11.2 V14.2"/>',
@@ -210,8 +215,8 @@ const CONTROLS = {
   // calling out, or silent; the button shows one or the other (styles.css)
   sound: '<path d="M2.4 6.6 L4.6 6.5 L4.7 9.6 L2.5 9.5 Z M4.6 6.6 L10.4 3.4 M4.7 9.5 L10.5 12.7 M10.4 3.2 C11.4 5.4 11.5 10.6 10.5 12.8 M12.6 6.4 C13.2 7.4 13.2 8.8 12.6 9.8 M14 5 C15 6.8 15 9.4 14 11.2"/>',
   soundOff: '<path d="M2.4 6.6 L4.6 6.5 L4.7 9.6 L2.5 9.5 Z M4.6 6.6 L10.4 3.4 M4.7 9.5 L10.5 12.7 M10.4 3.2 C11.4 5.4 11.5 10.6 10.5 12.8"/>',
-  // a folded map, and a plus: a new one
-  newMap: '<path d="M1.5 4 L5 2.5 L8.5 4 L12 2.5 V8 M1.5 4 V12.5 L5 11 L8.5 12.5 M5 2.5 V11 M8.5 4 V12.5 M12.5 10 V15 M10 12.5 H15"/>',
+  // a blank sheet with a plus: a new one
+  newMap: '<path d="M2 3.2 H14 V12.8 H2 Z M8 5.4 V10.6 M5.4 8 H10.6"/>',
 };
 
 // A top-bar icon's drawing on its 16×16 box, without the <svg> (e.g. the

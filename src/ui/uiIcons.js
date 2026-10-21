@@ -9,8 +9,9 @@
 // own. A file that's missing, or isn't an SVG, leaves its place the drawing
 // in the code, which each caller passes along as its stand-in.
 //
-// Not here: the Build menu's tiles (icons.js toolIcon, drawn by each
-// building's own draw code) and the marks on the map.
+// The Build menu's tiles and tabs have sprites of their own, one file per
+// tool in icons/sprites/ (listed in its list.json, written by its make.js),
+// read here too (sprite()). Not here: the marks on the map.
 
 // Every file in icons/ui/, by name, and where the game shows it (the
 // reference sheet, icons/ui/index.html, lists them with this).
@@ -53,19 +54,35 @@ export const ICONS = {
 const loaded = new Map();
 
 export async function loadIcons() {
-  await Promise.all(Object.keys(ICONS).map(async (name) => {
-    try {
-      const res = await fetch(new URL(`../../icons/ui/${name}.svg`, import.meta.url));
-      if (!res.ok) throw new Error(`${res.status}`);
-      const doc = new DOMParser().parseFromString(await res.text(), 'image/svg+xml');
-      const svg = doc.documentElement;
-      if (svg.localName !== 'svg' || doc.querySelector('parsererror')) throw new Error('not an SVG');
-      for (const s of svg.querySelectorAll('script, foreignObject')) s.remove();
-      loaded.set(name, { viewBox: svg.getAttribute('viewBox') ?? '0 0 24 24', art: svg.innerHTML });
-    } catch (err) {
-      console.warn(`icons/ui/${name}.svg: ${err.message}; the drawing in the code stands in`);
-    }
-  }));
+  await Promise.all([
+    ...Object.keys(ICONS).map((name) => read(`ui/${name}`, name)),
+    // the sprites, once their list is in
+    fetch(new URL('../../icons/sprites/list.json', import.meta.url))
+      .then((res) => res.json())
+      .then((names) => Promise.all(names.map((name) => read(`sprites/${name}`, `sprites/${name}`))))
+      .catch((err) => console.warn(`icons/sprites/list.json: ${err.message}; the Build menu draws its buildings instead`)),
+  ]);
+}
+
+// One file, icons/<path>.svg, kept as `name`.
+async function read(path, name) {
+  try {
+    const res = await fetch(new URL(`../../icons/${path}.svg`, import.meta.url));
+    if (!res.ok) throw new Error(`${res.status}`);
+    const doc = new DOMParser().parseFromString(await res.text(), 'image/svg+xml');
+    const svg = doc.documentElement;
+    if (svg.localName !== 'svg' || doc.querySelector('parsererror')) throw new Error('not an SVG');
+    for (const s of svg.querySelectorAll('script, foreignObject')) s.remove();
+    loaded.set(name, { viewBox: svg.getAttribute('viewBox') ?? '0 0 24 24', art: svg.innerHTML });
+  } catch (err) {
+    console.warn(`icons/${path}.svg: ${err.message}; the drawing in the code stands in`);
+  }
+}
+
+// A Build menu sprite (icons/sprites/<name>.svg) as { viewBox, art }, or
+// null if there's none.
+export function sprite(name) {
+  return loaded.get(`sprites/${name}`) ?? null;
 }
 
 // A drawing as { viewBox, art, file }: its file's, or else the stand-in

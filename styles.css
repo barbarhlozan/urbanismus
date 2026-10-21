@@ -1391,6 +1391,12 @@ body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 4
 .icon .i-rail-dash { stroke: var(--bg); stroke-width: calc(1.4px * var(--stroke, 1)); stroke-dasharray: calc(3.5px * var(--stroke, 1)) calc(3.5px * var(--stroke, 1)); stroke-linecap: butt; stroke-linejoin: round; }
 .icon .i-eraser { stroke-width: calc(1.4px * var(--stroke, 1)); stroke-linejoin: round; }
 .icon .i-smudge { stroke-width: calc(1.2px * var(--stroke, 1)); stroke-dasharray: calc(2px * var(--stroke, 1)) calc(2px * var(--stroke, 1)); }
+/* the Build menu's sprites (icons/sprites/): one pen, the hatching finer,
+   windows dots of ink, paper behind what stands in front */
+.icon.sprite path { fill: none; stroke: currentColor; stroke-width: calc(1.05px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.icon.sprite .h { stroke-width: calc(0.6px * var(--stroke, 1)); }
+.icon.sprite .ink { fill: currentColor; stroke-width: calc(0.4px * var(--stroke, 1)); }
+.icon.sprite .p { fill: var(--bg); stroke: none; }
 
 /* ---------- Colors menu (src/ui/colorMenu.js) ---------- */
 

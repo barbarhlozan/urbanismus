@@ -39,10 +39,10 @@ drawing written in the code, the one each file was first exported from.
 | --- | --- |
 | `menu.svg` | Menu button, top right: ≡ while the Menu is folded |
 | `menu-close.svg` | Menu button, top right: the cross while the Menu is open |
-| `colors.svg` | Menu: Barvy / Colours (an ink pot with three pens) |
-| `export.svg` | Menu: Uložit do souboru / Save to a file (a sheet going into a desk drawer) |
-| `import.svg` | Menu: Otevřít ze souboru / Open from a file (an opened document folder) |
-| `newmap.svg` | Menu: Nová mapa / New map (a rolled survey plan) |
+| `colors.svg` | Menu: Barvy / Colours (a painter's palette with three dabs of paint) |
+| `export.svg` | Menu: Uložit do souboru / Save to a file (an arrow coming up out of a box) |
+| `import.svg` | Menu: Otevřít ze souboru / Open from a file (an arrow going down into a box) |
+| `newmap.svg` | Menu: Nová mapa / New map (a blank sheet with a plus) |
 | `fullscreen.svg` | Menu: Celá obrazovka / Full screen, going in (a big picture frame) |
 | `fullscreen-exit.svg` | Menu: Full screen, coming back (the small picture back on its nail) |
 | `sound.svg` | Menu: Zvuk / Sound, while it's on (the village loudspeaker calling out) |
@@ -75,9 +75,10 @@ it's added there.
 
 ## Not here
 
-- **The Build menu's tiles and tabs**, the buildings, roads, fences and the eraser: each
-  building's is drawn from its own draw code with the map's pen (`src/ui/icons.js` toolIcon),
-  so it always matches what gets built.
+- **The Build menu's tiles and tabs**: they have a folder of their own, `icons/sprites/`, one
+  sprite per tool, written by `icons/sprites/make.js` and shown at
+  <http://localhost:8173/icons/sprites/>. A tool without a sprite falls back on its building drawn
+  by its own draw code (`src/ui/icons.js` toolIcon).
 - **The map's own marks**: the photographer's camera on the map, the cursor's crosses and
   signs, the road marks (`src/render/`).
 - **Pen frames and marks drawn to size**: the boxes round the panels (`sketchFrame.js`), what

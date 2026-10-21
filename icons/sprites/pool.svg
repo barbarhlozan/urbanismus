@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Koupaliště: the diving tower over the water -->
+  <path d="M4.05 21.05Q4.76 13.52 5.14 5.97M9.52 21.06Q8.99 13.51 8.71 5.95"/>
+  <path class="h" stroke-width="0.8" d="M4.46 13.41Q6.81 13.47 9.17 13.71M4.35 13.7Q6.76 9.97 8.99 6.12M4.62 19.99Q7.08 16.93 9.41 13.77"/>
+  <path d="M3.9 6.12Q8.7 6.06 13.49 5.85M8.31 11.47Q12 11.51 15.69 11.57"/>
+  <path class="h" stroke-width="0.8" d="M13.06 5.95Q13.13 6.46 13.2 6.96"/>
+  <path d="M4.29 6Q4.31 5.2 4.31 4.4M8.73 6Q8.62 5.2 8.54 4.4"/>
+  <path class="h" stroke-width="0.8" d="M4.13 4.53Q6.42 4.48 8.71 4.57"/>
+  <path d="M1.4 17.6Q3.6 16.6 5.8 17.6T10.2 17.6T14.6 17.6T19 17.6T23 17.4"/>
+  <path class="h" stroke-width="0.8" d="M3 20.2Q5.2 19.2 7.4 20.2T11.8 20.2T16.2 20.2T20.8 20.2"/>
+</svg>
