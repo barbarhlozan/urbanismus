@@ -40,10 +40,13 @@ ffmpeg -ss 26 -t 4 -i forest.wav -i forest.wav -filter_complex "[0:a][1:a]concat
 ffmpeg -i clean.wav -af volume=8.1dB -ar 44100 -c:a libmp3lame -q:a 5 forest-june.mp3
 ```
 
-The rain in the woods: a little under its peaks, the lowest rumble cut:
+The rain in the woods: the recording has thumps in it – wind and big drops on the microphone,
+deep (20–80 Hz) and short knocks (300–700 Hz, a few ms). Everything under 140 Hz is cut
+steeply, and under 1500 Hz a quick compressor squashes the knocks; the rain's hiss above is
+left alone:
 
 ```
-ffmpeg -i rain.wav -af "highpass=f=40:poles=2,volume=-1.5dB" -ar 44100 -c:a libmp3lame -q:a 5 rain-woods.mp3
+ffmpeg -i rain.wav -filter_complex "[0:a]highpass=f=140:poles=2,highpass=f=140:poles=2,highpass=f=140:poles=2,acrossover=split=1500[lo][hi];[lo]acompressor=threshold=-34dB:ratio=12:attack=0.2:release=60:detection=peak:knee=2[loc];[loc][hi]amix=inputs=2:normalize=0,volume=-1.5dB" -ar 44100 -c:a libmp3lame -q:a 5 rain-woods.mp3
 ```
 
 The short ones, to one channel (the pencil's and the wood's desk thumps cut, the wood 8.7 dB

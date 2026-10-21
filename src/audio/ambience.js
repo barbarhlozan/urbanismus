@@ -27,8 +27,8 @@ export const SOUND = {
   // and the wind in the trees before it began; how loud each is at its
   // hardest (the rain at `rain` and over, config.weather.rain; the wind at
   // `wind`, config.weather.wind.storm)
-  rain: { part: [33, 47.6], stretch: [5, 9], fade: 2.5, volume: 2.4, at: 1.6 },
-  wind: { part: [1, 28], stretch: [8, 16], fade: 4, volume: 1.4, at: 0.14 },
+  rain: { part: [33, 47.6], stretch: [5, 9], fade: 2.5, volume: 2.8, at: 1.6 },
+  wind: { part: [1, 28], stretch: [8, 16], fade: 4, volume: 1.75, at: 0.14 },
   // the pencil: how long for one building, and for a line (a road, a path,
   // a fence) by its segments
   build: { one: [0.4, 0.75], line: [0.35, 0.06, 2.2] },
