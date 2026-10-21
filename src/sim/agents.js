@@ -14,8 +14,9 @@
 //
 // Agent lifecycle:  home --(leg out)--> away --(leg back)--> home …
 // with some states where people stand about in view (see wander):
-//   linger – in front of the house (porch), or in a park on the way
-//            (then the leg back)
+//   linger – in front of the house (porch), or round it in the garden
+//            where nothing leads from its front (startYard), or in a park
+//            on the way (then the leg back)
 //   wait   – at a bus stop / station for a ride off the map (config.transit);
 //            they board when a bus or train calls there (transitCall), sit
 //            out their time `away`, then `abroad` wait for one calling there
@@ -353,6 +354,7 @@ export class AgentSystem {
   // Moves a lingering agent on; true once it's back where it began after its time.
   wander(a, dt) {
     const w = a.wander;
+    if (w.loop) return this.roundYard(a, dt);
     w.time -= dt;
     if (w.pause > 0) {
       w.pause -= dt;
@@ -395,6 +397,90 @@ export class AgentSystem {
       return [cx - dy * u + dx * v, cy + dx * u + dy * v];
     });
     return 'linger';
+  }
+
+  // Round the house, where nothing leads from its front (no road, no
+  // footpath): out of the door and a little way round it in the garden,
+  // along a loop at the door's distance (doorPad) round the footprint,
+  // stopping here and there, then back the same way and in. Not into water
+  // nor off the map: the walk keeps to the stretch of the loop either side
+  // of the door that's clear. 'linger', or null when even the door step
+  // isn't.
+  startYard(a, home) {
+    const { world } = this;
+    const m = this.config.sim.doorPad;
+    const pts = world.nodesOf(home).map((n) => world.grid.xy(n));
+    const x0 = Math.min(...pts.map((p) => p[0])), x1 = Math.max(...pts.map((p) => p[0]));
+    const y0 = Math.min(...pts.map((p) => p[1])), y1 = Math.max(...pts.map((p) => p[1]));
+    // the footprint's box grown by m, its corners rounded (clockwise from the top right)
+    const ring = [];
+    for (const [cx, cy, from] of [[x1, y0, -0.5], [x1, y1, 0], [x0, y1, 0.5], [x0, y0, 1]]) {
+      for (let k = 0; k <= 4; k++) {
+        const t = (from + k / 8) * Math.PI;
+        ring.push([cx + Math.cos(t) * m, cy + Math.sin(t) * m]);
+      }
+    }
+    ring.push(ring[0]);
+    const loop = measurePolyline(ring);
+    // the door: the middle of the side the house faces
+    const [fx, fy] = FACING[world.drawnRotation(home)];
+    const door = [(x0 + x1) / 2 + fx * ((x1 - x0) / 2 + m), (y0 + y1) / 2 + fy * ((y1 - y0) / 2 + m)];
+    let s0 = 0, best = Infinity;
+    for (let s = 0; s < loop.total; s += 0.02) {
+      const [x, y] = pointAt(loop, s);
+      const d = Math.hypot(x - door[0], y - door[1]);
+      if (d < best) [best, s0] = [d, s];
+    }
+    const at = (u) => pointAt(loop, (((s0 + u) % loop.total) + loop.total) % loop.total);
+    const clear = (u) => {
+      const [x, y] = at(u);
+      // (the main dot a step further out: the ground the garden runs down to)
+      const [ix, iy] = world.grid.xy(world.grid.nodeAt(Math.min(Math.max(x, x0), x1), Math.min(Math.max(y, y0), y1)));
+      const d = Math.hypot(x - ix, y - iy) || 1;
+      const n = world.grid.nodeAt(ix + ((x - ix) / d) * 0.65, iy + ((y - iy) / d) * 0.65);
+      return n >= 0 && !world.terrain.isWater(n);
+    };
+    if (!clear(0)) return null;
+    const half = loop.total / 2, step = 0.05;
+    let hi = 0, lo = 0;
+    while (hi < half && clear(hi + step)) hi += step;
+    while (lo > -half && clear(lo - step)) lo -= step;
+    a.trip = { mode: 'linger', nodes: [], dest: null, back: null };
+    [a.x, a.y] = at(0);
+    [a.tx, a.ty] = [a.x, a.y];
+    a.wander = { loop: { at, lo, hi }, u: 0, goal: null, time: between(...this.config.linger.porch), pause: between(0.5, 2), back: false };
+    return 'linger';
+  }
+
+  // Moves an agent round its house (startYard); true once back at the door.
+  roundYard(a, dt) {
+    const w = a.wander;
+    const { lo, hi, at } = w.loop;
+    w.time -= dt;
+    if (w.pause > 0) {
+      w.pause -= dt;
+      return false;
+    }
+    if (w.goal === null) {
+      w.back = w.time <= 0;
+      if (w.back) {
+        w.goal = 0;
+      } else { // on a bit, either way round (back from the end of the clear stretch)
+        const len = between(0.3, 1);
+        let dir = Math.random() < 0.5 ? -1 : 1;
+        if (w.u + dir * len > hi || w.u + dir * len < lo) dir = -dir;
+        w.goal = Math.min(hi, Math.max(lo, w.u + dir * len));
+      }
+    }
+    const d = w.goal - w.u;
+    const step = this.config.sim.walkSpeed * this.config.linger.speed * dt;
+    w.u = Math.abs(d) > step ? w.u + Math.sign(d) * step : w.goal;
+    [a.x, a.y] = at(w.u);
+    if (w.u !== w.goal) return false;
+    w.goal = null;
+    if (w.back) return true;
+    w.pause = between(...this.config.linger.pause);
+    return false;
   }
 
   // Where to stand about in a park or square: along its walkways, a step
@@ -853,7 +939,7 @@ export class AgentSystem {
         a.timer = this.homeDwell(home);
         return 'home';
       case 'porch':
-        return this.startPorch(a, home);
+        return this.startPorch(a, home) ?? this.startYard(a, home);
       case 'stroll': {
         const loop = this.walk.stroll(home, walk.strollMin, walk.strollMax);
         return loop && this.begin(a, { mode: 'stroll', purpose: 'stroll', ...loop }, null);
@@ -1436,6 +1522,9 @@ function newAgent(fields) {
 function between(min, max) {
   return min + Math.random() * (max - min);
 }
+
+// The way a building faces, by its drawn rotation (its front is local -y).
+const FACING = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
 // A picker of random points within r of (x, y).
 function around(x, y, r) {
