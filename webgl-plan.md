@@ -126,6 +126,32 @@ uploaded per frame.
 - Moving things: `agentCanvas.js` (`#agents`, `#trains-top`), drawn by
   `renderAgents`, `renderTrains`, `renderBoats`, `renderAnimals`.
 
+## Progress
+
+- **Steps 0–1 done** (commit `WebGL lines`, 2026-10-22): `src/render/gl/
+  lines.js`, switchable in the Debug panel (off by default). Measured on
+  Pupíkov, back-to-back: turn 25–28 → 35–37 fps (JS 690 → 490 ms/s),
+  settle 46–49 → 51–52, the rest unchanged (lines were only part of it).
+  Look: `tools/perf/imgdiff.mjs` against the SVG — no placement offset
+  (any ¼ px nudge doubles the difference), dashes carried on across items
+  as ink.js does, mean difference on inked pixels ~16/255 at rest, ~8
+  mid-turn; what is left is how the two rasterisers smooth an edge.
+- **Order changed** after that: what costs most is the objects' SVG
+  (Chrome) and the moving things' and shadows' canvases (Firefox: every
+  frame re-uploaded); the terrain costs little in either. So step 4
+  (moving things) goes next, then 3 (hatching: shadows, night, clouds),
+  then 5 (objects) and 2 (terrain).
+- **Step 4, first part done** (commit `WebGL movers`): people, vehicles,
+  trains, boats, animals and crossing signs drawn with WebGL
+  (`src/render/gl/movers.js`, Debug panel, off by default): each frame one
+  stream of filled triangles and pen segments in the 2D canvas's exact
+  order, one draw call; shapes flattened and triangulated once
+  (`src/render/gl/geometry.js`, written by a helper agent, 54 tests).
+  Look: within ~4 % of the 2D canvas's ink (fills multisampled, not exact
+  coverage). Chrome: turn 26 → 37 fps with lines and movers on, the rest
+  unchanged (the per-frame stream costs ~0.5 ms of script). Smoke and rain
+  still on 2D canvases.
+
 ## The plan
 
 Each step lands on its own, switchable in the Debug panel against the SVG

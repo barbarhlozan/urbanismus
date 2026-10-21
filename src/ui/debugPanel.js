@@ -47,6 +47,7 @@ export class DebugPanel {
       // TEMPORARY, the WebGL map's first step (webgl-plan.md): the ground's
       // lines drawn on the GPU instead
       ['Roads, paths, rails, fences in SVG (unticked: WebGL)', (on) => { renderer.setGlLines(!on); }],
+      ['People, vehicles, trains on 2D canvases (unticked: WebGL)', (on) => { renderer.setGlMovers(!on); }],
     ];
 
     this.el = document.createElement('div');

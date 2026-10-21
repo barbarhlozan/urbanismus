@@ -1,6 +1,7 @@
 // How alike two screenshots are (the SVG map and the WebGL one): the share
 // of pixels that differ, by how much, and a picture of where – red where
-// only the first has ink, blue where only the second does.
+// only the first has ink, blue where only the second does; and how much
+// ink the second has for the first's (inkRatio: 1 the same, above heavier).
 //
 //   node tools/perf/imgdiff.mjs a.png b.png [diff.png] [--ink]
 //
@@ -27,9 +28,11 @@ try {
     let paper = 0;
     for (let i = 0; i < pa.length; i += 4) paper = Math.max(paper, lum(pa, i));
     const diff = new OffscreenCanvas(w, h), dc = diff.getContext('2d'), dd = dc.createImageData(w, h);
-    let n = 0, d8 = 0, d32 = 0, d96 = 0, sum = 0, onlyA = 0, onlyB = 0;
+    let n = 0, d8 = 0, d32 = 0, d96 = 0, sum = 0, onlyA = 0, onlyB = 0, inkA = 0, inkB = 0;
     for (let i = 0; i < pa.length; i += 4) {
       const la = paper - lum(pa, i), lb = paper - lum(pb, i); // ink: how much darker than the paper
+      inkA += Math.max(0, la);
+      inkB += Math.max(0, lb);
       const g = 235;
       dd.data.set([g, g, g, 255], i);
       if (${ink} && la < 8 && lb < 8) continue;
@@ -48,7 +51,7 @@ try {
     const blob = await diff.convertToBlob({ type: 'image/png' });
     const png = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
     const pct = (k) => +(100 * k / Math.max(1, n)).toFixed(2);
-    return { w, h, counted: n, meanDiff: +(sum / Math.max(1, n)).toFixed(2), over8: pct(d8), over32: pct(d32), over96: pct(d96), inkOnlyA: pct(onlyA), inkOnlyB: pct(onlyB), png };
+    return { w, h, counted: n, meanDiff: +(sum / Math.max(1, n)).toFixed(2), over8: pct(d8), over32: pct(d32), over96: pct(d96), inkOnlyA: pct(onlyA), inkOnlyB: pct(onlyB), inkRatio: +(inkB / Math.max(1, inkA)).toFixed(3), png };
   })()`);
   if (out) writeFileSync(out, Buffer.from(r.png, 'base64'));
   delete r.png;

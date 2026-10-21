@@ -51,7 +51,7 @@ export function shapesOf(svg) {
 
 // One shape: a path `d` in style `cls`.
 export function shape(cls, d) {
-  return { style: STYLES[cls] ?? STYLES.car, path: new Path2D(d) };
+  return { style: STYLES[cls] ?? STYLES.car, path: new Path2D(d), d }; // (d: for WebGL, gl/movers.js)
 }
 
 export class AgentCanvas {
