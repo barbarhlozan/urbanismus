@@ -254,6 +254,9 @@ export class Renderer {
     // their own wrapper (#view-top), over the canvas with the moving people
     // and trains (agentCanvas.js). See styles.css.
     this.top = document.getElementById('objects');
+    // the parked cars in an <svg> of their own over the shadows' canvases
+    // (shadeCanvas.js), in the map's wrapper
+    this.parkedSvg = document.getElementById('parked');
     this.wrappers = [svg.parentNode, this.top.parentNode];
     this.pen = new AgentCanvas(document.getElementById('agents'));
     // over the buildings: carriages nothing nearer could hide (see screened)
@@ -309,10 +312,12 @@ export class Renderer {
           <line class="hatch" x1="0" y1="2.5" x2="5" y2="2.5"/>
         </pattern>
       </defs>
-      <g class="scene">${LAYERS.filter((l) => !TOP.includes(l) && l !== 'terrain').map((l) => `<g class="layer-${l}"></g>`).join('')}</g>`;
+      <g class="scene">${LAYERS.filter((l) => !TOP.includes(l) && l !== 'terrain' && l !== 'parked').map((l) => `<g class="layer-${l}"></g>`).join('')}</g>`;
+    this.parkedSvg.innerHTML = '<g class="scene"><g class="layer-parked"></g></g>';
     this.top.innerHTML = `<g class="scene">${TOP.map((l) => `<g class="layer-${l}${l === 'overlay' ? ' overlay' : ''}"></g>`).join('')}</g>`;
-    const svgOf = (l) => (l === 'terrain' ? ground : TOP.includes(l) ? this.top : svg);
-    this.scenes = [ground, svg, this.top].map((s) => s.querySelector('.scene'));
+    const svgOf = (l) => (l === 'terrain' ? ground : l === 'parked' ? this.parkedSvg : TOP.includes(l) ? this.top : svg);
+    this.svgs = [svg, ground, this.top, this.parkedSvg];
+    this.scenes = [ground, svg, this.parkedSvg, this.top].map((s) => s.querySelector('.scene'));
     this.layers = Object.fromEntries(LAYERS.map((l) => [l, svgOf(l).querySelector(`.layer-${l}`)]));
     // the shadows (shadows.js shadowMask, hillShadows.js): one sheet of the
     // paper's strokes (hatch.js) shown through one mask of every object's
@@ -1982,7 +1987,7 @@ export class Renderer {
     const k = this.constantStrokes ? (lineWeight * step ** -Math.round(Math.log(z) / Math.log(step))) / (devicePixelRatio || 1) : 1;
     if (k === this.strokeK) return;
     this.strokeK = k;
-    for (const s of [this.svg, this.ground, this.top]) s.style.setProperty('--stroke', k);
+    for (const s of this.svgs) s.style.setProperty('--stroke', k);
   }
 
   updateLod(z) {
@@ -2015,7 +2020,7 @@ export class Renderer {
     // (contours, the overlay); not the objects, which go by their own
     const level = z >= medium ? 0 : z >= far ? 1 : 2;
     if (level === this.lodLevel) return;
-    for (const s of [this.svg, this.ground, this.top]) {
+    for (const s of this.svgs) {
       s.classList.remove(`lod-${this.lodLevel}`);
       s.classList.add(`lod-${level}`);
     }
@@ -2656,14 +2661,14 @@ export class Renderer {
   goDraft() {
     if (this.drafting) return;
     this.drafting = true;
-    for (const svg of [this.svg, this.top]) svg.classList.add('draft');
+    for (const svg of this.svgs) svg.classList.add('draft');
     this.hideShadows();
   }
 
   // …its detail back as soon as it rests.
   endDraft() {
     this.drafting = false;
-    for (const svg of [this.svg, this.top]) svg.classList.remove('draft');
+    for (const svg of this.svgs) svg.classList.remove('draft');
   }
 
   // The shadows' canvases (shadeCanvas.js), for the view the SVGs were
@@ -2675,7 +2680,7 @@ export class Renderer {
     const sun = this.svg.style.getPropertyValue('--sun');
     if (sun !== this.shadeSun) {
       this.shadeSun = sun;
-      for (const c of [this.hillCanvas, this.shadeCanvas]) c.canvas.style.setProperty('--sun', sun);
+      for (const el of [this.hillCanvas.canvas, this.shadeCanvas.canvas, this.parkedSvg]) el.style.setProperty('--sun', sun);
     }
     const look = {
       view: { zoom: d.zoom, panX: d.panX, panY: d.panY, angle: d.angle, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH },
@@ -2797,7 +2802,7 @@ export class Renderer {
     if (ink !== this.inkSet && (now - (this.inkAt ?? 0) > INK_EVERY || this.inkSet == null || this.inkShown === this.inkNight)) {
       this.inkSet = ink;
       this.inkAt = now;
-      for (const el of [this.svg, this.ground, this.top]) el.style.setProperty('--ink-night', `${Math.round(ink * 100)}%`);
+      for (const el of this.svgs) el.style.setProperty('--ink-night', `${Math.round(ink * 100)}%`);
     }
     this.nightGrey += ((this.gloom ?? 0) - this.nightGrey) * Math.min(1, dt / 1.6);
     if (Math.abs(this.nightGrey - (this.gloom ?? 0)) < 0.004) this.nightGrey = this.gloom ?? 0;

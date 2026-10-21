@@ -82,7 +82,7 @@ html, body {
 .view { position: fixed; will-change: transform; pointer-events: none; }
 /* the terrain and the buildings get their own GPU layers */
 #ground, #objects { will-change: transform; }
-#world, #ground, #objects {
+#world, #ground, #objects, #parked {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -283,7 +283,7 @@ html, body {
    the whole drawing is in the one ink, the night's lines' */
 @property --ink-night { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
 .view { --main-day: var(--main); }
-#ground, #world, #objects { --main: color-mix(in srgb, var(--detail) var(--ink-night), var(--main-day)); --fg: var(--main); transition: --sun 4s; }
+#ground, #world, #objects, #parked { --main: color-mix(in srgb, var(--detail) var(--ink-night), var(--main-day)); --fg: var(--main); transition: --sun 4s; }
 .shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
 .layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-opacity: var(--sun); }
 :is(.shadow, .layer-objects .wall-shade).p1 { stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
@@ -367,7 +367,7 @@ mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3
 .lod-1 .d2,
 .lod-2 .d1,
 .lod-2 .d2,
-#world.lod-2 .layer-parked,
+#parked.lod-2 .layer-parked,
 #world.lod-2 .driveway,
 #world.lod-2 .zebra { display: none; }
 .layer-objects .d1, .layer-objects .d2, .layer-lots .d1, .layer-lots .d2 { display: inline; }
