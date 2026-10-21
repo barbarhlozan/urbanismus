@@ -22,11 +22,11 @@ import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { mulberry32 } from '../core/random.js';
 import { smoothLine } from '../core/geom2d.js';
 
-const SWAY = 0.2;       // how far the wave swings either way (grid units, before the fit)
-const WAVES = [3, 2];   // its two swells' lengths (grid units): a turn every step or so
+const SWAY = 0.28;      // how far the wave swings either way (grid units, before the fit)
+const WAVES = [1.9, 1.4]; // its two swells' lengths (grid units); the dots are half a step apart, so not much under 1.5
 const GROUND = 0.018;   // grid units aside per metre-per-step of rise across the path
 const RAMP = 0.75;      // grid units over which each end eases into it
-const STIFF = 0.4;      // how hard the fit resists bending (enough to even out a staircase)
+const STIFF = 0.12;     // how hard the fit resists bending (enough to even out a staircase)
 const MAX_SHIFT = 0.26; // grid units: no dot moved further
 
 // Map dense dot -> [x, y] for the footpaths' dots that move.
