@@ -1,46 +1,45 @@
 // Clouds overhead: zoomed right out under a cloudy sky, the clouds whose
 // shadows drift over the map (cloudShadows.js) are drawn too, up in the
 // air above their shadows – filled with paper, so they hide the town
-// under them, and outlined in the pen, as the clouds in a photo's sky are
-// (clouds.js). Zoom back in and they part; the sky clears and they go.
+// under them, and outlined in the pen. Zoom back in and they part; the sky
+// clears and they go.
+//
+// Each is drawn as clouds are traced in an outline drawing: one long, low
+// shape lying level, three or four times as wide as it is tall – a few
+// broad humps of uneven size along the top, the underside nearly flat, the
+// ends drawn out, one often into a thin tail – its edge crinkled all
+// round, finely and unevenly, like the edge of torn paper. Some have a
+// fold: a line curling in from the underside where one lobe lies in front
+// of the next; now and then a small hole shows the sky through.
 //
 // The same clouds as the shadows, so they drift with the same wind and
-// come and go with them: each lifted `lift` up the screen from its shadow.
-// Drawn on their own canvas (#clouds-above) over the map, a few times a
-// second and moved with the map in between (follow.js), as the shadows.
-//
-// Three looks (CLOUDS_ABOVE.look):
-//   heap    each of the cloud's lumps a heap with a scalloped edge, the
-//           heaps run together into one outline, a few short strokes along
-//           the underside (as a photo's fair-weather heaps)
-//   shaded  the same heaps with a band of hatching all along the underside,
-//           as an engraver shades a cloud's belly
-//   kasumi  long flat banks, two or three laid one above another, their
-//           tops lobed and their undersides straight, as the valley mist
-//           (mist.js) and the cloud bands of old Japanese maps
+// come and go with them: each lifted `lift` up the screen from its shadow,
+// as wide as the shadow is (`scale`). Drawn on their own canvas
+// (#clouds-above) over the map, a few times a second and moved with the
+// map in between (follow.js), as the shadows.
 
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
-import { CLOUD_SHADOWS } from './cloudShadows.js';
 import { Follow } from './follow.js';
 
 export const CLOUDS_ABOVE = {
-  look: 'kasumi',      // 'kasumi', 'heap' or 'shaded'
   zoom: 0.72,          // shown at this zoom and further out (config.camera.minZoom is 0.55)
   fade: 0.9,           // seconds to come or go
   cover: [0.45, 0.95], // the sky's cover (config.weather.cover) from which the first are up, and all of them
   lift: 2.4,           // grid units up the screen from the shadow
-  scale: 0.85,         // a cloud's size as a share of its shadow's
-  bump: 0.55,          // grid units: a scallop of the edge, about
-  pen: 3,              // the outline's pen (styles.css --pen-n); the strokes under it one finer
-  under: 0.35,         // heap: strokes along the underside per grid unit of it
-  band: 0.32,          // shaded: the hatched band's depth, share of a heap's height
-  gap: 0.09,           // shaded: grid units between its lines
+  scale: 0.95,         // a cloud's width as a share of its shadow's
+  tall: [0.22, 0.34],  // its height as a share of its width
+  humps: [2, 4],       // broad humps along the top
+  crinkle: [0.1, 0.04], // grid units: how far the edge wobbles, the coarse ripple and the fine
+  ripple: [0.32, 0.1],  // grid units: their lengths
+  fold: 0.55,          // the share with a fold line
+  hole: 0.2,           // the share with a hole
+  pen: 2,              // the outline's pen (styles.css --pen-n)
   more: 3,             // times as many clouds in the sky while they're shown (their shadows too)
   fps: 6,
 };
 
-const nudge = (rnd) => (rnd() + rnd() + rnd() - 1.5) / 1.5;
+const between = (rnd, [a, b]) => a + rnd() * (b - a);
 
 export class CloudsAbove {
   constructor(canvas, shadows) {
@@ -60,22 +59,19 @@ export class CloudsAbove {
     this.k = want > this.k ? Math.min(1, this.k + dt / C.fade) : Math.max(0, this.k - dt / C.fade);
     // a fuller sky while they're seen (more come in as they fade in)
     this.shadows.more = 1 + (C.more - 1) * this.k;
-    // (the whole drawing faded as one, so one cloud's outlines don't show through another's)
+    // (the whole drawing faded as one, so one cloud doesn't show through another)
     if (this.k !== was) this.canvas.style.opacity = this.k;
     // which clouds are up: a share of them, the more the cloudier
     const share = Math.min(1, Math.max(0, (cover - C.cover[0]) / (C.cover[1] - C.cover[0])));
     const up = this.shadows.clouds.filter((c) => c.a > 0 && (c.pick ??= Math.random()) < share);
     if (!this.k || !up.length) return this.clear();
-    const fading = this.k !== was;
-    if (!fading && !this.empty && !this.follow.due(camera)) return this.follow.place(camera);
+    if (this.k === was && !this.empty && !this.follow.due(camera)) return this.follow.place(camera);
     this.draw(camera, up, stroke);
     this.follow.drawn(camera);
   }
 
   draw(camera, clouds, stroke) {
-    const { canvas } = this, C = CLOUDS_ABOVE;
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const { canvas, ctx } = this, C = CLOUDS_ABOVE;
     const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
     if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
       canvas.width = Math.round(W * dpr);
@@ -83,150 +79,29 @@ export class CloudsAbove {
       canvas.style.width = `${W}px`;
       canvas.style.height = `${H}px`;
     }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     const z = dpr * camera.zoom, tile = camera.tile;
     if (!(z > 0 && tile > 0)) return;
     const css = getComputedStyle(document.documentElement);
-    const pen = (n) => (parseFloat(css.getPropertyValue(`--pen-${n}`)) || 1) * stroke * (CONFIG.render.lineWeight ?? 1) * dpr / z;
-    const { bg, main, detail } = THEME.palette;
+    const pen = (parseFloat(css.getPropertyValue(`--pen-${C.pen}`)) || 1) * stroke * (CONFIG.render.lineWeight ?? 1) * dpr / z;
+    const { bg, main } = THEME.palette;
     const lift = C.lift * tile;
+    ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.lineWidth = pen;
+    ctx.strokeStyle = main;
+    ctx.fillStyle = bg;
     // far ones first: a nearer cloud hides the back of one behind it
     for (const c of [...clouds].sort((p, q) => p.y - q.y)) {
-      const s = (c.above?.look === C.look && c.above.tile === tile) ? c.above : (c.above = this.shape(c, tile));
-      // one coming or going is drawn whole on a sheet of its own, then laid
-      // on faded, so its heaps' outlines don't show through each other
-      const a = Math.min(1, c.a);
-      const ctx = a < 1 ? this.sheet(canvas.width, canvas.height) : this.ctx;
+      if (c.above?.tile !== tile) c.above = traced(Math.random, c.w * C.scale, tile);
       ctx.setTransform(z, 0, 0, z, dpr * camera.panX + z * c.x, dpr * camera.panY + z * (c.y - lift));
-      ctx.lineJoin = ctx.lineCap = 'round';
-      // the outline twice as wide under the fill: only its outer half
-      // shows, round the heaps run together
-      ctx.strokeStyle = main;
-      ctx.lineWidth = 2 * pen(C.pen);
-      ctx.fillStyle = bg;
-      if (s.apart) { // kasumi: each bank outlined, the nearer laid over the one behind
-        for (const p of s.parts) {
-          ctx.stroke(p);
-          ctx.fill(p);
-        }
-      } else {
-        for (const p of s.parts) ctx.stroke(p);
-        for (const p of s.parts) ctx.fill(p);
-      }
-      if (s.hatch) { // shaded: the band of lines along the underside
-        ctx.save();
-        ctx.clip(s.all);
-        ctx.strokeStyle = detail;
-        ctx.lineWidth = pen(C.pen - 1);
-        ctx.stroke(s.hatch);
-        ctx.fillStyle = bg;
-        ctx.translate(0, -s.band);
-        for (const p of s.parts) ctx.fill(p);
-        ctx.restore();
-      }
-      if (s.under) {
-        ctx.strokeStyle = detail;
-        ctx.lineWidth = pen(C.pen - 1);
-        ctx.stroke(s.under);
-      }
-      if (a < 1) {
-        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        this.ctx.globalAlpha = a;
-        this.ctx.drawImage(ctx.canvas, 0, 0);
-        this.ctx.globalAlpha = 1;
-      }
+      ctx.globalAlpha = Math.min(1, c.a);
+      ctx.fill(c.above.shape, 'evenodd');
+      ctx.stroke(c.above.shape);
+      if (c.above.fold) ctx.stroke(c.above.fold);
     }
+    ctx.globalAlpha = 1;
     this.empty = false;
-  }
-
-  // A clear sheet the size of the canvas, to draw one cloud on.
-  sheet(w, h) {
-    if (this.scratch?.width !== w || this.scratch?.height !== h) this.scratch = new OffscreenCanvas(w, h);
-    const ctx = this.scratch.getContext('2d');
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    return ctx;
-  }
-
-  // A cloud's drawing in scene units about its middle: `parts` filled and
-  // outlined, and what goes over them.
-  shape(c, tile) {
-    const C = CLOUDS_ABOVE, rnd = Math.random;
-    const k = C.scale;
-    if (C.look === 'kasumi') return { look: C.look, tile, ...this.banks(c, tile, rnd) };
-    // the lumps as the shadow lays them out, turned with the wind and
-    // squashed onto the ground, each a heap seen from above and the side
-    const a = this.shadows.windAngle, cos = Math.cos(a), sin = Math.sin(a), sq = CLOUD_SHADOWS.squash;
-    const heaps = c.lumps.map(({ u, v, ru, rv }) => {
-      const x = (u * cos - v * sin) * k, y = (u * sin + v * cos) * sq * k;
-      const rx = Math.max(ru, rv) * k * 1.05, ry = rx * 0.62;
-      return { x, y, rx, ry };
-    });
-    const parts = heaps.map((h) => scalloped(rnd, h, C.bump * tile));
-    const all = new Path2D();
-    for (const p of parts) all.addPath(p);
-    const out = { look: C.look, tile, parts, all };
-    if (C.look === 'shaded') {
-      const top = Math.min(...heaps.map((h) => h.y - h.ry)), bottom = Math.max(...heaps.map((h) => h.y + h.ry));
-      out.band = (bottom - top) * C.band;
-      out.hatch = new Path2D();
-      const left = Math.min(...heaps.map((h) => h.x - h.rx)) - out.band, right = Math.max(...heaps.map((h) => h.x + h.rx));
-      const gap = C.gap * tile, lean = 0.55;
-      for (let x = left; x < right + (bottom - top) * lean; x += gap * (0.8 + rnd() * 0.4)) {
-        out.hatch.moveTo(x, top - 2);
-        out.hatch.lineTo(x - (bottom - top + 4) * lean, bottom + 2);
-      }
-      return out;
-    }
-    // heap: short strokes along the underside of each heap, where no other
-    // heap covers it, leaning the one way
-    out.under = new Path2D();
-    for (const h of heaps) {
-      const n = Math.max(2, Math.round(((Math.PI * h.rx) / tile) * C.under));
-      for (let i = 0; i < n; i++) {
-        const t = Math.PI * (0.18 + (0.64 * (i + 0.5 + nudge(rnd) * 0.3)) / n);
-        const x = h.x + Math.cos(t) * h.rx * 0.82, y = h.y + Math.sin(t) * h.ry * 0.78;
-        if (heaps.some((o) => o !== h && o.y > h.y && ((x - o.x) / o.rx) ** 2 + ((y - o.y) / o.ry) ** 2 < 1.1)) continue;
-        const l = (0.12 + rnd() * 0.1) * tile;
-        out.under.moveTo(x, y);
-        out.under.lineTo(x - l * 0.55, y - l);
-      }
-    }
-    return out;
-  }
-
-  // Kasumi: two to four long thin banks, stepped – each further up a
-  // little shorter and set off to one side – their tops a run of low
-  // lobes, their undersides flat, their ends rounded off.
-  banks(c, tile, rnd) {
-    const C = CLOUDS_ABOVE;
-    const w = c.w * C.scale * 1.2;
-    const n = 2 + Math.floor(rnd() * 3);
-    const parts = [];
-    const all = new Path2D();
-    let shift = 0;
-    for (let i = 0; i < n; i++) {
-      const len = w * (1 - i * 0.17) * (0.8 + rnd() * 0.3);
-      shift += i ? (rnd() < 0.5 ? -1 : 1) * w * (0.08 + rnd() * 0.1) : 0;
-      const x0 = -len / 2 + shift, x1 = x0 + len;
-      const h = w * (0.034 + rnd() * 0.016);
-      const y = w * 0.1 - i * h * (2.1 + rnd() * 0.6);
-      const p = new Path2D();
-      p.moveTo(x1 - h, y);
-      p.lineTo(x0 + h, y);
-      p.arc(x0 + h, y - h, h, Math.PI / 2, Math.PI * 1.5);
-      const lobes = Math.max(1, Math.round((len - 2 * h) / (C.bump * tile * 2.6)));
-      let x = x0 + h;
-      for (let j = 0; j < lobes; j++) {
-        const nx = x0 + h + ((len - 2 * h) * (j + 1 + (j + 1 < lobes ? nudge(rnd) * 0.35 : 0))) / lobes;
-        p.quadraticCurveTo(x + (nx - x) * (0.35 + rnd() * 0.3), y - 2 * h - h * (0.4 + rnd() * 1.3), nx, y - 2 * h);
-        x = nx;
-      }
-      p.arc(x1 - h, y - h, h, Math.PI * 1.5, Math.PI / 2);
-      parts.push(p);
-      all.addPath(p);
-    }
-    // the highest (furthest back) first
-    return { parts: parts.reverse(), all, apart: true };
   }
 
   clear() {
@@ -238,23 +113,108 @@ export class CloudsAbove {
   }
 }
 
-// A heap ({ x, y, rx, ry }) with a scalloped edge: bulges about `bump`
-// wide all round, a little uneven, flatter along its underside.
-function scalloped(rnd, { x, y, rx, ry }, bump) {
-  const per = Math.PI * (rx + ry);
-  const n = Math.max(5, Math.round(per / bump));
-  const ts = Array.from({ length: n }, (_, i) => ((i + nudge(rnd) * 0.25) / n) * Math.PI * 2 - Math.PI / 2);
-  const at = (t) => [x + Math.cos(t) * rx, y + Math.sin(t) * ry];
-  const p = new Path2D();
-  p.moveTo(...at(ts[0]));
-  for (let i = 0; i < n; i++) {
-    const a = ts[i], b = i + 1 < n ? ts[i + 1] : ts[0] + Math.PI * 2;
-    const m = (a + b) / 2;
-    // underneath (sin > 0) the bulges are shallow, on top full
-    const out = 1 + (Math.sin(m) > 0.3 ? 0.06 : 0.22 + rnd() * 0.12) * (bump / Math.max(rx, ry)) * 3;
-    const [cx, cy] = [x + Math.cos(m) * rx * out, y + Math.sin(m) * ry * out];
-    p.quadraticCurveTo(cx, cy, ...at(b));
+// A cloud `w` wide (scene px), about its middle: its outline (with a hole,
+// maybe, as a second loop) and its fold line, if it has one.
+function traced(rnd, w, tile) {
+  const C = CLOUDS_ABOVE;
+  const h = w * between(rnd, C.tall);
+  // the top: a few humps side by side, the tallest somewhere off the middle
+  const n = Math.round(between(rnd, C.humps));
+  const humps = Array.from({ length: n }, (_, i) => ({
+    at: (i + 0.5 + (rnd() - 0.5) * 0.6) / n - 0.5,
+    wide: (0.6 + rnd() * 0.7) / n,
+    high: 0.45 + rnd() * 0.55,
+  }));
+  // one end drawn out into a tail, low and thin
+  const tail = rnd() < 0.6 ? (rnd() < 0.5 ? -1 : 1) : 0;
+  // each hump a rounded lobe on a low body
+  const top = (u) => { // u from -0.5 to 0.5 along it; how high the top is, share of h
+    let t = 0.32;
+    for (const p of humps) {
+      const d = (u - p.at) / p.wide;
+      if (Math.abs(d) < 1) t = Math.max(t, p.high * Math.sqrt(1 - d * d));
+    }
+    const e = 2 * Math.abs(u), drawn = tail && Math.sign(u) === tail;
+    const end = drawn ? 1 - e ** 1.6 : Math.sqrt(Math.max(0, 1 - e ** 4));
+    return t * Math.max(0, end) * (drawn ? 1 - 0.55 * e : 1);
+  };
+  // the underside: nearly flat, a slow swell or two, a touch lower in the middle
+  const sag = rnd() * 0.06, swell = rnd() * Math.PI * 2;
+  const under = (u) => ((1 - (2 * u) ** 2) * sag + Math.sin(u * 9 + swell) * 0.025) * (1 - (2 * u) ** 6);
+  // round it: the top left to right, then the underside back
+  const step = tile * 0.03;
+  const m = Math.ceil(w / step);
+  const rough = crinkler(rnd, tile);
+  const pts = [];
+  for (let i = 0; i <= m; i++) {
+    const u = i / m - 0.5;
+    pts.push([u * w, -top(u) * h]);
   }
-  p.closePath();
-  return p;
+  for (let i = m - 1; i > 0; i--) {
+    const u = i / m - 0.5;
+    pts.push([u * w, under(u) * h]);
+  }
+  const shape = new Path2D();
+  loop(shape, rough(pts));
+  const out = { tile, shape, fold: null };
+  // a hole: a small crinkled loop in the thick of it
+  if (rnd() < C.hole) {
+    const p = humps[Math.floor(rnd() * n)];
+    const cx = p.at * w, cy = -top(p.at) * h * 0.45, r = Math.min(w * 0.04, h * 0.12);
+    const ring = [];
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      ring.push([cx + Math.cos(a) * r * 1.8, cy + Math.sin(a) * r]);
+    }
+    loop(shape, crinkler(rnd, tile * 0.5)(ring));
+  }
+  // a fold: from the underside up into it, curling over the way it leans
+  if (rnd() < C.fold) {
+    const u0 = (rnd() - 0.5) * 0.6, way = rnd() < 0.5 ? -1 : 1;
+    const x0 = u0 * w, y0 = under(u0) * h;
+    const reach = w * (0.12 + rnd() * 0.12), rise = Math.min(top(u0), top(u0 + (way * reach) / w)) * h * (0.35 + rnd() * 0.25);
+    const line = [];
+    for (let i = 0; i <= 20; i++) {
+      const t = i / 20, a = t * Math.PI * 0.9;
+      line.push([x0 + way * reach * (1 - Math.cos(a)) * 0.55, y0 - rise * Math.sin(a) * (0.6 + 0.4 * t)]);
+    }
+    const fold = new Path2D();
+    rough(line).forEach(([x, y], i) => (i ? fold.lineTo(x, y) : fold.moveTo(x, y)));
+    out.fold = fold;
+  }
+  return out;
+}
+
+// A function that crinkles a run of points: each nudged off the line it
+// lies on by two ripples of random heights, a coarse one and a fine one,
+// easing off towards both ends of the run (so a loop closes cleanly).
+function crinkler(rnd, tile) {
+  const C = CLOUDS_ABOVE;
+  const waves = C.ripple.map((l, k) => {
+    const len = l * tile, size = C.crinkle[k] * tile;
+    const knots = [];
+    return (s) => {
+      const u = s / len, i = Math.floor(u), f = u - i;
+      while (knots.length <= i + 1) knots.push((rnd() * 2 - 1) * size);
+      return knots[i] + (knots[i + 1] - knots[i]) * f * f * (3 - 2 * f);
+    };
+  });
+  const ease = C.ripple[0] * tile;
+  return (pts) => {
+    const along = [0];
+    for (let i = 1; i < pts.length; i++) along.push(along[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const total = along[along.length - 1];
+    return pts.map(([x, y], i) => {
+      const [px, py] = pts[Math.max(0, i - 1)], [qx, qy] = pts[Math.min(pts.length - 1, i + 1)];
+      const s = along[i];
+      const l = Math.hypot(qx - px, qy - py) || 1;
+      const d = waves.reduce((sum, wave) => sum + wave(s), 0) * Math.min(1, s / ease, (total - s) / ease);
+      return [x - ((qy - py) / l) * d, y + ((qx - px) / l) * d];
+    });
+  };
+}
+
+function loop(path, pts) {
+  pts.forEach(([x, y], i) => (i ? path.lineTo(x, y) : path.moveTo(x, y)));
+  path.closePath();
 }
