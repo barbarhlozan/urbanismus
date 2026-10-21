@@ -20,6 +20,7 @@
 //   eachParticle(e, kind, time, env, fn)   the particles alive now
 //   ParticleCanvas   one frame: the emitters in view, under a cap
 
+import { Follow } from './follow.js';
 import { THEME } from '../theme.js';
 import { PEN } from './agentCanvas.js';
 
@@ -289,7 +290,7 @@ export const SMOKE_DRAW = {
   style: { house: 'curl', stack: 'puff' },
   most: 1500,
   minZoom: { house: 1, stack: 0 },
-  fps: 30,
+  fps: 12, // on twos, moved with the map between (follow.js)
 };
 
 export class ParticleCanvas {
@@ -307,12 +308,12 @@ export class ParticleCanvas {
     const dpr = devicePixelRatio || 1;
     const W = innerWidth, H = innerHeight;
     const w = Math.round(W * dpr), h = Math.round(H * dpr);
-    const view = `${camera.zoom} ${camera.panX} ${camera.panY} ${camera.angle} ${w} ${h}`;
     const now = performance.now();
-    if (view === this.view && now - this.at < 1000 / draw.fps - 2) return;
-    this.view = view;
-    this.at = now;
-    if (canvas.width !== w || canvas.height !== h) {
+    const follow = (this.follow ??= new Follow(canvas, draw.fps));
+    const resized = canvas.width !== w || canvas.height !== h;
+    if (!resized && !follow.due(camera, now)) return follow.place(camera);
+    follow.drawn(camera, now);
+    if (resized) {
       canvas.width = w;
       canvas.height = h;
       canvas.style.width = `${W}px`;
@@ -350,7 +351,8 @@ export class ParticleCanvas {
   }
 
   clear() {
-    this.view = null;
+    this.follow?.set('');
+    if (this.follow) this.follow.view = null;
     if (this.empty) return;
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);

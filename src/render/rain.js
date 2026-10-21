@@ -11,6 +11,7 @@
 
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
+import { Follow } from './follow.js';
 
 export const RAIN = {
   density: 1 / 2600,  // drops on screen at full rain, per screen px²
@@ -23,6 +24,7 @@ export const RAIN = {
   width: 1.5,         // stroke width: device px times config.render.lineWeight, as the map's (pen 1)
   alpha: 0.65,
   ease: 4,            // seconds for the rain to come on or go off
+  fps: 12,            // drawn this many times a second (on twos), moved with the map between (follow.js)
 };
 
 const between = ([a, b]) => a + Math.random() * (b - a);
@@ -35,6 +37,7 @@ export class RainCanvas {
     this.level = 0;    // 0 none – 1 rain – more for a storm (config.weather.rain)
     this.pan = null;
     this.empty = true;
+    this.follow = new Follow(canvas, RAIN.fps);
   }
 
   // One frame: `dt` simulated seconds, `target` how hard it should be
@@ -81,6 +84,12 @@ export class RainCanvas {
       this.drops.push({ x, y, dist, fall, len: between(RAIN.length), t: still ? fall * Math.random() : 0 });
     }
 
+    // each drop on its way, those landed and splashed let go
+    if (!still) for (const d of this.drops) d.t += dt;
+    this.drops = this.drops.filter((d) => d.t < d.fall + RAIN.splash);
+    if (!this.empty && !this.follow.due(camera)) return this.follow.place(camera);
+    this.follow.drawn(camera);
+
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     ctx.strokeStyle = THEME.palette.detail;
@@ -89,9 +98,7 @@ export class RainCanvas {
     ctx.globalAlpha = RAIN.alpha;
     ctx.beginPath();
     const slant = RAIN.slant + RAIN.storm.slant * over;
-    const kept = [];
     for (const d of this.drops) {
-      if (!still) d.t += dt;
       if (d.t < d.fall) {
         // falling: the stroke's lower end is `left` px above where it lands
         const left = d.dist * (1 - d.t / d.fall);
@@ -105,11 +112,9 @@ export class RainCanvas {
         ctx.lineTo(d.x - 2 * k, d.y - 1.4 * k);
         ctx.moveTo(d.x + k, d.y - 0.6 * k);
         ctx.lineTo(d.x + 2 * k, d.y - 1.4 * k);
-      } else continue;
-      kept.push(d);
+      }
     }
     ctx.stroke();
-    this.drops = kept;
     this.empty = false;
   }
 
@@ -119,5 +124,6 @@ export class RainCanvas {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.pan = null;
     this.empty = true;
+    this.follow.set('');
   }
 }

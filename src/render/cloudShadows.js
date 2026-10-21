@@ -34,6 +34,7 @@
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
 import { hatchFrame, hatchTileLines } from './hatch.js';
+import { Follow } from './follow.js';
 
 export const CLOUD_SHADOWS = {
   // grid units² of map per cloud under a cloudy sky (cover 1; config
@@ -45,6 +46,7 @@ export const CLOUD_SHADOWS = {
   squash: 0.58,       // on the ground: height per width (isometric)
   wind: 0.22,         // grid units per simulated second
   look: 'hatch',      // 'hatch' (the paper's strokes), 'wash' (watercolour) or 'pen' (hatched lines)
+  fps: 6,             // drawn this many times a second, moved with the map between (follow.js)
   tone: 0.001,          // how strong the wash is put down
   // the wash: layers laid over each other, each this opaque; how many
   // times the outline's edges are split, and how far a split may wander
@@ -108,6 +110,7 @@ export class CloudShadows {
     this.clouds = [];
     this.view = null;
     this.empty = true;
+    this.follow = new Follow(canvas, CLOUD_SHADOWS.fps);
     // the wind's way across the map, the same for a town every time
     const a = ((seed * 2654435761) >>> 0) / 4294967296 * Math.PI * 2;
     this.windAngle = a;
@@ -166,7 +169,10 @@ export class CloudShadows {
 
     if (!this.clouds.length) return this.clear();
     if (!changed && !this.empty) return;
+    // (they drift a few px a second: drawn now and then, moved with the map between)
+    if (!this.empty && !this.follow.due(camera)) return this.follow.place(camera);
     this.draw(camera, W, H);
+    this.follow.drawn(camera);
   }
 
   // A cloud: a few lumps strung out along the wind, its wash painted later
@@ -421,5 +427,6 @@ export class CloudShadows {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.empty = true;
+    this.follow.set('');
   }
 }
