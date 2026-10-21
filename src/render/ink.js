@@ -74,6 +74,8 @@ function partialRuns(runs, f, flip) {
 export class InkLayer {
   // `classes`: the layer's path classes, back to front.
   constructor(el, classes) {
+    this.classes = classes;
+    this.headless = false;   // drawn elsewhere (gl/lines.js): the pen's timing kept, no DOM written
     this.items = new Map();  // key -> { key, cls, pts, a, b }
     this.moving = new Map(); // key -> { item, batch, rank, flip, out, cap }
     this.first = true;
@@ -153,6 +155,11 @@ export class InkLayer {
   }
 
   tick(now = performance.now()) {
+    if (this.headless) {
+      for (const [k, m] of this.moving) if (now >= m.batch.t0 + m.batch.T) this.moving.delete(k);
+      this.settledDirty = true; // (for when it is shown again)
+      return;
+    }
     const moving = {};
     for (const [k, m] of this.moving) {
       if (now >= m.batch.t0 + m.batch.T) {

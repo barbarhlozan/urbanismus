@@ -57,6 +57,7 @@ import { LIVESTOCK, livestockSVG, livestockMark } from './livestock.js';
 import { fenceGates } from '../sim/pastures.js';
 import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './draw.js';
 import { ShadeCanvas } from './shadeCanvas.js';
+import { GLLines } from './gl/lines.js';
 import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
@@ -135,6 +136,8 @@ const OVERSCAN = 0.25;
 // the turning angle every frame. Buildings, trees and lamps go their own way.
 const SHEET = ['forest', 'mist', 'hillshade'];
 const LINES = ['roads', 'paths', 'rails', 'fences', 'notes'];
+// …of which these can be drawn with WebGL instead (setGlLines, gl/lines.js)
+const GL_LINES = ['paths', 'rails', 'roads', 'fences'];
 // The steps of a whole turn (Camera.STEP); the views an object keeps of
 // the steps it has been drawn at, at most (Renderer.swapIn); and ms the
 // view must rest before those either side are made ready (prepareTurn).
@@ -455,6 +458,7 @@ export class Renderer {
     world.events.on('parking:changed', (s) => this.parkedDirty.add(s.id));
     on('terrain:changed', 'terrain', 'meadow', 'paths', 'rails', 'roads', 'fences');
     world.events.on('terrain:changed', () => {
+      this.worldStamp = null; // (the lines on the ground in world space, worldLine)
       this.objsAll = this.worldAll = true; // (not just the view: draw them all now)
       this.roadLines = null;
       this.contourLines = null; // water breaks them
@@ -469,6 +473,7 @@ export class Renderer {
   // Rebuild everything (e.g. after a camera rotation).
   invalidate() {
     this.roadLines = this.railLines = this.pathLines = null;
+    this.worldStamp = null;
     for (const l of LAYERS) if (l !== 'agents' && l !== 'overlay' && l !== 'objects' && l !== 'lots' && l !== 'shadows') this.dirty.add(l);
     this.objsAll = true;
     this.lastOverlay = null;
@@ -660,6 +665,7 @@ export class Renderer {
     this.markErasing();
     this.markHovered();
     this.renderShadeCanvas();
+    this.renderGlLines();
     if (overlaySVG !== this.lastOverlay) {
       this.letGo(overlaySVG);
       this.layers.overlay.innerHTML = overlaySVG;
@@ -775,6 +781,37 @@ export class Renderer {
       }
       return this.project(x, y, lift);
     }));
+  }
+
+  // A line as screenLines has it short of the view: on the ground in world
+  // space – the sway, the deck, the relief and the warp in, so the camera
+  // alone places it (gl/lines.js). [[x, y, z]…]; kept per line while the
+  // terrain and the bridges are the same (the ground lines are kept too,
+  // groundLines).
+  worldLine(line, sway = false, deck = false) {
+    sway = sway && LOOK.roads > 0;
+    const cam = this.camera, onDeck = deck ? this.bridgeState().deck : null;
+    const stamp = `${this.bridgeKey}|${sway}|${deck}`;
+    if (this.worldStamp !== stamp) {
+      this.worldStamp = stamp;
+      this.worldCache = new WeakMap();
+    }
+    const kept = this.worldCache.get(line);
+    if (kept) return kept;
+    let pts = line;
+    if ((cam.warp || cam.lift || sway || onDeck) && !(pts[0]?.length > 2)) pts = densify(pts);
+    const out = pts.map(([x, y, z]) => {
+      let h = z ?? (onDeck ? onDeck(x, y) : 0);
+      if (sway) {
+        const [dx, dy] = wobble(x, y);
+        [x, y] = [x + dx, y + dy];
+      }
+      if (cam.lift) h += cam.lift(x, y);
+      if (cam.warp) [x, y] = cam.warp(x, y);
+      return [x, y, h];
+    });
+    this.worldCache.set(line, out);
+    return out;
   }
 
   // ----- layers -----
@@ -1151,13 +1188,15 @@ export class Renderer {
   // for each piece, a / b the dots it runs between, for the pen's order.
   inkItems(sway) {
     const items = [];
+    // (on the ground for WebGL, glWorld: renderGlLines)
+    const lines = (ls) => (this.glWorld ? ls.map((l) => this.worldLine(l, sway, true)) : this.screenLines(ls, true, sway, true));
     const add = (key, cls, line, a, b) => {
       // (one line, or its parts in front of a photo camera)
-      for (const pts of this.screenLines([line], true, sway, true)) if (pts.length > 1) items.push({ key, cls, pts, a, b });
+      for (const pts of lines([line])) if (pts.length > 1) items.push({ key, cls, pts, a, b });
     };
     // several separate lines as one item (ink.js `runs`)
-    const addRuns = (key, cls, lines, a, b) => {
-      const runs = this.screenLines(lines, true, sway, true).filter((pts) => pts.length > 1);
+    const addRuns = (key, cls, ls, a, b) => {
+      const runs = lines(ls).filter((pts) => pts.length > 1);
       if (runs.length) items.push({ key, cls, pts: runs[0], runs, a, b });
     };
     return { items, add, addRuns };
@@ -1198,7 +1237,7 @@ export class Renderer {
   }
 
   renderPaths() {
-    this.ink.paths.update(this.pathItems(), { rankOf: this.rankOf(this.world.networks.path) });
+    this.inkUpdate('paths', () => this.pathItems(), this.world.networks.path);
   }
 
   // The footpaths' ink items (for the current camera).
@@ -1248,7 +1287,7 @@ export class Renderer {
   }
 
   renderFences() {
-    this.ink.fences.update(this.fenceItems(), { rankOf: this.rankOf(this.world.networks.fence) });
+    this.inkUpdate('fences', () => this.fenceItems(), this.world.networks.fence);
   }
 
   // The fences' ink items, as the garden fences are drawn (kit.js
@@ -1338,7 +1377,62 @@ export class Renderer {
   }
 
   renderRails() {
-    this.ink.rails.update(this.railItems(), { rankOf: this.rankOf(this.world.networks.rail) });
+    this.inkUpdate('rails', () => this.railItems(), this.world.networks.rail);
+  }
+
+  // A network's ink layer given its items – with WebGL (setGlLines) on the
+  // ground in world space, for gl/lines.js, the layer keeping only the
+  // pen's timing (ink.js headless).
+  inkUpdate(name, itemsOf, network) {
+    const gl = this.glLines && GL_LINES.includes(name) ? this.glLines : null;
+    this.glWorld = !!gl;
+    let items;
+    try {
+      items = itemsOf();
+    } finally {
+      this.glWorld = false;
+    }
+    this.ink[name].update(items, { rankOf: this.rankOf(network) });
+    gl?.setLayer(name, items, this.ink[name].classes, this.ink[name]);
+  }
+
+  // The roads, footpaths, railways and fences drawn with WebGL (gl/lines.js)
+  // instead of their SVG layers, or not (the Debug panel). False if the
+  // browser has no WebGL2.
+  setGlLines(on) {
+    if (on && !this.glLines) {
+      const canvas = document.createElement('canvas');
+      canvas.id = 'map-gl';
+      Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' });
+      this.svg.after(canvas); // (over the map's ground drawing, under the shadows and parked cars)
+      this.glLines = GLLines.make(canvas);
+      if (!this.glLines) canvas.remove();
+    } else if (!on && this.glLines) {
+      this.glLines.canvas.remove();
+      this.glLines = null;
+    }
+    for (const l of GL_LINES) {
+      this.ink[l].headless = !!this.glLines;
+      this.layers[l].style.display = this.glLines ? 'none' : '';
+      this.dirty.add(l);
+    }
+    return !on || !!this.glLines;
+  }
+
+  // The WebGL lines for the view the map's SVGs are drawn at (their wrapper
+  // with its overscan: placeView) at the angle the view has reached – as
+  // the SVG lines are drawn mid-turn.
+  renderGlLines() {
+    const gl = this.glLines, d = this.drawn, cam = this.camera;
+    if (!gl || !d) return;
+    const night = this.inkSet ?? 0;
+    gl.draw({
+      zoom: d.zoom, panX: d.panX + this.ox, panY: d.panY + this.oy, cos: cam._cos, sin: cam._sin, angle: cam.angle, cx: cam.cx, cy: cam.cy,
+      iso: [cam.tile * COS30, cam.tile * 0.5, cam.tile * cam.zScale], W: this.winW + 2 * this.ox, H: this.winH + 2 * this.oy,
+    }, {
+      stroke: this.strokeK, near: !!this.railsNear, far: this.lodLevel === 2, palette: THEME.palette,
+      fg: night > 0.005 ? mixColour(THEME.palette.main, THEME.palette.detail, night) : THEME.palette.main,
+    });
   }
 
   // The railway's ink items. Its lines are kept (railLines, groundLines)
@@ -1460,7 +1554,7 @@ export class Renderer {
   }
 
   renderRoads() {
-    this.ink.roads.update(this.roadItems(), { rankOf: this.rankOf(this.world.networks.road) });
+    this.inkUpdate('roads', () => this.roadItems(), this.world.networks.road);
   }
 
   // `cache`: keep the road and kerb lines between calls.
@@ -1656,6 +1750,7 @@ export class Renderer {
     this.hillSheet = new DOMMatrix().translate(d.panX + this.ox, d.panY + this.oy).multiply(new DOMMatrix(this.sheet(d.angle, a, true))).translate(-(d.panX + this.ox), -(d.panY + this.oy));
     if (this.linesAngle !== a) {
       for (const l of LINES) {
+        if (this.glLines && GL_LINES.includes(l)) continue; // (on the GPU the camera turns them)
         this.ink[l]?.clearErasing();
         this[`render${l[0].toUpperCase()}${l.slice(1)}`]();
       }
@@ -2011,6 +2106,7 @@ export class Renderer {
     // railways between the map symbol and the track (trackItems)
     const close = z >= VEHICLES.minZoom;
     this.layers.rails.classList.toggle('near', close);
+    this.railsNear = close;
     if (close !== this.carsClose) {
       this.carsClose = close;
       this.dirty.add('parked');

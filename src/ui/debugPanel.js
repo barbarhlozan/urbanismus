@@ -44,6 +44,9 @@ export class DebugPanel {
       ['Grid dots', (on) => show(layer('grid'), on)],
       ['Hover tags', (on) => { STYLE.hoverTags = on; }],
       ['Pen animations (build / demolish)', (on) => { DRAW.on = on; }],
+      // TEMPORARY, the WebGL map's first step (webgl-plan.md): the ground's
+      // lines drawn on the GPU instead
+      ['Roads, paths, rails, fences in SVG (unticked: WebGL)', (on) => { renderer.setGlLines(!on); }],
     ];
 
     this.el = document.createElement('div');
