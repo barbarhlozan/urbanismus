@@ -71,7 +71,8 @@ html, body {
    with nothing nearer in front of them, so they pass in front of stations
    and buildings behind the track, #smoke: chimney smoke (particles.js),
    over the roofs it comes from, and the weather over all of it:
-   #cloud-shadows (cloudShadows.js), #gloom (a grey sky's
+   #cloud-shadows (cloudShadows.js), #clouds-above (the clouds themselves,
+   zoomed far out: cloudsAbove.js), #gloom (a grey sky's
    shade, config.weather.gloom), #rain (rain.js).
    The two .view wrappers are larger than the window and moved on the GPU
    while the camera moves (position and size set by Renderer.placeView);
@@ -90,7 +91,7 @@ html, body {
   display: block;
   user-select: none;
 }
-#night-ground, #agents, #night-top, #trains-top, #smoke, #cloud-shadows, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
+#night-ground, #agents, #night-top, #trains-top, #smoke, #cloud-shadows, #clouds-above, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
 /* the shadows, the hills' and the objects' (shadeCanvas.js): drawn as large
    as the SVGs beside them, fading with the weather (--sun, set by the
    renderer) */

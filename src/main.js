@@ -25,6 +25,7 @@ import { Ambience } from './audio/ambience.js';
 import { SOUNDS, LICENCES, sourceOf } from './audio/sounds.js';
 import { RainCanvas } from './render/rain.js';
 import { CloudShadows } from './render/cloudShadows.js';
+import { CloudsAbove } from './render/cloudsAbove.js';
 import { ParkingSystem } from './sim/parking.js';
 import { TrainSystem } from './sim/trains.js';
 import { BoatSystem } from './sim/boats.js';
@@ -142,6 +143,7 @@ const weather = new WeatherSystem(world, CONFIG);
 const rain = new RainCanvas(document.getElementById('rain'));
 const ambience = new Ambience(); // (the weather's sound: the wind and the rain)
 const cloudShadows = new CloudShadows(document.getElementById('cloud-shadows'), world.seed);
+const cloudsAbove = new CloudsAbove(document.getElementById('clouds-above'), cloudShadows); // (zoomed far out, the clouds themselves)
 // the shadows follow the sun (styles.css --sun), and a grey sky
 // shades the whole map (#gloom) and, a little less, the UI's paper (--gloom)
 const objectsSvg = document.getElementById('objects');
@@ -693,6 +695,7 @@ function loop(now) {
     const sky = weather.sky();
     // (no sun at night, so no cloud shadows: they fade away)
     cloudShadows.frame(simDt, camera, renderer.dark ? 0 : sky.cover, { hatch: SUN.hatch, stroke: renderer.strokeK });
+    cloudsAbove.frame(dt, camera, renderer.dark ? 0 : sky.cover, renderer.strokeK);
     rain.frame(simDt, camera, sky.rain);
     ambience.frame(dt, sky, DAY.held ?? hourAt(world.time)); // (the birds keep the hour too)
     showSun(sky);

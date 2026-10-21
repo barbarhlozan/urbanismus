@@ -110,6 +110,7 @@ export class CloudShadows {
     this.clouds = [];
     this.view = null;
     this.empty = true;
+    this.more = 1; // times as many clouds (cloudsAbove.js: zoomed far out, a fuller sky)
     this.follow = new Follow(canvas, CLOUD_SHADOWS.fps);
     // the wind's way across the map, the same for a town every time
     const a = ((seed * 2654435761) >>> 0) / 4294967296 * Math.PI * 2;
@@ -147,7 +148,7 @@ export class CloudShadows {
 
     // as many as the sky wants over this much map
     const area = ((out.x1 - out.x0) * (out.y1 - out.y0)) / (tile * tile * C.squash);
-    const want = Math.min(C.most, Math.round((area / C.spread) * cover));
+    const want = Math.min(C.most, Math.round((area / C.spread) * cover * this.more));
     const staying = this.clouds.filter((c) => !c.leaving);
     for (let i = want; i < staying.length; i++) staying[i].leaving = true;
     // new ones come in from beyond the edge – unless the sky is clouding
