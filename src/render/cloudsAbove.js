@@ -59,7 +59,8 @@ export class CloudsAbove {
     const C = CLOUDS_ABOVE;
     const want = camera.zoom <= C.zoom && cover > C.cover[0] ? 1 : 0;
     const was = this.k;
-    this.k = want > this.k ? Math.min(1, this.k + dt / C.fade) : Math.max(0, this.k - dt / C.fade);
+    if (want > this.k) this.k = Math.min(1, this.k + dt / C.fade);
+    else if (want < this.k) this.k = Math.max(0, this.k - dt / C.fade);
     // a fuller sky while they're seen (more come in as they fade in)
     this.shadows.more = 1 + (C.more - 1) * this.k;
     // (the whole drawing faded as one, so one cloud doesn't show through another)
