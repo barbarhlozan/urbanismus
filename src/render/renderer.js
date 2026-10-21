@@ -407,13 +407,14 @@ export class Renderer {
     // street lamps: new streets get theirs drawn in, gone ones erased
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) world.events.on(type, () => this.touchStreets());
     on('paths:changed', 'paths');
+    on('fences:changed', 'paths'); // (a gate holds the footpath to its dot, roads/meander.js)
     on('rails:changed', 'rails');
     on('roads:changed', 'rails'); // the track stops at level crossings
     on('paths:changed', 'rails');
     for (const type of ['roads:changed', 'paths:changed']) world.events.on(type, () => (this.roadLines = null));
     // the railway's and footpaths' lines on the ground (railItems,
     // pathItems): level crossings, stations' tracks, parks and squares
-    for (const type of ['rails:changed', 'roads:changed', 'paths:changed', 'terrain:changed', 'structure:added', 'structure:removed', 'structure:changed']) {
+    for (const type of ['rails:changed', 'roads:changed', 'paths:changed', 'fences:changed', 'terrain:changed', 'structure:added', 'structure:removed', 'structure:changed']) {
       world.events.on(type, () => (this.railLines = this.pathLines = null));
     }
     // the woods stop at roads and railways (forest.js)

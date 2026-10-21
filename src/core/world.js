@@ -22,6 +22,7 @@ import { validateRoute } from '../roads/routing.js';
 import { STRUCTURE_TYPES, footprintOffsets, newSeed } from '../../structures/index.js';
 import { mulberry32 } from './random.js';
 import { smoothLine } from './geom2d.js';
+import { meanderPaths } from '../roads/meander.js';
 import { upgrade, upgradeMarks, unretire, regroup } from './legacy.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { History } from './history.js';
@@ -123,6 +124,17 @@ export class World {
       }),
     };
     this.networks.rail.pos = (f) => this.railPos(f);
+    this.networks.path.pos = (f) => this.pathPos(f);
+  }
+
+  // Where a footpath runs at dense dot f: wandering a little off its dots,
+  // with the lie of the ground (roads/meander.js), found again whenever
+  // what it keeps to changes.
+  pathPos(f) {
+    const { path, road, rail, fence } = this.networks;
+    const key = `${path.version}|${road.version}|${rail.version}|${fence.version}|${this.structureVersion ?? 0}|${this.lanes.size}`;
+    if (this._pathPos?.key !== key) this._pathPos = { key, pos: meanderPaths(this) };
+    return this._pathPos.pos.get(f) ?? path.dot(f);
   }
 
   // Where a railway runs at dense dot f. Track drawn as a staircase of
