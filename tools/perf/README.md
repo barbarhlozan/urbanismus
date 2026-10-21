@@ -51,3 +51,20 @@ node tools/perf/profile.mjs town.json --ms 3000 --step 'cam => cam.turnAt(innerW
 ```
 
 Numbers move by about ±20 % between runs; compare runs made one after the other.
+
+## Firefox and Zen
+
+```
+node tools/perf/firefox.mjs town.json [--night] [--pref gfx.canvas.accelerated=true] [--only pan,turn]
+```
+
+The same scenarios in Zen (or Firefox, `--browser <binary>`), driven over
+WebDriver BiDi with a fresh profile, frame rates measured in the page. It
+opens a window, so run it in your own terminal: an app's sandbox can't. (Playwright's
+Firefox doesn't start on macOS 27.)
+
+To see *why* Firefox is slow, record a profile there (profiler.firefox.com,
+⌃⇧1 to start, ⌃⇧2 to capture, then Upload › Download) and read it with
+`tools/perf/gecko/`: `threads.mjs` to find the game's threads, then
+`timeline.mjs`, `analyze.mjs`, `markers.mjs`, `callers.mjs` (usage at the top
+of each). Unzip the profile first (`gunzip -k`).

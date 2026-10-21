@@ -1,0 +1,199 @@
+# WebGL: the map drawn on the GPU
+
+The plan for moving Dědina's map from SVG and full-window 2D canvases to
+WebGL, so that it runs at a steady 60 fps on a sharp (Retina) screen in
+Chrome **and** in Firefox / Zen (the user plays in Zen, Firefox 157 based).
+Written 2026-10-21 at the end of two days of profiling; everything below was
+measured, unless it says otherwise.
+
+## Where we are
+
+### Measured (Pupíkov: 384 buildings, 1,069 trees; 1440×900 at 2×)
+
+| | Chrome before | Chrome now | Zen now (user's profiles) |
+|---|---|---|---|
+| still | 60 | 60 | ~23 by day, 4–9 at night |
+| pan | 55 | 59 | ~23 |
+| zoom | 26 | 44–49 | ~27 |
+| settle after zoom | 8 | 30–50 | – |
+| turn | 9 | 20–30 | – |
+| JS heap | 869 MB | ~480 MB | |
+
+Chrome numbers move ±20–50 % with machine load; compare only back-to-back
+full runs (`tools/perf/README.md`).
+
+### What limits it now
+
+**Chrome:** what is left is the browser redrawing the SVG: the objects' SVG
+(buildings, trees, lamps) is one raster layer, so any change in it — a
+swaying tree, a building redrawn for a new level of detail, a turn's landing
+batch — repaints all of it (~80 ms GPU); zoom restyles every line
+(`--stroke`); a turn re-projects every road, path and railway at each angle
+(they're kept on the ground, `groundLines`, but projected and written as
+path data each frame).
+
+**Firefox / Zen (macOS):** canvases are drawn on the CPU and every new
+picture of one is copied to the GPU whole ("Texture uploads" ~29 ms a
+frame); a full-window canvas at 2× is 21 MB. Its OS compositor makes every
+canvas a surface of its own: ~600 small tile canvases cost ~25 ms a frame
+(94k `SurfacePool` markers) — tiling canvases was a mistake there and was
+reverted. Whole-map restyles cost ~40 ms each (35k elements): toggling
+`svg.draft`, each `--ink-night` step, each day step (`setSun` rewrites
+every shadow, `sunFree.js` rewrites its stylesheet). The Zen window also
+pays for the user's extensions (Pocket Bird queries the DOM on a timer,
+iCloud Passwords scans it after load).
+
+WebGL removes all of these at once: the drawing stays on the GPU, a pan,
+zoom or turn is a new camera matrix, nothing is restyled, rasterised or
+uploaded per frame.
+
+### Done so far (commits on main, oldest first)
+
+- `Perf bench` — tools/perf: headless Chrome via CDP (`bench.mjs`
+  variants/scenarios, `profile.mjs`).
+- `Lighter motion` — sway 12 fps and still while moving; turns keep 5 steps
+  ready each way (was 12; heap 911 → 480 MB); roads/paths/rails keep their
+  ground lines (`groundLines`); north arrow updated by attributes (its
+  innerHTML made `penMarks.js` re-measure every turn step).
+- `Draft motion` — `svg.draft` while the view moves (no meadow tufts, parked
+  cars, `.d2` detail, object shadows); shadows hatched back in 3 steps; a
+  turn's landing redrawn a few a frame (`landFrame`).
+- `Shadow canvas` — the shadows (one mask of every object's and the hills'
+  over a hatch sheet) are no longer painted by the browser: `shadeCanvas.js`
+  mirrors the mask DOM onto two canvases (hills; objects minus hills) drawn
+  in a worker (`shadeWorker.js`), dashes cut once.
+- `Parked over shadows` — parked cars in their own `#parked` svg.
+- `Canvases on twos` — `follow.js`: clouds (6 fps), smoke and rain (12 fps)
+  drawn now and then and moved with the map (CSS transform) in between.
+- `Agent tiles`, `Night tiles` — **reverted** (`Whole canvases`), see above.
+- `Canvas sharpness` — **reverted** (`Full sharpness`): the user wants all or
+  nothing; moving things soft over a sharp map looks wrong.
+- `Night on twos` — the night at 12 fps via Follow on a window + 96 px
+  canvas, its grey and strokes kept on a sheet (`paper()`), grey in steps.
+
+## Constraints (from the user, keep to them)
+
+- **The look is the point.** Hand-drawn pen sketch (`LOOK` in painter.js,
+  `hand-drawn-look` memory), Czechoslovak 50s–80s buildings, avoid the "AI
+  look" (no bounce, blur, glow, generic shapes; read the `avoid-ai-look`
+  memory before UI or motion work). Lines are thin (pens 0.5–2 css px at
+  2×), wobbly, overshooting at corners, ragged-edged shadows. The WebGL map
+  must look the same as the SVG one — compare screenshots side by side at
+  2× before replacing anything.
+- **Full sharpness everywhere**, no lower render resolution for parts.
+- Plain JS, no build step, ES modules. A library is fine only as one
+  vendored file or a pinned CDN ES module; prefer none (raw WebGL2).
+- Work on `main` in the main checkout, no branches/worktrees; commit only
+  your own files (the user edits in parallel — check `git status`, stage
+  hunks; never `git stash`); commit subjects one word, three at most.
+- Don't test in the user's real town in the browser pane (it autosaves); use
+  saved towns via tools/perf, which seed a fresh profile.
+- Keep photo mode (`photo.js`) as it is: it builds its own SVG.
+
+## The renderer as it is (what to replace)
+
+- `src/render/renderer.js` (~4,000 lines) owns the DOM: `#ground` (terrain),
+  `#world` (meadow, lots, forest, paths, rails, roads, fences, the shadows'
+  mask DOM, ...), `#parked`, `#objects` (buildings, trees, lamps, mist,
+  notes, overlay). `LAYERS`, `TOP`, `placeView` (pan/zoom as a CSS
+  transform of the `.view` wrappers, redrawn at rest), `turnFrame` / `land`
+  / `prepareTurn` (turning), `renderObjects`, `updateLod` / `bandOf`
+  (levels of detail per object), `cull`.
+- The painters produce **SVG strings with classes**: `painter.js` (houses:
+  walls, roofs, hatching, windows; `LOOK`), `structures/*.js`, `features/
+  trees.js`, `kit.js`. Styling — colours, line widths times `--stroke`,
+  detail classes `d1`/`d2`, `lv1`, `bare`, roof tiers `rh1–3`, sun classes
+  `wd*`/`wl*`/`tq*` (`sunFree.js`) — lives in `styles.css`. The same strings
+  can be parsed into geometry: `agentCanvas.js` already does this for
+  people and vehicles (`shapesOf`, class → style table `STYLES`).
+- Lines on the ground: `ink.js` (`InkLayer`: items with keys, pen draw-in
+  and erase along the line, dashed lines), fed by `roadItems`, `pathItems`,
+  `railItems`, `fenceItems` (world points, projected by `screenLines`).
+- Projection: `camera.js` `project(x, y, z)` = lift (terrain height, a fixed
+  function of x, y: `warp.js makeLift`) and warp (a fixed sideways drift,
+  `makeWarp`) applied per point, then rotation by `angle` and the isometric
+  projection — **linear once lift and warp are baked into each vertex**, so
+  a turn is a matrix, exact over the hills.
+- Pen animations: `draw.js` (stroke-dash reveal per element, fills fading
+  in), `InkLayer` for lines, `sketchIntro` on opening; hover squash
+  (`markHovered`), tree sway (`swayTrees`), ghosts erased (`reapGhosts`).
+- Shadows: `shadows.js` `shadowMask` (shapes), `hatch.js` (the paper's
+  strokes: `hatchTileLines`, tiers), `hillShadows.js`, `shadeCanvas.js` +
+  `shadeWorker.js` now. Night: `nightCanvas.js` (grey, 3 hatch sets
+  revealed in sweeps, lights cut out: lamps' pools, lit windows,
+  headlights), `lights.js`. Clouds `cloudShadows.js`, rain `rain.js`, smoke
+  `particles.js`, mist `mist.js`.
+- Moving things: `agentCanvas.js` (`#agents`, `#trains-top`), drawn by
+  `renderAgents`, `renderTrains`, `renderBoats`, `renderAnimals`.
+
+## The plan
+
+Each step lands on its own, switchable in the Debug panel against the SVG
+it replaces until it matches, then the old path goes. After each: screenshots
+side by side at 2× (`tools/perf` has the recipes: `compare`-style CDP
+captures with `clip`), `node --test tests/*.test.js`, the Chrome bench, and
+the Zen bench (`tools/perf/firefox.mjs`, run by the user in their terminal).
+
+0. **The GPU map** — one full-window WebGL2 canvas (`#map-gl`) under the
+   SVGs, its own module (`src/render/gl/`). A camera uniform from `Camera`
+   (zoom, pan, angle; tile, zScale) so a pan/zoom/turn is a uniform change.
+   Vertex positions in world space with lift and warp baked in
+   (`camera.lift`, `camera.warp`, recomputed when the terrain changes).
+   **A line renderer for the pen**: instanced segments with round joins and
+   caps, width in css px times the map's `--stroke` and `lineWeight`
+   (`Renderer.updateStroke`), antialiased in the shader (thin lines must
+   look like the SVG's at 2×), dashes by distance along the line, a reveal
+   uniform for the pen's draw-in / erase (as `InkLayer`/`draw.js`), colours
+   from `THEME.palette` (and the night's ink mix, `--ink-night`). Fills by
+   triangulation (earcut-style, write it or vendor one small file).
+1. **Ground linework first** (the prototype): roads, kerbs, driveways,
+   zebras, footpaths, rails and track, fences, bridges — from the items
+   `roadItems`/`pathItems`/`railItems`/`fenceItems` already give (world
+   points, keys, classes → styles from styles.css). Pen draw-in and erase
+   per item as `InkLayer` does. Measure a turn (it re-projects all of these
+   every frame now) and zoom. **Show the user the look before going on.**
+2. **Terrain**: contours, water and shores, brows, steep strokes, rocks,
+   meadow tufts (per chunk), the forest far out, lots and gardens.
+3. **Hatching as a shader**: the paper's strokes (`hatch.js`: lattice,
+   tiers, angle, pen) drawn procedurally in scene space, masked by shapes:
+   object and hill shadows (with their ragged dashed edges), the night's
+   three sets with their sweeps, cloud shadows, roof hatching maybe. Lights
+   cut out. Replaces shadeCanvas/shadeWorker, nightCanvas, cloudShadows.
+4. **Moving things**: people, vehicles, trains, boats, animals, crossing
+   signs (their shapes already parse into paths), smoke, rain — instanced,
+   in the same pass, so nothing is uploaded per frame.
+5. **Buildings, trees, lamps** last, the hardest: per object and per turn
+   step its painter SVG parsed into GPU geometry (fills and pen lines,
+   classes → styles, the sun-free classes as per-vertex flags the shader
+   shows or hides by the sun, levels of detail as flags too), drawn in the
+   painter's order (`isoSort`, `reorder`) or with depth; per-object uniforms
+   for the hover squash, sway, slide, fade; the pen's draw-in per stroke
+   (`draw.js` order: ground, outlines back to front, details).
+   `prepareTurn`'s views become GPU buffers per angle step (much cheaper
+   than detached DOM).
+6. **Take the SVG out**: what's left in it (overlay, hover tags, road
+   marks, text) stays SVG or HTML over the canvas; photo mode as it is.
+
+The user also suggested **fixed zoom levels** (stepping between a few scales
+instead of a free zoom, with a designed transition): with the map on the
+GPU it is a matter of how zooming should feel, not speed — worth proposing
+once step 5 lands, not before.
+
+## Tools
+
+- `tools/perf/bench.mjs`, `profile.mjs` — Chrome (see `tools/perf/README.md`;
+  `--cpu` draws without the GPU; results depend on load and scenario order).
+- `tools/perf/firefox.mjs` — the same scenarios in the user's Zen over
+  WebDriver BiDi, with a fresh profile; it opens a window, so it must run in
+  the user's own terminal (an app sandbox can't open windows). Reached
+  "game running" once; its frame numbers are still unseen. Playwright's
+  Firefox doesn't start on macOS 27 (sandbox extension refused, headless
+  compositor broken) — don't use it.
+- `tools/perf/gecko/` — reading a Firefox profile the user records
+  (profiler.firefox.com › Upload › Download, then gunzip): `threads.mjs`
+  (which thread is the game's), `timeline.mjs`, `analyze.mjs`, `markers.mjs`
+  ('Texture uploads', 'Styles' with elementsStyled, 'RefreshDriverTick'),
+  `callers.mjs`. Format: shared stack table, `prefix = i − prefixOffset[i]`,
+  `samples.threadCPUDelta` in µs.
+- Towns to test with: the user's saves in ~/Downloads (`Pupíkov`,
+  `Třebenice`, `Kladno`, `Zadní Újezd`…).
