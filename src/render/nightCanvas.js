@@ -1,4 +1,4 @@
-// The night, on two canvases of its own: on the ground, over the map's drawing
+// The night, on two layers of its own (each on tiles, tiles.js): on the ground, over the map's drawing
 // (#view), under the people, vehicles and trains (#agents) and the
 // buildings (#view-top). A grey and the paper's strokes (hatch.js, the
 // same as every shadow's and the night's over the objects) laid over the
@@ -16,6 +16,7 @@
 
 import { THEME } from '../theme.js';
 import { hatchFrame, hatchTileLines, hash } from './hatch.js';
+import { Tiles } from './tiles.js';
 
 // The ragged edge of a light, as the night's masks have it (styles.css
 // mask .light): a dashed line round it, rubbing a little further out in
@@ -51,9 +52,12 @@ function sweep(ctx, w, h, angle, r, seed) {
 }
 
 export class NightCanvas {
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+  // `el`: where it shows (tiles.js); it is drawn off the page, on a canvas
+  // of its own, and what of it changed copied onto the tiles (draw).
+  constructor(el) {
+    this.tiles = new Tiles(el);
+    this.canvas = new OffscreenCanvas(1, 1);
+    this.ctx = this.canvas.getContext('2d');
     this.empty = true;
     this.tile = null; // { key, pattern, scale }
   }
@@ -78,28 +82,36 @@ export class NightCanvas {
   // their breaks don't line up), and across them (CROSS); one coming or
   // going is hatched in, or rubbed out, band by band across the page
   // (sweep).
-  draw(camera, { grey = 0, colour, tier = -1, reveal = [1, 0, 0], hatch, px, stroke, lights = null, sheet = null, beams = [], cover = null }) {
+  // `size`: { W, H } css px, the window's unless given (the map's wrapper,
+  // with its overscan: Renderer.renderNightCanvases).
+  draw(camera, look, size = { W: innerWidth, H: innerHeight }) {
+    this.size = size;
+    const dirty = this.paint(camera, look);
+    const relaid = this.tiles.fit(size.W, size.H, devicePixelRatio || 1);
+    if (relaid || !dirty || dirty.length) this.tiles.show(this.empty ? null : this.canvas, relaid ? null : dirty);
+  }
+
+  // The frame drawn on the canvas off the page; what of it changed, as
+  // [x0, y0, x1, y1] in its px – null: all of it.
+  paint(camera, { grey = 0, colour, tier = -1, reveal = [1, 0, 0], hatch, px, stroke, lights = null, sheet = null, beams = [], cover = null }) {
     const { canvas, ctx } = this;
-    const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+    const dpr = devicePixelRatio || 1, { W, H } = this.size;
     const w = Math.round(W * dpr), h = Math.round(H * dpr);
     let resized = false;
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
-      canvas.style.width = `${W}px`;
-      canvas.style.height = `${H}px`;
       this.empty = true;
       resized = true;
     }
     const on = grey > 0.002 || (tier >= 0 && reveal.some((r) => r > 0));
     if (!on) {
-      if (!this.empty) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, w, h);
-        this.empty = true;
-      }
       this.last = null;
-      return;
+      if (this.empty) return [];
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      this.empty = true;
+      return null;
     }
     const view = new DOMMatrix([dpr * camera.zoom, 0, 0, dpr * camera.zoom, dpr * camera.panX, dpr * camera.panY]);
     const lightsAt = lights ? (sheet ? view.multiply(sheet) : view) : null;
@@ -115,14 +127,14 @@ export class NightCanvas {
       return [Math.floor(x0 - pad), Math.floor(y0 - pad), Math.ceil(x1 + pad), Math.ceil(y1 + pad)];
     });
     const same = !resized && this.last && Object.keys(state).every((k) => state[k] === this.last.state[k]);
-    if (same && cover) return;
+    if (same && cover) return [];
     const regions = same ? [...this.last.boxes, ...boxes] : null;
     this.last = { state, boxes };
     this.empty = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     if (regions) {
-      if (!regions.length) return;
+      if (!regions.length) return [];
       ctx.save();
       ctx.beginPath();
       for (const [x0, y0, x1, y1] of regions) ctx.rect(x0, y0, x1 - x0, y1 - y0);
@@ -192,7 +204,7 @@ export class NightCanvas {
       ctx.globalCompositeOperation = 'destination-in';
       ctx.drawImage(m, 0, 0);
       ctx.globalCompositeOperation = 'source-over';
-      return;
+      return null;
     }
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fillStyle = ctx.strokeStyle = '#000';
@@ -208,6 +220,7 @@ export class NightCanvas {
     ctx.globalCompositeOperation = 'source-over';
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (regions) ctx.restore();
+    return regions;
   }
 
   // The paper's strokes as a pattern, drawn at `scale` window px to a scene

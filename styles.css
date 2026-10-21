@@ -90,7 +90,9 @@ html, body {
   display: block;
   user-select: none;
 }
-#night-ground, #agents, #night-top, #trains-top, #smoke, #cloud-shadows, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
+#agents, #trains-top, #smoke, #cloud-shadows, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
+/* the night's tiles (nightCanvas.js) in the map's wrappers, moved with it */
+#night-ground, #night-top { position: absolute; left: 0; top: 0; pointer-events: none; }
 /* the shadows, the hills' and the objects' (shadeCanvas.js): drawn as large
    as the SVGs beside them, fading with the weather (--sun, set by the
    renderer) */

@@ -2832,11 +2832,18 @@ export class Renderer {
       px: camera.tile,
       stroke: this.strokeK ?? 1,
     };
-    this.nightPen.draw(camera, { ...look, lights: this.groundLight, sheet: this.nightSheet, beams: this.headlights() });
+    // drawn for the view the SVGs were drawn at, as large as their wrappers
+    // (placeView), which the night's tiles stand in: moved with them while
+    // the view moves
+    const d = this.drawn;
+    if (!d) return;
+    const at = { zoom: d.zoom, panX: d.panX + this.ox, panY: d.panY + this.oy, tile: camera.tile };
+    const size = { W: this.winW + 2 * this.ox, H: this.winH + 2 * this.oy };
+    this.nightPen.draw(at, { ...look, lights: this.groundLight, sheet: this.nightSheet, beams: this.headlights() }, size);
     // (while the view turns the objects' night can't follow them: they go
     // without, bare paper, as they are drawn bare – the lights on the ground
     // stay; renderLights left the cover empty)
-    this.nightTop.draw(camera, { ...look, cover: this.turning ? [] : this.topCover });
+    this.nightTop.draw(at, { ...look, cover: this.turning ? [] : this.topCover }, size);
   }
 
   // Every object's shadow drawn again from its feet, with SUN as it is

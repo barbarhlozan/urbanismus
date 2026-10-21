@@ -9,7 +9,7 @@
 // map's --stroke (Renderer.updateStroke), so a car's outline is as heavy as
 // the road line beside it on any screen and at any zoom.
 
-import { canvasRatio } from './pixels.js';
+import { Tiles } from './tiles.js';
 import { THEME } from '../theme.js';
 
 // The map's pens (--pen-1…5 in styles.css), px of line width.
@@ -57,13 +57,10 @@ export function shape(cls, d) {
   return { style: STYLES[cls] ?? STYLES.car, path: new Path2D(d), reach };
 }
 
-// The window cut into tiles (TILE css px a side), each a <canvas> of its
-// own: what moves is noted as it is drawn (draw, drawScene) and laid on
-// the tiles at the frame's end (end), and a tile whose drawing is the same
-// as the last frame's is left alone. Every new picture of a canvas is
-// copied to the GPU again – Firefox copies the whole of it – so the meadow,
-// the woods and the streets where nobody is going cost nothing.
-const TILE = 96;
+// Drawn on tiles (tiles.js): what moves is noted as it is drawn (draw,
+// drawScene) and laid on the tiles at the frame's end (end), and a tile
+// whose drawing is the same as the last frame's is left alone – the
+// meadow, the woods and the streets where nobody is going cost nothing.
 
 // How far (scene units of a shape, before its size k) a set of shapes
 // reaches from its foot: the furthest point of their path data, a little
@@ -88,18 +85,10 @@ const id = (o) => {
 const r1 = (n) => Math.round(n * 10) / 10;
 
 export class AgentCanvas {
-  // `el`: the element the tiles go in (a <canvas> given is replaced by a
-  // <div> with its id, so styles.css places it the same).
+  // `el`: the element the tiles go in (tiles.js).
   constructor(el) {
-    if (el.tagName === 'CANVAS') {
-      const host = document.createElement('div');
-      host.id = el.id;
-      host.className = el.className;
-      el.replaceWith(host);
-      el = host;
-    }
-    this.host = el;
-    this.tiles = [];  // [{ canvas, ctx, x, y, sig }]
+    this.grid = new Tiles(el);
+    this.tiles = this.grid.list; // [{ canvas, ctx, x, y, w, h, sig }]
     this.notes = [];  // what this frame draws, in order
     this.empty = true;
   }
@@ -107,31 +96,16 @@ export class AgentCanvas {
   // Start a frame at the camera's current view.
   // `stroke`: the map's --stroke, scene px per px of line width.
   begin(camera, stroke) {
-    const dpr = canvasRatio();
+    const dpr = devicePixelRatio || 1;
     const W = innerWidth, H = innerHeight;
-    if (W !== this.W || H !== this.H || dpr !== this.dpr) this.layOut(W, H, dpr);
+    if (this.grid.fit(W, H, dpr)) this.tiles = this.grid.list;
+    [this.W, this.H, this.dpr] = [W, H, dpr];
     this.strokeK = stroke ?? 1 / camera.zoom;
     this.zoom = camera.zoom;
     this.panX = camera.panX;
     this.panY = camera.panY;
     this.pal = THEME.palette;
     this.notes = [];
-  }
-
-  layOut(W, H, dpr) {
-    for (const t of this.tiles) t.canvas.remove();
-    this.tiles = [];
-    [this.W, this.H, this.dpr] = [W, H, dpr];
-    for (let y = 0; y < H; y += TILE) {
-      for (let x = 0; x < W; x += TILE) {
-        const w = Math.min(TILE, W - x), h = Math.min(TILE, H - y);
-        const canvas = this.host.appendChild(document.createElement('canvas'));
-        canvas.width = Math.round(w * dpr);
-        canvas.height = Math.round(h * dpr);
-        Object.assign(canvas.style, { position: 'absolute', left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
-        this.tiles.push({ canvas, ctx: canvas.getContext('2d'), x, y, w, h, sig: '' });
-      }
-    }
   }
 
   // Leave it blank (agents switched off).
