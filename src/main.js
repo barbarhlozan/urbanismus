@@ -15,7 +15,7 @@ import { World } from './core/world.js';
 import { generateWorld } from './terrain/generate.js';
 import { Camera } from './render/camera.js';
 import { Renderer } from './render/renderer.js';
-import { SUN, sunAt } from './render/shadows.js';
+import { SUN, sunAt, DAY, hourAt } from './render/shadows.js';
 import { OverlayKit } from './render/overlay.js';
 import { AgentSystem } from './sim/agents.js';
 import { GrowthSystem } from './sim/growth.js';
@@ -672,7 +672,7 @@ function loop(now) {
     // (no sun at night, so no cloud shadows: they fade away)
     cloudShadows.frame(simDt, camera, renderer.dark ? 0 : sky.cover, { hatch: SUN.hatch, stroke: renderer.strokeK });
     rain.frame(simDt, camera, sky.rain);
-    ambience.frame(dt, sky);
+    ambience.frame(dt, sky, DAY.held ?? hourAt(world.time)); // (the birds keep the hour too)
     showSun(sky);
     renderer.setSun(sunAt(world.time)); // (the sun steps through the day, shadows.js DAY)
     renderer.setMist(mistRisen(world.weather, world.time, CONFIG.weather.mist));

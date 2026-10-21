@@ -18,8 +18,9 @@
 </head>
 <body>
   <h1>Weather sounds</h1>
-  <p>The wind and the rain as the game makes them (src/audio/ambience.js), made from noise as they play. Pick a weather: it goes over to it in a few seconds, the way the game blends one into the next. In the game the same sound follows the weather on its own; <code>cmd.weather('storm')</code> in the console jumps to one.</p>
+  <p>The wind and the rain as the game makes them (src/audio/ambience.js), made from noise as they play, and the birds (src/audio/birds.js), sung from two recordings in a new order each time. Pick a weather: it goes over to it in a few seconds, the way the game blends one into the next. In the game the same sound follows the weather on its own; <code>cmd.weather('storm')</code> in the console jumps to one.</p>
   <div class="row" id="kinds"></div>
+  <div class="row"><label>Hour <input id="hour" type="range" min="0" max="24" step="0.25" value="9"> <span id="hourText">9:00</span></label></div>
   <div class="row"><button id="mute">Sound off</button></div>
   <div id="now"></div>
   <script type="module">
@@ -27,10 +28,11 @@
     import { applyTheme } from './src/theme.js';
     import { CONFIG } from './src/config.js';
     import { Ambience } from './src/audio/ambience.js';
+    import { birdsAt } from './src/audio/birds.js';
     applyTheme();
     const c = CONFIG.weather;
     const ambience = new Ambience();
-    const sky = { wind: c.wind.fair, rain: 0 };
+    const sky = { wind: c.wind.fair, rain: 0, birds: c.birds.fair };
     let target = { ...sky };
 
     const kinds = document.getElementById('kinds');
@@ -38,7 +40,7 @@
       const b = document.createElement('button');
       b.textContent = kind;
       b.addEventListener('click', () => {
-        target = { wind: c.wind[kind] ?? 0, rain: c.rain[kind] ?? 0 };
+        target = { wind: c.wind[kind] ?? 0, rain: c.rain[kind] ?? 0, birds: c.birds[kind] ?? 0 };
         for (const o of kinds.children) o.classList.toggle('on', o === b);
         if (!ambience.on) ambience.set(true);
         mute.textContent = 'Sound off';
@@ -53,15 +55,18 @@
       mute.textContent = ambience.on ? 'Sound off' : 'Sound on';
     });
 
+    const hourEl = document.getElementById('hour'), hourText = document.getElementById('hourText');
+    const showHour = () => { const h = +hourEl.value; hourText.textContent = `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`; };
+    hourEl.addEventListener('input', showHour);
     const now = document.getElementById('now');
     let last = performance.now();
     const loop = (t) => {
       requestAnimationFrame(loop);
       const dt = Math.min(0.1, (t - last) / 1000);
       last = t;
-      for (const q of ['wind', 'rain']) sky[q] += (target[q] - sky[q]) * Math.min(1, dt / 1.5);
-      ambience.frame(dt, sky);
-      now.textContent = `wind ${sky.wind.toFixed(3)}   rain ${sky.rain.toFixed(2)}`;
+      for (const q of ['wind', 'rain', 'birds']) sky[q] += (target[q] - sky[q]) * Math.min(1, dt / 1.5);
+      ambience.frame(dt, sky, +hourEl.value);
+      now.textContent = `wind ${sky.wind.toFixed(3)}   rain ${sky.rain.toFixed(2)}   birds ${(sky.birds * birdsAt(+hourEl.value)).toFixed(2)}`;
     };
     requestAnimationFrame(loop);
   </script>

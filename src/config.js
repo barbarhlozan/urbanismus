@@ -272,7 +272,7 @@ export const CONFIG = {
     // (WeatherSystem.sky) – the wind picks up first, the clouds gather
     // around the change, the rain thickens after it. Each pair adds up to
     // no more than the shortest spell.
-    blend: { wind: [25, 10], cover: [20, 20], rain: [10, 25], gloom: [10, 25], sun: [10, 25] },
+    blend: { wind: [25, 10], cover: [20, 20], rain: [10, 25], gloom: [10, 25], sun: [10, 25], birds: [20, 25] },
     // the cloud shadows (render/cloudShadows.js): how many, 1 for a cloudy
     // sky's; under rain it is all shade instead (gloom)
     cover: { fair: 0.15, cloudy: 1 },
@@ -290,6 +290,10 @@ export const CONFIG = {
     // it rises over `rise` seconds as it comes and sinks as it goes, in
     // `steps` steps
     mist: { share: 0.4, least: 0.55, rise: 40, steps: 5 },
+    // how many birds sing (audio/birds.js; 1 all of them, 0 none): they
+    // fall quiet before a storm and come back slowly after it, and the hour
+    // of the day has its say too (BIRDS.day)
+    birds: { fair: 1, mist: 0.6, cloudy: 0.7, rain: 0.1 },
     // the wind in the trees (Renderer.swayTrees): how far a tree's top leans,
     // as a share of its height
     wind: { fair: 0.025, mist: 0.005, cloudy: 0.045, rain: 0.07, storm: 0.14 },

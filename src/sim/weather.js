@@ -71,7 +71,8 @@ export class WeatherSystem {
     }
   }
 
-  // What is seen of the weather now: { wind, cover, rain, gloom, sun }, each
+  // What is seen (and heard) of the weather now: { wind, cover, rain, gloom,
+  // sun, birds }, each
   // the kind's own (config.weather[that]) except around a change, where it
   // goes from one kind's to the next's over config.weather.blend[that] =
   // [seconds before the change, seconds after].
@@ -95,7 +96,7 @@ export class WeatherSystem {
 }
 
 // what a kind leaves out of config.weather's tables is this
-const SKY = { wind: 0, cover: 0, rain: 0, gloom: 0, sun: 1 };
+const SKY = { wind: 0, cover: 0, rain: 0, gloom: 0, sun: 1, birds: 0 };
 
 // from a to b as k goes 0 to 1, slow at both ends
 function mix(a, b, k) {

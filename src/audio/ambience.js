@@ -1,5 +1,6 @@
-// The sound of the weather, made as it plays (Web Audio): no recordings,
-// only noise shaped by filters. The wind is a low rush that comes in gusts,
+// The sound of the weather, made as it plays (Web Audio): the wind and the
+// rain no recordings, only noise shaped by filters, and the birds
+// (birds.js) as many as the weather and the hour of the day bring. The wind is a low rush that comes in gusts,
 // a whistle in the strongest of them and the leaves rustling; the rain is a
 // hiss with drops in it, and in a storm a roar under them. Both follow what
 // is seen of the weather (WeatherSystem.sky(): its wind and rain), so they
@@ -9,6 +10,8 @@
 // on it, so nothing is set up until the first click or key. Whether there
 // is sound at all is the player's (the Menu's Sound button), remembered in
 // this browser; it's on unless they turned it off.
+
+import { Birds, birdsAt } from './birds.js';
 
 export const SOUND = {
   key: 'urbanismus.sound',
@@ -35,7 +38,8 @@ export class Ambience {
     this.ctx = null;
     this.t = 0; // (seconds of sound so far, for the gusts)
     this.wait = 0;
-    this.sky = { wind: 0, rain: 0 };
+    this.sky = { wind: 0, rain: 0, birds: 0 };
+    this.hour = 12;
     this.changed = () => {};
     // the first click or key anywhere: the sound may start
     const first = () => {
@@ -88,16 +92,19 @@ export class Ambience {
     this.master.gain.setTargetAtTime(SOUND.volume, this.ctx.currentTime, 0.4);
   }
 
-  // Each frame: what is seen of the weather now ({ wind, rain }, as
-  // WeatherSystem.sky() gives them), and the real seconds since the last.
-  frame(dt, sky) {
+  // Each frame: the real seconds since the last, what is seen of the weather
+  // now ({ wind, rain, birds }, as WeatherSystem.sky() gives them) and the
+  // hour of the day.
+  frame(dt, sky, hour = this.hour) {
     this.sky = sky;
+    this.hour = hour;
     if (!this.ctx || !this.on) return;
     this.t += dt;
     this.wait -= dt;
     if (this.wait > 0) return;
     this.wait = SOUND.every;
     this.levels();
+    this.birds.frame();
   }
 
   build() {
@@ -164,6 +171,8 @@ export class Ambience {
     chain(source(dense), filter('lowpass', 9000), this.dense);
     this.roar = gain();
     chain(source(brown, 5.9), filter('lowpass', 220), this.roar);
+
+    this.birds = new Birds(ctx, this.master);
   }
 
   // Set every layer for the weather now (at once when `now`, otherwise eased).
@@ -187,6 +196,8 @@ export class Ambience {
     to(this.sparse.gain, 0.7 * Math.min(1, rain / 0.42) ** 0.8);
     to(this.dense.gain, 0.55 * rain ** 1.4);
     to(this.roar.gain, 0.4 * Math.max(0, (rain - 0.45) / 0.55) ** 1.2);
+
+    this.birds.level(clamp(this.sky.birds ?? 0) * birdsAt(this.hour), ease);
   }
 }
 
