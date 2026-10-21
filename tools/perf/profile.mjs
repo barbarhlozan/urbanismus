@@ -6,6 +6,7 @@
 // --step: run every frame while profiling (cam => …), e.g. a pan:
 //   --step 'cam => cam.pan(8, 0)'
 // --now: profile from the start, not once the turn's drawings are ready.
+// --cpu: drawn without the GPU (bench.mjs).
 import { launch, openTown } from './chrome.mjs';
 
 const argv = process.argv.slice(2);
@@ -15,9 +16,10 @@ const step = opt('--step', null);
 const origin = opt('--origin', 'http://localhost:8173');
 const port = Number(opt('--port', 9334));
 const now = argv.includes('--now');
+const cpu = argv.includes('--cpu');
 const town = argv.find((a) => !a.startsWith('--'));
 
-const b = await launch({ port });
+const b = await launch({ port, cpu });
 try {
   await openTown(b, { town, origin });
   const t0 = Date.now();

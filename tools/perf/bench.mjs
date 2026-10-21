@@ -25,6 +25,13 @@ const VARIANTS = {
   noMeadow: `R.layers.meadow.style.display = 'none'`,
   noTrees: `R.hiddenKinds.add('f'); R.layers.forest.style.display = 'none'; R.cull()`,
   noBuildings: `R.hiddenKinds.add('s'); R.cull()`,
+  // a whole <svg> of the map left out
+  noGround: `document.getElementById('ground').style.display = 'none'`,
+  noWorld: `document.getElementById('world').style.display = 'none'`,
+  noObjects: `document.getElementById('objects').style.display = 'none'`,
+  noLots: `R.layers.lots.style.display = 'none'`,
+  noVeil: `R.shadeVeil.style.display = 'none'`,
+  noRoads: `['roads', 'paths', 'rails', 'fences'].forEach((l) => (R.layers[l].style.display = 'none'))`,
   // all the time, what the view leaves out while it moves
   draft: `document.head.insertAdjacentHTML('beforeend', '<style>.layer-meadow, .layer-parked, .layer-objects .d2, .layer-lots .d2, .shade-veil { display: none !important }</style>')`,
 };

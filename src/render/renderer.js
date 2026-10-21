@@ -56,6 +56,7 @@ import { DEER, deerSVG, deerMark } from './deer.js';
 import { LIVESTOCK, livestockSVG, livestockMark } from './livestock.js';
 import { fenceGates } from '../sim/pastures.js';
 import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './draw.js';
+import { ShadeCanvas } from './shadeCanvas.js';
 import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
@@ -323,6 +324,9 @@ export class Renderer {
       '<mask id="shade-mask" class="shade-mask" maskUnits="userSpaceOnUse"><g class="hill-shapes"></g><g class="shade-shapes"></g><g class="lights-cut"></g></mask>' +
       '<rect class="shade-veil" fill="url(#shade-tile)" mask="url(#shade-mask)"/>';
     this.shadeVeil = veil;
+    // (drawn on canvases from these shapes, never painted by the browser)
+    this.hillCanvas = new ShadeCanvas(document.getElementById('hill-canvas'), veil, 'hills');
+    this.shadeCanvas = new ShadeCanvas(document.getElementById('shade-canvas'), veil, 'objects');
     this.layers.shadows = veil.querySelector('.shade-shapes');
     this.layers.hillshade.remove();
     this.layers.hillshade = veil.querySelector('.hill-shapes');
@@ -614,7 +618,11 @@ export class Renderer {
       if (this.objsPlace) this.placeObjects();
       this.prepareTurn();
       if (this.drafting && performance.now() - this.movedAt > VIEW_SETTLE) this.endDraft();
-      if (this.shadesOff && !this.rebuildQueue.size && performance.now() - this.movedAt > VIEW_SETTLE) this.showShadows();
+      // (drawn first, shown once its drawing is back: renderShadeCanvas)
+      if (this.shadesOff && !this.rebuildQueue.size && !this.landing.size && performance.now() - this.movedAt > VIEW_SETTLE) {
+        if (this.shadesComing && this.shadeCanvas.current) this.showShadows();
+        else this.shadesComing = true;
+      }
     }
     if (this.ghosts.size) this.reapGhosts();
     const now = performance.now();
@@ -644,6 +652,7 @@ export class Renderer {
     }
     this.markErasing();
     this.markHovered();
+    this.renderShadeCanvas();
     if (overlaySVG !== this.lastOverlay) {
       this.letGo(overlaySVG);
       this.layers.overlay.innerHTML = overlaySVG;
@@ -1626,10 +1635,12 @@ export class Renderer {
     this.nightSheet = new DOMMatrix(this.sheet(this.drawn.angle, a, true)); // (and the ground's, nightCanvas.js)
     // the terrain, the largest of them, turned whole on the GPU: its <svg>
     // about the middle of the map as drawn (the scene's origin)
+    // (and the hills' shadows on their canvas: renderShadeCanvas)
     const { ground } = this, d = this.drawn;
     ground.style.transformOrigin = `${d.panX + this.ox}px ${d.panY + this.oy}px`;
     ground.style.transform = this.sheet(d.angle, a, true);
     ground.style.willChange = 'transform';
+    this.hillSheet = new DOMMatrix().translate(d.panX + this.ox, d.panY + this.oy).multiply(new DOMMatrix(this.sheet(d.angle, a, true))).translate(-(d.panX + this.ox), -(d.panY + this.oy));
     if (this.linesAngle !== a) {
       for (const l of LINES) {
         this.ink[l]?.clearErasing();
@@ -1895,6 +1906,7 @@ export class Renderer {
       old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SETTLE_FADE, easing: 'ease-out', fill: 'forwards' }).finished.then(() => old.remove(), () => old.remove());
     }
     Object.assign(ground.style, { transform: '', transformOrigin: '', willChange: '' });
+    this.hillSheet = null;
     this.dirty.add('terrain');
     for (const l of SHEET) {
       this.layers[l].removeAttribute('transform');
@@ -2653,20 +2665,46 @@ export class Renderer {
     for (const svg of [this.svg, this.top]) svg.classList.remove('draft');
   }
 
+  // The shadows' canvases (shadeCanvas.js), for the view the SVGs were
+  // last drawn at, fading with the weather as they do (--sun, main.js);
+  // the objects' not while it is hidden (hideShadows), drawn once it shows.
+  renderShadeCanvas() {
+    const d = this.drawn;
+    if (!d) return;
+    const sun = this.svg.style.getPropertyValue('--sun');
+    if (sun !== this.shadeSun) {
+      this.shadeSun = sun;
+      for (const c of [this.hillCanvas, this.shadeCanvas]) c.canvas.style.setProperty('--sun', sun);
+    }
+    const look = {
+      view: { zoom: d.zoom, panX: d.panX, panY: d.panY, angle: d.angle, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH },
+      hatch: SUN.hatch, tier: SHADE_TIERS[this.lodLevel ?? 0] ?? 1, px: this.camera.tile, stroke: this.strokeK,
+    };
+    // (mid-turn the hills' as far as it has turned, turnFrame)
+    const sheet = this.turning ? this.hillSheet : null;
+    this.hillCanvas.draw({ ...look, sheet });
+    this.shadeCanvas.draw({ ...look, hold: (this.shadesOff && !this.shadesComing) || this.turning });
+    this.hillCanvas.place(look.view, sheet);
+    this.shadeCanvas.place(look.view);
+  }
+
   hideShadows() {
+    this.shadesComing = false;
     if (this.shadesOff) return;
     this.shadesOff = true;
     cancelAnimationFrame(this.shadesIn);
     this.sweep?.end();
-    Object.assign(this.layers.shadows.style, { display: 'none', opacity: '' });
+    const { style } = this.shadeCanvas.canvas;
+    style.visibility = 'hidden';
+    style.removeProperty('--shown');
   }
 
   // The shadows hatched in again once the view rests and what it redraws
   // is drawn (frame).
   showShadows() {
-    this.shadesOff = false;
-    const shapes = this.layers.shadows, { steps, step } = DRAFT;
-    shapes.style.display = '';
+    this.shadesOff = this.shadesComing = false;
+    const { style } = this.shadeCanvas.canvas, { steps, step } = DRAFT;
+    style.visibility = '';
     if (!drawEnabled()) return;
     const start = performance.now();
     let shown = -1;
@@ -2674,7 +2712,8 @@ export class Renderer {
       const i = Math.min(steps, Math.floor((performance.now() - start) / step) + 1);
       if (i !== shown) {
         shown = i;
-        shapes.style.opacity = i < steps ? String(i / steps) : '';
+        if (i < steps) style.setProperty('--shown', String(i / steps));
+        else style.removeProperty('--shown');
       }
       if (i < steps) this.shadesIn = requestAnimationFrame(next);
     };
@@ -2725,6 +2764,7 @@ export class Renderer {
       const front = off.map((o, i) => [u0 + ((u1 - u0) * i) / n, f + o - jag / 2]);
       pNew.setAttribute('d', `M${at(u0, v0 - jag * 2)}L${at(u1, v0 - jag * 2)}${front.slice().reverse().map(([u, v]) => `L${at(u, v)}`).join('')}Z`);
       pOld.setAttribute('d', `M${at(u0, v1 + jag * 2)}L${at(u1, v1 + jag * 2)}${front.slice().reverse().map(([u, v]) => `L${at(u, v)}`).join('')}Z`);
+      this.hillCanvas.dirty = this.shadeCanvas.dirty = true; // (the clips are outside the sheets they watch)
       if (t < 1) this.sweep.raf = requestAnimationFrame(step);
       else this.sweep.end();
     };
