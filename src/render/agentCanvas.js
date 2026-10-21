@@ -1,5 +1,5 @@
 // The moving things – people, cyclists, cars, trucks, trains – are drawn on
-// a <canvas> (#agents) between the map and the buildings, not as SVG
+// canvases (#agents, in tiles) between the map and the buildings, not as SVG
 // elements: hundreds of them move every frame, and moving an SVG element
 // restyles it and repaints the map's whole layer under it.
 //
@@ -9,6 +9,7 @@
 // map's --stroke (Renderer.updateStroke), so a car's outline is as heavy as
 // the road line beside it on any screen and at any zoom.
 
+import { canvasRatio } from './pixels.js';
 import { THEME } from '../theme.js';
 
 // The map's pens (--pen-1…5 in styles.css), px of line width.
@@ -51,54 +52,92 @@ export function shapesOf(svg) {
 
 // One shape: a path `d` in style `cls`.
 export function shape(cls, d) {
-  return { style: STYLES[cls] ?? STYLES.car, path: new Path2D(d) };
+  let reach = 0;
+  for (const n of d.match(/-?[\d.]+(?:e-?\d+)?/g) ?? []) reach = Math.max(reach, Math.abs(Number(n)));
+  return { style: STYLES[cls] ?? STYLES.car, path: new Path2D(d), reach };
 }
 
+// The window cut into tiles (TILE css px a side), each a <canvas> of its
+// own: what moves is noted as it is drawn (draw, drawScene) and laid on
+// the tiles at the frame's end (end), and a tile whose drawing is the same
+// as the last frame's is left alone. Every new picture of a canvas is
+// copied to the GPU again – Firefox copies the whole of it – so the meadow,
+// the woods and the streets where nobody is going cost nothing.
+const TILE = 96;
+
+// How far (scene units of a shape, before its size k) a set of shapes
+// reaches from its foot: the furthest point of their path data, a little
+// more for the pen (kept per set).
+const reach = new WeakMap();
+function reachOf(shapes) {
+  let r = reach.get(shapes);
+  if (r == null) {
+    r = 0;
+    for (const s of shapes) r = Math.max(r, s.reach ?? 0);
+    reach.set(shapes, r);
+  }
+  return r;
+}
+let ids = 0;
+const idOf = new WeakMap();
+const id = (o) => {
+  let n = idOf.get(o);
+  if (n == null) idOf.set(o, (n = ++ids));
+  return n;
+};
+const r1 = (n) => Math.round(n * 10) / 10;
+
 export class AgentCanvas {
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.empty = false;
+  // `el`: the element the tiles go in (a <canvas> given is replaced by a
+  // <div> with its id, so styles.css places it the same).
+  constructor(el) {
+    if (el.tagName === 'CANVAS') {
+      const host = document.createElement('div');
+      host.id = el.id;
+      host.className = el.className;
+      el.replaceWith(host);
+      el = host;
+    }
+    this.host = el;
+    this.tiles = [];  // [{ canvas, ctx, x, y, sig }]
+    this.notes = [];  // what this frame draws, in order
+    this.empty = true;
   }
 
-  // Start a frame at the camera's current view: clear, size to the window.
+  // Start a frame at the camera's current view.
   // `stroke`: the map's --stroke, scene px per px of line width.
   begin(camera, stroke) {
-    const { canvas, ctx } = this;
-    const dpr = devicePixelRatio || 1;
+    const dpr = canvasRatio();
     const W = innerWidth, H = innerHeight;
-    const w = Math.round(W * dpr), h = Math.round(H * dpr);
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-      canvas.style.width = `${W}px`;
-      canvas.style.height = `${H}px`;
-    } else if (!this.empty) {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-    }
-    ctx.lineJoin = 'round';
-    ctx.miterLimit = 4;
-    ctx.globalAlpha = 1;
-    this.dpr = dpr;
+    if (W !== this.W || H !== this.H || dpr !== this.dpr) this.layOut(W, H, dpr);
     this.strokeK = stroke ?? 1 / camera.zoom;
     this.zoom = camera.zoom;
     this.panX = camera.panX;
     this.panY = camera.panY;
-    this.W = W;
-    this.H = H;
     this.pal = THEME.palette;
-    this.fill = this.stroke = this.width = null;
-    this.empty = true;
+    this.notes = [];
   }
 
-  // Leave the canvas blank (agents switched off).
+  layOut(W, H, dpr) {
+    for (const t of this.tiles) t.canvas.remove();
+    this.tiles = [];
+    [this.W, this.H, this.dpr] = [W, H, dpr];
+    for (let y = 0; y < H; y += TILE) {
+      for (let x = 0; x < W; x += TILE) {
+        const w = Math.min(TILE, W - x), h = Math.min(TILE, H - y);
+        const canvas = this.host.appendChild(document.createElement('canvas'));
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        Object.assign(canvas.style, { position: 'absolute', left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
+        this.tiles.push({ canvas, ctx: canvas.getContext('2d'), x, y, w, h, sig: '' });
+      }
+    }
+  }
+
+  // Leave it blank (agents switched off).
   clear() {
-    if (this.empty) return;
-    const { canvas, ctx } = this;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    this.empty = true;
+    this.notes = [];
+    if (this.tiles.length) this.end();
   }
 
   // Is the scene point (sx, sy) near enough to the window to draw?
@@ -113,25 +152,63 @@ export class AgentCanvas {
   // (a walker's step).
   draw(shapes, sx, sy, k = 1, mirror = false, shear = 0, squash = 1) {
     if (!(k > 0.001) || !this.onScreen(sx, sy)) return;
-    const { ctx, dpr, zoom } = this;
-    const m = dpr * zoom * k;
-    ctx.setTransform(mirror ? -m : m, m * shear, 0, m * squash, dpr * (this.panX + zoom * sx), dpr * (this.panY + zoom * sy));
-    const unit = this.strokeK / k; // one px of line width in the shapes' units
-    for (const s of shapes) this.paint(s.style, s.path, unit);
+    const { zoom } = this;
+    const m = zoom * k;
+    const x = this.panX + zoom * sx, y = this.panY + zoom * sy;
+    const r = reachOf(shapes) * m * (1 + Math.abs(shear)) + 3; // css px, with the pen
+    this.notes.push({
+      shapes, matrix: [mirror ? -m : m, m * shear, 0, m * squash, x, y], unit: this.strokeK / k, alpha: 1,
+      box: [x - r, y - r, x + r, y + r],
+      sig: `${id(shapes)}:${r1(x)},${r1(y)},${r1(m * 100)},${mirror ? 1 : 0},${r1(shear * 100)},${r1(squash * 100)}`,
+    });
   }
 
-  // Shapes already in scene coordinates (a truck or train far out), faded to `alpha`.
-  drawScene(style, path, alpha = 1) {
-    const { ctx, dpr, zoom } = this;
-    ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * this.panX, dpr * this.panY);
-    ctx.globalAlpha = alpha;
-    this.paint(style, path, this.strokeK);
-    ctx.globalAlpha = 1;
+  // Shapes already in scene coordinates (a truck or train far out), faded
+  // to `alpha`; `box`: what of the scene they cover, [x0, y0, x1, y1].
+  drawScene(style, path, alpha = 1, box = null) {
+    const { zoom, panX, panY } = this;
+    const b = box ? [panX + zoom * box[0] - 3, panY + zoom * box[1] - 3, panX + zoom * box[2] + 3, panY + zoom * box[3] + 3] : [0, 0, this.W, this.H];
+    this.notes.push({
+      shapes: [{ style, path }], matrix: [zoom, 0, 0, zoom, panX, panY], unit: this.strokeK, alpha, box: b,
+      sig: `s${id(style)}:${b.map(r1).join(',')},${r1(alpha * 100)}`,
+    });
+  }
+
+  // The frame's drawing laid on the tiles: those whose drawing changed
+  // are drawn again, the rest left as they are.
+  end() {
+    const { dpr, notes } = this;
+    const look = `${this.pal.main}|${this.pal.bg}|${r1(this.strokeK * 1000)}`;
+    let empty = true;
+    for (const t of this.tiles) {
+      const x0 = t.x, y0 = t.y, x1 = t.x + t.w, y1 = t.y + t.h;
+      const mine = notes.filter(({ box }) => box[2] > x0 && box[0] < x1 && box[3] > y0 && box[1] < y1);
+      const sig = mine.length ? `${look}|${mine.map((n) => n.sig).join('|')}` : '';
+      if (sig) empty = false;
+      if (sig === t.sig) continue;
+      t.sig = sig;
+      const { ctx, canvas } = t;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!mine.length) continue;
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 4;
+      this.ctx = ctx;
+      this.fill = this.stroke = this.width = null;
+      for (const n of mine) {
+        const [a, b, c, d, e, f] = n.matrix;
+        ctx.setTransform(dpr * a, dpr * b, dpr * c, dpr * d, dpr * (e - x0), dpr * (f - y0));
+        ctx.globalAlpha = n.alpha;
+        for (const s of n.shapes) this.paint(s.style, s.path, n.unit);
+      }
+      ctx.globalAlpha = 1;
+    }
+    this.empty = empty;
+    this.notes = [];
   }
 
   paint(style, path, unit) {
     const { ctx, pal } = this;
-    this.empty = false;
     if (style.fill) {
       const c = pal[style.fill];
       if (c !== this.fill) ctx.fillStyle = this.fill = c;

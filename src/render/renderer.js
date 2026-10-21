@@ -646,6 +646,8 @@ export class Renderer {
       this.renderAnimals();
       this.renderTrains(); // under the people and cars (or over everything)
       this.renderAgents();
+      this.pen.end();
+      this.penTop.end();
     } else {
       this.agentsShown = false;
       this.pen.clear();
@@ -3786,7 +3788,7 @@ export class Renderer {
     const pen = this.pen;
     if (el.kind !== 'truck' && el.kind !== 'bus') return pen.draw(el.shapes, el.sx, el.sy, k, el.mirror, el.shear ?? 0, el.squash ?? 1);
     if (el.key === 'dot') {
-      if (el.path && pen.onScreen(el.dot[0], el.dot[1])) pen.drawScene(AGENT_STYLES.truck, el.path, k < 1 ? Math.max(0, k) : 1);
+      if (el.path && pen.onScreen(el.dot[0], el.dot[1])) pen.drawScene(AGENT_STYLES.truck, el.path, k < 1 ? Math.max(0, k) : 1, el.box);
       return;
     }
     for (const p of el.parts) pen.draw(p.shapes, p.sx, p.sy, k, false, el.shear ?? 0);
@@ -3910,6 +3912,8 @@ export class Renderer {
       path.lineTo(bx - ux + uy, by - uy - ux);
       path.lineTo(bx - ux - uy, by - uy + ux);
       path.closePath();
+      const xs = [ax + ux - uy, ax + ux + uy, bx - ux + uy, bx - ux - uy], ys = [ay + uy + ux, ay + uy - ux, by - uy - ux, by - uy + ux];
+      el.box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
       return;
     }
     const heading = el.heading ?? 0;
