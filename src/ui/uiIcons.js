@@ -9,10 +9,11 @@
 // own. A file that's missing, or isn't an SVG, leaves its place the drawing
 // in the code, which each caller passes along as its stand-in.
 //
-// Not here: the Build menu's tiles (icons.js toolIcon, drawn by each
-// building's own draw code) and the marks on the map. The menu's tabs are
-// here: each group has a little sprite of its own (tab-…), drawn with the
-// classes .ink, .h and .p (see the README).
+// Not here: the Build menu's tiles for buildings (icons.js toolIcon, drawn
+// by each building's own draw code) and the marks on the map. The menu's
+// tabs are here, each group with a little sprite of its own (tab-…), and
+// the tiles of the tools that aren't buildings (tool-…: roads, the
+// footpath, the railway, the fence, the eraser).
 
 // Every file in icons/ui/, by name, and where the game shows it (the
 // reference sheet, icons/ui/index.html, lists them with this).
@@ -56,6 +57,12 @@ export const ICONS = {
   'tab-farming': 'Build menu tab: Zemědělství / Farming',
   'tab-spaces': 'Build menu tab: Prostranství / Spaces',
   'tab-heritage': 'Build menu tab: Památky / Heritage',
+  'tool-road': 'Build menu tile: Silnice / Road',
+  'tool-lane': 'Build menu tile: Úzká silnice / Narrow road',
+  'tool-path': 'Build menu tile: Pěšina / Footpath',
+  'tool-rail': 'Build menu tile: Železnice / Railway',
+  'tool-fence': 'Build menu tile: Ohrada / Fence',
+  'tool-erase': 'Build menu: Vymazat / Erase (a rubber)',
 };
 
 // what was read: name → { viewBox, art }

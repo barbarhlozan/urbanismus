@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Build menu tile: Železnice / Railway – two rails across their sleepers -->
+  <path d="M1.42 13.47Q10.43 8.73 19.7 4.51M4.47 15.37Q13.6 11.26 22.41 6.52"/>
+  <path d="M2.18 15.38Q4.02 16.13 5.68 17.2M6.52 13.04Q8.4 13.84 10.1 14.98M10.64 10.62Q12.52 11.34 14.23 12.42M15.25 8.8Q17 9.42 18.66 10.24M19.68 6.29Q21.34 7.28 22.98 8.32"/>
+</svg>

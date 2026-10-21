@@ -1415,6 +1415,15 @@ body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 4
 .icon.sprite .h { stroke-width: calc(0.6px * var(--stroke, 1)); }
 .icon.sprite .ink { fill: currentColor; stroke-width: calc(0.4px * var(--stroke, 1)); }
 .icon.sprite .p { fill: var(--bg); stroke: none; }
+/* the Build menu's buildings (icons.js structureIcon) as doodles: the
+   outlines rounder and a little heavier, the windows kept without their
+   glazing bars, the walls' shading and the denser roof hatching left out */
+.icon.doodle :is(path, polygon, ellipse) { stroke-linejoin: round; stroke-linecap: round; }
+.icon.doodle .filled { stroke-width: calc(1.15px * var(--stroke, 1)); }
+.icon.doodle :is(path.ln, .glyph) { stroke-width: calc(0.8px * var(--stroke, 1)); }
+.icon.doodle .gnd { stroke-width: calc(0.6px * var(--stroke, 1)); }
+.icon.doodle .pane.d2:not(.bar) { display: inline; }
+.icon.doodle :is(.wall-shade, .rh2, .rh3, .bar, .tuft) { display: none; }
 
 /* ---------- Colors menu (src/ui/colorMenu.js) ---------- */
 

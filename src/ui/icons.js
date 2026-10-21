@@ -1,7 +1,10 @@
 // Small line drawings for the Build menu. Buildings are drawn with their own
 // draw() through the same Painter as the map (with a fixed seed), so the
-// icons always match what gets built; lines and the eraser are hand drawn.
-// The tabs have sprites of their own (icons/ui/tab-…, buildMenu.js).
+// icons always match what gets built, but in a looser, rounder hand than
+// the map's (DOODLE, and styles.css .icon.doodle: the finer detail left
+// out). Roads, the footpath, the railway, the fence and the eraser are
+// doodles of their own, files in icons/ui/ (tool-…; LINES below stand in);
+// the tabs too (icons/ui/tab-…, buildMenu.js).
 // The other drawings here (the camera, the HUD's, the Menu's, the New map
 // settings') are files of their own in icons/ui/, read at startup
 // (uiIcons.js); the ones written below stand in for a file that can't be
@@ -9,7 +12,7 @@
 // (render/sketch.js), stroke by stroke; its file was exported from it.
 
 import { Camera } from '../render/camera.js';
-import { Painter } from '../render/painter.js';
+import { Painter, LOOK } from '../render/painter.js';
 import { vehicleSVG } from '../render/vehicles.js';
 import { drawSeed, footprintOffsets } from '../../structures/index.js';
 import { sampleSitePaths } from '../roads/siteWalks.js';
@@ -51,8 +54,15 @@ const PLAINNESS = [
   { keep: 1, keepTier: 1, near: false, detail: 2 },
 ];
 
+// The tiles' hand: the map's pen (Painter LOOK) as a doodle – the lines
+// bowing a little more, barely running past the corners – set while a
+// tile is drawn, the map's own put back after.
+export const DOODLE = { sketch: 7, overshoot: 0.7 };
+
 // The structure's drawing (ground + solids) as SVG markup, on its own.
-function paint(def, seed, camera, plain = 0) {
+function paint(def, seed, camera, plain = 0, hand = null) {
+  const map = Object.fromEntries(Object.keys(hand ?? {}).map((k) => [k, LOOK[k]]));
+  Object.assign(LOOK, hand);
   try {
     camera.cx = camera.cy = 0;
     // facing the viewer, as they come when picked up (tools/build.js)
@@ -73,18 +83,21 @@ function paint(def, seed, camera, plain = 0) {
   } catch (err) {
     console.warn(`Can't draw ${def.id}`, err);
     return '';
+  } finally {
+    Object.assign(LOOK, map);
   }
 }
 
-export function structureIcon(def, { seed = ICON_SEED } = {}) {
+export function structureIcon(def, { seed = ICON_SEED, fresh = false } = {}) {
   const key = `${def.id}:${seed}`;
+  if (fresh) cache.delete(key);
   if (cache.has(key)) return cache.get(key);
   const camera = new Camera({ width: 1, height: 1 }, { tile: 32, zScale: 0.9 });
-  let body = paint(def, seed, camera);
+  let body = paint(def, seed, camera, 0, DOODLE);
   const { width, height } = boxOf(`<g>${body}</g>`);
   const plain = PLAIN.find(([px]) => Math.max(width, height) > px)?.[1] ?? 0;
-  if (plain) body = paint(def, seed, camera, plain);
-  const svg = fit(`<g class="icon-art">${body}</g>`, 'icon lod-1', PAD);
+  if (plain) body = paint(def, seed, camera, plain, DOODLE);
+  const svg = fit(`<g class="icon-art">${body}</g>`, 'icon lod-1 doodle', PAD);
   cache.set(key, svg);
   return svg;
 }
@@ -145,8 +158,13 @@ const LINES = {
   bulldoze: '<path class="i-eraser" d="M6 22 L20.1 7.9 L26.5 14.3 L12.4 28.4 Z M10.9 17.1 L17.3 23.5"/><path class="i-smudge" d="M16 29 H28"/>',
 };
 
+// the tools drawn from a file of their own, icons/ui/tool-…
+const TOOL_FILES = { road: 'tool-road', lane: 'tool-lane', path: 'tool-path', rail: 'tool-rail', fence: 'tool-fence', bulldoze: 'tool-erase' };
+
 export function toolIcon(tool) {
   if (tool.defs) return structureIcon(tool.defs[0]);
+  const own = TOOL_FILES[tool.id] && drawing(TOOL_FILES[tool.id], '');
+  if (own?.file) return `<svg class="icon sprite" viewBox="${own.viewBox}" aria-hidden="true">${own.art}</svg>`;
   if (tool.id === 'photo') return cameraIcon();
   const art = LINES[tool.id];
   return art ? `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">${art}</svg>` : '<svg class="icon" viewBox="0 0 32 32"></svg>';

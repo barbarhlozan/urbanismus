@@ -30,7 +30,7 @@ drawing written in the code, the one each file was first exported from.
   `polyline`, `circle`…), not filled shapes or thick strokes. A circle is drawn over the
   paper in most places (it hides what's behind it), a path never is.
 - **Drawn by hand**: lines a little uneven, running a touch past the corners. The Menu's
-  items and the Build menu's tabs are rounder, like a marker doodle (soft corners, few
+  items and the Build menu's tabs and `tool-…` tiles are rounder, like a marker doodle (soft corners, few
   strokes, dots for windows), drawn in the game in the pen of the UI's frames. Simple enough to read at 16 px, where most of them are shown.
 - **No text** in a drawing: the button's name is its title and, in the Menu, is written beside
   it when it's pointed at or held.
@@ -83,15 +83,21 @@ drawing written in the code, the one each file was first exported from.
 | `tab-farming.svg` | Build menu tab: Zemědělství / Farming (the JZD cowshed and silo) |
 | `tab-spaces.svg` | Build menu tab: Prostranství / Spaces (a tree, a bush) |
 | `tab-heritage.svg` | Build menu tab: Památky / Heritage (the chapel) |
+| `tool-road.svg` | Build menu tile: Silnice / Road (a stretch of road, its middle dashed) |
+| `tool-lane.svg` | Build menu tile: Úzká silnice / Narrow road |
+| `tool-path.svg` | Build menu tile: Pěšina / Footpath (a path winding in short dashes) |
+| `tool-rail.svg` | Build menu tile: Železnice / Railway (two rails on their sleepers) |
+| `tool-fence.svg` | Build menu tile: Ohrada / Fence (posts and two rails) |
+| `tool-erase.svg` | Build menu: Vymazat / Erase (a rubber and its smudge) |
 
 The list is the loader's own (`ICONS` in `src/ui/uiIcons.js`): a new file is only read once
 it's added there.
 
 ## Not here
 
-- **The Build menu's tiles**, the buildings, roads, fences and the eraser: each building's is
-  drawn from its own draw code with the map's pen (`src/ui/icons.js` toolIcon), so it always
-  matches what gets built.
+- **The Build menu's tiles for buildings**: each is drawn from the building's own draw code
+  (`src/ui/icons.js` structureIcon), so it always matches what gets built, in a looser, rounder
+  hand than the map's (`DOODLE` there, `.icon.doodle` in styles.css).
 - **The map's own marks**: the photographer's camera on the map, the cursor's crosses and
   signs, the road marks (`src/render/`).
 - **Pen frames and marks drawn to size**: the boxes round the panels (`sketchFrame.js`), what
