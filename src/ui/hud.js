@@ -42,10 +42,37 @@ function northArrow(camera) {
   const at = (k, side = 0) => [20 + ux * k - uy * side, 20 + uy * k + ux * side];
   const head = at(9), tail = at(-11), barb = at(2, 3.5), back = at(2, -3.5);
   const p = (pt) => pt.map((n) => Math.round(n * 10) / 10).join(' ');
+  return {
+    needle: `${sketchLine(tail, head, 7, { over: 1 })}${sketchLine(head, barb, 8)}${sketchLine(head, back, 9)}`,
+    half: `M${p(head)}L${p(barb)}L${p(at(0))}Z`,
+    x: at(16)[0].toFixed(1),
+    y: (at(16)[1] + 3.5).toFixed(1),
+  };
+}
+
+// The north arrow drawn once; turned after that by its attributes alone
+// (setNorth): rewriting it would have the pen marks (penMarks.js) measure
+// the camera button again on every step of a turn.
+function northSVG(camera) {
+  const { needle, half, x, y } = northArrow(camera);
   return `<svg class="north" viewBox="0 0 40 40" aria-hidden="true">
-    <path class="needle" d="${sketchLine(tail, head, 7, { over: 1 })}${sketchLine(head, barb, 8)}${sketchLine(head, back, 9)}"/>
-    <path class="half" d="M${p(head)}L${p(barb)}L${p(at(0))}Z"/>
-    <text x="${at(16)[0].toFixed(1)}" y="${(at(16)[1] + 3.5).toFixed(1)}" text-anchor="middle">${t('north')}</text></svg>`;
+    <path class="needle" d="${needle}"/>
+    <path class="half" d="${half}"/>
+    <text x="${x}" y="${y}" text-anchor="middle">${t('north')}</text></svg>`;
+}
+
+function setNorth(el, camera) {
+  const svg = el.querySelector('svg.north');
+  if (!svg) {
+    el.innerHTML = northSVG(camera);
+    return;
+  }
+  const { needle, half, x, y } = northArrow(camera);
+  svg.querySelector('.needle').setAttribute('d', needle);
+  svg.querySelector('.half').setAttribute('d', half);
+  const text = svg.querySelector('text');
+  text.setAttribute('x', x);
+  text.setAttribute('y', y);
 }
 
 // The Menu button's drawing: ≡ while it's folded, a cross while it's open
@@ -184,7 +211,7 @@ export class Hud {
     const turn = Math.round((this.camera.angle * 360) / Math.PI);
     if (turn !== this.northTurn) {
       this.northTurn = turn;
-      this.northEl.innerHTML = northArrow(this.camera);
+      setNorth(this.northEl, this.camera);
     }
     // a dot on the book while there's something new in it
     const unread = !!this.chronicle?.unread;

@@ -137,8 +137,8 @@ const LINES = ['roads', 'paths', 'rails', 'fences', 'notes'];
 // the steps it has been drawn at, at most (Renderer.swapIn); and ms the
 // view must rest before those either side are made ready (prepareTurn).
 const STEPS = Math.round((Math.PI * 2) / Camera.STEP);
-const VIEWS = 40;
-const PREPARE_REST = 400;
+const VIEWS = 12;
+const PREPARE_REST = 1500;
 const SETTLE_FADE = 260;
 // An object's light shapes as path data, for the night's mask
 // (renderLights), worked out once per drawing: its outline (Painter.covers)
@@ -180,6 +180,12 @@ const INK_STEP = 0.1;
 const INK_EVERY = 500;
 const WINDOWS_BY = 0.06;
 const SHADE_SWEEP = 1600;
+// While the view moves the shadows are left out (hideShadows): any move
+// that has the browser draw the map again – a zoom, a turn, a pan further
+// than `pan` of the window – would redraw them through their masks every
+// frame, the dearest thing on the map. Once it rests and its detail is
+// back, they are hatched in again in `steps`, `step` ms apart.
+const SHADE_REST = { pan: 0.12, steps: 3, step: 80 };
 const SWEEP_STEPS = 6; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -217,8 +223,9 @@ function detailRank(key) {
 }
 
 // Trees swaying in the wind (Renderer.swayTrees): at most `most` on screen
-// at once, only at zoom `minZoom` or closer, updated `fps` times a second.
-export const TREE_SWAY = { most: 60, minZoom: 1.2, fps: 30 };
+// at once, only at zoom `minZoom` or closer, updated `fps` times a second
+// (on twos, as drawn animation: each step repaints the objects whole).
+export const TREE_SWAY = { most: 60, minZoom: 1.2, fps: 12 };
 
 // Lakes (Renderer.renderWater): the furthest the shore reaches from a water
 // dot (under 1, so dry dots stay dry) and how softly neighbouring dots'
@@ -395,6 +402,11 @@ export class Renderer {
     on('roads:changed', 'rails'); // the track stops at level crossings
     on('paths:changed', 'rails');
     for (const type of ['roads:changed', 'paths:changed']) world.events.on(type, () => (this.roadLines = null));
+    // the railway's and footpaths' lines on the ground (railItems,
+    // pathItems): level crossings, stations' tracks, parks and squares
+    for (const type of ['rails:changed', 'roads:changed', 'paths:changed', 'terrain:changed', 'structure:added', 'structure:removed', 'structure:changed']) {
+      world.events.on(type, () => (this.railLines = this.pathLines = null));
+    }
     // the woods stop at roads and railways (forest.js)
     for (const type of ['roads:changed', 'rails:changed']) {
       world.events.on(type, () => {
@@ -440,7 +452,7 @@ export class Renderer {
 
   // Rebuild everything (e.g. after a camera rotation).
   invalidate() {
-    this.roadLines = null; // drawn for the old view
+    this.roadLines = this.railLines = this.pathLines = null;
     for (const l of LAYERS) if (l !== 'agents' && l !== 'overlay' && l !== 'objects' && l !== 'lots' && l !== 'shadows') this.dirty.add(l);
     this.objsAll = true;
     this.lastOverlay = null;
@@ -596,6 +608,7 @@ export class Renderer {
       }
       if (this.objsPlace) this.placeObjects();
       this.prepareTurn();
+      if (this.shadesOff && !this.rebuildQueue.size && performance.now() - this.movedAt > VIEW_SETTLE) this.showShadows();
     }
     if (this.ghosts.size) this.reapGhosts();
     const now = performance.now();
@@ -1128,6 +1141,21 @@ export class Renderer {
     return { items, add, addRuns };
   }
 
+  // A network's lines worked out on the ground, the same at any angle,
+  // kept under `name` until reset (null) and only projected anew for each
+  // view – every frame of a turn: `build(add, addRuns)` records them,
+  // and they go to inkItems' `add` / `addRuns`. `cache` false: worked out
+  // afresh and not kept.
+  groundLines(name, { add, addRuns }, build, cache = true) {
+    let lines = cache ? this[name] : null;
+    if (!lines) {
+      lines = [];
+      build((...a) => lines.push([false, a]), (...a) => lines.push([true, a]));
+      if (cache) this[name] = lines;
+    }
+    for (const [runs, a] of lines) (runs ? addRuns : add)(...a);
+  }
+
   // Where a new piece comes in the pen's run along the last build of `layer`:
   // segments in the order their dots were built, drawn from the earlier dot;
   // map exits after the segment reaching them – or first, drawn inward, when
@@ -1152,9 +1180,17 @@ export class Renderer {
   }
 
   // The footpaths' ink items (for the current camera).
+  // Their lines are kept (pathLines, groundLines) until a network, a park
+  // or square or the terrain changes; the bridges are found each time.
   pathItems() {
+    const ink = this.inkItems(true);
+    this.groundLines('pathLines', ink, (add) => this.pathPieces(add));
+    this.addBridges('path', ink.add);
+    return ink.items;
+  }
+
+  pathPieces(add) {
     const layer = this.world.networks.path;
-    const { items, add } = this.inkItems(true);
     // Footpaths as two narrow edges, like small roads (roadEdges), stopping
     // where the roadway starts: at a plain road's edge, at a street's kerb
     // (its sidewalk carries on). Dead ends are closed, but not where a
@@ -1172,8 +1208,6 @@ export class Renderer {
       const keep = j ? (q) => !onRoad(q) && Math.hypot(q[0] - at[0], q[1] - at[1]) >= JOIN_REACH - 1e-3 : (q) => !onRoad(q);
       keepRuns(line, keep).forEach((run, i) => add(`p${key}${i ? `:${i}` : ''}`, 'footpath', run, a, b));
     }
-    this.addBridges('path', add);
-    return items;
   }
 
   // Footpaths carrying on from roads' dead ends (roads/geometry.js),
@@ -1279,11 +1313,22 @@ export class Renderer {
     this.ink.rails.update(this.railItems(), { rankOf: this.rankOf(this.world.networks.rail) });
   }
 
+  // The railway's ink items. Its lines are kept (railLines, groundLines)
+  // until a network, a station or the terrain changes – the close-up
+  // track's bed and sleepers are costly (trackItems). Its bridges, drawn
+  // for the side facing the view, are found each time.
   railItems() {
+    const ink = this.inkItems(false);
+    this.groundLines('railLines', ink, (add, addRuns) => this.railPieces(add, addRuns));
+    this.addBridges('rail', ink.add);
+    return ink.items;
+  }
+
+  // The railway's lines on the ground, to `add` / `addRuns` (inkItems).
+  railPieces(add, addRuns) {
     const { world } = this;
     const layer = world.networks.rail;
     const { edges, exits, buffers } = railParts(layer, this.config.rail, world.railExits());
-    const { items, add, addRuns } = this.inkItems(false);
     const tracks = []; // for the track close up (trackItems)
     // the dashes are a second line over the same track
     for (const { a, b, line } of edges) {
@@ -1296,7 +1341,6 @@ export class Renderer {
       tracks.push({ key: `x${node}`, line, a: node, b: node, fade });
     }
     for (const { node, line } of buffers) add(`b${node}`, 'rail-buffer', line, node, node);
-    this.addBridges('rail', add);
     // stations' own tracks, drawn with the line so they meet it exactly
     for (const s of world.structures.values()) {
       const def = STRUCTURE_TYPES[s.type];
@@ -1311,7 +1355,6 @@ export class Renderer {
       });
     }
     this.trackItems(tracks, add, addRuns);
-    return items;
   }
 
   // The railway close up (shown from zoom VEHICLES.minZoom on, the rails
@@ -1392,16 +1435,15 @@ export class Renderer {
     this.ink.roads.update(this.roadItems(), { rankOf: this.rankOf(this.world.networks.road) });
   }
 
-  // `cache`: keep the road and kerb lines between calls (the map's own
-  // camera only).
+  // `cache`: keep the road and kerb lines between calls.
   roadItems(cache = true) {
     const { world } = this;
     const layer = world.networks.road, curve = this.config.road;
-    const { items, add } = this.inkItems(true);
+    const ink = this.inkItems(true), { items, add } = ink;
     // The road and kerb lines depend on the networks only, not on the
-    // buildings (which redraw the roads for their driveways): kept until
-    // a network, the terrain or the view changes.
-    const cached = cache ? this.roadLines : null;
+    // buildings (which redraw the roads for their driveways): kept on the
+    // ground (roadLines, groundLines) until a network or the terrain
+    // changes.
 
     // Driveways: from the building edge at its door to the road's edge.
     for (const s of world.structures.values()) {
@@ -1415,9 +1457,7 @@ export class Renderer {
       add(`d${s.id}`, 'driveway', [[dx + (rx - dx) * t, dy + (ry - dy) * t], [dx + (rx - dx) * u, dy + (ry - dy) * u]]);
     }
 
-    if (cached) items.push(...cached);
-    else {
-      const from = items.length;
+    this.groundLines('roadLines', ink, (add) => {
       // The road as its two edges, with corners at junctions, rounded dead
       // ends, and at map exits carried on past the edge, then faded out.
       // Lanes are narrower, and widen into the road where they meet one.
@@ -1440,9 +1480,8 @@ export class Renderer {
       for (const { node, a, b, stripes } of zebraCrossings(world, curve)) {
         stripes.forEach((line, i) => add(`z${node}:${edgeKey(a, b)}.${i}`, 'zebra', line, a, b));
       }
-      this.addBridges('road', add);
-      if (cache) this.roadLines = items.slice(from);
-    }
+    }, cache);
+    this.addBridges('road', add);
     return items;
   }
 
@@ -1483,6 +1522,7 @@ export class Renderer {
       const turned = d && d.angle !== cam.angle;
       if (d && (covered || turned) && this.deferView && now - this.movedAt < VIEW_SETTLE) {
         css = `translate(${tx}px, ${ty}px) scale(${k})`;
+        if (turned || k !== 1 || Math.hypot(tx, ty) > SHADE_REST.pan * Math.min(W, H)) this.hideShadows();
         if (turned && !this.turning) this.startTurn();
       } else {
         if (this.turning || turned) this.land();
@@ -1583,7 +1623,6 @@ export class Renderer {
     ground.style.transform = this.sheet(d.angle, a, true);
     ground.style.willChange = 'transform';
     if (this.linesAngle !== a) {
-      this.roadLines = null; // drawn for the old view
       for (const l of LINES) {
         this.ink[l]?.clearErasing();
         this[`render${l[0].toUpperCase()}${l.slice(1)}`]();
@@ -1820,7 +1859,6 @@ export class Renderer {
     for (const el of this.lightCuts) el.removeAttribute('transform');
     this.nightSheet = null;
     if (this.linesAngle !== a) {
-      this.roadLines = null;
       for (const l of LINES) {
         this.ink[l]?.clearErasing();
         this.dirty.add(l);
@@ -2416,7 +2454,7 @@ export class Renderer {
     // (the first sun of all just is; the next ones are drawn in)
     const drawn = this.sunDrawn;
     this.sunDrawn = true;
-    if (drawn && drawEnabled()) this.sweepShadows();
+    if (drawn && drawEnabled() && !this.shadesOff) this.sweepShadows(); // (out of sight while the view moves: they come back as they are)
     // nothing is drawn anew for it (sunFree.js): every shadow at once, from
     // what each object keeps (Renderer.shadeOf) – those of the views kept
     // for a turn as they come back (swapIn) – and the stylesheet that shows
@@ -2565,6 +2603,34 @@ export class Renderer {
   // shadows a copy of their sheet and masks, clipped to what the front
   // has not reached, the new ones clipped to what it has (the objects
   // drawn anew meanwhile go into those). A sweep still going ends at once.
+  // The shadows out of the drawing while the view moves (SHADE_REST)…
+  hideShadows() {
+    if (this.shadesOff) return;
+    this.shadesOff = true;
+    cancelAnimationFrame(this.shadesIn);
+    this.sweep?.end();
+    Object.assign(this.shadeVeil.style, { visibility: 'hidden', opacity: '' });
+  }
+
+  // …and hatched in again once it rests, its detail redrawn (frame).
+  showShadows() {
+    this.shadesOff = false;
+    const veil = this.shadeVeil, { steps, step } = SHADE_REST;
+    veil.style.visibility = '';
+    if (!drawEnabled()) return;
+    const start = performance.now();
+    let shown = -1;
+    const next = () => {
+      const i = Math.min(steps, Math.floor((performance.now() - start) / step) + 1);
+      if (i !== shown) {
+        shown = i;
+        veil.style.opacity = i < steps ? String(i / steps) : '';
+      }
+      if (i < steps) this.shadesIn = requestAnimationFrame(next);
+    };
+    next();
+  }
+
   sweepShadows() {
     this.sweep?.end();
     const veil = this.shadeVeil, h = SUN.hatch;
@@ -3117,9 +3183,12 @@ export class Renderer {
   // budget (TREE_SWAY): only trees on screen, at most `most` of them – a
   // share of those in view, picked by a hash of where each stands so the
   // same ones keep swaying as the view moves – only this close or closer,
-  // and `fps` times a second.
+  // and `fps` times a second. While the view moves they hold still where
+  // they lean: the drawing is moved on the GPU then (placeView), and a
+  // lean would paint it all again.
   swayTrees(time, strength) {
     const S = TREE_SWAY;
+    if (this.turning || performance.now() - this.movedAt < VIEW_SETTLE) return;
     const on = strength > 0 && this.drawn.zoom >= S.minZoom;
     if (!on && this.swayIdle) return;
     if (on && time >= this.swayTime && time - this.swayTime < 1 / S.fps) return;

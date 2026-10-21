@@ -52,7 +52,7 @@ export const CONFIG = {
     // way are made ready, for at most `prepareBudget` ms each frame
     // (Renderer.prepareTurn).
     turnBudget: 12,
-    turnAhead: 12,
+    turnAhead: 5,
     prepareBudget: 8,
     // ...and the meadow's chunks in sight drawn at the angle it has reached,
     // for at most this many ms each frame
