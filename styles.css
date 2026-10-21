@@ -190,11 +190,12 @@ html, body {
   stroke-dasharray: calc(3px * var(--stroke, 1)) calc(4px * var(--stroke, 1));
 }
 
-/* footpaths: two narrow edge lines, like small roads (roadEdges) */
+/* footpaths: two narrow edges in broken strokes, a dirt path not a road
+   (render/dirtPath.js), in the lighter detail pen */
 .footpath {
   fill: none;
   stroke: var(--fg);
-  stroke-width: calc(var(--pen-3) * var(--stroke, 1));
+  stroke-width: calc(var(--pen-2) * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
 }

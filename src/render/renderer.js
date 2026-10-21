@@ -74,6 +74,7 @@ import { zebraCrossings, streetLamp, FURNITURE } from '../roads/furniture.js';
 import { lamp } from '../../structures/kit.js';
 import { networkPolylines } from '../roads/geometry.js';
 import { SegmentIndex } from '../core/geom2d.js';
+import { trodden } from './dirtPath.js';
 import { densify } from './warp.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { ELEVATION, contours } from '../terrain/elevation.js';
@@ -1205,17 +1206,18 @@ export class Renderer {
   // or square or the terrain changes; the bridges are found each time.
   pathItems() {
     const ink = this.inkItems(true);
-    this.groundLines('pathLines', ink, (add) => this.pathPieces(add));
+    this.groundLines('pathLines', ink, (add, addRuns) => this.pathPieces(add, addRuns));
     this.addBridges('path', ink.add);
     return ink.items;
   }
 
-  pathPieces(add) {
+  pathPieces(add, addRuns) {
     const layer = this.world.networks.path;
-    // Footpaths as two narrow edges, like small roads (roadEdges), stopping
-    // where the roadway starts: at a plain road's edge, at a street's kerb
-    // (its sidewalk carries on). Dead ends are closed, but not where a
-    // path runs on into a park or square as its walkway.
+    // Footpaths as two narrow edges (roadEdges), stopping where the
+    // roadway starts: at a plain road's edge, at a street's kerb (its
+    // sidewalk carries on). Drawn as dirt paths are, not kerbs: each edge
+    // in broken strokes that wander in and out (dirtPath.js), and a dead
+    // end left open – the path just peters out.
     const { world } = this;
     const onRoad = roadway(world, this.config.road, this.config.lane);
     const intoSite = (n) => world.coarseAround(n).some((c) => STRUCTURE_TYPES[world.structureAt(c)?.type]?.site);
@@ -1227,7 +1229,12 @@ export class Renderer {
       const j = kind === 'edge' && joinOf(a, b);
       const at = j && layer.pos(j.fine);
       const keep = j ? (q) => !onRoad(q) && Math.hypot(q[0] - at[0], q[1] - at[1]) >= JOIN_REACH - 1e-3 : (q) => !onRoad(q);
-      keepRuns(line, keep).forEach((run, i) => add(`p${key}${i ? `:${i}` : ''}`, 'footpath', run, a, b));
+      if (kind === 'end') continue;
+      keepRuns(line, keep).forEach((run, i) => {
+        const k = `p${key}${i ? `:${i}` : ''}`;
+        if (kind === 'edge' || kind === 'corner') addRuns(k, 'footpath', trodden(run, hashKey(k)), a, b);
+        else add(k, 'footpath', run, a, b);
+      });
     }
   }
 
