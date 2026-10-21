@@ -20,6 +20,7 @@
 //   eachParticle(e, kind, time, env, fn)   the particles alive now
 //   ParticleCanvas   one frame: the emitters in view, under a cap
 
+import { canvasRatio } from './pixels.js';
 import { Follow } from './follow.js';
 import { THEME } from '../theme.js';
 import { PEN } from './agentCanvas.js';
@@ -305,7 +306,7 @@ export class ParticleCanvas {
   // the map's --stroke; `time` simulated seconds; `env` the weather.
   frame(camera, stroke, emitters, time, env = CALM, draw = SMOKE_DRAW) {
     const { canvas, ctx } = this;
-    const dpr = devicePixelRatio || 1;
+    const dpr = canvasRatio();
     const W = innerWidth, H = innerHeight;
     const w = Math.round(W * dpr), h = Math.round(H * dpr);
     const now = performance.now();

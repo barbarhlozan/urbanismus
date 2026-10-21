@@ -4,6 +4,7 @@
 // Not remembered between reloads. Remove it (and its lines in main.js and
 // styles.css) once the performance questions are settled.
 
+import { PIXELS } from '../render/pixels.js';
 import { STYLE } from '../render/style.js';
 import { DRAW } from '../render/draw.js';
 import { DAY, hourAt, stepAt, sunAt, holdDay, goOnDay, dayLength } from '../render/shadows.js';
@@ -44,6 +45,9 @@ export class DebugPanel {
       ['Grid dots', (on) => show(layer('grid'), on)],
       ['Hover tags', (on) => { STYLE.hoverTags = on; }],
       ['Pen animations (build / demolish)', (on) => { DRAW.on = on; }],
+      // the canvases over the map (people, smoke, clouds, rain, shadows,
+      // night) at the screen's own sharpness, or 1 px per css px
+      ['Canvases at the screen’s sharpness (unticked: 1×)', (on) => { PIXELS.most = on ? null : 1; }],
     ];
 
     this.el = document.createElement('div');

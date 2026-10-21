@@ -31,6 +31,7 @@
 // all shade then, and the walls lose their shading instead
 // (config.weather.sun, cover).
 
+import { canvasRatio } from './pixels.js';
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
 import { hatchFrame, hatchTileLines } from './hatch.js';
@@ -312,7 +313,7 @@ export class CloudShadows {
 
   draw(camera, W, H) {
     const { canvas, ctx } = this;
-    const dpr = devicePixelRatio || 1;
+    const dpr = canvasRatio();
     if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
@@ -329,7 +330,7 @@ export class CloudShadows {
     const tone = look === 'pen' ? pen.tone : CLOUD_SHADOWS.tone;
     ctx.strokeStyle = color;
     ctx.lineCap = 'round';
-    ctx.lineWidth = (pen.width * (CONFIG.render.lineWeight ?? 1)) / z;
+    ctx.lineWidth = (pen.width * (CONFIG.render.lineWeight ?? 1)) / z * (dpr / (devicePixelRatio || 1)); // (device px of the screen)
     for (const c of this.clouds) {
       if (c.sprite?.color !== color) this.wash(c, color);
       const { canvas: sp, path, half } = c.sprite;
@@ -353,7 +354,7 @@ export class CloudShadows {
   drawHatch(camera, color) {
     const { ctx } = this, H = CLOUD_SHADOWS.hatch;
     const { hatch, stroke = 1 } = this.paper;
-    const dpr = devicePixelRatio || 1, z = dpr * camera.zoom, px = camera.tile;
+    const dpr = canvasRatio(), z = dpr * camera.zoom, px = camera.tile;
     if (!(z > 0 && px > 0)) return; // (the view not set up yet)
     // the densest tier whose lines are at least H.least apart on the screen
     const gap = hatchFrame(hatch).gap * px * z;
