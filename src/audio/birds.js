@@ -9,13 +9,12 @@
 // the hour), the fewer sing and the longer they wait.
 //
 // The forest: the June forest recording under them, a bed of birds further
-// off, played as stretches from anywhere in it, each faded into the next,
-// now and then the other way round (left for right) and a hair faster or
-// slower.
+// off (bed.js).
+
+import { Bed } from './bed.js';
+import { load } from './sounds.js';
 
 export const BIRDS = {
-  song: 'sounds/birds-olomouc.mp3',
-  forest: 'sounds/forest-june.mp3',
   volume: { song: 0.42, forest: 0.5 },
   // up to this many singers; the next sings only once there are this many
   // more birds (0 … 1)
@@ -31,10 +30,8 @@ export const BIRDS = {
   voice: 0.06,
   pan: 0.85,
   // the forest: stretches this long, faded over `fade` seconds, a hair
-  // faster or slower
-  stretch: [14, 30],
-  fade: 5,
-  drift: 0.02,
+  // faster or slower (bed.js)
+  forest: { stretch: [14, 30], fade: 5, drift: 0.02 },
   // how many birds there are through the day, 0 … 1, by the hour: none
   // at night, the most at dawn, again a little in the evening
   day: [[0, 0], [3.5, 0], [4.25, 0.5], [5, 1], [6.5, 1], [8, 0.75], [11, 0.55], [15, 0.5], [18, 0.65], [19.5, 0.8], [20.75, 0.35], [21.5, 0], [24, 0]],
@@ -64,35 +61,24 @@ export class Birds {
     this.ctx = ctx;
     this.k = 0;
     this.song = null;
-    this.forest = null;
-    this.forestGain = ctx.createGain();
-    this.forestGain.gain.value = 0;
-    this.forestGain.connect(out);
     this.songOut = out;
     this.singers = Array.from({ length: BIRDS.singers }, () => ({ next: 0, left: 0 }));
-    this.forestAt = 0; // when the next stretch begins (ctx time)
-    this.forestFrom = -1; // where in the recording the last began
     this.recent = [];
-    const load = async (path) => {
-      const res = await fetch(new URL(`../../${path}`, import.meta.url));
-      if (!res.ok) throw new Error(`${path}: ${res.status}`);
-      return ctx.decodeAudioData(await res.arrayBuffer());
-    };
-    load(BIRDS.song).then((b) => { this.song = b; }, (err) => console.warn('No birdsong:', err));
-    load(BIRDS.forest).then((b) => { this.forest = b; }, (err) => console.warn('No forest:', err));
+    load(ctx, 'birds').then((b) => { this.song = b; }, (err) => console.warn('No birdsong:', err));
+    this.forest = new Bed(ctx, out, load(ctx, 'forest'), BIRDS.forest);
   }
 
   // How many birds there are now (0 … 1), and the forest's level eased to it.
   level(k, ease) {
     this.k = k;
-    this.forestGain.gain.setTargetAtTime(BIRDS.volume.forest * k, this.ctx.currentTime, ease);
+    this.forest.level(BIRDS.volume.forest * k, ease);
   }
 
   // A few times a second: the songs and the forest's stretches due soon
   // are set going.
   frame() {
     const now = this.ctx.currentTime;
-    if (this.forest && now > this.forestAt - 0.5) this.stretch(Math.max(now, this.forestAt));
+    this.forest.frame();
     if (!this.song) return;
     this.singers.forEach((s, i) => {
       if (now < s.next) return;
@@ -145,39 +131,6 @@ export class Birds {
     src.start(at, from, to - from);
     return length;
   }
-
-  // The forest's next stretch, from ctx time `at`, faded in as the last
-  // fades out.
-  stretch(at) {
-    const ctx = this.ctx, b = this.forest;
-    const rate = 1 + (Math.random() * 2 - 1) * BIRDS.drift;
-    const length = Math.min(between(BIRDS.stretch), (b.duration - 1) / rate);
-    // from anywhere it fits, but not where the last began
-    let from;
-    do from = Math.random() * (b.duration - length * rate);
-    while (this.forestFrom >= 0 && Math.abs(from - this.forestFrom) < 10 && b.duration > 40);
-    this.forestFrom = from;
-    const src = ctx.createBufferSource();
-    src.buffer = b;
-    src.playbackRate.value = rate;
-    const g = ctx.createGain();
-    const fade = BIRDS.fade;
-    g.gain.value = 0;
-    g.gain.setValueCurveAtTime(FADE_IN, at, fade);
-    g.gain.setValueCurveAtTime(FADE_OUT, at + length - fade, fade);
-    let node = src;
-    // now and then the other way round
-    if (Math.random() < 0.5 && b.numberOfChannels === 2) {
-      const split = ctx.createChannelSplitter(2), merge = ctx.createChannelMerger(2);
-      src.connect(split);
-      split.connect(merge, 0, 1);
-      split.connect(merge, 1, 0);
-      node = merge;
-    }
-    node.connect(g).connect(this.forestGain);
-    src.start(at, from, length * rate);
-    this.forestAt = at + length - fade;
-  }
 }
 
 // a perch: where the singer is, how far, its voice
@@ -188,7 +141,3 @@ function perch() {
     rate: 1 + (Math.random() * 2 - 1) * BIRDS.voice,
   };
 }
-
-// the forest's fades: as loud all through (the stretches aren't alike)
-const FADE_IN = Float32Array.from({ length: 64 }, (_, i) => Math.sin((i / 63) * Math.PI / 2));
-const FADE_OUT = FADE_IN.slice().reverse();

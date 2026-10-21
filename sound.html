@@ -18,9 +18,18 @@
 </head>
 <body>
   <h1>Sounds</h1>
-  <p>The birds (src/audio/birds.js), sung from two recordings in a new order each time, as many as the weather and the hour bring. Pick a weather: it goes over to it in a few seconds, the way the game blends one into the next. In the game the same sound follows the weather on its own; <code>cmd.weather('storm')</code> in the console jumps to one.</p>
+  <p>The birds (src/audio/birds.js), sung from two recordings in a new order each time, as many as the weather and the hour bring, and the rain and the wind in the woods (src/audio/bed.js). Below, the pencil and the taps (src/audio/effects.js): each press is another one. Pick a weather: it goes over to it in a few seconds, the way the game blends one into the next. In the game the same sound follows the weather on its own; <code>cmd.weather('storm')</code> in the console jumps to one.</p>
   <div class="row" id="kinds"></div>
   <div class="row"><label>Hour <input id="hour" type="range" min="0" max="24" step="0.25" value="9"> <span id="hourText">9:00</span></label></div>
+  <div class="row" id="tries">
+    <button data-try="house">Build a house</button>
+    <button data-try="road">Draw a road</button>
+    <button data-try="long">A long road</button>
+    <button data-try="look">Another look</button>
+    <button data-try="erase">Pull down</button>
+    <button data-try="tick">Tap (a button)</button>
+    <button data-try="knock">Knock (the Menu)</button>
+  </div>
   <div class="row"><button id="mute">Sound off</button></div>
   <div id="now"></div>
   <script type="module">
@@ -55,6 +64,21 @@
       mute.textContent = ambience.on ? 'Sound off' : 'Sound on';
     });
 
+    // the pencil and the taps, with made-up steps of the history (core/history.js)
+    const steps = {
+      house: { structures: [{ before: null, after: '{}' }], edges: {} },
+      road: { structures: [], edges: { road: { added: Array(8), removed: [] } } },
+      long: { structures: [], edges: { road: { added: Array(30), removed: [] } } },
+      look: { structures: [{ before: '{}', after: '{}' }], edges: {} },
+      erase: { structures: [{ before: '{}', after: null }], edges: {} },
+    };
+    document.getElementById('tries').addEventListener('click', (e) => {
+      const what = e.target.closest('button')?.dataset.try;
+      if (!what) return;
+      if (!ambience.on) ambience.set(true);
+      if (steps[what]) ambience.built(steps[what]);
+      else ambience.tap(what === 'knock', e.clientX / innerWidth);
+    });
     const hourEl = document.getElementById('hour'), hourText = document.getElementById('hourText');
     const showHour = () => { const h = +hourEl.value; hourText.textContent = `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`; };
     hourEl.addEventListener('input', showHour);

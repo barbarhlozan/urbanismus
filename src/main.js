@@ -22,6 +22,7 @@ import { GrowthSystem } from './sim/growth.js';
 import { SimClock } from './sim/clock.js';
 import { WeatherSystem, mistRisen } from './sim/weather.js';
 import { Ambience } from './audio/ambience.js';
+import { SOUNDS, LICENCES, sourceOf } from './audio/sounds.js';
 import { RainCanvas } from './render/rain.js';
 import { CloudShadows } from './render/cloudShadows.js';
 import { ParkingSystem } from './sim/parking.js';
@@ -251,6 +252,7 @@ const actions = {
   import: () => importCity(),
   fullscreen: () => toggleFullscreen(),
   sound: () => ambience.toggle(),
+  credits: () => showCredits(),
   chronicle: () => { if (UNLOCKS.allowsControl('chronicle')) chronicleBook.toggle(); },
   language: () => switchLanguage(Object.keys(LANGUAGES).find((code) => code !== language())),
 };
@@ -399,6 +401,26 @@ story.onScheme = () => colorMenu.refresh();
   document.addEventListener('fullscreenchange', show);
   document.addEventListener('webkitfullscreenchange', show);
 }
+// The sound of the buttons (a tap of wood; a knock for opening the Menu and
+// folding the Build menu), and of building: the pencil (audio/ambience.js).
+uiRoot.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (btn && !btn.disabled) ambience.tap(btn.matches('.menu-toggle, .bm-fold'), e.clientX / innerWidth);
+}, true);
+world.history.onStep((step) => ambience.built(step));
+
+// Who made what the game uses (the Menu's Credits, under the imprint): the
+// recordings, each with its author, its name on Freesound and its licence.
+function showCredits() {
+  const at = uiRoot.querySelector('.controls .imprint').getBoundingClientRect();
+  const esc = (v) => String(v).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const link = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
+  const sounds = Object.values(SOUNDS).map((s) => ({
+    block: `<span class="credit"><b>${esc(t(s.what))}</b><span>${link(sourceOf(s), s.title)}, ${esc(s.author)}, ${link(LICENCES[s.licence], s.licence)}</span></span>`,
+  }));
+  popup.show(at.left, at.top, t('credits'), [{ section: t('credits.sounds') }, ...sounds]);
+}
+
 // the Sound button: its icon and name following whether there is sound
 {
   const btn = uiRoot.querySelector('[data-act="sound"]');

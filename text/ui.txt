@@ -76,6 +76,39 @@ control.language
   cs: Jazyk
   en: Language
 
+# the Credits, under the imprint in the Menu: who made the recordings
+credits
+  cs: Poděkování
+  en: Credits
+
+credits.sounds
+  cs: Zvuky
+  en: Sounds
+
+credits.birds
+  cs: Zpěv ptáka v Olomouci
+  en: A bird singing in Olomouc
+
+credits.forest
+  cs: Český les v červnu
+  en: A Czech forest in June
+
+credits.rain
+  cs: Jarní déšť v lesích severních Čech
+  en: Spring rain in the woods of northern Bohemia
+
+credits.pencil
+  cs: Tužka na papíře, když se staví
+  en: A pencil on paper, when building
+
+credits.wood
+  cs: Ťuknutí do dřeva, tlačítka
+  en: A tap of wood, the buttons
+
+credits.knock
+  cs: Klepnutí do dřevěné desky, větší tlačítka
+  en: A knock on a wooden panel, the bigger buttons
+
 # the Sound button names what it will do
 sound.on
   cs: Zapnout zvuk

@@ -70,6 +70,7 @@ export class History {
     this.applying = false; // an undo or redo is being put in
     this.asides = 0;
     this.listeners = new Set();
+    this.steps = new Set();
   }
 
   get canUndo() {
@@ -90,6 +91,13 @@ export class History {
     this.listeners.forEach((fn) => fn(this));
   }
 
+  // fn(step) whenever the player has done something (not on undo or redo):
+  // the step as diff() makes it (the pencil's sound, audio/ambience.js).
+  onStep(fn) {
+    this.steps.add(fn);
+    return () => this.steps.delete(fn);
+  }
+
   // World is about to change the town.
   touch() {
     if (this.applying || this.asides || this.open) return;
@@ -108,6 +116,7 @@ export class History {
     if (this.done.length > LIMIT) this.done.shift();
     this.undone = [];
     this.notify();
+    this.steps.forEach((fn) => fn(step));
   }
 
   // The town's own doing: changes made in fn() aren't recorded.

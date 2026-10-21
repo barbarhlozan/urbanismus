@@ -90,7 +90,7 @@ export class Hud {
         ${control('sound', t('sound.off'), t('sound.off'))}
         ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
         ${control('language', `${t('control.language')}: ${LANGUAGES[otherLanguage()]}`, LANGUAGES[otherLanguage()], `flag${otherLanguage()}`)}
-        <span class="imprint"><span>${CONFIG.app.name} v${CONFIG.app.version}</span> <span>${CONFIG.app.author}</span></span>
+        <span class="imprint"><span>${CONFIG.app.name} v${CONFIG.app.version}</span> <span>${CONFIG.app.author}</span> <button data-act="credits" class="credits-link">${t('credits')}</button></span>
         <button class="close menu-toggle" aria-expanded="true">${menuButtonIcon()}</button>
       </div>
       <button class="north-box" title="${t('north.up')}" aria-label="${t('north.up')}"><span class="north-art"></span></button>`);

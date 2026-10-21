@@ -630,6 +630,14 @@ body:not(.touch) .controls button:hover > .label, .controls button.telling > .la
 }
 /* (in the column: the name and version over the author) */
 .controls .imprint span { display: block; }
+/* who made the sounds: a word under the imprint, underlined like a name on the map */
+#ui .controls .imprint .credits-link { display: block; margin: 3px 0 0 auto; padding: 0; min-height: 0; border: 0; background: none; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+#ui .controls .imprint .credits-link:hover { color: var(--main); }
+/* the Credits: each recording, what it is over where it's from */
+.popup-block .credit { display: flex; flex-direction: column; gap: 1px; text-align: left; align-self: stretch; }
+.popup-block .credit b { font-weight: 600; }
+.popup-block .credit span { color: var(--detail); font-size: 11px; }
+.popup-block .credit a { color: inherit; }
 
 /* (#ui: over the .close look) the mark stays put as the menu opens */
 #ui .controls .menu-toggle { order: -1; align-self: flex-end; min-height: var(--bar-h); width: var(--bar-h); min-width: 0; padding: 0; margin-right: -4px; justify-content: center; }
