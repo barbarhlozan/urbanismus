@@ -23,10 +23,10 @@ import { mulberry32 } from '../core/random.js';
 import { smoothLine } from '../core/geom2d.js';
 
 const SWAY = 0.2;       // how far the wave swings either way (grid units, before the fit)
-const WAVES = [4.2, 2.6]; // its two swells' lengths (grid units)
+const WAVES = [3, 2];   // its two swells' lengths (grid units): a turn every step or so
 const GROUND = 0.018;   // grid units aside per metre-per-step of rise across the path
-const RAMP = 1;         // grid units over which each end eases into it
-const STIFF = 1.5;      // how hard the fit resists bending
+const RAMP = 0.75;      // grid units over which each end eases into it
+const STIFF = 0.4;      // how hard the fit resists bending (enough to even out a staircase)
 const MAX_SHIFT = 0.26; // grid units: no dot moved further
 
 // Map dense dot -> [x, y] for the footpaths' dots that move.
@@ -75,7 +75,7 @@ function meander(world, nodes, free, height) {
   if (length < 2 * RAMP) return [];
 
   const rand = mulberry32((world.seed ^ Math.imul(nodes[0], 2654435761) ^ Math.imul(nodes[nodes.length - 1], 40503)) >>> 0);
-  const swells = WAVES.map((l, k) => ({ l: l * (0.8 + 0.4 * rand()), phase: rand() * Math.PI * 2, size: k ? 0.4 : 0.75 }));
+  const swells = WAVES.map((l, k) => ({ l: l * (0.8 + 0.4 * rand()), phase: rand() * Math.PI * 2, size: k ? 0.55 : 0.7 }));
   const sideOf = (i) => {
     const [px, py] = dots[Math.max(0, i - 1)], [qx, qy] = dots[Math.min(dots.length - 1, i + 1)];
     const l = Math.hypot(qx - px, qy - py) || 1;
