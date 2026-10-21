@@ -16,6 +16,12 @@
 
 import { THEME } from '../theme.js';
 import { hatchFrame, hatchTileLines, hash } from './hatch.js';
+import { Follow } from './follow.js';
+
+// The night drawn on twos (`fps` a second) and moved with the map between
+// (follow.js), on a canvas reaching `margin` css px past the window's edges
+// so that moved it still covers it; its grey in steps of `grey`.
+const NIGHT = { fps: 12, margin: 96, grey: 0.02 };
 
 // The ragged edge of a light, as the night's masks have it (styles.css
 // mask .light): a dashed line round it, rubbing a little further out in
@@ -80,14 +86,16 @@ export class NightCanvas {
   // (sweep).
   draw(camera, { grey = 0, colour, tier = -1, reveal = [1, 0, 0], hatch, px, stroke, lights = null, sheet = null, beams = [], cover = null }) {
     const { canvas, ctx } = this;
-    const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
-    const w = Math.round(W * dpr), h = Math.round(H * dpr);
+    const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight, M = NIGHT.margin;
+    const w = Math.round((W + 2 * M) * dpr), h = Math.round((H + 2 * M) * dpr);
+    const follow = (this.follow ??= new Follow(canvas, NIGHT.fps));
     let resized = false;
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
-      canvas.style.width = `${W}px`;
-      canvas.style.height = `${H}px`;
+      // the window and a margin round it, so that moved with the map
+      // between its drawings (follow.js) it still covers the window
+      Object.assign(canvas.style, { left: `${-M}px`, top: `${-M}px`, width: `${W + 2 * M}px`, height: `${H + 2 * M}px`, transformOrigin: `${M}px ${M}px` });
       this.empty = true;
       resized = true;
     }
@@ -99,11 +107,19 @@ export class NightCanvas {
         this.empty = true;
       }
       this.last = null;
+      follow.set('');
+      follow.view = null;
       return;
     }
-    const view = new DOMMatrix([dpr * camera.zoom, 0, 0, dpr * camera.zoom, dpr * camera.panX, dpr * camera.panY]);
+    // drawn on twos (NIGHT.fps), and between moved with the map, as long as
+    // that still covers the window
+    if (!resized && !this.empty && !follow.due(camera) && this.covers(follow, camera, W, H, M)) return follow.place(camera);
+    follow.drawn(camera);
+    grey = Math.round(grey / NIGHT.grey) * NIGHT.grey; // (in steps)
+    const view = new DOMMatrix([dpr * camera.zoom, 0, 0, dpr * camera.zoom, dpr * (camera.panX + M), dpr * (camera.panY + M)]);
     const lightsAt = lights ? (sheet ? view.multiply(sheet) : view) : null;
-    const state = { grey: Math.round(grey * 1000), colour, tier, reveal: reveal.map((r) => Math.round(r * 1000)).join(), hatch, px, stroke, lights, view: view.toString(), lightsAt: lightsAt?.toString(), cover };
+    const look = { grey, colour, tier, reveal: reveal.map((r) => Math.round(r * 1000)).join(), hatch, px, stroke, view: view.toString(), w, h };
+    const state = { look: JSON.stringify(look), lights, lightsAt: lightsAt?.toString(), cover };
     // the beams as window boxes, padded for their ragged edges
     const boxes = beams.map((poly) => {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -119,6 +135,10 @@ export class NightCanvas {
     const regions = same ? [...this.last.boxes, ...boxes] : null;
     this.last = { state, boxes };
     this.empty = false;
+    // the grey and the strokes, kept on a sheet of their own until they or
+    // the view change: what is drawn each time is that sheet with the
+    // lights rubbed out of it
+    const paper = this.paper(view, look, camera, { grey, colour, tier, reveal, hatch, px, stroke, w, h, dpr });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     if (regions) {
@@ -129,31 +149,7 @@ export class NightCanvas {
       ctx.clip();
     }
     ctx.clearRect(0, 0, w, h);
-    if (grey > 0.002) {
-      ctx.globalAlpha = grey;
-      ctx.fillStyle = colour;
-      ctx.fillRect(0, 0, w, h);
-      ctx.globalAlpha = 1;
-    }
-    if (tier >= 0 && hatch) {
-      const t = this.tileFor(tier, hatch, px, stroke, dpr * camera.zoom);
-      // the pattern's own px -> scene px (turned to the lines' angle) -> the window
-      const gap = hatchFrame(hatch).gap * px;
-      const lay = (angle, along, across, r, seed) => {
-        if (r <= 0) return;
-        if (r < 1) {
-          ctx.save();
-          sweep(ctx, w, h, angle, r, seed);
-        }
-        t.pattern.setTransform(view.rotate(angle).translate(along, across).scale(1 / t.scale));
-        ctx.fillStyle = t.pattern;
-        ctx.fillRect(0, 0, w, h);
-        if (r < 1) ctx.restore();
-      };
-      lay(hatch.angle, 0, 0, reveal[0], 1);
-      lay(hatch.angle, 3.7 * px, gap / 2, reveal[1], 2);
-      lay(hatch.angle + CROSS, 1.3 * px, gap / 3, reveal[2], 3);
-    }
+    ctx.drawImage(paper, 0, 0);
     // the lights rubbed out of it, edges ragged
     const cut = (path, m, c = ctx) => {
       c.setTransform(m);
@@ -169,7 +165,7 @@ export class NightCanvas {
       // when the objects, their lights or the view change – not as the
       // night's strokes are hatched in)
       const m = this.mask?.width === w && this.mask?.height === h ? this.mask : (this.mask = new OffscreenCanvas(w, h));
-      const maskKey = `${state.view}|${w}|${h}`;
+      const maskKey = `${look.view}|${w}|${h}`;
       if (this.maskOf !== cover || this.maskKey !== maskKey) {
         this.maskOf = cover;
         this.maskKey = maskKey;
@@ -210,11 +206,58 @@ export class NightCanvas {
     if (regions) ctx.restore();
   }
 
+  // Does the last drawing, moved with the map (follow.js), still cover the
+  // window? It reaches M css px past each edge.
+  covers(follow, camera, W, H, M) {
+    const v = follow.view;
+    if (!v) return false;
+    const k = camera.zoom / v.zoom, tx = camera.panX - k * v.panX, ty = camera.panY - k * v.panY;
+    return -M * k + tx <= 0 && (W + M) * k + tx >= W && -M * k + ty <= 0 && (H + M) * k + ty >= H;
+  }
+
+  // The grey and the paper's strokes for `look` (its `key`), drawn on a
+  // canvas of their own when they change.
+  paper(view, look, camera, { grey, colour, tier, reveal, hatch, px, stroke, w, h, dpr }) {
+    const key = JSON.stringify(look);
+    const c = this.sheet?.width === w && this.sheet?.height === h ? this.sheet : (this.sheet = new OffscreenCanvas(w, h));
+    if (this.sheetKey === key) return c;
+    this.sheetKey = key;
+    const ctx = c.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    if (grey > 0.002) {
+      ctx.globalAlpha = grey;
+      ctx.fillStyle = colour;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = 1;
+    }
+    if (tier >= 0 && hatch) {
+      const t = this.tileFor(tier, hatch, px, stroke, dpr * camera.zoom, ctx);
+      // the pattern's own px -> scene px (turned to the lines' angle) -> the window
+      const gap = hatchFrame(hatch).gap * px;
+      const lay = (angle, along, across, r, seed) => {
+        if (r <= 0) return;
+        if (r < 1) {
+          ctx.save();
+          sweep(ctx, w, h, angle, r, seed);
+        }
+        t.pattern.setTransform(view.rotate(angle).translate(along, across).scale(1 / t.scale));
+        ctx.fillStyle = t.pattern;
+        ctx.fillRect(0, 0, w, h);
+        if (r < 1) ctx.restore();
+      };
+      lay(hatch.angle, 0, 0, reveal[0], 1);
+      lay(hatch.angle, 3.7 * px, gap / 2, reveal[1], 2);
+      lay(hatch.angle + CROSS, 1.3 * px, gap / 3, reveal[2], 3);
+    }
+    return c;
+  }
+
   // The paper's strokes as a pattern, drawn at `scale` window px to a scene
   // px (in steps of a quarter of a doubling, so zooming redraws it only now
   // and then), with the pen the night's lines have (--pen-1 times --stroke,
   // as every hatch line's).
-  tileFor(tier, hatch, px, stroke, scale) {
+  tileFor(tier, hatch, px, stroke, scale, on = this.ctx) {
     const q = 2 ** (Math.round(Math.log2(scale) * 4) / 4);
     const pen = this.pen ??= parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pen-1')) || 0.5;
     const key = `${tier}|${JSON.stringify(hatch)}|${px}|${stroke}|${q}|${THEME.palette.detail}`;
@@ -227,7 +270,7 @@ export class NightCanvas {
     c.lineWidth = pen * stroke;
     c.lineCap = c.lineJoin = 'round';
     c.stroke(new Path2D(d));
-    this.tile = { key, pattern: this.ctx.createPattern(off, 'repeat'), scale: n / size };
+    this.tile = { key, pattern: on.createPattern(off, 'repeat'), scale: n / size };
     return this.tile;
   }
 }
