@@ -372,6 +372,12 @@ mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3
 .lv1 .d2, .lv2 .d1, .lv2 .d2 { display: none; }
 /* …and once a turn of the view has gone far enough (Renderer.goBare) */
 .bare .d2 { display: none; }
+/* …and while the view moves, the map in draft (Renderer.goDraft): no
+   meadow tufts, parked cars or fine detail */
+svg.draft .layer-meadow,
+svg.draft .layer-parked,
+svg.draft .layer-objects .d2,
+svg.draft .layer-lots .d2 { display: none; }
 
 /* Road marks (render/roadMarks.js): a pencil note at a building nothing
    reaches. Quiet always, in the detail pen; firmer while a build or road

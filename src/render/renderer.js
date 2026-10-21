@@ -180,12 +180,15 @@ const INK_STEP = 0.1;
 const INK_EVERY = 500;
 const WINDOWS_BY = 0.06;
 const SHADE_SWEEP = 1600;
-// While the view moves the shadows are left out (hideShadows): any move
-// that has the browser draw the map again – a zoom, a turn, a pan further
-// than `pan` of the window – would redraw them through their masks every
-// frame, the dearest thing on the map. Once it rests and its detail is
-// back, they are hatched in again in `steps`, `step` ms apart.
-const SHADE_REST = { pan: 0.12, steps: 3, step: 80 };
+// While the view moves the map is drawn in draft (goDraft): any move that
+// has the browser draw it again – a zoom, a turn, a pan further than `pan`
+// of the window – leaves out the meadow's tufts, the parked cars and the
+// buildings' and gardens' fine detail (styles.css, svg.draft), and the
+// objects' shadows, redrawn through their mask the dearest thing on the map
+// (the hills' stay: they lie over whole slopes). Once it rests the detail
+// is back; the shadows wait until what the zoom redraws is drawn (frame),
+// then are hatched in in `steps`, `step` ms apart.
+const DRAFT = { pan: 0.12, steps: 3, step: 80 };
 const SWEEP_STEPS = 6; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -288,6 +291,8 @@ export class Renderer {
     this.rebuildQueue = new Set(); // object keys to redraw for a new level of detail (rebandObjects)
     this.rebuildOrder = null; // the same, nearest the middle last, once the view has settled (frame)
     this.rebuildCost = 1;     // ms that redrawing one of them took lately (frame)
+    this.landing = new Set();   // object keys a turn rested on before they were drawn there (landFrame)
+    this.landingOrder = null;
     this.hiddenKinds = new Set(); // TEMPORARY (debug panel): objects hidden by key letter, 's' buildings, 'f' trees, 'k' street lamps…
     this.contours = STYLE.contours;
     this.meadow = new Map();        // chunk key 'cx,cy' -> { g, box, svg, shown }
@@ -584,7 +589,7 @@ export class Renderer {
       // a new level of detail: the objects in sight, as many as fit in
       // config.render.rebuildBudget ms by what they took so far (rebandObjects),
       // once the view has settled – each batch repaints the whole objects layer
-      let batch = 0;
+      let batch = this.landFrame();
       if (this.rebuildQueue.size && !this.objsAll && performance.now() - this.movedAt > VIEW_SETTLE) {
         this.rebuildOrder ??= this.nearestLast(this.rebuildQueue);
         const n = Math.max(1, Math.floor(this.config.render.rebuildBudget / this.rebuildCost));
@@ -608,6 +613,7 @@ export class Renderer {
       }
       if (this.objsPlace) this.placeObjects();
       this.prepareTurn();
+      if (this.drafting && performance.now() - this.movedAt > VIEW_SETTLE) this.endDraft();
       if (this.shadesOff && !this.rebuildQueue.size && performance.now() - this.movedAt > VIEW_SETTLE) this.showShadows();
     }
     if (this.ghosts.size) this.reapGhosts();
@@ -1522,7 +1528,7 @@ export class Renderer {
       const turned = d && d.angle !== cam.angle;
       if (d && (covered || turned) && this.deferView && now - this.movedAt < VIEW_SETTLE) {
         css = `translate(${tx}px, ${ty}px) scale(${k})`;
-        if (turned || k !== 1 || Math.hypot(tx, ty) > SHADE_REST.pan * Math.min(W, H)) this.hideShadows();
+        if (turned || k !== 1 || Math.hypot(tx, ty) > DRAFT.pan * Math.min(W, H)) this.goDraft();
         if (turned && !this.turning) this.startTurn();
       } else {
         if (this.turning || turned) this.land();
@@ -1578,6 +1584,8 @@ export class Renderer {
   // is) wait for it to end, and what is being erased goes at once.
   startTurn() {
     this.turning = true;
+    this.landing.clear(); // (still behind: the turn draws them, turnFrame)
+    this.landingOrder = null;
     this.sweep?.end(); // (the shadows as they are now)
     this.renderLights(); // (the lamps' alone, turning as a sheet; the windows' once the view rests)
     this.layers.overlay.style.visibility = 'hidden';
@@ -1627,7 +1635,7 @@ export class Renderer {
         this.ink[l]?.clearErasing();
         this[`render${l[0].toUpperCase()}${l.slice(1)}`]();
       }
-      this.renderParked();
+      if (!this.drafting) this.renderParked(); // (left out of a draft, drawn once it rests: land)
       this.linesAngle = a;
     }
     // (changed meanwhile: its views are old, and it is drawn anew once at rest)
@@ -1686,7 +1694,8 @@ export class Renderer {
     // the meadow: each chunk in sight turned as a sheet from where it was
     // drawn (its tufts lean a little meanwhile), and drawn at this angle,
     // the furthest behind first, for config.render.turnMeadow ms
-    const chunks = [...this.meadow.entries()].filter(([, c]) => c.shown && c.angle !== a);
+    // (left out of a draft: drawn once it rests, land)
+    const chunks = this.drafting ? [] : [...this.meadow.entries()].filter(([, c]) => c.shown && c.angle !== a);
     const off = (c) => Math.abs(Math.sin(((c.angle ?? this.drawn.angle) - a) / 2));
     chunks.sort((p, q) => off(q[1]) - off(p[1]));
     const m0 = performance.now();
@@ -1837,6 +1846,41 @@ export class Renderer {
   // step (so what was shown last is what stays), or drawn anew. What
   // shows bare (goBare) is drawn whole again, from the middle of the view
   // out (the rebuild queue in frame()), the pen putting the detail back.
+  // What a turn rested on before it was drawn at that step (land): as many
+  // as config.render.turnBudget allows by what they took so far, from the
+  // middle out, each drawn anew while what it showed fades out over it,
+  // where it showed it, rather than jumping. How many went to the redraw.
+  landFrame() {
+    if (!this.landing.size || this.objsAll) return 0;
+    this.landingOrder ??= this.nearestLast(this.landing);
+    const a = this.camera.angle, n = Math.max(1, Math.floor(this.config.render.turnBudget / this.rebuildCost));
+    let batch = 0;
+    while (batch < n && this.landingOrder.length) {
+      const key = this.landingOrder.pop();
+      this.landing.delete(key);
+      const e = this.objs.get(key);
+      if (!e || e.shown === false || e.angle === a || this.objsDirty.has(key)) continue;
+      this.objsDirty.add(key);
+      this.viewOnly.add(key);
+      if (e.slid && drawEnabled()) {
+        for (const g of ['g', 'lg', 'sg']) {
+          const old = e[g];
+          if (!old.parentNode) continue;
+          e[g] = old.parentNode.insertBefore(document.createElementNS(SVGNS, 'g'), old);
+          old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SETTLE_FADE, easing: 'ease-out', fill: 'forwards' }).finished.then(() => old.remove(), () => old.remove());
+        }
+      } else if (e.slid) {
+        e.slideT = '';
+        this.placeGroups(e);
+      }
+      e.slid = false;
+      if (e.hidBare) for (const g of [e.g, e.lg]) g.classList.remove('bare');
+      e.hidBare = '';
+      batch++;
+    }
+    return batch;
+  }
+
   land() {
     const bare = this.bare;
     this.turning = this.bare = false;
@@ -1881,20 +1925,12 @@ export class Renderer {
       if (view) this.swapIn(e, view);
       else if (e.angle !== a) {
         e.stale = true;
+        // not drawn here yet: drawn a few a frame, from the middle out,
+        // showing meanwhile what it showed mid-turn (landFrame)
         if (e.shown !== false && !this.objsDirty.has(e.key)) {
-          this.objsDirty.add(e.key);
-          this.viewOnly.add(e.key);
-          // not drawn here yet: drawn now, and what it showed fades out
-          // over it, where it showed it, rather than jumping
-          if (e.slid && drawEnabled()) {
-            for (const n of ['g', 'lg', 'sg']) {
-              const old = e[n];
-              if (!old.parentNode) continue;
-              e[n] = old.parentNode.insertBefore(document.createElementNS(SVGNS, 'g'), old);
-              old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SETTLE_FADE, easing: 'ease-out', fill: 'forwards' }).finished.then(() => old.remove(), () => old.remove());
-            }
-            e.slid = false;
-          }
+          this.landing.add(e.key);
+          this.landingOrder = null;
+          continue;
         }
       }
       if (e.slid) {
@@ -2603,20 +2639,34 @@ export class Renderer {
   // shadows a copy of their sheet and masks, clipped to what the front
   // has not reached, the new ones clipped to what it has (the objects
   // drawn anew meanwhile go into those). A sweep still going ends at once.
-  // The shadows out of the drawing while the view moves (SHADE_REST)…
+  // The map in draft while the view moves (DRAFT)…
+  goDraft() {
+    if (this.drafting) return;
+    this.drafting = true;
+    for (const svg of [this.svg, this.top]) svg.classList.add('draft');
+    this.hideShadows();
+  }
+
+  // …its detail back as soon as it rests.
+  endDraft() {
+    this.drafting = false;
+    for (const svg of [this.svg, this.top]) svg.classList.remove('draft');
+  }
+
   hideShadows() {
     if (this.shadesOff) return;
     this.shadesOff = true;
     cancelAnimationFrame(this.shadesIn);
     this.sweep?.end();
-    Object.assign(this.shadeVeil.style, { visibility: 'hidden', opacity: '' });
+    Object.assign(this.layers.shadows.style, { display: 'none', opacity: '' });
   }
 
-  // …and hatched in again once it rests, its detail redrawn (frame).
+  // The shadows hatched in again once the view rests and what it redraws
+  // is drawn (frame).
   showShadows() {
     this.shadesOff = false;
-    const veil = this.shadeVeil, { steps, step } = SHADE_REST;
-    veil.style.visibility = '';
+    const shapes = this.layers.shadows, { steps, step } = DRAFT;
+    shapes.style.display = '';
     if (!drawEnabled()) return;
     const start = performance.now();
     let shown = -1;
@@ -2624,7 +2674,7 @@ export class Renderer {
       const i = Math.min(steps, Math.floor((performance.now() - start) / step) + 1);
       if (i !== shown) {
         shown = i;
-        veil.style.opacity = i < steps ? String(i / steps) : '';
+        shapes.style.opacity = i < steps ? String(i / steps) : '';
       }
       if (i < steps) this.shadesIn = requestAnimationFrame(next);
     };

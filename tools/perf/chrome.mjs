@@ -24,13 +24,16 @@ function chromePath() {
   throw new Error('No Chrome for Testing found: run `npx playwright install chromium`, or set $CHROME');
 }
 
-export async function launch({ port = 9333, width = 1440, height = 900, dpr = 2 } = {}) {
+// `cpu`: the page drawn without the GPU, as a stand-in for a browser that
+// rasters SVG on the CPU (Firefox does, in tiles).
+export async function launch({ port = 9333, width = 1440, height = 900, dpr = 2, cpu = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'dedina-perf-'));
   const proc = spawn(chromePath(), [
     '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`,
     '--no-first-run', '--no-default-browser-check', `--window-size=${width},${height}`,
     '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
-    '--disable-backgrounding-occluded-windows', '--enable-precise-memory-info', 'about:blank',
+    '--disable-backgrounding-occluded-windows', '--enable-precise-memory-info',
+    ...(cpu ? ['--disable-gpu', '--disable-gpu-rasterization', '--disable-gpu-compositing'] : []), 'about:blank',
   ], { stdio: 'ignore', detached: true }); // (its own process group: closed whole, helpers too)
   const kill = () => { try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* gone */ } };
   process.on('exit', kill);

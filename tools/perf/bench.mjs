@@ -8,12 +8,15 @@
 // Options: --only idle,pan,… (scenarios), --dpr 2, --port 9333,
 // --origin http://localhost:8173 (the dev server; if none answers there,
 // serve.py is started on a port of its own),
-// --setup '<js>' (run before measuring, R is the renderer), --json.
+// --setup '<js>' (run before measuring, R is the renderer), --json,
+// --cpu (drawn without the GPU, as Firefox rasters SVG).
 import { launch, openTown, trace, costs } from './chrome.mjs';
 
 const VARIANTS = {
   base: '',
   noShadows: `document.querySelectorAll('.shade-veil').forEach((e) => (e.style.display = 'none'))`,
+  noObjectShadows: `document.querySelector('.shade-shapes').style.display = 'none'`,
+  noHillShade: `document.querySelector('.hill-shapes').style.display = 'none'`,
   noSway: `(await import('/src/render/renderer.js')).TREE_SWAY.most = 0`,
   noAgents: `R.showAgents = false`,
   noCanvases: `document.querySelectorAll('canvas').forEach((e) => (e.style.display = 'none')); R.showAgents = false`,
@@ -22,6 +25,8 @@ const VARIANTS = {
   noMeadow: `R.layers.meadow.style.display = 'none'`,
   noTrees: `R.hiddenKinds.add('f'); R.layers.forest.style.display = 'none'; R.cull()`,
   noBuildings: `R.hiddenKinds.add('s'); R.cull()`,
+  // all the time, what the view leaves out while it moves
+  draft: `document.head.insertAdjacentHTML('beforeend', '<style>.layer-meadow, .layer-parked, .layer-objects .d2, .layer-lots .d2, .shade-veil { display: none !important }</style>')`,
 };
 
 // name: [what to do each frame (cam, i, R), ms, what to count each frame]
@@ -47,6 +52,7 @@ const port = Number(opt('--port', 9333));
 const origin = opt('--origin', 'http://localhost:8173');
 const setup = opt('--setup', '');
 const json = argv.includes('--json') && argv.splice(argv.indexOf('--json'), 1);
+const cpu = argv.includes('--cpu') && argv.splice(argv.indexOf('--cpu'), 1);
 const [town, ...variants] = argv;
 if (!town) {
   console.log(`usage: node tools/perf/bench.mjs <town.json> [${Object.keys(VARIANTS).join('|')}…] [--only ${Object.keys(SCENARIOS).join(',')}]`);
@@ -101,7 +107,7 @@ const rows = [];
 const add = (r) => { rows.push(r); show(r); };
 for (const variant of variants.length ? variants : ['base']) {
   if (!(variant in VARIANTS)) throw new Error(`no variant ${variant}: ${Object.keys(VARIANTS).join(', ')}`);
-  const b = await launch({ port, dpr });
+  const b = await launch({ port, dpr, cpu: !!cpu });
   const limit = setTimeout(() => { console.error(`${variant}: no result in 5 minutes, given up`); process.exit(2); }, 300000);
   try {
     await openTown(b, { town, origin });
