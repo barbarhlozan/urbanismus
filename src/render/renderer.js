@@ -60,6 +60,7 @@ import { ShadeCanvas } from './shadeCanvas.js';
 import { GLLines } from './gl/lines.js';
 import { GLMovers } from './gl/movers.js';
 import { GLShadows } from './gl/shadows.js';
+import { GLNight } from './gl/night.js';
 import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
@@ -178,6 +179,7 @@ const hashKey = (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)
 // night keep at each level of detail: every line close up (3), every other
 // further out, every 4th far out.
 const SHADE_TIERS = [3, 2, 1];
+const NO_COVER = []; // (the objects' night while the view turns: none)
 // Seconds the night's strokes take to be hatched in, a set at a time
 // (renderNightCanvases); a share of the windows going out (or coming on)
 // each second; ms the shadows take to be drawn anew as the sun moves
@@ -1488,6 +1490,33 @@ export class Renderer {
     return true;
   }
 
+  // The night drawn with WebGL (gl/night.js) instead of on its 2D canvases,
+  // or not (the Debug panel): on the ground over the map's drawing (the
+  // last in its wrapper), over the objects (the last in theirs).
+  setGlNight(on) {
+    const twoD = [this.nightPen.canvas, this.nightTop.canvas];
+    if (on && !this.glNight) {
+      const pens = ['view', 'view-top'].map((id) => {
+        const canvas = document.createElement('canvas');
+        Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' });
+        document.getElementById(id).append(canvas);
+        return GLNight.make(canvas);
+      });
+      if (pens.some((p) => !p)) {
+        for (const p of pens) p?.canvas.remove();
+        return false;
+      }
+      this.glNight = pens;
+      for (const c of twoD) c.style.display = 'none';
+    } else if (!on && this.glNight) {
+      for (const p of this.glNight) p.canvas.remove();
+      this.glNight = null;
+      for (const c of twoD) c.style.display = '';
+      this.nightPen.last = this.nightTop.last = null;
+    }
+    return true;
+  }
+
   // The WebGL lines for the view the map's SVGs are drawn at (their wrapper
   // with its overscan: placeView) at the angle the view has reached – as
   // the SVG lines are drawn mid-turn.
@@ -2742,13 +2771,16 @@ export class Renderer {
     const lit = this.dark && !turning ? Math.round((this.litShown ?? this.litShare ?? 0) * 100) : 0;
     this.litDrawn = Math.round((this.litShown ?? this.litShare ?? 0) * 100);
     const parts = []; // [light?, path data], in order
+    const each = []; // (the same, one shape each: the GPU's, gl/night.js)
     const add = (light, d) => {
       if (!d) return;
+      each.push([light, d]);
       const last = parts[parts.length - 1];
       if (last && last[0] === light) last[1] += d;
       else parts.push([light, d]);
     };
     let pools = '', spills = '';
+    const ground = []; // (the pools and spills one by one, for the GPU)
     const view = `${this.camera.angle}|${px}`;
     for (const e of turning ? this.objs.values() : this.order) {
       const lamp = this.lampsOn && e.key?.[0] === 'k' && e.at?.points?.[0];
@@ -2760,6 +2792,7 @@ export class Renderer {
           e.lampD = { view, at: lamp, pool, head: h };
         }
         pools += e.lampD.pool;
+        if (e.lampD.pool) ground.push(e.lampD.pool);
         head = e.lampD.head;
       }
       if (turning) continue;
@@ -2770,12 +2803,17 @@ export class Renderer {
         for (const w of n.wins) {
           if (w.n >= lit) continue;
           add(true, w.glow);
-          if (w.spill) spills += w.spill;
+          if (w.spill) {
+            spills += w.spill;
+            ground.push(w.spill);
+          }
         }
       }
     }
     this.topCover = parts.map(([light, d]) => [light, new Path2D(d)]);
     this.groundLight = pools || spills ? new Path2D(pools + spills) : null;
+    this.glCover = each;
+    this.glGround = ground;
     // (the shadows' masks, only when the pools change: a change repaints them)
     if (pools !== this.poolsCut) {
       this.poolsCut = pools;
@@ -3009,6 +3047,14 @@ export class Renderer {
       px: camera.tile,
       stroke: this.strokeK ?? 1,
     };
+    if (this.glNight) {
+      const d = this.drawn;
+      if (!d) return;
+      const view = { zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH };
+      this.glNight[0].draw(view, { ...look, lights: this.glGround, sheet: this.nightSheet, beams: this.headlights() });
+      this.glNight[1].draw(view, { ...look, cover: this.turning ? NO_COVER : this.glCover });
+      return;
+    }
     this.nightPen.draw(camera, { ...look, lights: this.groundLight, sheet: this.nightSheet, beams: this.headlights() });
     // (while the view turns the objects' night can't follow them: they go
     // without, bare paper, as they are drawn bare – the lights on the ground

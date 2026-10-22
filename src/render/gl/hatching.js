@@ -209,11 +209,11 @@ export const rgb = (c) => {
 // A shape's fill (triangles) and its pen lines (polylines, with how their
 // ends are drawn), in its own units, kept per path: `kind` 'shape' (filled,
 // its edge dashed round it), 'fill' (filled only), 'line' (a pen line,
-// round ends).
+// round ends). Not kept (`keep` false) for a shape seen once (a beam).
 const meshes = new Map();
-export function meshOf(kind, d, evenodd = false) {
+export function meshOf(kind, d, evenodd = false, keep = true) {
   const key = `${kind}${evenodd ? 'e' : ''}|${d}`;
-  let m = meshes.get(key);
+  let m = keep ? meshes.get(key) : null;
   if (m) {
     // (the most recently used last: the oldest go first)
     meshes.delete(key);
@@ -234,6 +234,7 @@ export function meshOf(kind, d, evenodd = false) {
   if (kind === 'line') lines = subs.filter((s) => s.pts.length > 1).map((s) => ({ pts: s.pts, closed: s.closed, cap: 1 }));
   else if (kind === 'shape') lines = dashed(subs, EDGE.dash);
   m = { tris, lines, width: kind === 'line' ? LINE : EDGE.width };
+  if (!keep) return m;
   meshes.set(key, m);
   if (meshes.size > 6000) for (const k of [...meshes.keys()].slice(0, 2000)) meshes.delete(k);
   return m;
@@ -385,7 +386,11 @@ export class Hatching {
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
-      this.maskTex = null;
+      if (this.maskTex) {
+        this.gl.deleteTexture(this.maskTex.tex);
+        this.gl.deleteFramebuffer(this.maskTex.fb);
+        this.maskTex = null;
+      }
     }
     this.w = w;
     this.h = h;
@@ -483,9 +488,9 @@ export class Hatching {
   }
 
   // The mask the night's sheet is drawn through (texelFetch by the canvas's
-  // px): cleared to `fill` (0 or 1), then the pieces in order, each writing
+  // px): cleared to `fill` (0 or 1), then the buffers' pieces in order, each writing
   // its value (1 the night, 0 a light) – later ones over earlier.
-  mask(b, base, fill) {
+  mask(bs, base, fill) {
     const { gl } = this;
     if (!this.maskTex) {
       const tex = gl.createTexture();
@@ -496,13 +501,15 @@ export class Hatching {
       const fb = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      gl.bindTexture(gl.TEXTURE_2D, null); // (drawn into: not bound)
       this.maskTex = { tex, fb };
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.maskTex.fb);
     gl.viewport(0, 0, this.w, this.h);
     gl.clearColor(fill, fill, fill, fill);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    if (b?.n) {
+    for (const b of bs) {
+      if (!b?.n) continue;
       const { p, u } = this.prog;
       gl.useProgram(p);
       gl.uniform3fv(u.base, base);
@@ -551,5 +558,9 @@ export class Hatching {
     gl.bindVertexArray(this.sheetVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
+    // (the mask let go: drawn into next time, it mustn't be bound)
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE0);
   }
 }
