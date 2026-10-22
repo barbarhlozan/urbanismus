@@ -143,8 +143,9 @@ export function hatchTile(id, tier, h, px, cls = 'night-line') {
 }
 
 // The tile's strokes as path data, in its own axes (before it is turned to
-// the lines' angle), and its size: scene px (the night's canvas draws it
-// as a pattern of its own, NightCanvas).
+// the lines' angle), and its size: scene px (drawn once into a texture
+// the shadows, the night and the clouds' shadows are hatched with,
+// gl/hatching.js).
 export function hatchTileLines(tier, h, px) {
   const frame = hatchFrame(h), { n } = frame;
   let d = '';

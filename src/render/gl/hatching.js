@@ -130,7 +130,9 @@ void main() {
 }`;
 
 // The night: a grey and up to three sets of the strokes over the whole
-// canvas, each laid in sweeps as a hand hatches (nightCanvas.js sweep), all
+// canvas, each laid in sweeps as a hand hatches (in bands across its
+// lines, each band laid along them from one end, the next starting before
+// the last is done), all
 // but where the mask leaves out.
 const SHEET_VS = `#version 300 es
 layout(location = 0) in vec2 corner;

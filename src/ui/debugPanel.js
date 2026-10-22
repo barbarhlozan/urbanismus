@@ -48,7 +48,6 @@ export class DebugPanel {
       // (webgl-plan.md; ticked: the old way) – to compare
       ['Roads, paths, rails, fences in SVG (unticked: WebGL)', (on) => { renderer.setGlLines(!on); }, () => !renderer.glLines],
       ['People, vehicles, trains on 2D canvases (unticked: WebGL)', (on) => { renderer.setGlMovers(!on); }, () => !renderer.glMovers],
-      ['Night on 2D canvases (unticked: WebGL)', (on) => { renderer.setGlNight(!on); }, () => !renderer.glNight],
       ['Buildings, trees, lamps in SVG (unticked: WebGL)', (on) => { renderer.setGlObjects(!on); }, () => !renderer.glObjects],
       ['Smoke on a 2D canvas (unticked: WebGL)', (on) => { renderer.setGlSmoke(!on); }, () => !renderer.smoke?.gl],
       ['Rain on a 2D canvas (unticked: WebGL)', (on) => { renderer.setGlRain(!on); }, () => !renderer.rain?.gl],

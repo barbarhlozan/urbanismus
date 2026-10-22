@@ -1,5 +1,4 @@
-// The night drawn with WebGL2 (gl/hatching.js) instead of on the 2D
-// canvases (nightCanvas.js), the same picture: a grey and up to three sets
+// The night drawn with WebGL2 (gl/hatching.js): a grey and up to three sets
 // of the paper's strokes, each hatched in band by band as it comes, and
 // the lights left out of it. On the ground (under what moves) the lamps'
 // pools, the windows' light spilt on the ground and the beams ahead of
@@ -21,7 +20,7 @@ import { THEME } from '../../theme.js';
 import { hatchFrame } from '../hatch.js';
 import { Hatching, Pieces, meshOf, rgb } from './hatching.js';
 
-// The night's grey in steps (as nightCanvas.js); how far the third set of
+// The night's grey in steps (each a new picture); how far the third set of
 // strokes is turned from the first (degrees); the sweep's bands (css px).
 const GREY_STEP = 0.02;
 const CROSS = -68;

@@ -109,6 +109,13 @@ function save(key, value) {
 
 // Palette names ('bg', 'main', 'detail'; 'fg' is the old name for main) as
 // CSS variables; anything else is taken as a literal CSS color.
+// Two colours (#rrggbb) mixed, `t` of the second.
+export function mixColour(a, b, t) {
+  const p = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',')})`;
+}
+
 export function color(name) {
   if (name === 'fg') return 'var(--main)';
   return name === 'bg' || name === 'main' || name === 'detail' ? `var(--${name})` : name;

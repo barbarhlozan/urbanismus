@@ -128,7 +128,7 @@ export function screenLight(camera, sun = SUN) {
 //   windows the share of the windows lit at night (0 … 1): most in the
 //           evening, a few in the small hours, some again before dawn
 //   depth   how deep the night is, in the paper's strokes (Renderer,
-//           nightCanvas.js): 1 its lines, 2 as many again between them,
+//           gl/night.js): 1 its lines, 2 as many again between them,
 //           3 and a set across them
 //   ink     how far the main ink has gone over to the secondary (0 … 1):
 //           in the dead of night the whole drawing is in the one ink, the

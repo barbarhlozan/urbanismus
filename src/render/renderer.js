@@ -46,7 +46,7 @@
 // Detail levels: the <svg> gets class lod-0/1/2 from the zoom, and CSS hides
 // elements tagged d1 / d2 (see Painter).
 
-import { THEME } from '../theme.js';
+import { THEME, mixColour } from '../theme.js';
 import { STYLE } from './style.js';
 import { MIST, mistLevel, mistSurface, mistSVG, mistTile, coverSVG, mistIn, mistOut } from './mist.js';
 import { Painter, LOOK, wobble } from './painter.js';
@@ -97,7 +97,6 @@ import { HILL_SHADOWS, hillShade, hillShadeRings } from './hillShadows.js';
 import { lampPool, headBeam } from './lights.js';
 import { SUN_FREE, sunStyle } from './sunFree.js';
 import { treeLightSector } from '../../features/trees.js';
-import { NightCanvas, mixColour } from './nightCanvas.js';
 import { findForests, forestSVG } from './forest.js';
 import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
 
@@ -352,25 +351,24 @@ export class Renderer {
     this.layers.shadows = veil.querySelector('.shade-shapes');
     this.layers.hillshade.remove();
     this.layers.hillshade = veil.querySelector('.hill-shapes');
-    // the night (nightCanvas.js), on two canvases drawn every frame
+    // the night (gl/night.js), on two canvases drawn every frame
     // (renderNightCanvases): a grey and a sheet of the paper's strokes on
     // the ground, under the cars and trains, and over the objects, only
     // where they stand (their outlines, Painter.covers) – each leaving out
-    // the lights (renderLights): the ground's a path the canvas rubs out
-    // (groundLight), the objects' their outlines and lights in order
-    // (topCover); the lamps' pools are cut out of the shadows' masks too
-    // (lightCuts). While the view turns the objects' night lies over
-    // everything, as it can't follow them.
+    // the lights (renderLights): the ground's the lamps' pools and the
+    // windows' light (glGround), the objects' their outlines and lights in
+    // order (glCover); the lamps' pools are cut out of the shadows' masks
+    // too (lightCuts). While the view turns the objects go without.
     // the map's drawings hold for any sun (sunFree.js): a stylesheet shows
     // what the light has now (updateSunStyle)
     SUN_FREE.on = true;
     this.sunCss = document.head.appendChild(document.createElement('style'));
     this.sunCss.id = 'sun-free';
     this.sunKey = 0; // which sun the objects' shadows are drawn for (setSun, swapIn)
-    this.nightPen = new NightCanvas(document.getElementById('night-ground'));
-    this.nightTop = new NightCanvas(document.getElementById('night-top'));
-    this.groundLight = null;
-    this.topCover = [];
+    this.glNight = ['night-ground', 'night-top'].map((id) => GLNight.make(document.getElementById(id)));
+    if (this.glNight.some((n) => !n)) this.glNight = null;
+    this.glGround = [];
+    this.glCover = NO_COVER;
     this.nightGrey = 0; // the grey as shown, easing to this.gloom
     this.lightCuts = [...veil.querySelectorAll('.lights-cut')];
     // hover rings and tags on their way out, over the overlay (see letGo)
@@ -1401,7 +1399,6 @@ export class Renderer {
   useWebGL() {
     this.setGlLines(true);
     this.setGlMovers(true);
-    this.setGlNight(true);
     this.setGlObjects(true);
     this.setGlRain(true);
     this.setGlSmoke(true);
@@ -1458,33 +1455,6 @@ export class Renderer {
       this.glMovers = null;
       for (const pen of this.pens2d) pen.canvas.style.display = '';
       [this.pen, this.penTop] = this.pens2d;
-    }
-    return true;
-  }
-
-  // The night drawn with WebGL (gl/night.js) instead of on its 2D canvases,
-  // or not (the Debug panel): on the ground over the map's drawing (the
-  // last in its wrapper), over the objects (the last in theirs).
-  setGlNight(on) {
-    const twoD = [this.nightPen.canvas, this.nightTop.canvas];
-    if (on && !this.glNight) {
-      const pens = ['view', 'view-top'].map((id) => {
-        const canvas = document.createElement('canvas');
-        Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' });
-        document.getElementById(id).append(canvas);
-        return GLNight.make(canvas);
-      });
-      if (pens.some((p) => !p)) {
-        for (const p of pens) p?.canvas.remove();
-        return false;
-      }
-      this.glNight = pens;
-      for (const c of twoD) c.style.display = 'none';
-    } else if (!on && this.glNight) {
-      for (const p of this.glNight) p.canvas.remove();
-      this.glNight = null;
-      for (const c of twoD) c.style.display = '';
-      this.nightPen.last = this.nightTop.last = null;
     }
     return true;
   }
@@ -1895,7 +1865,7 @@ export class Renderer {
     const turn = this.sheet(this.drawn.angle, a);
     for (const l of SHEET) this.layers[l].setAttribute('transform', turn);
     for (const el of this.lightCuts) el.setAttribute('transform', turn); // (as the lights)
-    this.nightSheet = new DOMMatrix(this.sheet(this.drawn.angle, a, true)); // (and the ground's, nightCanvas.js)
+    this.nightSheet = new DOMMatrix(this.sheet(this.drawn.angle, a, true)); // (and the ground's, gl/night.js)
     // the terrain, the largest of them, turned whole on the GPU: its <svg>
     // about the middle of the map as drawn (the scene's origin)
     const { ground } = this, d = this.drawn;
@@ -2854,8 +2824,8 @@ export class Renderer {
       if (last && last[0] === light) last[1] += d;
       else parts.push([light, d]);
     };
-    let pools = '', spills = '';
-    const ground = []; // (the pools and spills one by one, for the GPU)
+    let pools = '';
+    const ground = []; // (the pools and the windows' light on the ground, one by one)
     const view = `${this.camera.angle}|${px}`;
     for (const e of turning ? this.objs.values() : this.order) {
       const lamp = this.lampsOn && e.key?.[0] === 'k' && e.at?.points?.[0];
@@ -2878,15 +2848,10 @@ export class Renderer {
         for (const w of n.wins) {
           if (w.n >= lit) continue;
           add(true, w.glow);
-          if (w.spill) {
-            spills += w.spill;
-            ground.push(w.spill);
-          }
+          if (w.spill) ground.push(w.spill);
         }
       }
     }
-    this.topCover = parts.map(([light, d]) => [light, new Path2D(d)]);
-    this.groundLight = pools || spills ? new Path2D(pools + spills) : null;
     this.glCover = each;
     this.glGround = ground;
     // (the shadows' masks, only when the pools change: a change repaints them)
@@ -3059,7 +3024,7 @@ export class Renderer {
     step();
   }
 
-  // The night, every frame (nightCanvas.js): its grey easing to the
+  // The night, every frame (gl/night.js): its grey easing to the
   // hour's (this.gloom, a little each frame), the paper's strokes at night
   // – every line close up, fewer further out, as the shadows' – and the
   // lights rubbed out: on the ground, the lamps' pools, the windows' light
@@ -3102,19 +3067,13 @@ export class Renderer {
       px: camera.tile,
       stroke: this.strokeK ?? 1,
     };
-    if (this.glNight) {
-      const d = this.drawn;
-      if (!d) return;
-      const view = { zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH };
-      this.glNight[0].draw(view, { ...look, lights: this.glGround, sheet: this.nightSheet, beams: this.headlights() });
-      this.glNight[1].draw(view, { ...look, cover: this.turning ? NO_COVER : this.glCover });
-      return;
-    }
-    this.nightPen.draw(camera, { ...look, lights: this.groundLight, sheet: this.nightSheet, beams: this.headlights() });
+    const d = this.drawn;
+    if (!this.glNight || !d) return;
+    const view = { zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH };
+    this.glNight[0].draw(view, { ...look, lights: this.glGround, sheet: this.nightSheet, beams: this.headlights() });
     // (while the view turns the objects' night can't follow them: they go
-    // without, bare paper, as they are drawn bare – the lights on the ground
-    // stay; renderLights left the cover empty)
-    this.nightTop.draw(camera, { ...look, cover: this.turning ? [] : this.topCover });
+    // without, bare paper, as they are drawn bare – the lights on the ground stay)
+    this.glNight[1].draw(view, { ...look, cover: this.turning ? NO_COVER : this.glCover });
   }
 
   // Every object's shadow drawn again from its feet, with SUN as it is
