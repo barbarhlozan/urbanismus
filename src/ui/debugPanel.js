@@ -48,6 +48,7 @@ export class DebugPanel {
       // lines drawn on the GPU instead
       ['Roads, paths, rails, fences in SVG (unticked: WebGL)', (on) => { renderer.setGlLines(!on); }],
       ['People, vehicles, trains on 2D canvases (unticked: WebGL)', (on) => { renderer.setGlMovers(!on); }],
+      ['Shadows on 2D canvases (unticked: WebGL)', (on) => { renderer.setGlShadows(!on); }],
     ];
 
     this.el = document.createElement('div');

@@ -98,6 +98,9 @@ try {
   const { contexts } = await send('browsingContext.getTree', {});
   const context = contexts[0].context;
   await send('browsingContext.setViewport', { context, viewport: { width: 1440, height: 900 } }).catch(() => {});
+  // (in front: a window out of sight draws no frames)
+  const raise = () => send('browsingContext.activate', { context }).catch(() => {});
+  await raise();
   // the page's own code, its result as JSON
   const evaluate = async (expression) => {
     const r = await send('script.evaluate', { expression: `(async () => JSON.stringify(await (${expression})))()`, target: { context }, awaitPromise: true });
@@ -133,6 +136,7 @@ try {
   console.log(`${info.ua}, ${info.w}×${info.h} at ${info.dpr}×${night ? ', at night' : ''}${Object.keys(prefs).length ? `, ${JSON.stringify(prefs)}` : ''} (${session.capabilities?.browserName ?? ''})`);
   console.log('scenario     fps    p95  worst');
   for (const [name, [step, ms]] of Object.entries(SCENARIOS)) {
+    await raise();
     if (only && !only.includes(name)) continue;
     const r = await evaluate(`(async () => {
       const f = ${step}, cam = R.camera, gaps = [];

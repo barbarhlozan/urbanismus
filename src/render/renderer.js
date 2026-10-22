@@ -59,6 +59,7 @@ import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './d
 import { ShadeCanvas } from './shadeCanvas.js';
 import { GLLines } from './gl/lines.js';
 import { GLMovers } from './gl/movers.js';
+import { GLShadows } from './gl/shadows.js';
 import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
@@ -642,7 +643,7 @@ export class Renderer {
       if (this.drafting && performance.now() - this.movedAt > VIEW_SETTLE) this.endDraft();
       // (drawn first, shown once its drawing is back: renderShadeCanvas)
       if (this.shadesOff && !this.rebuildQueue.size && !this.landing.size && performance.now() - this.movedAt > VIEW_SETTLE) {
-        if (this.shadesComing && this.shadeCanvas.current) this.showShadows();
+        if (this.shadesComing && (this.glShadows ?? this.shadeCanvas).current) this.showShadows();
         else this.shadesComing = true;
       }
     }
@@ -1458,6 +1459,31 @@ export class Renderer {
       this.glMovers = null;
       for (const pen of this.pens2d) pen.canvas.style.display = '';
       [this.pen, this.penTop] = this.pens2d;
+    }
+    return true;
+  }
+
+  // The shadows drawn with WebGL (gl/shadows.js) instead of on their 2D
+  // canvases, or not (the Debug panel): a canvas of its own where those
+  // stand, from the same masks.
+  setGlShadows(on) {
+    const twoD = [this.hillCanvas.canvas, this.shadeCanvas.canvas];
+    if (on && !this.glShadows) {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'shade-canvas';
+      canvas.style.setProperty('--sun', this.shadeSun ?? '');
+      this.shadeCanvas.canvas.after(canvas);
+      this.glShadows = GLShadows.make(canvas, this.shadeVeil);
+      if (!this.glShadows) {
+        canvas.remove();
+        return false;
+      }
+      for (const c of twoD) c.style.display = 'none';
+    } else if (!on && this.glShadows) {
+      this.glShadows.canvas.remove();
+      this.glShadows = null;
+      for (const c of twoD) c.style.display = '';
+      this.hillCanvas.dirty = this.shadeCanvas.dirty = true;
     }
     return true;
   }
@@ -2826,12 +2852,19 @@ export class Renderer {
     const sun = this.svg.style.getPropertyValue('--sun');
     if (sun !== this.shadeSun) {
       this.shadeSun = sun;
-      for (const el of [this.hillCanvas.canvas, this.shadeCanvas.canvas, this.parkedSvg]) el.style.setProperty('--sun', sun);
+      for (const el of [this.hillCanvas.canvas, this.shadeCanvas.canvas, this.parkedSvg, this.glShadows?.canvas]) el?.style.setProperty('--sun', sun);
     }
     const look = {
       view: { zoom: d.zoom, panX: d.panX, panY: d.panY, angle: d.angle, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH },
       hatch: SUN.hatch, tier: SHADE_TIERS[this.lodLevel ?? 0] ?? 1, px: this.camera.tile, stroke: this.strokeK,
     };
+    if (this.glShadows) {
+      // (the objects' as hideShadows and showShadows have their canvas)
+      const { style } = this.shadeCanvas.canvas;
+      const shown = style.visibility === 'hidden' ? 0 : parseFloat(style.getPropertyValue('--shown') || '1');
+      this.glShadows.draw({ ...look, hold: (this.shadesOff && !this.shadesComing) || this.turning, shown });
+      return;
+    }
     // (mid-turn the hills' as far as it has turned, turnFrame)
     const sheet = this.turning ? this.hillSheet : null;
     this.hillCanvas.draw({ ...look, sheet });

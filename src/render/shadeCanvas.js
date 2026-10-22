@@ -168,7 +168,7 @@ export class ShadeCanvas {
 // An element's shapes as the worker draws them – each element's transform
 // and opacity, those not displayed left out: [kind ('shape', 'line'),
 // path data, matrix, alpha, cut, evenodd].
-function collect(el, m, alpha, cut, out) {
+export function collect(el, m, alpha, cut, out) {
   if (el.style?.display === 'none') return;
   const t = el.transform?.baseVal;
   if (t?.numberOfItems) {
@@ -187,7 +187,7 @@ function collect(el, m, alpha, cut, out) {
 }
 
 // A sheet's clip (the sun's front, mid-sweep): its <clipPath>'s path data.
-function clipOf(g) {
+export function clipOf(g) {
   const id = g.getAttribute('clip-path')?.match(/url\(#([^)]+)\)/)?.[1];
   return (id && document.getElementById(id)?.querySelector('path')?.getAttribute('d')) || null;
 }
