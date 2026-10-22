@@ -192,6 +192,19 @@ uploaded per frame.
   Left: mist on the GPU; smoke and rain; turns (each step's drawings are
   still painted as SVG strings and parsed) and settles; switch it all on by
   default once the user has seen it in Zen; then take the SVG out (step 6).
+- **2026-10-22 evening: on by default** (commit `WebGL by default`,
+  `Renderer.useWebGL`), after the user tried it in Zen ("runs amazing").
+  The user asked to measure in Chrome only from now on (Zen just has to stay
+  playable). Since: turn views prepared in idle time (`schedulePrepare`),
+  rebuilds of objects spread over frames (6 ms a frame), faster path
+  reading, object boxes from cached lifted corners, each object's shadow
+  pieces kept, rain on the GPU (gl/movers.js segments). Tried and dropped:
+  a separate probe document for styles, a cache of whole drawings' pieces
+  (too many distinct drawings). Chrome now, everything on the GPU: idle/pan
+  60, zoom ~49, settle ~55, unzoom ~51–56, turn ~37–40 (SVG path: turn
+  ~29). Left: smoke and mist on the GPU; the renderer's own redraw at
+  level-of-detail changes (updateLod, updateWoods' first findForests, the
+  painters' SVG strings); taking the old paths out (step 6).
   Re-reading every object's shadow costs ~9 ms (on a change of objects);
   cache pieces per element if that shows.
 
