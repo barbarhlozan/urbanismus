@@ -359,6 +359,7 @@ export class Renderer {
     this.sunCss = document.head.appendChild(document.createElement('style'));
     this.sunCss.id = 'sun-free';
     this.sunKey = 0; // which sun the objects' shadows are drawn for (setSun, swapIn)
+    this.makeGlObjects();
     this.glNight = ['night-ground', 'night-top'].map((id) => GLNight.make(document.getElementById(id)));
     if (this.glNight.some((n) => !n)) this.glNight = null;
     this.glGround = [];
@@ -1383,72 +1384,29 @@ export class Renderer {
     this.glLines?.setLayer(name, items, this.ink[name].classes, this.ink[name]);
   }
 
-  // The map drawn with WebGL2 wherever it can be (webgl-plan.md) – each
-  // part keeps its SVG or 2D canvas without it, and in the Debug panel.
-  useWebGL() {
-    this.setGlObjects(true);
-    this.setGlRain(true);
-    this.setGlSmoke(true);
-    this.setGlClouds(true);
-  }
-
-  // The clouds' shadows drawn with WebGL, or not (the Debug panel; main.js
-  // gives the renderer its cloudShadows).
-  setGlClouds(on) {
-    return this.cloudShadows?.setGl(on) ?? false;
-  }
-
-  // The rain drawn with WebGL, or not (the Debug panel; main.js gives the
-  // renderer its rain).
-  setGlRain(on) {
-    return this.rain?.setGl(on) ?? false;
-  }
-
-  // The chimneys' smoke drawn with WebGL, or not (the Debug panel).
-  setGlSmoke(on) {
-    return this.smoke?.setGl(on) ?? false;
-  }
-
   // The buildings, trees and lamps drawn with WebGL (gl/objects.js) from
-  // their SVG, which stays in the page unpainted, or not (the Debug panel):
-  // a canvas under the objects' <svg> (its notes and overlay over it).
-  setGlObjects(on) {
+  // their SVG, which stays in the page as the drawings' source, neither
+  // styled nor laid out (display: none; the pen measures it through
+  // gl/objects.js, draw.js) – on a canvas under the objects' <svg> (its
+  // notes and overlay over it).
+  makeGlObjects() {
     const layer = this.layers.objects;
-    if (on && !this.glObjects) {
-      const canvas = document.createElement('canvas');
-      Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' });
-      this.top.before(canvas);
-      this.glObjects = GLObjects.make(canvas, layer, this.top, this.sunCss);
-      if (!this.glObjects) {
-        canvas.remove();
-        return false;
-      }
-      // (the drawings made ready for a turn kept on the GPU: those of the
-      // nearest steps)
-      this.glObjects.kept = () => {
-        const out = new Set(), k = this.camera.step();
-        for (const e of this.objs.values()) {
-          for (const [j, v] of e.views ?? []) {
-            const d = Math.min(Math.abs(j - k) % STEPS, STEPS - (Math.abs(j - k) % STEPS));
-            if (d <= GL_AHEAD) out.add(v.g);
-          }
+    this.glObjects = GLObjects.make(document.getElementById('objects-gl'), layer, this.top, this.sunCss);
+    if (!this.glObjects) return;
+    // (the drawings made ready for a turn kept on the GPU: those of the
+    // nearest steps)
+    this.glObjects.kept = () => {
+      const out = new Set(), k = this.camera.step();
+      for (const e of this.objs.values()) {
+        for (const [j, v] of e.views ?? []) {
+          const d = Math.min(Math.abs(j - k) % STEPS, STEPS - (Math.abs(j - k) % STEPS));
+          if (d <= GL_AHEAD) out.add(v.g);
         }
-        return out;
-      };
-      this.preparedAt = null;
-      // (not displayed: the browser neither styles nor lays it out; the
-      // pen measures it through gl/objects.js, draw.js)
-      layer.style.display = 'none';
-      layer.classList.add('gl-drawn');
-    } else if (!on && this.glObjects) {
-      this.glObjects.canvas.remove();
-      this.glObjects = null;
-      this.glObjectsAside = false;
-      layer.style.display = '';
-      layer.classList.remove('gl-drawn');
-      if (this.order) this.placeObjectGroups(this.order.filter((e) => e.shown !== false).map((e) => e.g));
-    }
-    return true;
+      }
+      return out;
+    };
+    layer.style.display = 'none';
+    layer.classList.add('gl-drawn');
   }
 
   // The objects' groups put in the painter's order in their layer – or,

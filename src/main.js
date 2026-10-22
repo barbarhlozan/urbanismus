@@ -174,9 +174,6 @@ const showSun = ({ sun, gloom }) => {
 agents.trains = trains;
 trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
 const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, boats, deer, livestock, parking, config: CONFIG });
-renderer.cloudShadows = cloudShadows; // (the Debug panel's WebGL switches)
-renderer.rain = rain;
-renderer.useWebGL();
 renderer.setSun(sunAt(world.time)); // (the sun as the day has it, before the map is first drawn)
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);

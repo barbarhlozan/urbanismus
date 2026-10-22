@@ -44,13 +44,6 @@ export class DebugPanel {
       ['Grid dots', (on) => show(layer('grid'), on)],
       ['Hover tags', (on) => { STYLE.hoverTags = on; }],
       ['Pen animations (build / demolish)', (on) => { DRAW.on = on; }],
-      // the map drawn the old way, part by part, instead of with WebGL
-      // (webgl-plan.md; ticked: the old way) – to compare
-      ['Roads, paths, rails, fences in SVG (unticked: WebGL)', (on) => { renderer.setGlLines(!on); }, () => !renderer.glLines],
-      ['Buildings, trees, lamps in SVG (unticked: WebGL)', (on) => { renderer.setGlObjects(!on); }, () => !renderer.glObjects],
-      ['Smoke on a 2D canvas (unticked: WebGL)', (on) => { renderer.setGlSmoke(!on); }, () => !renderer.smoke?.gl],
-      ['Rain on a 2D canvas (unticked: WebGL)', (on) => { renderer.setGlRain(!on); }, () => !renderer.rain?.gl],
-      ['Clouds\' shadows on a 2D canvas (unticked: WebGL)', (on) => { renderer.setGlClouds(!on); }, () => !renderer.cloudShadows?.gl],
     ];
 
     this.el = document.createElement('div');
@@ -62,7 +55,7 @@ export class DebugPanel {
       '<div class="sun-row"><span class="sun-at">Day</span><input class="sun" type="range" min="0" max="23.75" step="0.25" value="0"></div>' +
       '<label><input type="checkbox" class="day-on" checked> The day goes on from there (unticked: the time stays put)</label>' +
       '<div class="sun-row"><span class="sun-at">A day lasts</span><select class="day-length"><option value="1800">30 minutes</option><option value="300">5 minutes</option><option value="120">2 minutes</option><option value="45">45 seconds</option></select></div>' +
-      toggles.map(([label, , ticked], i) => `<label><input type="checkbox" data-i="${i}"${(ticked?.() ?? true) ? ' checked' : ''}> ${label}</label>`).join('');
+      toggles.map(([label], i) => `<label><input type="checkbox" data-i="${i}" checked> ${label}</label>`).join('');
     root.appendChild(this.el);
     this.el.addEventListener('change', (e) => {
       const i = e.target.dataset.i;

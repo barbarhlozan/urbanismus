@@ -1,6 +1,6 @@
 // Particles: little marks given off by points on the map – smoke from
-// chimneys first. Drawn on a <canvas> (#smoke) over the buildings, as the
-// moving people are (agentCanvas.js): the marks change every frame.
+// chimneys first. Drawn with WebGL (gl/movers.js) on a <canvas> (#smoke)
+// over the buildings, as the moving people are: the marks change all the time.
 //
 // Nothing is kept from one frame to the next. A particle is worked out from
 // the time alone: emitter e gives off particle i at about i / rate seconds,
@@ -20,7 +20,6 @@
 //   eachParticle(e, kind, time, env, fn)   the particles alive now
 //   ParticleCanvas   one frame: the emitters in view, under a cap
 
-import { Follow } from './follow.js';
 import { THEME } from '../theme.js';
 import { PEN } from './agentCanvas.js';
 import { GLMovers } from './gl/movers.js';
@@ -313,83 +312,38 @@ const MARGIN = 40;
 //   most      the most particles drawn in a frame: beyond it the houses'
 //             smoke thins first, then the works' too
 //   minZoom   per kind: further out than this, none
-//   fps       drawn again this often while the view stands still (smoke
-//             moves slowly); at once when the view moves
+//   fps       found again this often (smoke moves slowly); laid out for
+//             the camera every frame it moves
 export const SMOKE_DRAW = {
   style: { house: 'curl', stack: 'puff' },
   most: 1500,
   minZoom: { house: 1, stack: 0 },
-  fps: 12, // on twos, moved with the map between (follow.js)
+  fps: 12, // (on twos)
 };
 
 export class ParticleCanvas {
   constructor(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.empty = true;
-    this.drawnCount = 0;
-  }
-
-  // With WebGL (gl/movers.js) instead of the 2D canvas, or not (the Debug
-  // panel): a canvas of its own over it.
-  setGl(on) {
-    if (on && !this.gl) {
-      const canvas = document.createElement('canvas');
-      Object.assign(canvas.style, { position: 'fixed', left: '0', top: '0', pointerEvents: 'none' });
-      this.canvas.after(canvas);
-      this.gl = GLMovers.make(canvas, { antialias: true });
-      if (!this.gl) {
-        canvas.remove();
-        return false;
-      }
-      this.clear();
-      this.canvas.style.display = 'none';
-    } else if (!on && this.gl) {
-      this.gl.canvas.remove();
-      this.gl = null;
-      this.canvas.style.display = '';
-    }
-    this.empty = false;
+    this.gl = GLMovers.make(canvas, { antialias: true });
     this.marks = null;
-    this.clear();
-    return true;
+    this.drawnAt = -Infinity;
+    this.drawnCount = 0;
   }
 
   // One frame. `emitters`: [{ x, y, kind, k, seed }] in scene px; `stroke`
-  // the map's --stroke; `time` simulated seconds; `env` the weather.
+  // the map's --stroke; `time` simulated seconds; `env` the weather. The
+  // marks are found again `draw.fps` times a second, and laid out for the
+  // camera every frame it moves.
   frame(camera, stroke, emitters, time, env = CALM, draw = SMOKE_DRAW) {
-    const { canvas, ctx } = this;
-    const dpr = devicePixelRatio || 1;
-    const W = innerWidth, H = innerHeight;
-    const w = Math.round(W * dpr), h = Math.round(H * dpr);
+    if (!this.gl) return;
     const now = performance.now();
-    const follow = (this.follow ??= new Follow(canvas, draw.fps));
-    const resized = canvas.width !== w || canvas.height !== h;
-    if (this.gl) {
-      // (drawn again at once: no picture to send; the marks are kept between
-      // drawings, as the map moves)
-      const v = this.glView;
-      if (!resized && v && !follow.due(camera, now)) {
-        if (this.marks && (v.zoom !== camera.zoom || v.panX !== camera.panX || v.panY !== camera.panY)) this.drawGl(camera, stroke);
-        return;
-      }
-    } else {
-      if (!resized && !follow.due(camera, now)) return follow.place(camera);
+    if (now - this.drawnAt < 1000 / draw.fps) {
+      const v = this.view;
+      if (this.marks && (v.zoom !== camera.zoom || v.panX !== camera.panX || v.panY !== camera.panY)) this.lay(camera, stroke);
+      return;
     }
-    follow.drawn(camera, now);
-    if (this.gl) {
-      this.glView = null;
-    } else if (resized) {
-      canvas.width = w;
-      canvas.height = h;
-      canvas.style.width = `${W}px`;
-      canvas.style.height = `${H}px`;
-    } else if (!this.empty) {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-    }
-    this.empty = true;
+    this.drawnAt = now;
     this.drawnCount = 0;
+    const W = innerWidth, H = innerHeight;
     const { zoom, panX, panY } = camera;
     const T = camera.tile;
     // in view: the mouth, or the plume above and aside of it
@@ -406,53 +360,33 @@ export class ParticleCanvas {
       if (K.on) load += n; else fixed += n;
       shown.push([e, K]);
     }
-    if (!shown.length) {
-      if (this.gl) { this.marks = null; this.drawGl(camera, stroke); }
-      return;
-    }
-    const keepHouses = Math.min(1, Math.max(0, draw.most - fixed) / Math.max(1, load));
-    const keepWorks = Math.min(1, draw.most / Math.max(1, fixed));
-
-    if (this.gl) {
+    this.marks = null;
+    if (shown.length) {
+      const keepHouses = Math.min(1, Math.max(0, draw.most - fixed) / Math.max(1, load));
+      const keepWorks = Math.min(1, draw.most / Math.max(1, fixed));
       const pen = new MarkPen();
       paintParticles(pen, shown, { time, env, tile: T, zScale: camera.zScale, unit: stroke ?? 1 / zoom, style: draw.style, keep: keepHouses, keepFixed: keepWorks, pal: NAMES });
       this.marks = pen.marks;
       this.drawnCount = shown.length;
-      return this.drawGl(camera, stroke);
     }
-    ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * panX, dpr * panY);
-    paintParticles(ctx, shown, { time, env, tile: T, zScale: camera.zScale, unit: stroke ?? 1 / zoom, style: draw.style, keep: keepHouses, keepFixed: keepWorks, pal: this.pal ?? THEME.palette });
-    this.drawnCount = shown.length;
-    this.empty = false;
+    this.lay(camera, stroke);
   }
 
-  // The marks kept, laid out for the camera as it is (movers.js marks).
-  drawGl(camera, stroke) {
+  // The marks kept, laid out for the camera as it is (gl/movers.js marks).
+  lay(camera, stroke) {
     const pen = this.gl;
     pen.begin(camera, stroke);
     if (this.pal) pen.pal = this.pal;
     if (this.marks) pen.marks(this.marks);
     pen.end();
-    this.glView = { zoom: camera.zoom, panX: camera.panX, panY: camera.panY };
-    this.empty = !this.marks;
+    this.view = { zoom: camera.zoom, panX: camera.panX, panY: camera.panY };
   }
 
   clear() {
-    this.follow?.set('');
-    if (this.follow) this.follow.view = null;
-    this.glView = null;
+    if (!this.marks && this.drawnAt < 0) return;
     this.marks = null;
-    if (this.gl) {
-      if (!this.empty) {
-        this.gl.clear();
-        this.empty = true;
-      }
-      return;
-    }
-    if (this.empty) return;
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.empty = true;
+    this.drawnAt = -Infinity;
+    this.gl?.clear();
   }
 }
 
