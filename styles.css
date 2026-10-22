@@ -92,6 +92,10 @@ html, body {
   user-select: none;
 }
 #night-ground, #agents, #night-top, #trains-top, #smoke, #cloud-shadows, #clouds-above, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
+/* (a stacking context of its own: the clouds' z-index orders them among themselves only) */
+#clouds-above { isolation: isolate; }
+/* a cloud overhead: drawn once, slid along with the map (cloudsAbove.js) */
+#clouds-above .cloud-above { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform, opacity; }
 /* the shadows, the hills' and the objects' (shadeCanvas.js): drawn as large
    as the SVGs beside them, fading with the weather (--sun, set by the
    renderer) */

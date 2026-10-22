@@ -14,14 +14,15 @@
 //
 // The same clouds as the shadows, so they drift with the same wind and
 // come and go with them: each lifted `lift` up the screen from its shadow,
-// as big as the shadow is (`scale`). Drawn on their own canvas
-// (#clouds-above) over the map, a few times a second and moved with the
-// map in between (follow.js), as the shadows.
+// as big as the shadow is (`scale`). Only a few of them (`most`): those
+// overhead in the view, one joining when another drifts off. Each is drawn
+// once on a little canvas of its own (in #clouds-above, over the map) and
+// slid along with the map and the wind every frame, so they drift
+// smoothly; drawn again only when the zoom has changed a good deal.
 
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
 import { CLOUD_SHADOWS } from './cloudShadows.js';
-import { Follow } from './follow.js';
 
 export const CLOUDS_ABOVE = {
   zoom: 0.72,          // shown at this zoom and further out (config.camera.minZoom is 0.55)
@@ -38,99 +39,106 @@ export const CLOUDS_ABOVE = {
   fold: 0.6,           // the share of lumps lying over another whose edge shows there as a fold
   hole: 0.2,           // the share with a hole
   pen: 2,              // the outline's pen (styles.css --pen-n)
-  more: 3,             // times as many clouds in the sky while they're shown (their shadows too)
-  fps: 6,
+  most: 4,             // clouds overhead at most, under a cloudy sky (fewer under a thinner one)
 };
 
 const between = (rnd, [a, b]) => a + rnd() * (b - a);
 
 export class CloudsAbove {
-  constructor(canvas, shadows) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+  constructor(el, shadows) {
+    this.el = el;         // the clouds' box: a little <canvas> each
     this.shadows = shadows;
-    this.k = 0;          // how far they are in (0 gone, 1 there)
-    this.empty = true;
-    this.follow = new Follow(canvas, CLOUDS_ABOVE.fps);
+    this.k = 0;           // how far they are in, zoomed out (0 gone, 1 there)
+    this.up = new Map();  // shadow cloud -> { canvas, b (how far it's in), drawn }
   }
 
   // One frame: `dt` real seconds; `cover` the sky's; `stroke` the map's --stroke.
   frame(dt, camera, cover, stroke = 1) {
     const C = CLOUDS_ABOVE;
     const want = camera.zoom <= C.zoom && cover > C.cover[0] ? 1 : 0;
-    const was = this.k;
     if (want > this.k) this.k = Math.min(1, this.k + dt / C.fade);
     else if (want < this.k) this.k = Math.max(0, this.k - dt / C.fade);
-    // a fuller sky while they're seen (more come in as they fade in)
-    this.shadows.more = 1 + (C.more - 1) * this.k;
-    // (the whole drawing faded as one, so one cloud doesn't show through another)
-    if (this.k !== was) this.canvas.style.opacity = this.k;
-    // which clouds are up: a share of them, the more the cloudier
-    const share = Math.min(1, Math.max(0, (cover - C.cover[0]) / (C.cover[1] - C.cover[0])));
-    const up = this.shadows.clouds.filter((c) => c.a > 0 && (c.pick ??= Math.random()) < share);
-    if (!this.k || !up.length) return this.clear();
-    if (this.k === was && !this.empty && !this.follow.due(camera)) return this.follow.place(camera);
-    this.draw(camera, up, stroke);
-    this.follow.drawn(camera);
+    const tile = camera.tile, lift = C.lift * tile;
+    const W = innerWidth, H = innerHeight;
+    // a cloud whose middle is overhead in the view (or, with `reach`, any of it)
+    const seen = (c, reach = 0) => {
+      const x = camera.panX + camera.zoom * c.x, y = camera.panY + camera.zoom * (c.y - lift), m = camera.zoom * c.w * reach;
+      return x > -m && x < W + m && y > -m && y < H + m;
+    };
+    // a few of the sky's clouds, the more the cloudier: those up stay
+    // while their shadows last, until they drift out of view; one more
+    // joins, in view, when there's room
+    const most = Math.round(C.most * Math.min(1, Math.max(0, (cover - C.cover[0]) / (C.cover[1] - C.cover[0]))));
+    const alive = new Set(this.shadows.clouds);
+    let staying = 0;
+    for (const [c, u] of this.up) {
+      u.leaving ||= !alive.has(c) || c.leaving || !seen(c, 0.8) || !this.k;
+      if (!u.leaving) staying++;
+    }
+    if (this.k && staying < most) {
+      const next = this.shadows.clouds.find((c) => !this.up.has(c) && !c.leaving && seen(c));
+      if (next) this.up.set(next, { canvas: null, b: 0, leaving: false, drawn: null });
+    }
+    // each fades in or out by itself, slid along with the map every frame
+    const z = camera.zoom, dpr = devicePixelRatio || 1;
+    for (const [c, u] of this.up) {
+      u.b = u.leaving ? u.b - dt / C.fade : Math.min(1, u.b + dt / C.fade);
+      if (u.b <= 0) {
+        u.canvas?.remove();
+        this.up.delete(c);
+        continue;
+      }
+      // drawn again only when the zoom has gone far from the one it was drawn at
+      if (!u.drawn || Math.abs(z / u.drawn.zoom - 1) > 0.15 || u.drawn.stroke !== stroke || u.drawn.palette !== THEME.palette.main + THEME.palette.bg) {
+        this.draw(c, u, tile, z * dpr, stroke);
+        u.drawn = { zoom: z, stroke, palette: THEME.palette.main + THEME.palette.bg };
+      }
+      const k = z / u.drawn.zoom, [x0, y0] = u.at;
+      const x = camera.panX + z * (c.x + x0), y = camera.panY + z * (c.y - lift + y0);
+      u.canvas.style.transform = `translate(${x}px, ${y}px) scale(${k / dpr})`;
+      u.canvas.style.opacity = u.b * this.k;
+      u.canvas.style.zIndex = Math.round(c.y); // (nearer ones over those behind)
+    }
   }
 
-  draw(camera, clouds, stroke) {
-    const { canvas, ctx } = this, C = CLOUDS_ABOVE;
-    const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
-    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
-      canvas.width = Math.round(W * dpr);
-      canvas.height = Math.round(H * dpr);
-      canvas.style.width = `${W}px`;
-      canvas.style.height = `${H}px`;
-    }
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const z = dpr * camera.zoom, tile = camera.tile;
-    if (!(z > 0 && tile > 0)) return;
+  // A cloud's own little canvas, drawn at `scale` device px per scene px.
+  draw(c, u, tile, scale, stroke) {
+    const C = CLOUDS_ABOVE;
+    c.above ??= traced(Math.random, c, this.shadows.windAngle, tile);
+    const { lumps, folds, holes, box } = c.above;
+    const pad = 4;
+    const canvas = u.canvas ?? this.el.appendChild(Object.assign(document.createElement('canvas'), { className: 'cloud-above' }));
+    u.canvas = canvas;
+    canvas.width = Math.ceil((box[2] - box[0]) * scale) + 2 * pad;
+    canvas.height = Math.ceil((box[3] - box[1]) * scale) + 2 * pad;
+    u.at = [box[0] - pad / scale, box[1] - pad / scale];
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(scale, 0, 0, scale, pad - box[0] * scale, pad - box[1] * scale);
     const css = getComputedStyle(document.documentElement);
-    const pen = (parseFloat(css.getPropertyValue(`--pen-${C.pen}`)) || 1) * stroke * (CONFIG.render.lineWeight ?? 1) * dpr / z;
+    const pen = ((parseFloat(css.getPropertyValue(`--pen-${C.pen}`)) || 1) * stroke * (CONFIG.render.lineWeight ?? 1) * (devicePixelRatio || 1)) / scale;
     const { bg, main } = THEME.palette;
-    const lift = C.lift * tile;
     ctx.lineJoin = ctx.lineCap = 'round';
-    ctx.lineWidth = pen;
     ctx.strokeStyle = main;
     ctx.fillStyle = bg;
-    // far ones first: a nearer cloud hides the back of one behind it
-    for (const c of [...clouds].sort((p, q) => p.y - q.y)) {
-      if (c.above?.tile !== tile) c.above = traced(Math.random, c, this.shadows.windAngle, tile);
-      const { lumps, folds, holes } = c.above;
-      ctx.setTransform(z, 0, 0, z, dpr * camera.panX + z * c.x, dpr * camera.panY + z * (c.y - lift));
-      ctx.globalAlpha = Math.min(1, c.a);
-      // each lump's outline twice as wide under all their fills: only the
-      // outer half shows, round the lumps run together
-      ctx.lineWidth = 2 * pen;
-      for (const p of lumps) ctx.stroke(p);
-      for (const p of lumps) ctx.fill(p);
-      ctx.lineWidth = pen;
-      // a fold: a lump's edge where it lies over the lumps behind it
-      for (const { edge, over } of folds) {
-        ctx.save();
-        ctx.clip(over);
-        ctx.stroke(edge);
-        ctx.restore();
-      }
-      if (holes) {
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.fill(holes);
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.stroke(holes);
-      }
+    // each lump's outline twice as wide under all their fills: only the
+    // outer half shows, round the lumps run together
+    ctx.lineWidth = 2 * pen;
+    for (const p of lumps) ctx.stroke(p);
+    for (const p of lumps) ctx.fill(p);
+    ctx.lineWidth = pen;
+    // a fold: a lump's edge where it lies over the lumps behind it
+    for (const { edge, over } of folds) {
+      ctx.save();
+      ctx.clip(over);
+      ctx.stroke(edge);
+      ctx.restore();
     }
-    ctx.globalAlpha = 1;
-    this.empty = false;
-  }
-
-  clear() {
-    if (this.empty) return;
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.empty = true;
-    this.follow.set('');
+    if (holes) {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fill(holes);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.stroke(holes);
+    }
   }
 }
 
@@ -153,6 +161,7 @@ function traced(rnd, c, wind, tile) {
       parts.push({ u: l.u + Math.cos(a) * ru * 0.78, v: l.v + Math.sin(a) * rv * 0.78, ru: ru * f, rv: rv * f, main: false });
     }
   }
+  const box = [Infinity, Infinity, -Infinity, -Infinity];
   const rings = parts.map(({ u, v, ru, rv, main }) => {
     // a few swells and dips round it, of their own sizes
     const swells = [2, 3, 5].map((n) => ({ n, size: between(rnd, C.bulge) / (n / 2), phase: rnd() * Math.PI * 2 }));
@@ -161,7 +170,10 @@ function traced(rnd, c, wind, tile) {
     for (let i = 0; i < m; i++) {
       const a = (i / m) * Math.PI * 2;
       const r = 1 + swells.reduce((sum, w) => sum + w.size * Math.sin(w.n * a + w.phase), 0);
-      pts.push(ground([u + Math.cos(a) * ru * r, v + Math.sin(a) * rv * r]));
+      const p = ground([u + Math.cos(a) * ru * r, v + Math.sin(a) * rv * r]);
+      pts.push(p);
+      box[0] = Math.min(box[0], p[0]); box[1] = Math.min(box[1], p[1]);
+      box[2] = Math.max(box[2], p[0]); box[3] = Math.max(box[3], p[1]);
     }
     pts.push(pts[0]);
     const path = new Path2D();
@@ -192,7 +204,9 @@ function traced(rnd, c, wind, tile) {
     holes = new Path2D();
     loop(holes, crinkler(rnd, tile * 0.5)(ring));
   }
-  return { tile, lumps, folds, holes };
+  // (room for the crinkle)
+  const m = (C.crinkle[0] + C.crinkle[1]) * tile;
+  return { tile, lumps, folds, holes, box: [box[0] - m, box[1] - m, box[2] + m, box[3] + m] };
 }
 
 // A function that crinkles a run of points: each nudged off the line it
