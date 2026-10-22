@@ -51,8 +51,13 @@ export function findForests(world, cfg, ways = null) {
   // the cover: 1 at a tree, 0 from `reach` away; the outline at 0.5
   const woodCells = buckets(wood, cfg.reach);
   const cover = (x, y) => {
-    let c = 0;
-    near(woodCells, cfg.reach, x, y, (i) => { c = Math.max(c, 1 - Math.hypot(wood[i].x - x, wood[i].y - y) / cfg.reach); });
+    // (the nearest tree's, by its squared distance: sampled all over the woods)
+    let d2 = cfg.reach * cfg.reach;
+    near(woodCells, cfg.reach, x, y, (i) => {
+      const dx = wood[i].x - x, dy = wood[i].y - y, e = dx * dx + dy * dy;
+      if (e < d2) d2 = e;
+    });
+    let c = 1 - Math.sqrt(d2) / cfg.reach;
     // half full right at the clearance off a road, nothing nearer it
     if (c > 0 && ways) c = Math.min(c, 0.5 + Math.min(1, ways.distance([x, y], cfg.clear + 1) - cfg.clear));
     return c;
@@ -61,8 +66,34 @@ export function findForests(world, cfg, ways = null) {
   for (const t of wood) {
     x0 = Math.min(x0, t.x); y0 = Math.min(y0, t.y); x1 = Math.max(x1, t.x); y1 = Math.max(y1, t.y);
   }
-  const pad = cfg.reach + cfg.step;
-  const lines = contours(cover, [x0 - pad, y0 - pad, x1 + pad, y1 + pad], { step: cfg.step, interval: 0.5, index: 1, only: 0.5 });
+  // the outline sampled from the cover on a grid, laid tree by tree (each
+  // over the samples within its reach) rather than asked sample by sample
+  const pad = cfg.reach + cfg.step, step = cfg.step;
+  const X0 = x0 - pad, Y0 = y0 - pad;
+  const nx = Math.ceil((x1 + pad - X0) / step) + 1, ny = Math.ceil((y1 + pad - Y0) / step) + 1;
+  const reach2 = cfg.reach * cfg.reach, n = Math.ceil(cfg.reach / step);
+  const d2 = new Float64Array(nx * ny).fill(reach2);
+  for (const t of wood) {
+    const ci = Math.round((t.x - X0) / step), cj = Math.round((t.y - Y0) / step);
+    for (let j = Math.max(0, cj - n); j <= Math.min(ny - 1, cj + n); j++) {
+      const dy = Y0 + j * step - t.y;
+      for (let i = Math.max(0, ci - n); i <= Math.min(nx - 1, ci + n); i++) {
+        const dx = X0 + i * step - t.x, e = dx * dx + dy * dy;
+        if (e < d2[j * nx + i]) d2[j * nx + i] = e;
+      }
+    }
+  }
+  const grid = new Float32Array(nx * ny);
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      let c = 1 - Math.sqrt(d2[k]) / cfg.reach;
+      if (c > 0 && ways) c = Math.min(c, 0.5 + Math.min(1, ways.distance([X0 + i * step, Y0 + j * step], cfg.clear + 1) - cfg.clear));
+      grid[k] = c;
+    }
+  }
+  const sampled = (x, y) => grid[Math.round((y - Y0) / step) * nx + Math.round((x - X0) / step)];
+  const lines = contours(sampled, [X0, Y0, x1 + pad, y1 + pad], { step, interval: 0.5, index: 1, only: 0.5 });
   const loops = lines.map((l) => straighten(l.points, cfg.straighten)).filter((p) => p.length > 3);
   return { trees: new Set(wood.map((t) => t.id)), loops, ...woodsOf(loops, wood, root, trees), cover };
 }
@@ -74,8 +105,23 @@ export function findForests(world, cfg, ways = null) {
 // and `woodOf`, tree id -> wood id. A tree the straightened outline left
 // out goes with the wood of the others in its group.
 function woodsOf(loops, wood, root, trees) {
+  // (each outline's box, to pass most of them over at once)
+  const boxes = loops.map((l) => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of l) {
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    return [x0, y0, x1, y1];
+  });
+  const within = (k, x, y) => {
+    const b = boxes[k];
+    return x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3] && inside(loops[k], x, y);
+  };
   // a loop inside an odd number of others is a clearing in the innermost
-  const depth = loops.map((l) => loops.filter((o) => o !== l && inside(o, ...l[0])).length);
+  const depth = loops.map((l, i) => loops.reduce((n, o, k) => n + (k !== i && within(k, ...l[0]) ? 1 : 0), 0));
   const woods = [];
   const at = new Map(); // loop index of an outline -> its wood
   loops.forEach((l, i) => {
@@ -86,15 +132,16 @@ function woodsOf(loops, wood, root, trees) {
   });
   loops.forEach((l, i) => {
     if (!(depth[i] % 2)) return;
-    const j = loops.findIndex((o, k) => depth[k] === depth[i] - 1 && inside(o, ...l[0]));
+    const j = loops.findIndex((o, k) => depth[k] === depth[i] - 1 && within(k, ...l[0]));
     at.get(j)?.loops.push(l);
   });
   const index = new Map(trees.map((t, i) => [t.id, i]));
   const byGroup = new Map(), lost = [];
+  const outlines = [...at.keys()];
   for (const t of wood) {
     // the innermost outline around it
     let best = -1;
-    at.forEach((w, i) => { if ((best < 0 || depth[i] > depth[best]) && inside(loops[i], t.x, t.y)) best = i; });
+    for (const i of outlines) if ((best < 0 || depth[i] > depth[best]) && within(i, t.x, t.y)) best = i;
     if (best < 0) { lost.push(t); continue; }
     at.get(best).trees.push(t.id);
     byGroup.set(root(index.get(t.id)), at.get(best));
@@ -277,10 +324,13 @@ function keep(pts, a, b, tolerance) {
 }
 
 // Trees by grid square of `size`, to find those near a point.
+// (cells keyed by a number: the cover asks for them hundreds of thousands of times)
+const cellKey = (i, j) => (i + 32768) * 65536 + (j + 32768);
+
 function buckets(list, size) {
   const cells = new Map();
   list.forEach((t, i) => {
-    const k = `${Math.floor(t.x / size)},${Math.floor(t.y / size)}`;
+    const k = cellKey(Math.floor(t.x / size), Math.floor(t.y / size));
     (cells.get(k) ?? cells.set(k, []).get(k)).push(i);
   });
   return { cells, size };
@@ -289,7 +339,12 @@ function buckets(list, size) {
 function near({ cells, size }, r, x, y, fn) {
   const n = Math.ceil(r / size);
   const cx = Math.floor(x / size), cy = Math.floor(y / size);
-  for (let i = cx - n; i <= cx + n; i++) for (let j = cy - n; j <= cy + n; j++) for (const k of cells.get(`${i},${j}`) ?? []) fn(k);
+  for (let i = cx - n; i <= cx + n; i++) {
+    for (let j = cy - n; j <= cy + n; j++) {
+      const list = cells.get(cellKey(i, j));
+      if (list) for (const k of list) fn(k);
+    }
+  }
 }
 
 const r2 = (n) => Math.round(n * 100) / 100;
