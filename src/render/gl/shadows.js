@@ -16,7 +16,8 @@
 //   s.current                                   drawn as last asked
 
 import { THEME } from '../../theme.js';
-import { Hatching, Pieces, meshOf, rgb, STRIDE } from './hatching.js';
+import { Hatching, Pieces, meshOf, rgb, STRIDE, EDGE } from './hatching.js';
+import { SUN } from '../shadows.js';
 
 // Where each part's shapes are in the mask (and the lamps' pools, cut out
 // of both, read with the hills').
@@ -126,10 +127,18 @@ export class GLShadows {
       const t = c.getAttribute('transform') ?? '', shown = c.style.display !== 'none';
       let k = this.kept.get(c);
       if (!k || this.changed.has(c) || k.t !== t || k.shown !== shown) {
-        const shapes = [];
-        collect(c, new DOMMatrix(), 1, false, shapes);
         const q = new Pieces();
-        for (const [kind, d, m, alpha, , evenodd] of shapes) q.shape(meshOf(kind, d, evenodd), m, alpha, 1);
+        if ('cast' in c) {
+          // (an object's shadow as it is cast: drawn for the sun as it is, castPieces)
+          if (c.cast && shown) {
+            const m = c.transform?.baseVal?.numberOfItems ? c.transform.baseVal.consolidate().matrix : null;
+            castPieces(q, c.cast, m ? [m.a, m.b, m.c, m.d, m.e, m.f] : ID, parseFloat(c.style.opacity || 1));
+          }
+        } else {
+          const shapes = [];
+          collect(c, new DOMMatrix(), 1, false, shapes);
+          for (const [kind, d, m, alpha, , evenodd] of shapes) q.shape(meshOf(kind, d, evenodd), m, alpha, 1);
+        }
         k = { t, shown, data: q.data.slice(0, q.n * STRIDE), n: q.n };
         this.kept.set(c, k);
       }
@@ -142,10 +151,20 @@ export class GLShadows {
     b.sig = b.ds = null;
   }
 
+  // An object's shadow group given what it casts (Renderer: entry.shade),
+  // or null for none.
+  castInto(g, shade) {
+    if (g.firstChild) g.textContent = '';
+    g.cast = shade ?? null;
+    this.changed.add(g);
+    this.dirty.objects = true;
+  }
+
   // Each frame: `view` the SVGs' drawn view and wrapper ({ zoom, panX,
   // panY, ox, oy, W, H }), the paper's strokes (`hatch`, `tier`, `px`,
-  // `stroke`), the objects' held (`hold`), faded (`shown` 0 … 1, 0 hidden).
-  draw({ view, hatch, tier, px, stroke, hold = false, shown = 1 }) {
+  // `stroke`), the objects' held (`hold`), faded (`shown` 0 … 1, 0 hidden),
+  // the `sun` they are cast by ({ cast, iso }, castPieces).
+  draw({ view, hatch, tier, px, stroke, hold = false, shown = 1, sun = null }) {
     const { h } = this;
     const dpr = devicePixelRatio || 1;
     const w = Math.round((view.W + 2 * view.ox) * dpr), hgt = Math.round((view.H + 2 * view.oy) * dpr);
@@ -177,7 +196,7 @@ export class GLShadows {
     const pen = (this.pen ??= parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pen-2')) || 0.7);
     const q = 2 ** (Math.round(Math.log2(dpr * view.zoom) * 4) / 4);
     const colour = THEME.palette.detail;
-    const key = `${view.zoom}|${view.panX}|${view.panY}|${view.ox}|${view.oy}|${w}|${hgt}|${tier}|${JSON.stringify(hatch)}|${px}|${stroke}|${q}|${colour}|${shown}`;
+    const key = `${view.zoom}|${view.panX}|${view.panY}|${view.ox}|${view.oy}|${w}|${hgt}|${tier}|${JSON.stringify(hatch)}|${px}|${stroke}|${q}|${colour}|${shown}|${sun?.cast}|${sun?.iso}`;
     if (!changed && key === this.drawnKey) return;
     this.drawnKey = key;
     h.size(w, hgt);
@@ -198,7 +217,8 @@ export class GLShadows {
       h.pieces(s.cuts, { base, stencil: { ref: 1, write: 1 } });
       const test = { ref, mask: 3 };
       h.pieces(s.hills, { ...look, test });
-      if (shown > 0) h.pieces(s.objects, { ...look, test });
+      // (the objects' cast for the sun as it is: not swept, out of the lamps' pools)
+      if (shown > 0 && sun) h.pieces(s.objects, { ...look, test: { ref: 0, mask: 1 }, sun });
     }
   }
 }
@@ -228,4 +248,67 @@ function collect(el, m, alpha, cut, out) {
 function clipOf(g) {
   const id = g.getAttribute('clip-path')?.match(/url\(#([^)]+)\)/)?.[1];
   return (id && document.getElementById(id)?.querySelector('path')?.getAttribute('d')) || null;
+}
+
+// What an object casts (Painter: its walls' feet and the shapes it leaves,
+// shadows.js castStrips, castShapes), as pieces cast by the sun the
+// shader is given: each point where it stands on the ground (`project`,
+// then `m`) and its height, shifted along the sun on the GPU – so the sun
+// moving draws nothing anew. Each shape's edge dashed (EDGE), as the
+// masks' were; a trunk's a pen line.
+const HW = EDGE.width / 2, LINE_HW = 1.1, CROWN = 12, CONE = 10;
+export function castPieces(p, { feet = [], casts = [], project }, m, alpha) {
+  const [a, b, c, d, e, f] = m;
+  const P = (x, y) => {
+    const [px, py] = project(x, y);
+    return [a * px + c * py + e, b * px + d * py + f];
+  };
+  let phase = 0;
+  const next = () => (phase = (phase + 7.3) % 24.5);
+  const put = (vals) => {
+    p.room(1);
+    p.data.set(vals, p.n++ * STRIDE);
+  };
+  // a filled triangle, each point with its height; `how` 1 cast, 2 a wall's (its normal n)
+  const tri = (A, za, B, zb, C, zc, how = 1, n = [0, 0]) =>
+    put([A[0], A[1], B[0], B[1], C[0], C[1], 0, 0, 0, 0, 0, 0, alpha, 1, 1, 0, za, zb, zc, 0, n[0], n[1], how, -1]);
+  // a dashed edge (or, with `hw` and round ends, a pen line)
+  const seg = (A, za, B, zb, how = 1, n = [0, 0], line = false) =>
+    put([A[0], A[1], B[0], B[1], A[0], A[1], B[0], B[1], 1, line ? LINE_HW : HW, line ? 1 : 2, line ? 1 : 2, alpha, 1, 1, 0, za, zb, za, zb, n[0], n[1], how, line ? -1 : next()]);
+  for (const ft of feet) {
+    if (ft.h < SUN.low) continue;
+    const z = ft.level ?? ft.h, A = P(...ft.a), B = P(...ft.b);
+    tri(A, 0, B, 0, B, z, 2, ft.n);
+    tri(A, 0, B, z, A, z, 2, ft.n);
+    seg(A, 0, B, 0, 2, ft.n);
+    seg(B, 0, B, z, 2, ft.n);
+    seg(B, z, A, z, 2, ft.n);
+    seg(A, z, A, 0, 2, ft.n);
+  }
+  for (const s of casts) {
+    if (s.kind === 'crown') {
+      const M = P(...s.at);
+      for (let i = 0; i < CROWN; i++) {
+        put([M[0], M[1], s.r, s.rz, i, 0, 0, 0, 0, 0, 0, 0, alpha, 1, 1, 0, s.z, 0, 0, 0, 0, 0, 3, -1]);
+        put([M[0], M[1], s.r, s.rz, i, 0, 0, 0, 1, HW, 0, 0, alpha, 1, 1, 0, s.z, 0, 0, 0, 0, 0, 4, next()]);
+      }
+    } else if (s.kind === 'cone') {
+      const M = P(...s.at);
+      const ring = Array.from({ length: CONE }, (_, i) => P(s.at[0] + Math.cos((i / CONE) * 2 * Math.PI) * s.r, s.at[1] + Math.sin((i / CONE) * 2 * Math.PI) * s.r));
+      ring.forEach((R, i) => {
+        const S = ring[(i + 1) % CONE];
+        tri(M, s.z0, R, s.z0, S, s.z0);
+        tri(M, s.z1, R, s.z0, S, s.z0);
+        seg(R, s.z0, S, s.z0);
+        seg(M, s.z1, R, s.z0);
+      });
+    } else if (s.kind === 'face') {
+      const pts = s.pts.map(([x, y, z]) => [P(x, y), z]);
+      for (let i = 1; i + 1 < pts.length; i++) tri(pts[0][0], pts[0][1], pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]);
+      pts.forEach(([A, za], i) => seg(A, za, ...pts[(i + 1) % pts.length]));
+    } else if (s.kind === 'stem' && s.z > 0) {
+      const A = P(...s.at);
+      seg(A, 0, A, s.z, 1, [0, 0], true);
+    }
+  }
 }

@@ -8,8 +8,9 @@
 //             (Painter.feet: ends, height, outward normal); each foot turned
 //             away from the sun casts the strip between it and its own foot
 //             shifted along the sun, and the strips together make the
-//             shadow. The renderer keeps an object's feet, so its hatching
-//             alone can be drawn again from them (shadowSVG). Trees cast theirs from
+//             shadow. The renderer keeps an object's feet, so its shadow
+//             is cast from them on the GPU for the sun as it goes
+//             (gl/shadows.js castPieces; a photo's: shadowSVG). Trees cast theirs from
 //             the shapes they leave (Painter.casts, castShapes): a crown's
 //             round shadow, a spruce's pointed one, and a line from the
 //             trunk. The lines are the paper's hatching (hatch.js): straight
@@ -207,6 +208,44 @@ export function sunAt(t, day = DAY) {
   return day.on && day.steps.length ? stepAt(hourAt(t, day), day) : null;
 }
 
+// Where the sun stands at an hour, between the steps: [azimuth, length],
+// or null by night. The positions (DAY.positions) are the sun at the
+// steps that bring them (the morning's at the last of its steps, the rest
+// at the first: so noon is the middle), and it goes on evenly from one to
+// the next; the shadows' length is the position's, or the longer one the
+// dawn and the dusk stretch them to, each eased into the next.
+export function sunOfHour(hour, day = DAY) {
+  const h = ((hour % 24) + 24) % 24;
+  const step = day.steps[stepAt(h, day)];
+  if (step.sun == null) return null;
+  const keys = (day.sunKeys ??= sunKeys(day));
+  const at = (list) => {
+    if (h <= list[0][0]) return list[0][1];
+    for (let i = 1; i < list.length; i++) {
+      const [h1, v1] = list[i];
+      if (h <= h1) {
+        const [h0, v0] = list[i - 1];
+        return v0 + ((v1 - v0) * (h - h0)) / (h1 - h0);
+      }
+    }
+    return list[list.length - 1][1];
+  };
+  return [at(keys.azimuth), Math.max(at(keys.length), at(keys.stretch))];
+}
+
+function sunKeys(day) {
+  const steps = day.steps.filter((s) => s.sun != null), mid = (day.positions.length - 1) / 2;
+  const azimuth = [], length = [];
+  day.positions.forEach(([az, len], i) => {
+    const mine = steps.filter((s) => s.sun === i);
+    if (!mine.length) return;
+    const h = (i < mid ? mine[mine.length - 1] : mine[0]).at;
+    azimuth.push([h, az]);
+    length.push([h, len]);
+  });
+  return { azimuth, length, stretch: steps.map((s) => [s.at, s.length ?? 0]) };
+}
+
 // How far a wall with outward world normal n (unit, horizontal) is turned
 // away from the sun: 1 straight away, 0 side on, below 0 lit.
 export function awayFrom([nx, ny], sun) {
@@ -379,39 +418,6 @@ export function hatchLine(k, t0, t1, u, v, h, step = 0.12) {
     pts.push([u[0] * t + v[0] * c, u[1] * t + v[1] * c]);
   }
   return pts;
-}
-
-// An object's cast shadow on the map, as shapes for the shadows' mask
-// (Renderer: one sheet of the paper's strokes, hatch.js, shows through
-// it): the strips its feet cast and the shapes of what else it drew
-// (castShapes), projected – `project(x, y)`: a ground point -> scene px,
-// with the object's relief – each edge through points `step` apart on the
-// ground, so a long shadow bends over the hills; all turned the same way,
-// so where they overlap they add up. Its trunks' shadows as lines.
-export function shadowMask({ feet = [], casts = [], project }, sun, step = 0.25) {
-  if (!sun.on || !sun.hatch) return '';
-  const { polys, lines } = castShapes(casts, sun);
-  const xy = ([x, y]) => `${r2(x)} ${r2(y)}`;
-  const along = (a, b, close) => {
-    const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
-    const out = [];
-    for (let i = 0; i < (close ? n : n + 1); i++) out.push(project(a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n));
-    return out;
-  };
-  let d = '';
-  for (const poly of [...castStrips(feet, sun), ...polys]) {
-    let pts = poly.flatMap((p, i) => along(p, poly[(i + 1) % poly.length], true));
-    let area = 0;
-    for (let i = 0; i < pts.length; i++) {
-      const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
-      area += ax * by - bx * ay;
-    }
-    if (Math.abs(area) < 1e-6) continue;
-    if (area < 0) pts = pts.reverse();
-    d += `M${pts.map(xy).join('L')}Z`;
-  }
-  const l = lines.map(([a, b]) => `M${along(a, b, false).map(xy).join('L')}`).join('');
-  return (d ? `<path class="shade" d="${d}"/>` : '') + (l ? `<path class="shade-line" d="${l}"/>` : '');
 }
 
 // An object's cast shadow as SVG markup, its lines up to density tier

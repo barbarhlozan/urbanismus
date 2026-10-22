@@ -92,7 +92,7 @@ import { STEEP_LINES, steepLines } from './steep.js';
 import { carMark, personMark } from './marks.js';
 import { mergeRuns, isoSort } from './order.js';
 import { Camera } from './camera.js';
-import { SUN, DAY, sunFor, shadowMask } from './shadows.js';
+import { SUN, DAY, sunFor, sunOfHour, hourAt } from './shadows.js';
 import { HILL_SHADOWS, hillShade, hillShadeRings } from './hillShadows.js';
 import { lampPool, headBeam } from './lights.js';
 import { SUN_FREE, sunStyle } from './sunFree.js';
@@ -193,6 +193,8 @@ const INK_STEP = 0.1;
 const INK_EVERY = 500;
 const WINDOWS_BY = 0.06;
 const SHADE_SWEEP = 1600;
+// ms between the sun's moves between the day's steps (followSun)
+const SUN_EVERY = 100;
 // While the view moves the map is drawn in draft (goDraft): any move that
 // has the browser draw it again – a zoom, a turn, a pan further than `pan`
 // of the window – leaves out the meadow's tufts, the parked cars and the
@@ -332,12 +334,13 @@ export class Renderer {
     this.svgs = [svg, ground, this.top, this.parkedSvg];
     this.scenes = [ground, svg, this.parkedSvg, this.top].map((s) => s.querySelector('.scene'));
     this.layers = Object.fromEntries(LAYERS.map((l) => [l, svgOf(l).querySelector(`.layer-${l}`)]));
-    // the shadows (shadows.js shadowMask, hillShadows.js): the shapes of
-    // every object's shadow and the hills', and the lamps' pools left out
-    // of them, kept in a mask the browser never paints – the paper's
-    // strokes are drawn through them with WebGL (gl/shadows.js), the same
-    // strokes for all, so where a tree stands in a hill's shadow the two
-    // are one; the layers 'shadows' and 'hillshade' are the mask's shapes
+    // the shadows: the hills' shapes (hillShadows.js) and the lamps' pools
+    // left out of them, kept in a mask the browser never paints, and a
+    // group for each object holding what it casts (gl/shadows.js
+    // castInto) – the paper's strokes are drawn through them all with
+    // WebGL (gl/shadows.js), the same strokes for all, so where a tree
+    // stands in a hill's shadow the two are one; the layers 'shadows' and
+    // 'hillshade' are the mask's groups
     const veil = this.layers.shadows;
     veil.innerHTML = '<mask id="shade-mask" class="shade-mask" maskUnits="userSpaceOnUse"><g class="hill-shapes"></g><g class="shade-shapes"></g><g class="lights-cut"></g></mask>';
     this.shadeVeil = veil;
@@ -358,7 +361,6 @@ export class Renderer {
     SUN_FREE.on = true;
     this.sunCss = document.head.appendChild(document.createElement('style'));
     this.sunCss.id = 'sun-free';
-    this.sunKey = 0; // which sun the objects' shadows are drawn for (setSun, swapIn)
     this.makeGlObjects();
     this.glNight = ['night-ground', 'night-top'].map((id) => GLNight.make(document.getElementById(id)));
     if (this.glNight.some((n) => !n)) this.glNight = null;
@@ -612,6 +614,7 @@ export class Renderer {
     if (this.turning) this.turnFrame();
     else {
       if (this.camera.angle !== this.styleAngle) this.updateSunStyle(); // (the trees' light on screen turns with the view)
+      this.followSun();
       for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
       this.dirty.clear();
       if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
@@ -1871,8 +1874,8 @@ export class Renderer {
       const [g, lg, sg] = [0, 1, 2].map(() => document.createElementNS(SVGNS, 'g'));
       g.innerHTML = built.svg;
       lg.innerHTML = built.ground;
-      sg.innerHTML = this.shadowSVG(built.shade, built.detail);
-      return { k, angle: cam.angle, bare: true, g, lg, sg, sunKey: this.sunKey, shade: built.shade, night: built.night, band: built.band, vents: built.vents?.length ? built.vents : null, ventsTurn: cam.angle, bounds: built.bounds, box: built.box, at: built.at };
+      this.glShadows?.castInto(sg, built.shade);
+      return { k, angle: cam.angle, bare: true, g, lg, sg, shade: built.shade, night: built.night, band: built.band, vents: built.vents?.length ? built.vents : null, ventsTurn: cam.angle, bounds: built.bounds, box: built.box, at: built.at };
     } finally {
       cam.angle = live;
       this.drawBare = false;
@@ -1884,15 +1887,10 @@ export class Renderer {
   swapIn(e, view) {
     e.views ??= new Map();
     if (e.k != null && e.bare && !e.views.has(e.k)) {
-      const { k, angle, bare, g, lg, sg, sunKey, shade, night, band, vents, ventsTurn, bounds, box, at } = e;
-      e.views.set(e.k, { k, angle, bare, g, lg, sg, sunKey, shade, night, band, vents, ventsTurn, bounds, box, at });
+      const { k, angle, bare, g, lg, sg, shade, night, band, vents, ventsTurn, bounds, box, at } = e;
+      e.views.set(e.k, { k, angle, bare, g, lg, sg, shade, night, band, vents, ventsTurn, bounds, box, at });
     }
     e.views.delete(view.k);
-    // (its shadow drawn for another sun: drawn again, setSun)
-    if (view.sunKey !== this.sunKey) {
-      view.sg.innerHTML = this.shadowSVG(view.shade);
-      view.sunKey = this.sunKey;
-    }
     for (const n of ['g', 'lg', 'sg']) {
       e[n].removeAttribute('transform');
       e[n].parentNode?.replaceChild(view[n], e[n]);
@@ -2342,8 +2340,7 @@ export class Renderer {
       entry.lg.innerHTML = built.ground;
       entry.shade = built.shade;
       entry.night = built.night;
-      entry.sunKey = this.sunKey;
-      entry.sg.innerHTML = this.shadowSVG(entry.shade, built.band);
+      this.glShadows?.castInto(entry.sg, entry.shade);
       if (was) {
         const only = new Set(strokesOf(entry).filter((el) => !was.has(el.outerHTML)));
         if (only.size) sketch.push({ entry, only });
@@ -2582,20 +2579,11 @@ export class Renderer {
     return painter.feet.length || painter.casts.length ? { feet: painter.feet, casts: painter.casts, project: painter.groundProjector() } : null;
   }
 
-  // (its shapes, for the shadows' mask: the strokes are the sheet's)
-  shadowSVG(shade) {
-    return shade ? shadowMask(shade, sunFor(this.camera)) : '';
-  }
-
   // The day steps to step i (DAY.steps): the night or not (drawn over
-  // everything, renderNight), how grey, where the sun stands and how long
-  // the shadows are. A sun that moves – or sets, or rises – or shadows
-  // that stretch redraw what the sun lights: the walls turned away from
-  // it, the shadows, the trees' shaded sides, the hills' shadows. The
-  // objects in sight go by the rebuild budget, a few each frame (frame),
-  // as for a new level of detail; the rest once they come into sight
-  // (stale, cull()). Not mid-turn (the turn's views are drawn for the sun
-  // as it was): false if put off, to try again.
+  // everything, renderNight), how grey, the lamps and windows, and the
+  // hills' shadows, drawn again for the sun as it is then (between the
+  // steps the sun goes on by itself, followSun). Not mid-turn: false if
+  // put off, to try again.
   setSun(i) {
     if (i == null || i === this.dayStep) return true;
     if (this.turning || this.bare) return false;
@@ -2627,27 +2615,39 @@ export class Renderer {
     this.sunAt = sun;
     this.sunPos = pos;
     SUN.on = pos != null;
-    if (pos != null) {
-      [SUN.azimuth, SUN.length] = DAY.positions[pos];
-      SUN.length = Math.max(SUN.length, step.length ?? 0);
-    }
+    if (pos != null) [SUN.azimuth, SUN.length] = sunOfHour(this.hour()) ?? DAY.positions[pos];
     // (the first sun of all just is; the next ones are drawn in)
     const drawn = this.sunDrawn;
     this.sunDrawn = true;
     if (drawn && drawEnabled() && !this.shadesOff) this.sweepShadows(); // (out of sight while the view moves: they come back as they are)
-    // nothing is drawn anew for it (sunFree.js): every shadow at once, from
-    // what each object keeps (Renderer.shadeOf) – those of the views kept
-    // for a turn as they come back (swapIn) – and the stylesheet that shows
-    // the walls' hatching and the trees' shaded sides the light has now,
-    // the pen drawing in what comes into sight
-    this.sunKey++;
-    for (const e of this.objs.values()) {
-      if (e.sg && e.shade !== undefined) e.sg.innerHTML = this.shadowSVG(e.shade);
-      e.sunKey = this.sunKey;
-    }
+    // nothing of the objects is drawn anew for it: their shadows are cast
+    // on the GPU (gl/shadows.js), the stylesheet shows the walls' hatching
+    // and the trees' shaded sides the light has now (sunFree.js), the pen
+    // drawing in what comes into sight
     this.updateSunStyle(drawn && drawEnabled());
     this.dirty.add('hillshade');
     return true;
+  }
+
+  // The hour of the day (shadows.js DAY): the clock's, or where it is held.
+  hour() {
+    return DAY.on || DAY.held == null ? hourAt(this.world.time) : DAY.held;
+  }
+
+  // The sun going on between the day's steps (sunOfHour), a little at a
+  // time: the objects' shadows follow it at once (cast on the GPU,
+  // gl/shadows.js), the walls' hatching and the trees' shaded sides as
+  // the light comes round to them (updateSunStyle); the hills' wait for
+  // the next step (setSun). Not mid-turn.
+  followSun() {
+    if (this.turning || !SUN.on || this.dayStep == null) return;
+    const now = performance.now();
+    if (now - (this.sunFollowed ?? 0) < SUN_EVERY) return;
+    this.sunFollowed = now;
+    const at = sunOfHour(this.hour());
+    if (!at || (at[0] === SUN.azimuth && at[1] === SUN.length)) return;
+    [SUN.azimuth, SUN.length] = at;
+    this.updateSunStyle(drawEnabled());
   }
 
   // The stylesheet for the sun and the view as they are (sunFree.js); with
@@ -2655,11 +2655,11 @@ export class Renderer {
   // objects in sight.
   updateSunStyle(pen = false) {
     const sun = sunFor(this.camera), sector = treeLightSector(this.camera);
-    const key = `${sun.on}|${sun.cast.map((c) => c.toFixed(3))}|${sector}`;
-    if (key === this.sunStyleKey) return;
-    this.sunStyleKey = key;
     this.styleAngle = this.camera.angle;
+    // (written only when what it shows changes: each time restyles the drawings)
     const { css, shown } = sunStyle(sun, sector);
+    if (css === this.sunStyleKey) return;
+    this.sunStyleKey = css;
     const was = new Set(this.sunShown ?? []);
     this.sunShown = shown;
     this.sunCss.textContent = css;
@@ -2780,12 +2780,13 @@ export class Renderer {
     return out;
   }
 
-  // The sun has moved: the shadows as they were stay, under a ragged front
-  // that goes across the view the way a hand hatches (across the lines),
-  // and the new ones come in behind it, over SHADE_SWEEP ms – the old
-  // shadows a copy of their sheet and masks, clipped to what the front
-  // has not reached, the new ones clipped to what it has (the objects
-  // drawn anew meanwhile go into those). A sweep still going ends at once.
+  // The sun has moved a step: the hills' shadows as they were stay, under
+  // a ragged front that goes across the view the way a hand hatches
+  // (across the lines), and the new ones come in behind it, over
+  // SHADE_SWEEP ms – the old a copy of their sheet and masks, clipped to
+  // what the front has not reached, the new clipped to what it has. (The
+  // objects' follow the sun as it goes, followSun.) A sweep still going
+  // ends at once.
   // The map in draft while the view moves (DRAFT)…
   goDraft() {
     if (this.drafting) return;
@@ -2815,7 +2816,14 @@ export class Renderer {
       view: { zoom: d.zoom, panX: d.panX, panY: d.panY, angle: d.angle, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH },
       hatch: SUN.hatch, tier: SHADE_TIERS[this.lodLevel ?? 0] ?? 1, px: this.camera.tile, stroke: this.strokeK,
     };
-    this.glShadows.draw({ ...look, hold: (this.shadesOff && !this.shadesComing) || this.turning, shown: this.shadesShown ?? 1 });
+    // the sun the objects' shadows are cast by (gl/shadows.js castPieces):
+    // its shift on the ground, and a shift on the ground on screen
+    const cam = this.camera, [ux, uy] = cam.toView(1, 0), [vx, vy] = cam.toView(0, 1), T = cam.tile;
+    const casting = {
+      cast: SUN.on && SUN.hatch ? sunFor(cam).cast : [0, 0],
+      iso: [(ux - uy) * COS30 * T, (ux + uy) * 0.5 * T, (vx - vy) * COS30 * T, (vx + vy) * 0.5 * T],
+    };
+    this.glShadows.draw({ ...look, hold: (this.shadesOff && !this.shadesComing) || this.turning, shown: this.shadesShown ?? 1, sun: casting });
   }
 
   hideShadows() {
@@ -2960,10 +2968,7 @@ export class Renderer {
   // now – without repainting the objects (mark the layer dirty after a
   // change to SUN).
   renderShadows() {
-    for (const e of this.objs.values()) {
-      e.sg.innerHTML = this.shadowSVG(e.shade, e.band);
-      e.views?.clear(); // (their shadows are for the old sun)
-    }
+    for (const e of this.objs.values()) this.glShadows?.castInto(e.sg, e.shade);
   }
 
   paintStructure(s, camera = this.camera) {

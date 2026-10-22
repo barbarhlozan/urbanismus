@@ -37,7 +37,7 @@ const LINE = 2.2;
 // Curves flattened to within this of the true line (scene px).
 const TOLERANCE = 0.1;
 // floats per piece
-export const STRIDE = 16;
+export const STRIDE = 24;
 
 const VS = `#version 300 es
 precision highp float;
@@ -46,10 +46,14 @@ layout(location = 1) in vec4 ab;      // a fill: its first two points; a stroke:
 layout(location = 2) in vec4 cp;      // a fill: its third point; a stroke: the point before a, after b
 layout(location = 3) in vec4 kind;    // fill (0) or stroke (1), the stroke's half width (scene px), its ends at a and b (0 a join, 1 round, 2 butt)
 layout(location = 4) in vec4 paint;   // alpha, group (its alpha a uniform), the value it writes to a mask
+layout(location = 5) in vec4 lift;    // cast (below): the heights a, b, c (a fill) or a, b, before, after (a stroke)
+layout(location = 6) in vec4 casting; // cast: a wall's outward normal (world), how (1 cast, 2 a wall's, 3 4 a crown's: gl/shadows.js castPieces), where its dashes start (scene px; < 0 none)
 uniform vec3 base;                    // scene px -> device px: scale, x, y
 uniform mat3 pre;                     // the pieces' own px -> scene px (all of them alike: a turn's sheet)
 uniform vec2 size;                    // the canvas, device px
 uniform vec4 alphas;                  // per group
+uniform vec2 sun;                     // the ground shift per unit of height (world; 0 0 no sun)
+uniform mat2 iso;                     // a shift on the ground (world) -> the pieces' px
 out vec2 local;
 out vec2 joins;
 out float len;
@@ -57,19 +61,42 @@ out vec2 scene;
 flat out vec4 kindF;
 flat out float alpha;
 flat out float value;
+flat out float dash;
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
 vec2 dev(vec2 p) { return (pre * vec3(p, 1.0)).xy * base.x + base.yz; }
+// a crown's shadow (how 3, 4): the ring point i round its middle m
+vec2 ring(vec2 m, float i) {
+  float L = length(sun), t = i / 12.0 * 6.2831853;
+  vec2 c = sun / L, q = vec2(-c.y, c.x);
+  return m + iso * (c * cos(t) * length(vec2(ab.z, L * ab.w)) + q * sin(t) * ab.z);
+}
 void main() {
   kindF = vec4(kind.x, kind.y * base.x * sqrt(abs(pre[0][0] * pre[1][1] - pre[0][1] * pre[1][0])), kind.zw);
   alpha = paint.x * alphas[int(paint.y)];
   value = paint.z;
+  dash = -1.0;
+  vec2 A = ab.xy, B = ab.zw, C = cp.xy, D = cp.zw;
+  int how = int(casting.z + 0.5);
+  if (how > 0) {
+    // cast along the sun: each point by its height; a wall turned to the
+    // sun casts nothing, nor anything with no sun
+    vec2 s = iso * sun;
+    if (dot(sun, sun) < 1e-12 || how == 2 && dot(casting.xy, sun) <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+    if (how >= 3) {
+      vec2 m = A + lift.x * s;
+      float i = cp.x;
+      if (how == 3) { A = m; B = ring(m, i); C = ring(m, i + 1.0); }
+      else { A = ring(m, i); B = ring(m, i + 1.0); C = ring(m, i - 1.0); D = ring(m, i + 2.0); }
+    } else { A += lift.x * s; B += lift.y * s; C += lift.z * s; D += lift.w * s; }
+    dash = casting.w;
+  }
   vec2 p;
   if (kind.x < 0.5) {
     int c = int(corner.x + 0.5) + 2 * int(corner.y > 0.0);
-    p = dev(c == 0 ? ab.xy : c == 1 ? ab.zw : cp.xy);
+    p = dev(c == 0 ? A : c == 1 ? B : C);
     local = vec2(0.0); joins = vec2(1e6); len = 0.0;
   } else {
-    vec2 pa = dev(ab.xy), pb = dev(ab.zw), pp = dev(cp.xy), pn = dev(cp.zw);
+    vec2 pa = dev(A), pb = dev(B), pp = dev(C), pn = dev(D);
     float r = kindF.y + 1.0;
     len = length(pb - pa);
     vec2 dir = unit(pb - pa, vec2(1.0, 0.0)), nrm = vec2(-dir.y, dir.x);
@@ -100,11 +127,14 @@ in vec2 scene;
 flat in vec4 kindF;
 flat in float alpha;
 flat in float value;
+flat in float dash;
+uniform vec3 base;                    // (its scale: the dashes go by scene px)
 uniform int mode;
 uniform sampler2D tile;
 uniform vec3 tileAt;                  // cos, sin of the lines' angle, the tile's size (scene px)
 uniform vec4 colour;
 out vec4 outColour;
+const float DASH[${EDGE.dash.length}] = float[](${EDGE.dash.map((v) => v.toFixed(2)).join(', ')});
 void main() {
   float cover = 1.0;
   if (kindF.x > 0.5) {
@@ -118,6 +148,18 @@ void main() {
       else { d = abs(v); edge = clamp(0.5 - e, 0.0, 1.0); }
     } else d = abs(v);
     cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
+    // (a cast shadow's ragged edge: dashed, as EDGE.dash, from where dash says)
+    if (dash >= 0.0) {
+      float t = mod(dash + u / base.x, ${EDGE.dash.reduce((a, b) => a + b, 0).toFixed(2)});
+      bool on = true;
+      for (int k = 0; k < ${EDGE.dash.length}; k++) {
+        float l = DASH[k];
+        if (t < l) break;
+        t -= l;
+        on = !on;
+      }
+      if (!on) discard;
+    }
   }
   if (mode == 1) {
     if (cover < 0.5) discard;
@@ -304,6 +346,7 @@ export class Pieces {
       D[o + 4] = a * t[i + 4] + c * t[i + 5] + e; D[o + 5] = b * t[i + 4] + d * t[i + 5] + f;
       D[o + 6] = D[o + 7] = D[o + 8] = D[o + 9] = D[o + 10] = D[o + 11] = 0;
       D[o + 12] = alpha; D[o + 13] = group; D[o + 14] = value; D[o + 15] = 0;
+      D.fill(0, o + 16, o + 24);
     }
     if (!mesh.lines.length) return;
     // the pen's width as the matrix scales it (on average)
@@ -327,6 +370,7 @@ export class Pieces {
         D[o + 4] = X(ip); D[o + 5] = Y(ip); D[o + 6] = X(iq); D[o + 7] = Y(iq);
         D[o + 8] = 1; D[o + 9] = hw; D[o + 10] = endA; D[o + 11] = endB;
         D[o + 12] = alpha; D[o + 13] = group; D[o + 14] = value; D[o + 15] = 0;
+        D.fill(0, o + 16, o + 24);
       }
     }
   }
@@ -343,7 +387,7 @@ export class Hatching {
   constructor(canvas, gl) {
     this.canvas = canvas;
     this.gl = gl;
-    this.prog = program(gl, VS, FS, ['base', 'pre', 'size', 'alphas', 'mode', 'tile', 'tileAt', 'colour']);
+    this.prog = program(gl, VS, FS, ['base', 'pre', 'size', 'alphas', 'mode', 'tile', 'tileAt', 'colour', 'sun', 'iso']);
     this.sheetProg = program(gl, SHEET_VS, SHEET_FS, ['base', 'size', 'tile', 'mask', 'masked', 'tileSize', 'grey', 'colour', 'sets', 'reveal', 'band']);
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
@@ -366,7 +410,7 @@ export class Hatching {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    for (const [loc, off] of [[1, 0], [2, 4], [3, 8], [4, 12]]) {
+    for (const [loc, off] of [[1, 0], [2, 4], [3, 8], [4, 12], [5, 16], [6, 20]]) {
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, STRIDE * 4, off * 4);
       gl.vertexAttribDivisor(loc, 1);
@@ -450,10 +494,13 @@ export class Hatching {
   // Pieces drawn: `base` [scale, x, y] scene px -> device px; with the
   // tile's strokes in `colour` ([r, g, b]) where they lie, the groups'
   // `alphas`; or (`stencil`: { ref, write, test }) into the stencil only.
-  pieces(b, { base, pre = b?.pre, tile = null, colour = [0, 0, 0], alphas = [1, 1, 1, 1], stencil = null, test = null }) {
+  pieces(b, { base, pre = b?.pre, tile = null, colour = [0, 0, 0], alphas = [1, 1, 1, 1], stencil = null, test = null, sun = null }) {
     if (!b?.n) return;
     const { gl } = this, { p, u } = this.prog;
     gl.useProgram(p);
+    // (cast pieces: the sun's shift on the ground, and a ground shift in the pieces' px)
+    gl.uniform2f(u.sun, sun?.cast[0] ?? 0, sun?.cast[1] ?? 0);
+    gl.uniformMatrix2fv(u.iso, false, sun?.iso ?? [1, 0, 0, 1]);
     gl.uniform3fv(u.base, base);
     const m = pre ?? [1, 0, 0, 1, 0, 0];
     gl.uniformMatrix3fv(u.pre, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
