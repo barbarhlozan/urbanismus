@@ -167,6 +167,31 @@ uploaded per frame.
   (16–18) back now is the objects' SVG: step 5. Its ceiling, measured in
   Zen at night with all of the above on and #view-top hidden: idle and pan
   60, zoom 52, settle 35, turn 14 (the objects' turn work still runs).
+- **Step 5, first part done** (commits `WebGL objects` … `Object fades`,
+  Debug panel, off by default): `src/render/gl/objects.js` draws the
+  buildings, trees and lamps from their own SVG (entry.g), which stays in
+  the page `display: none`. Styles asked of the browser once per kind of
+  element (classes from the object's group down plus inline attributes;
+  ~100 kinds) on private copies in a hidden probe group, into a style table
+  texture – zoom, detail, sun and night ink only update the table.
+  Transforms on an object's group and its children (slides, sway, hover
+  squash) are matrices in a texture; any other change rebuilds that
+  object's pieces. Painter's order = Renderer.order, one draw per object.
+  The pen: draw.js keeps its plan on the groups (`group.pen`, `penWatch`)
+  and measures lengths through `penLength` (not laid out); the shader
+  reveals strokes along their length and fades fills on the same times.
+  Group fades (`group.fade`: a landed turn's old drawing, mist-under) and
+  CSS opacity followed. Turn views for ±3 steps prebuilt while resting.
+  Boxes for hover and the UI from the pieces (buildingBox, markHovered).
+  Look: ink 1.01 at rest, the same mid-turn and mid-pen. **In mist the
+  SVG objects come back** (pattern-filled mist covers, mist under the
+  objects: not on the GPU yet).
+  **Zen, everything on the GPU: night pan 58, zoom 41, settle 29, turn 16;
+  day pan 59.5, zoom 47, settle 35, turn 13** (from 5 / 4 / 15–19 / 4–7
+  this morning). Chrome turn 15 → 18.
+  Left: mist on the GPU; smoke and rain; turns (each step's drawings are
+  still painted as SVG strings and parsed) and settles; switch it all on by
+  default once the user has seen it in Zen; then take the SVG out (step 6).
   Re-reading every object's shadow costs ~9 ms (on a change of objects);
   cache pieces per element if that shows.
 
