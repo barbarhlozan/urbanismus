@@ -35,6 +35,7 @@ import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
 import { hatchFrame, hatchTileLines } from './hatch.js';
 import { Follow } from './follow.js';
+import { Hatching, Pieces, meshOf, rgb } from './gl/hatching.js';
 
 export const CLOUD_SHADOWS = {
   // grid units² of map per cloud under a cloudy sky (cover 1; config
@@ -170,6 +171,7 @@ export class CloudShadows {
 
     if (!this.clouds.length) return this.clear();
     if (!changed && !this.empty) return;
+    if (this.gl && CLOUD_SHADOWS.look === 'hatch' && this.paper?.hatch) return this.drawGl(camera); // (every frame: costs the GPU next to nothing)
     // (they drift a few px a second: drawn now and then, moved with the map between)
     if (!this.empty && !this.follow.due(camera)) return this.follow.place(camera);
     this.draw(camera, W, H);
@@ -385,6 +387,7 @@ export class CloudShadows {
     const C = CLOUD_SHADOWS, rnd = Math.random;
     const cos = Math.cos(this.windAngle), sin = Math.sin(this.windAngle);
     const path = new Path2D();
+    path.d = ''; // (the same as path data, for the GPU)
     for (const { u, v, ru, rv } of c.lumps) {
       const pts = [];
       for (let i = 0; i < 9; i++) {
@@ -395,8 +398,10 @@ export class CloudShadows {
         const x = a * cos - b * sin, y = (a * sin + b * cos) * C.squash;
         if (i) path.lineTo(x, y);
         else path.moveTo(x, y);
+        path.d += `${i ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`;
       });
       path.closePath();
+      path.d += 'Z';
     }
     return path;
   }
@@ -423,7 +428,66 @@ export class CloudShadows {
     return this.tile;
   }
 
+  // With WebGL (gl/hatching.js) instead of the 2D canvas, or not (the
+  // Debug panel, Renderer.setGlClouds): a canvas of its own over it.
+  setGl(on) {
+    if (on && !this.gl) {
+      const canvas = document.createElement('canvas');
+      Object.assign(canvas.style, { position: 'fixed', left: '0', top: '0', pointerEvents: 'none' });
+      this.canvas.after(canvas);
+      this.gl = Hatching.make(canvas);
+      if (!this.gl) {
+        canvas.remove();
+        return false;
+      }
+      this.clear();
+      this.canvas.style.display = 'none';
+    } else if (!on && this.gl) {
+      this.gl.canvas.remove();
+      this.gl = null;
+      this.canvas.style.display = '';
+    }
+    this.empty = false;
+    this.clear();
+    return true;
+  }
+
+  // Look 'hatch' on the GPU: each cloud's outline, its edge broken, picking
+  // out the paper's strokes (as drawHatch).
+  drawGl(camera) {
+    const h = this.gl, H = CLOUD_SHADOWS.hatch;
+    const { hatch, stroke = 1 } = this.paper;
+    const dpr = devicePixelRatio || 1, z = dpr * camera.zoom, px = camera.tile;
+    if (!(z > 0 && px > 0)) return;
+    const W = innerWidth, Hh = innerHeight;
+    const w = Math.round(W * dpr), hh = Math.round(Hh * dpr);
+    if (h.canvas.width !== w || h.canvas.height !== hh) Object.assign(h.canvas.style, { width: `${W}px`, height: `${Hh}px` });
+    h.size(w, hh);
+    h.clear();
+    const gap = hatchFrame(hatch).gap * px * z;
+    let tier = H.tier;
+    while (tier > 0 && gap * 2 ** (3 - tier) < H.least * dpr) tier--;
+    const pen = (this.pen ??= parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--pen-${H.pen}`)) || 0.5);
+    const q = 2 ** (Math.round(Math.log2(z) * 4) / 4);
+    const tile = h.tile(tier, hatch, px, pen * stroke, q);
+    const p = new Pieces();
+    for (const c of this.clouds) {
+      c.shape ??= this.outline(c);
+      p.shape(meshOf('shape', c.shape.d), [1, 0, 0, 1, c.x, c.y], H.tone * Math.max(0, Math.min(1, c.a)));
+    }
+    h.pieces(h.load((this.glBuf ??= h.buffer()), p), { base: [z, dpr * camera.panX, dpr * camera.panY], tile, colour: rgb(THEME.palette.detail) });
+    this.empty = false;
+  }
+
   clear() {
+    if (this.gl) {
+      if (!this.empty) {
+        this.gl.size(this.gl.canvas.width, this.gl.canvas.height);
+        this.gl.clear();
+      }
+      this.empty = true;
+      return;
+    }
     if (this.empty) return;
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);

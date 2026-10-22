@@ -1517,6 +1517,12 @@ export class Renderer {
     return true;
   }
 
+  // The clouds' shadows drawn with WebGL, or not (the Debug panel; main.js
+  // gives the renderer its cloudShadows).
+  setGlClouds(on) {
+    return this.cloudShadows?.setGl(on) ?? false;
+  }
+
   // The WebGL lines for the view the map's SVGs are drawn at (their wrapper
   // with its overscan: placeView) at the angle the view has reached – as
   // the SVG lines are drawn mid-turn.
