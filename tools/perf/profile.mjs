@@ -5,6 +5,7 @@
 //
 // --step: run every frame while profiling (cam => …), e.g. a pan:
 //   --step 'cam => cam.pan(8, 0)'
+// --setup: run once before (R the renderer), e.g. 'R.setGlObjects(true)'.
 // --now: profile from the start, not once the turn's drawings are ready.
 // --cpu: drawn without the GPU (bench.mjs).
 import { launch, openTown } from './chrome.mjs';
@@ -13,6 +14,7 @@ const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv.splice(i, 2)[1] : d; };
 const ms = Number(opt('--ms', 4000));
 const step = opt('--step', null);
+const setup = opt('--setup', null);
 const origin = opt('--origin', 'http://localhost:8173');
 const port = Number(opt('--port', 9334));
 const now = argv.includes('--now');
@@ -24,6 +26,7 @@ try {
   await openTown(b, { town, origin });
   const t0 = Date.now();
   while (!now && Date.now() - t0 < 60000 && !(await b.evaluate('R.preparedAt != null'))) await new Promise((r) => setTimeout(r, 500));
+  if (setup) await b.evaluate(`(async () => { ${setup}; await new Promise((r) => setTimeout(r, 2000)); return 1 })()`);
   await b.send('Profiler.enable');
   await b.send('Profiler.setSamplingInterval', { interval: 200 });
   if (step) await b.evaluate(`window.__perfStop = false; (function t() { if (__perfStop) return; (${step})(R.camera); requestAnimationFrame(t); })(); true`);

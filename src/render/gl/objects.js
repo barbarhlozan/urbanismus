@@ -36,11 +36,12 @@ layout(location = 0) in vec2 corner;
 layout(location = 1) in vec4 ab;      // a fill: its first two points; a stroke: a, b (the object's px)
 layout(location = 2) in vec4 cp;      // a fill: its third point; a stroke: the point before a, after b
 layout(location = 3) in vec4 kind;    // fill (0) or stroke (1), half width (px), ends at a and b (0 a join, 1 round, 2 butt)
-layout(location = 4) in vec4 colour;  // premultiplied
+layout(location = 4) in vec4 style;   // its kind of element (the style table), and stroke (1) or fill (0)
 layout(location = 5) in vec4 slots;   // the object's matrix, its child's (-1 none)
 uniform vec3 base;                    // scene px -> device px
 uniform vec2 size;
 uniform highp sampler2D mats;
+uniform highp sampler2D styles;       // per kind: fill, stroke (premultiplied), width and shown
 out vec2 local;
 out vec2 joins;
 out float len;
@@ -58,9 +59,12 @@ void main() {
   mat3 m = matAt(slots.x) * matAt(slots.y);
   mat3 M = mat3(base.x, 0.0, 0.0, 0.0, base.x, 0.0, base.y, base.z, 1.0) * m;
   vec2 A = (M * vec3(ab.xy, 1.0)).xy, B = (M * vec3(ab.zw, 1.0)).xy;
-  colourF = colour;
+  int sid = int(style.x) * 3;
+  vec4 look = texelFetch(styles, ivec2(sid + 2, 0), 0);
+  colourF = texelFetch(styles, ivec2(sid + int(style.y), 0), 0);
   float det = sqrt(abs(m[0][0] * m[1][1] - m[0][1] * m[1][0]));
-  kindF = vec4(kind.x, kind.y * base.x * det, kind.zw);
+  kindF = vec4(kind.x, kind.y * look.x * 0.5 * base.x * det, kind.zw);
+  if (look.y < 0.5 || colourF.a <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   vec2 p;
   if (kind.x < 0.5) {
     int c = int(corner.x + 0.5) + 2 * int(corner.y > 0.0);
@@ -136,6 +140,7 @@ function paint(c, alpha) {
 }
 
 const CAPS = { round: 1, butt: 2, square: 2 };
+const SVGNS = 'http://www.w3.org/2000/svg';
 const ATTRS = ['style', 'fill', 'stroke', 'stroke-width', 'fill-rule', 'opacity', 'fill-opacity', 'stroke-opacity', 'stroke-linecap', 'display'];
 const SHAPES = new Set(['path', 'polygon', 'polyline', 'line', 'rect', 'circle', 'ellipse']);
 
@@ -189,7 +194,7 @@ export class GLObjects {
     gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = Object.fromEntries(['base', 'size', 'mats'].map((n) => [n, gl.getUniformLocation(p, n)]));
+    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles'].map((n) => [n, gl.getUniformLocation(p, n)]));
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -202,7 +207,10 @@ export class GLObjects {
     this.matsDirty = new Set(); // slots to send
     this.allocTex();
     this.records = new Map();   // entry group -> { slot, n, children: Map el -> slot, vao, buf, count, dirty }
-    this.styles = new Map();    // chain -> { fill, stroke, width, capA, join, shown }
+    this.styles = new Map();    // chain -> { id, el, fill, stroke, width, cap, evenodd, shown }
+    this.styleTex = gl.createTexture();
+    this.styleData = new Float32Array(1024 * 12);
+    this.stylesDirty = true;
     this.epoch = 0;
     this.changed = true;
     // anything in an object's drawing changed: its pieces built again; a
@@ -230,11 +238,18 @@ export class GLObjects {
       }
     }).observe(layer, { subtree: true, childList: true, attributes: true, characterData: true });
     // what the styles depend on: the map's classes and properties, the sun's sheet
+    // (asked again of an element of each kind, into the table: nothing is built anew
+    // unless a kind gains a fill or a pen it had none of)
     const restyle = () => {
       this.epoch++;
-      this.styles.clear();
-      for (const rec of this.records.values()) rec.dirty = true;
-      this.changed = true;
+      let rebuild = false;
+      for (const [chain, st] of this.styles) {
+        const was = [!!st.fill, !!st.stroke];
+        this.probe(st);
+        if (was[0] !== !!st.fill || was[1] !== !!st.stroke) rebuild = true;
+      }
+      if (rebuild) for (const rec of this.records.values()) rec.dirty = true;
+      this.stylesDirty = this.changed = true;
     };
     new MutationObserver(restyle).observe(svg, { attributes: true, attributeFilter: ['class', 'style'] });
     if (sunCss) new MutationObserver(restyle).observe(sunCss, { childList: true, characterData: true, subtree: true });
@@ -291,19 +306,54 @@ export class GLObjects {
   styleOf(el, chain) {
     let s = this.styles.get(chain);
     if (s) return s;
-    const cs = getComputedStyle(el);
-    const alpha = parseFloat(cs.opacity) || 0;
-    s = {
-      shown: cs.display !== 'none',
-      fill: paint(cs.fill, alpha * (parseFloat(cs.fillOpacity) || 0)),
-      stroke: paint(cs.stroke, alpha * (parseFloat(cs.strokeOpacity) || 0)),
-      width: parseFloat(cs.strokeWidth) || 0,
-      cap: CAPS[cs.strokeLinecap] ?? 2,
-      evenodd: cs.fillRule === 'evenodd',
-    };
-    if (!(s.width > 0)) s.stroke = null;
+    if (this.styles.size >= 1024) throw new Error('GLObjects: too many kinds of element');
+    // (asked later, all new kinds at once – each asking alone would have the
+    // browser restyle the drawings changed meanwhile; until then built with
+    // both a fill and a pen, the table showing what it has)
+    s = { id: this.styles.size, el: this.copy(el), fill: true, stroke: true, cap: 1, evenodd: false, pending: true };
     this.styles.set(chain, s);
+    (this.pending ??= []).push(s);
     return s;
+  }
+
+  // A copy of an element and its groups up to the object's (no children,
+  // no geometry), kept in a probe of its own beside the objects: asked for
+  // its style it needs no restyle of anything that changed in the drawings.
+  copy(el) {
+    if (!this.probeRoot) {
+      // (as the objects' layer is: in a scene, in the same <svg>)
+      const scene = document.createElementNS(SVGNS, 'g');
+      scene.setAttribute('class', 'scene');
+      scene.style.visibility = 'hidden';
+      this.probeRoot = scene.appendChild(document.createElementNS(SVGNS, 'g'));
+      this.probeRoot.setAttribute('class', this.layer.getAttribute('class') ?? '');
+      this.layer.closest('svg').append(scene);
+    }
+    const chain = [];
+    for (let n = el; n && n !== this.layer; n = n.parentNode) chain.unshift(n);
+    let at = this.probeRoot;
+    for (const n of chain) {
+      const c = n.cloneNode(false);
+      c.removeAttribute('d');
+      c.removeAttribute('transform');
+      at = at.appendChild(c);
+    }
+    return at;
+  }
+
+  // A kind's style as the browser computes it for its element, into the table.
+  probe(s) {
+    const cs = getComputedStyle(s.el);
+    const alpha = parseFloat(cs.opacity) || 0;
+    s.shown = cs.display !== 'none';
+    s.fill = paint(cs.fill, alpha * (parseFloat(cs.fillOpacity) || 0));
+    s.stroke = paint(cs.stroke, alpha * (parseFloat(cs.strokeOpacity) || 0));
+    s.width = parseFloat(cs.strokeWidth) || 0;
+    s.cap = CAPS[cs.strokeLinecap] ?? 2;
+    s.evenodd = cs.fillRule === 'evenodd';
+    if (!(s.width > 0)) s.stroke = null;
+    this.styleData.set([...(s.fill ?? [0, 0, 0, 0]), ...(s.stroke ?? [0, 0, 0, 0]), s.width, s.shown ? 1 : 0, 0, 0], s.id * 12);
+    this.stylesDirty = true;
   }
 
   // An object's drawing read into pieces.
@@ -330,6 +380,7 @@ export class GLObjects {
     }
     rec.children = new Map();
     rec.dirty = false;
+    rec.pending = null;
     this.setMat(rec.slot, own(g));
     const out = (this.scratch ??= { data: new Float32Array(STRIDE * 4096) });
     let n = 0;
@@ -357,7 +408,8 @@ export class GLObjects {
         if (v != null) own += `|${a}:${v}`;
       }
       const st = this.styleOf(el, own ? chain + own : chain);
-      if (!st.shown || (!st.fill && !st.stroke)) return;
+      if (st.pending) (rec.pending ??= new Set()).add(st);
+      if (!st.fill && !st.stroke) return; // (shown or not: the table says)
       const subs = flattenPath(dOf(el), TOLERANCE);
       if (!subs.length) return;
       const X = (p) => (m ? m[0] * p[0] + m[2] * p[1] + m[4] : p[0]);
@@ -367,7 +419,6 @@ export class GLObjects {
         const { positions: P, indices: I } = triangulate(subs, st.evenodd ? 'evenodd' : 'nonzero');
         room(I.length / 3);
         D = out.data;
-        const c = st.fill;
         for (let i = 0; i < I.length; i += 3) {
           const o = n++ * STRIDE;
           const v = (k) => [P[I[i + k] * 2], P[I[i + k] * 2 + 1]];
@@ -375,13 +426,13 @@ export class GLObjects {
           D[o] = X(p0); D[o + 1] = Y(p0); D[o + 2] = X(p1); D[o + 3] = Y(p1);
           D[o + 4] = X(p2); D[o + 5] = Y(p2); D[o + 6] = D[o + 7] = 0;
           D[o + 8] = 0; D[o + 9] = D[o + 10] = D[o + 11] = 0;
-          D[o + 12] = c[0]; D[o + 13] = c[1]; D[o + 14] = c[2]; D[o + 15] = c[3];
+          D[o + 12] = st.id; D[o + 13] = 0; D[o + 14] = D[o + 15] = 0;
           D[o + 16] = rec.slot; D[o + 17] = slot; D[o + 18] = D[o + 19] = 0;
         }
       }
       if (st.stroke) {
-        const hw = (st.width / 2) * (m ? Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) : 1);
-        const c = st.stroke;
+        // (the pen's width from the table, times how much the kept transforms scale it)
+        const hw = m ? Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) : 1;
         for (const { pts, closed } of subs) {
           if (pts.length < 2 && !closed) continue;
           const count = pts.length + (closed ? 1 : 0);
@@ -401,7 +452,7 @@ export class GLObjects {
             D[o + 8] = 1; D[o + 9] = hw;
             D[o + 10] = i === 1 && !ring ? st.cap : ip !== i - 1 && turn > 0.35 ? 1 : 0;
             D[o + 11] = i === count - 1 && !ring ? st.cap : 0;
-            D[o + 12] = c[0]; D[o + 13] = c[1]; D[o + 14] = c[2]; D[o + 15] = c[3];
+            D[o + 12] = st.id; D[o + 13] = 1; D[o + 14] = D[o + 15] = 0;
             D[o + 16] = rec.slot; D[o + 17] = slot; D[o + 18] = D[o + 19] = 0;
           }
         }
@@ -457,6 +508,24 @@ export class GLObjects {
       const rec = this.records.get(e.g);
       if (!rec || rec.dirty) this.build(e.g, rec);
     }
+    // the new kinds asked for their style; a drawing built with one whose
+    // fill goes by even-odd, or whose pen ends aren't round, built again
+    if (this.pending?.length) {
+      const asked = new Set(this.pending);
+      this.pending = [];
+      for (const st of asked) {
+        st.pending = false;
+        this.probe(st);
+      }
+      for (const rec of this.records.values()) {
+        if (!rec.pending) continue;
+        if ([...rec.pending].some((st) => st.evenodd || st.cap !== 1)) {
+          rec.dirty = true;
+          this.changed = true;
+        }
+        rec.pending = null;
+      }
+    }
     for (const [g, rec] of this.records) if (!seen.has(g) && !g.isConnected) this.freeRecord(g, rec);
     // the matrices sent
     gl.bindTexture(gl.TEXTURE_2D, this.matTex);
@@ -464,6 +533,15 @@ export class GLObjects {
       const rows = new Set([...this.matsDirty].map((s) => Math.floor((s * 2) / ROW)));
       for (const r of rows) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, r, ROW, 1, gl.RGBA, gl.FLOAT, this.matData, r * ROW * 4);
       this.matsDirty.clear();
+    }
+    if (this.stylesDirty) {
+      this.stylesDirty = false;
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.styleTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 3 * 1024, 1, 0, gl.RGBA, gl.FLOAT, this.styleData);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.activeTexture(gl.TEXTURE0);
     }
     gl.viewport(0, 0, w, h);
     gl.clearColor(0, 0, 0, 0);
@@ -473,7 +551,11 @@ export class GLObjects {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.uniform3f(this.u.base, dpr * view.zoom, dpr * (view.panX + view.ox), dpr * (view.panY + view.oy));
     gl.uniform2f(this.u.size, w, h);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.styleTex);
+    gl.uniform1i(this.u.styles, 1);
     gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.matTex);
     gl.uniform1i(this.u.mats, 0);
     for (const e of order ?? []) {
       const rec = e.shown !== false && this.records.get(e.g);
