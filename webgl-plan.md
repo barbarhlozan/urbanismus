@@ -151,6 +151,22 @@ uploaded per frame.
   coverage). Chrome: turn 26 → 37 fps with lines and movers on, the rest
   unchanged (the per-frame stream costs ~0.5 ms of script). Smoke and rain
   still on 2D canvases.
+- **Step 3 done** (commits `WebGL shadows`, `WebGL night`, `WebGL clouds`,
+  each in the Debug panel, off by default): `src/render/gl/hatching.js` –
+  the paper's strokes as a tile texture (the 2D patterns' raster, at a
+  quarter of a doubling's zoom steps), shapes from path data as pieces
+  (fills, the ragged dashed edges, the trunks' lines) sampling it in scene
+  px, unioned with blending MAX; left-out parts by the stencil (shadows: the
+  lamps' pools, a sun sweep's clip) or a mask drawn in order (night).
+  `gl/shadows.js` reads the same mask DOM as shadeCanvas.js (no worker);
+  `gl/night.js` the ground's and the objects' night in the map's wrappers;
+  clouds in `cloudShadows.js` (setGl). Look against the 2D: ink 1.02
+  (shadows), 0.999 (night), 0.998 (clouds). Chrome: no change. **Zen at
+  night: pan 4.3 → 36 fps, zoom 4.3 → 30, idle 44 → 59, turn 4 → 8; by
+  day pan 23 → 39, zoom 28 → 34.** What holds turns (7 fps) and settles
+  (16–18) back now is the objects' SVG: step 5.
+  Re-reading every object's shadow costs ~9 ms (on a change of objects);
+  cache pieces per element if that shows.
 
 ## The plan
 
