@@ -296,6 +296,7 @@ export class GLObjects {
         this.probe(st);
         if (was[0] !== !!st.fill || was[1] !== !!st.stroke) rebuild = true;
       }
+      this.opacities?.clear();
       if (rebuild) for (const rec of this.records.values()) rec.dirty = true;
       this.stylesDirty = this.changed = true;
     };
@@ -427,7 +428,7 @@ export class GLObjects {
       rec = { slot: this.alloc(n), n, vao, buf, count: 0 };
       this.records.set(g, rec);
     }
-    rec.opacity = parseFloat(getComputedStyle(g).opacity) || 0; // (its classes' own: .mist-under)
+    rec.opacity = this.opacityOf(g); // (its classes' own: .mist-under)
     rec.children = new Map();
     rec.boxes = new Map(); // child -> [x0, y0, x1, y1] in the group's px
     rec.els = [];
@@ -574,6 +575,22 @@ export class GLObjects {
       }
       rec.pending = null;
     }
+  }
+
+  // A group's opacity as its classes give it, asked of a copy (once per
+  // set of classes: asking the group itself would restyle the page).
+  opacityOf(g) {
+    const cls = g.getAttribute('class') ?? '';
+    let o = (this.opacities ??= new Map()).get(cls);
+    if (o == null) {
+      this.copy(g); // (the probe made)
+      const c = this.probeRoot.appendChild(document.createElementNS(SVGNS, 'g'));
+      if (cls) c.setAttribute('class', cls);
+      o = parseFloat(getComputedStyle(c).opacity);
+      if (!(o >= 0)) o = 1;
+      this.opacities.set(cls, o);
+    }
+    return o;
   }
 
   // A drawn object's child's box ([x0, y0, x1, y1] in its group's px; null
