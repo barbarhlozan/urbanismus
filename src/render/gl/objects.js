@@ -488,12 +488,15 @@ export class GLObjects {
         const { positions: P, indices: I } = triangulate(subs, st.evenodd ? 'evenodd' : 'nonzero');
         room(I.length / 3);
         D = out.data;
+        const [ma, mb, mc, md, me, mf] = m ?? [1, 0, 0, 1, 0, 0];
         for (let i = 0; i < I.length; i += 3) {
           const o = n++ * STRIDE;
-          const v = (k) => [P[I[i + k] * 2], P[I[i + k] * 2 + 1]];
-          const p0 = v(0), p1 = v(1), p2 = v(2);
-          D[o] = X(p0); D[o + 1] = Y(p0); D[o + 2] = X(p1); D[o + 3] = Y(p1);
-          D[o + 4] = X(p2); D[o + 5] = Y(p2); D[o + 6] = D[o + 7] = 0;
+          for (let k = 0; k < 3; k++) {
+            const x = P[I[i + k] * 2], y = P[I[i + k] * 2 + 1];
+            D[o + 2 * k] = ma * x + mc * y + me;
+            D[o + 2 * k + 1] = mb * x + md * y + mf;
+          }
+          D[o + 6] = D[o + 7] = 0;
           D[o + 8] = 0; D[o + 9] = D[o + 10] = D[o + 11] = 0;
           D[o + 12] = st.id; D[o + 13] = 0; D[o + 14] = ei; D[o + 15] = 0;
           D[o + 16] = rec.slot; D[o + 17] = slot; D[o + 18] = D[o + 19] = 0;
@@ -509,16 +512,21 @@ export class GLObjects {
           room(count);
           D = out.data;
           const ring = closed && count > 3;
-          const at = (i) => pts[i % pts.length];
+          const L = pts.length;
+          const [ma, mb, mc, md, me, mf] = m ?? [1, 0, 0, 1, 0, 0];
           for (let i = 1; i < count; i++) {
             const ip = i > 1 ? i - 2 : ring ? count - 2 : i - 1;
             const iq = i < count - 1 ? i + 1 : ring ? 1 : i;
-            const pa = at(i - 1), pb = at(i), pp = at(ip), pq = at(iq);
-            const t1 = Math.atan2(pa[1] - pp[1], pa[0] - pp[0]), t2 = Math.atan2(pb[1] - pa[1], pb[0] - pa[0]);
-            const turn = Math.abs(Math.atan2(Math.sin(t2 - t1), Math.cos(t2 - t1)));
+            const pa = pts[(i - 1) % L], pb = pts[i % L], pp = pts[ip % L], pq = pts[iq % L];
+            // (a sharp turn gets a round join: the angle between the two
+            // directions, by their cross and dot products)
+            const ux = pa[0] - pp[0], uy = pa[1] - pp[1], vx = pb[0] - pa[0], vy = pb[1] - pa[1];
+            const turn = Math.abs(Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy));
             const o = n++ * STRIDE;
-            D[o] = X(pa); D[o + 1] = Y(pa); D[o + 2] = X(pb); D[o + 3] = Y(pb);
-            D[o + 4] = X(pp); D[o + 5] = Y(pp); D[o + 6] = X(pq); D[o + 7] = Y(pq);
+            D[o] = ma * pa[0] + mc * pa[1] + me; D[o + 1] = mb * pa[0] + md * pa[1] + mf;
+            D[o + 2] = ma * pb[0] + mc * pb[1] + me; D[o + 3] = mb * pb[0] + md * pb[1] + mf;
+            D[o + 4] = ma * pp[0] + mc * pp[1] + me; D[o + 5] = mb * pp[0] + md * pp[1] + mf;
+            D[o + 6] = ma * pq[0] + mc * pq[1] + me; D[o + 7] = mb * pq[0] + md * pq[1] + mf;
             D[o + 8] = 1; D[o + 9] = hw;
             D[o + 10] = i === 1 && !ring ? st.cap : ip !== i - 1 && turn > 0.35 ? 1 : 0;
             D[o + 11] = i === count - 1 && !ring ? st.cap : 0;
