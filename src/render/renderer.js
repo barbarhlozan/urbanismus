@@ -1423,6 +1423,18 @@ export class Renderer {
     gl?.setLayer(name, items, this.ink[name].classes, this.ink[name]);
   }
 
+  // The map drawn with WebGL2 wherever it can be (webgl-plan.md) – each
+  // part keeps its SVG or 2D canvas without it, and in the Debug panel.
+  useWebGL() {
+    this.setGlLines(true);
+    this.setGlMovers(true);
+    this.setGlShadows(true);
+    this.setGlNight(true);
+    this.setGlObjects(true);
+    this.setGlRain(true);
+    this.setGlClouds(true);
+  }
+
   // The roads, footpaths, railways and fences drawn with WebGL (gl/lines.js)
   // instead of their SVG layers, or not (the Debug panel). False if the
   // browser has no WebGL2.
