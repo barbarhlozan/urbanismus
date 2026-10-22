@@ -296,11 +296,12 @@ export class GLObjects {
         this.probe(st);
         if (was[0] !== !!st.fill || was[1] !== !!st.stroke) rebuild = true;
       }
-      this.opacities?.clear();
       if (rebuild) for (const rec of this.records.values()) rec.dirty = true;
       this.stylesDirty = this.changed = true;
     };
     new MutationObserver(restyle).observe(svg, { attributes: true, attributeFilter: ['class', 'style'] });
+    // (the groups' opacities depend on classes only)
+    new MutationObserver(() => this.opacities?.clear()).observe(svg, { attributes: true, attributeFilter: ['class'] });
     if (sunCss) new MutationObserver(restyle).observe(sunCss, { childList: true, characterData: true, subtree: true });
   }
 
@@ -428,7 +429,7 @@ export class GLObjects {
       rec = { slot: this.alloc(n), n, vao, buf, count: 0 };
       this.records.set(g, rec);
     }
-    rec.opacity = this.opacityOf(g); // (its classes' own: .mist-under)
+    rec.opacity = this.opacityOf(g, rec); // (its classes' own: .mist-under)
     rec.children = new Map();
     rec.boxes = new Map(); // child -> [x0, y0, x1, y1] in the group's px
     rec.els = [];
@@ -560,6 +561,21 @@ export class GLObjects {
   // The new kinds asked for their style, all at once; a drawing built with
   // one whose fill goes by even-odd, or whose pen ends aren't round, built again.
   askPending() {
+    if (this.opacityPending?.size) {
+      this.copy(this.layer); // (the probe made)
+      for (const [cls, rec] of this.opacityPending) {
+        const c = this.probeRoot.appendChild(document.createElementNS(SVGNS, 'g'));
+        if (cls) c.setAttribute('class', cls);
+        let o = parseFloat(getComputedStyle(c).opacity);
+        if (!(o >= 0)) o = 1;
+        this.opacities.set(cls, o);
+        if (o !== 1) {
+          rec.opacity = o;
+          this.changed = true;
+        }
+      }
+      this.opacityPending.clear();
+    }
     if (!this.pending?.length) return;
     const asked = new Set(this.pending);
     this.pending = [];
@@ -579,18 +595,13 @@ export class GLObjects {
 
   // A group's opacity as its classes give it, asked of a copy (once per
   // set of classes: asking the group itself would restyle the page).
-  opacityOf(g) {
+  // (a set not asked yet: 1 until asked with the new kinds, askPending)
+  opacityOf(g, rec) {
     const cls = g.getAttribute('class') ?? '';
-    let o = (this.opacities ??= new Map()).get(cls);
-    if (o == null) {
-      this.copy(g); // (the probe made)
-      const c = this.probeRoot.appendChild(document.createElementNS(SVGNS, 'g'));
-      if (cls) c.setAttribute('class', cls);
-      o = parseFloat(getComputedStyle(c).opacity);
-      if (!(o >= 0)) o = 1;
-      this.opacities.set(cls, o);
-    }
-    return o;
+    const o = (this.opacities ??= new Map()).get(cls);
+    if (o != null) return o;
+    (this.opacityPending ??= new Map()).set(cls, rec);
+    return 1;
   }
 
   // A drawn object's child's box ([x0, y0, x1, y1] in its group's px; null

@@ -48,19 +48,27 @@ function skipSeparator(s, i) {
 
 // The next number: sign, digits with a point somewhere, an exponent – and
 // no separator needed before it, so `-.5.5` is two. NaN when there is none.
+// (Read as it is scanned – the digits as a whole number, divided by the
+// power of ten after the point: both exact, so the one division rounds as
+// Number() would – with no string cut out; Number() for the rare rest.)
+const POW10 = Array.from({ length: 23 }, (_, k) => 10 ** k);
 function number(sc) {
   const s = sc.s;
   let i = skipSeparator(s, sc.i);
   const start = i;
-  let c = s.charCodeAt(i);
-  if (c === 43 || c === 45) c = s.charCodeAt(++i);
-  let digits = 0;
-  while (c >= 48 && c <= 57) { c = s.charCodeAt(++i); digits++; }
+  let c = s.charCodeAt(i), neg = false;
+  if (c === 43 || c === 45) {
+    neg = c === 45;
+    c = s.charCodeAt(++i);
+  }
+  let digits = 0, whole = 0, after = 0;
+  while (c >= 48 && c <= 57) { whole = whole * 10 + (c - 48); c = s.charCodeAt(++i); digits++; }
   if (c === 46) {
     c = s.charCodeAt(++i);
-    while (c >= 48 && c <= 57) { c = s.charCodeAt(++i); digits++; }
+    while (c >= 48 && c <= 57) { whole = whole * 10 + (c - 48); c = s.charCodeAt(++i); digits++; after++; }
   }
   if (!digits) return NaN;
+  let exp = false;
   if (c === 101 || c === 69) {
     let j = i + 1;
     c = s.charCodeAt(j);
@@ -68,9 +76,14 @@ function number(sc) {
     if (c >= 48 && c <= 57) {
       while (c >= 48 && c <= 57) c = s.charCodeAt(++j);
       i = j;
+      exp = true;
     }
   }
   sc.i = i;
+  if (!exp && digits <= 15 && after < POW10.length) {
+    const v = after ? whole / POW10[after] : whole;
+    return neg ? -v : v;
+  }
   const v = Number(s.slice(start, i));
   return Number.isFinite(v) ? v : NaN;
 }
