@@ -205,6 +205,18 @@ uploaded per frame.
   ~29). Left: smoke and mist on the GPU; the renderer's own redraw at
   level-of-detail changes (updateLod, updateWoods' first findForests, the
   painters' SVG strings); taking the old paths out (step 6).
+- **Step 6 (most of it), 2026-10-22 night**: the old ways taken out, at
+  the user's word – `shadeCanvas.js`, `shadeWorker.js`, `nightCanvas.js`,
+  `follow.js`, AgentCanvas, the SVG ink layers (ink.js keeps only the pen's
+  timing), the 2D paths of rain, clouds' shadows (and their wash/pen looks)
+  and smoke, the Debug panel's switches, `Renderer.useWebGL`. The GPU
+  canvases are in index.html from the start (#map-gl, #shade-canvas,
+  #night-ground, #night-top, #objects-gl; #agents, #trains-top, #smoke,
+  #cloud-shadows, #rain hold WebGL contexts). Without WebGL 2 the opening
+  cover says so and the game stops (text key `noWebGL`). Still SVG: the
+  terrain, meadow, lots, forest far out, parked cars, overlay, notes, and
+  the objects' SVG as the GPU's source. **The one switch left: in mist the
+  objects show as SVG (glObjectsAside)** until mist is on the GPU.
   Re-reading every object's shadow costs ~9 ms (on a change of objects);
   cache pieces per element if that shows.
 

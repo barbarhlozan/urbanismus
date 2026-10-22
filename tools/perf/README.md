@@ -39,8 +39,10 @@ costs (each runs in a fresh browser):
 node tools/perf/bench.mjs town.json base noShadows noSway --only pan,zoom,settle
 ```
 
-`base`, `noShadows`, `noSway`, `noAgents`, `noCanvases`, `noNight`,
-`noClouds`, `noMeadow`, `noTrees`, `noBuildings`; `--setup '<js>'` runs your
+`base`, `noShadows`, `noObjectShadows`, `noHillShade`, `noSway`,
+`noAgents`, `noCanvases`, `noNight`, `noClouds`, `noMeadow`, `noTrees`,
+`noBuildings`, `noGround`, `noWorld`, `noObjects`, `noLots`, `noRoads`,
+`draft`; `--setup '<js>'` runs your
 own before measuring (`R` is the renderer), `--dpr 1` for a plain screen,
 `--json` for the rows as data.
 

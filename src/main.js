@@ -64,6 +64,19 @@ applyTheme();
 // (icons/ui/), before any of it is built
 await Promise.all([loadText(), loadIcons()]);
 
+// The map is drawn with WebGL 2 (src/render/gl/): without it there is no
+// map – the opening cover says so, and stays.
+if (!document.createElement('canvas').getContext('webgl2')) {
+  const card = document.querySelector('.intro-card');
+  const note = card?.appendChild(document.createElement('p'));
+  if (note) {
+    note.className = 'intro-note';
+    note.textContent = t('noWebGL');
+    card.classList.add('shown');
+  }
+  throw new Error('No WebGL 2: the map cannot be drawn');
+}
+
 // ---------- world ----------
 
 // Set up in the New map menu, handed over across the reload (see newMap).

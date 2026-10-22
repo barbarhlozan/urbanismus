@@ -16,6 +16,11 @@ done
   cs: Hotovo
   en: Done
 
+# on the opening cover, in a browser that can't draw the map (no WebGL 2)
+noWebGL
+  cs: Dědinu nakreslí jen prohlížeč s WebGL 2 – třeba současný Chrome, Firefox nebo Safari.
+  en: Dědina can only be drawn by a browser with WebGL 2 – a current Chrome, Firefox or Safari.
+
 
 town.name
   cs: Jméno obce

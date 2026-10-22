@@ -64,10 +64,14 @@ html, body {
 
 /* ---------- World ---------- */
 
-/* The map, back to front: #view (terrain, then the map's linework), the
-   night on the ground (#night-ground, gl/night.js), the
-   <canvas> with the moving people, vehicles and trains, #view-top (the
-   buildings, trees and tool previews), the night over them (#night-top), then #trains-top: train carriages
+/* The map, back to front – drawn with WebGL (src/render/gl/) but for the
+   terrain, the meadow, the lots and the overlay: #view (the terrain, then
+   the roads and railways #map-gl, the shadows #shade-canvas, the parked
+   cars, the night on the ground #night-ground), the <canvas> with the
+   moving people, vehicles and trains (#agents), #view-top (the buildings,
+   trees and lamps #objects-gl – read from the #objects <svg>, which isn't
+   shown – the tool previews and the overlay, the night over them
+   #night-top), then #trains-top: train carriages
    with nothing nearer in front of them, so they pass in front of stations
    and buildings behind the track, #smoke: chimney smoke (particles.js),
    over the roofs it comes from, and the weather over all of it:
@@ -1159,6 +1163,8 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .intro-card { display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; transition: opacity 350ms ease-out, transform 250ms ease-out; }
 .intro-card.shown { opacity: 1; }
 .intro-name { font-family: var(--ui-font); font-size: clamp(26px, 5vw, 40px); letter-spacing: 0.01em; }
+/* the cover's word when the map can't be drawn (main.js: no WebGL 2) */
+.intro-note { font-family: var(--ui-font); font-size: 15px; max-width: 30em; margin: 14px 16px 0; text-align: center; }
 /* The underline is uncovered from the left as the name appears, by a box
    sliding over it while the line slides back the other way – only moves,
    which the browser animates smoothly even while the game is still busy

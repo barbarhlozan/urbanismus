@@ -14,7 +14,7 @@ import { launch, openTown, trace, costs } from './chrome.mjs';
 
 const VARIANTS = {
   base: '',
-  noShadows: `document.querySelectorAll('.shade-veil').forEach((e) => (e.style.display = 'none'))`,
+  noShadows: `document.getElementById('shade-canvas').style.display = 'none'`,
   noObjectShadows: `document.querySelector('.shade-shapes').style.display = 'none'`,
   noHillShade: `document.querySelector('.hill-shapes').style.display = 'none'`,
   noSway: `(await import('/src/render/renderer.js')).TREE_SWAY.most = 0`,
@@ -28,12 +28,11 @@ const VARIANTS = {
   // a whole <svg> of the map left out
   noGround: `document.getElementById('ground').style.display = 'none'`,
   noWorld: `document.getElementById('world').style.display = 'none'`,
-  noObjects: `document.getElementById('objects').style.display = 'none'`,
+  noObjects: `['objects', 'objects-gl'].forEach((i) => (document.getElementById(i).style.display = 'none'))`,
   noLots: `R.layers.lots.style.display = 'none'`,
-  noVeil: `R.shadeVeil.style.display = 'none'`,
-  noRoads: `['roads', 'paths', 'rails', 'fences'].forEach((l) => (R.layers[l].style.display = 'none'))`,
+  noRoads: `document.getElementById('map-gl').style.display = 'none'`,
   // all the time, what the view leaves out while it moves
-  draft: `document.head.insertAdjacentHTML('beforeend', '<style>.layer-meadow, .layer-parked, .layer-objects .d2, .layer-lots .d2, .shade-veil { display: none !important }</style>')`,
+  draft: `document.head.insertAdjacentHTML('beforeend', '<style>.layer-meadow, .layer-parked, .layer-objects .d2, .layer-lots .d2 { display: none !important }</style>')`,
 };
 
 // name: [what to do each frame (cam, i, R), ms, what to count each frame]
