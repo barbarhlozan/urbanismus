@@ -56,7 +56,6 @@ import { DEER, deerSVG, deerMark } from './deer.js';
 import { LIVESTOCK, livestockSVG, livestockMark } from './livestock.js';
 import { fenceGates } from '../sim/pastures.js';
 import { drawIn, eraseOut, drawEnabled, DRAW, growScale, shrinkScale } from './draw.js';
-import { ShadeCanvas } from './shadeCanvas.js';
 import { GLLines } from './gl/lines.js';
 import { GLMovers } from './gl/movers.js';
 import { GLShadows } from './gl/shadows.js';
@@ -95,7 +94,6 @@ import { mergeRuns, placeInOrder, isoSort } from './order.js';
 import { Camera } from './camera.js';
 import { SUN, DAY, sunFor, shadowMask } from './shadows.js';
 import { HILL_SHADOWS, hillShade, hillShadeRings } from './hillShadows.js';
-import { hatchTile } from './hatch.js';
 import { lampPool, headBeam } from './lights.js';
 import { SUN_FREE, sunStyle } from './sunFree.js';
 import { treeLightSector } from '../../features/trees.js';
@@ -262,7 +260,6 @@ export const TREE_SWAY = { most: 60, minZoom: 1.2, fps: 12 };
 // grid unit of it (at most `max`), this far apart (grid units).
 const WATER = { radius: 0.75, soft: 5, metres: 6, step: 0.08, wave: { from: 0.45, length: 0.7, max: 1.6, gap: 0.09 } };
 
-
 // Half-size of a building's ground area around each of its dots.
 const STRUCTURE_PAD = 0.45;
 // Kerbs open this much wider than a footpath coming in, each side (grid units).
@@ -277,8 +274,8 @@ export class Renderer {
     // their own wrapper (#view-top), over the canvas with the moving people
     // and trains (agentCanvas.js). See styles.css.
     this.top = document.getElementById('objects');
-    // the parked cars in an <svg> of their own over the shadows' canvases
-    // (shadeCanvas.js), in the map's wrapper
+    // the parked cars in an <svg> of their own over the shadows' canvas
+    // (gl/shadows.js), in the map's wrapper
     this.parkedSvg = document.getElementById('parked');
     this.wrappers = [svg.parentNode, this.top.parentNode];
     this.pen = new AgentCanvas(document.getElementById('agents'));
@@ -342,19 +339,16 @@ export class Renderer {
     this.svgs = [svg, ground, this.top, this.parkedSvg];
     this.scenes = [ground, svg, this.parkedSvg, this.top].map((s) => s.querySelector('.scene'));
     this.layers = Object.fromEntries(LAYERS.map((l) => [l, svgOf(l).querySelector(`.layer-${l}`)]));
-    // the shadows (shadows.js shadowMask, hillShadows.js): one sheet of the
-    // paper's strokes (hatch.js) shown through one mask of every object's
-    // shadow and the hills' – the same strokes, so where a tree stands in a
-    // hill's shadow the two are one; the layers 'shadows' and 'hillshade'
-    // are the mask's shapes (renderShadeTiles draws the sheet)
+    // the shadows (shadows.js shadowMask, hillShadows.js): the shapes of
+    // every object's shadow and the hills', and the lamps' pools left out
+    // of them, kept in a mask the browser never paints – the paper's
+    // strokes are drawn through them with WebGL (gl/shadows.js), the same
+    // strokes for all, so where a tree stands in a hill's shadow the two
+    // are one; the layers 'shadows' and 'hillshade' are the mask's shapes
     const veil = this.layers.shadows;
-    veil.innerHTML = '<defs class="shade-tiles"></defs>' +
-      '<mask id="shade-mask" class="shade-mask" maskUnits="userSpaceOnUse"><g class="hill-shapes"></g><g class="shade-shapes"></g><g class="lights-cut"></g></mask>' +
-      '<rect class="shade-veil" fill="url(#shade-tile)" mask="url(#shade-mask)"/>';
+    veil.innerHTML = '<mask id="shade-mask" class="shade-mask" maskUnits="userSpaceOnUse"><g class="hill-shapes"></g><g class="shade-shapes"></g><g class="lights-cut"></g></mask>';
     this.shadeVeil = veil;
-    // (drawn on canvases from these shapes, never painted by the browser)
-    this.hillCanvas = new ShadeCanvas(document.getElementById('hill-canvas'), veil, 'hills');
-    this.shadeCanvas = new ShadeCanvas(document.getElementById('shade-canvas'), veil, 'objects');
+    this.glShadows = GLShadows.make(document.getElementById('shade-canvas'), veil);
     this.layers.shadows = veil.querySelector('.shade-shapes');
     this.layers.hillshade.remove();
     this.layers.hillshade = veil.querySelector('.hill-shapes');
@@ -623,7 +617,6 @@ export class Renderer {
       if (this.camera.angle !== this.styleAngle) this.updateSunStyle(); // (the trees' light on screen turns with the view)
       for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
       this.dirty.clear();
-      this.renderShadeTiles(); // (only when they change)
       if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
       if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
       // a new level of detail: the objects in sight, as many as fit in
@@ -656,7 +649,7 @@ export class Renderer {
       if (this.drafting && performance.now() - this.movedAt > VIEW_SETTLE) this.endDraft();
       // (drawn first, shown once its drawing is back: renderShadeCanvas)
       if (this.shadesOff && !this.rebuildQueue.size && !this.landing.size && performance.now() - this.movedAt > VIEW_SETTLE) {
-        if (this.shadesComing && (this.glShadows ?? this.shadeCanvas).current) this.showShadows();
+        if (this.shadesComing && (this.glShadows?.current ?? true)) this.showShadows();
         else this.shadesComing = true;
       }
     }
@@ -923,26 +916,6 @@ export class Renderer {
       this.hills.views.set(camera.angle, view);
     }
     el.innerHTML = view;
-  }
-
-  // The sheet of the paper's strokes the shadows' mask shows (see the
-  // constructor): every line close up, fewer further out, as the night's;
-  // a rect far larger than the map, as the night's. Drawn again only when
-  // it changes.
-  renderShadeTiles() {
-    const { camera, world } = this;
-    const h = SUN.hatch;
-    if (!h) return;
-    const most = SHADE_TIERS[this.lodLevel ?? 0] ?? 1;
-    const key = `${most}|${JSON.stringify(h)}|${camera.tile}`;
-    if (key === this.shadeKey) return;
-    this.shadeKey = key;
-    const px = camera.tile;
-    this.shadeVeil.querySelector('.shade-tiles').innerHTML = hatchTile('shade-tile', most, h, px, 'shade-line');
-    const [mx, my] = this.project(camera.cx, camera.cy, 0);
-    const r = (Math.hypot(world.grid.width, world.grid.height) + 20) * px * 2;
-    const box = { x: Math.round(mx - r), y: Math.round(my - r), width: Math.round(2 * r), height: Math.round(2 * r) };
-    for (const el of this.shadeVeil.querySelectorAll('.shade-veil, .shade-mask')) for (const [k, v] of Object.entries(box)) el.setAttribute(k, v);
   }
 
   // What the camera sees of the ground, the brows (brows.js) and the rock
@@ -1428,7 +1401,6 @@ export class Renderer {
   useWebGL() {
     this.setGlLines(true);
     this.setGlMovers(true);
-    this.setGlShadows(true);
     this.setGlNight(true);
     this.setGlObjects(true);
     this.setGlRain(true);
@@ -1486,31 +1458,6 @@ export class Renderer {
       this.glMovers = null;
       for (const pen of this.pens2d) pen.canvas.style.display = '';
       [this.pen, this.penTop] = this.pens2d;
-    }
-    return true;
-  }
-
-  // The shadows drawn with WebGL (gl/shadows.js) instead of on their 2D
-  // canvases, or not (the Debug panel): a canvas of its own where those
-  // stand, from the same masks.
-  setGlShadows(on) {
-    const twoD = [this.hillCanvas.canvas, this.shadeCanvas.canvas];
-    if (on && !this.glShadows) {
-      const canvas = document.createElement('canvas');
-      canvas.className = 'shade-canvas';
-      canvas.style.setProperty('--sun', this.shadeSun ?? '');
-      this.shadeCanvas.canvas.after(canvas);
-      this.glShadows = GLShadows.make(canvas, this.shadeVeil);
-      if (!this.glShadows) {
-        canvas.remove();
-        return false;
-      }
-      for (const c of twoD) c.style.display = 'none';
-    } else if (!on && this.glShadows) {
-      this.glShadows.canvas.remove();
-      this.glShadows = null;
-      for (const c of twoD) c.style.display = '';
-      this.hillCanvas.dirty = this.shadeCanvas.dirty = true;
     }
     return true;
   }
@@ -1951,12 +1898,10 @@ export class Renderer {
     this.nightSheet = new DOMMatrix(this.sheet(this.drawn.angle, a, true)); // (and the ground's, nightCanvas.js)
     // the terrain, the largest of them, turned whole on the GPU: its <svg>
     // about the middle of the map as drawn (the scene's origin)
-    // (and the hills' shadows on their canvas: renderShadeCanvas)
     const { ground } = this, d = this.drawn;
     ground.style.transformOrigin = `${d.panX + this.ox}px ${d.panY + this.oy}px`;
     ground.style.transform = this.sheet(d.angle, a, true);
     ground.style.willChange = 'transform';
-    this.hillSheet = new DOMMatrix().translate(d.panX + this.ox, d.panY + this.oy).multiply(new DOMMatrix(this.sheet(d.angle, a, true))).translate(-(d.panX + this.ox), -(d.panY + this.oy));
     if (this.linesAngle !== a) {
       for (const l of LINES) {
         if (this.glLines && GL_LINES.includes(l)) continue; // (on the GPU the camera turns them)
@@ -2243,7 +2188,6 @@ export class Renderer {
       old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SETTLE_FADE, easing: 'ease-out', fill: 'forwards' }).finished.then(() => old.remove(), () => old.remove());
     }
     Object.assign(ground.style, { transform: '', transformOrigin: '', willChange: '' });
-    this.hillSheet = null;
     this.dirty.add('terrain');
     for (const l of SHEET) {
       this.layers[l].removeAttribute('transform');
@@ -2953,7 +2897,6 @@ export class Renderer {
     }
   }
 
-
   // The lights of what moves, at night (with the lamps on): a beam on the
   // ground ahead of every car, bus, lorry and train (lights.js headBeam),
   // as polygons in scene px, for the night's canvas to rub out
@@ -3012,34 +2955,22 @@ export class Renderer {
     for (const svg of this.svgs) svg.classList.remove('draft');
   }
 
-  // The shadows' canvases (shadeCanvas.js), for the view the SVGs were
-  // last drawn at, fading with the weather as they do (--sun, main.js);
-  // the objects' not while it is hidden (hideShadows), drawn once it shows.
+  // The shadows (gl/shadows.js), for the view the SVGs were last drawn
+  // at, fading with the weather as they do (--sun, main.js); the objects'
+  // held while the view moves (hideShadows), hatched in once it rests.
   renderShadeCanvas() {
     const d = this.drawn;
-    if (!d) return;
+    if (!d || !this.glShadows) return;
     const sun = this.svg.style.getPropertyValue('--sun');
     if (sun !== this.shadeSun) {
       this.shadeSun = sun;
-      for (const el of [this.hillCanvas.canvas, this.shadeCanvas.canvas, this.parkedSvg, this.glShadows?.canvas]) el?.style.setProperty('--sun', sun);
+      for (const el of [this.glShadows.canvas, this.parkedSvg]) el.style.setProperty('--sun', sun);
     }
     const look = {
       view: { zoom: d.zoom, panX: d.panX, panY: d.panY, angle: d.angle, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH },
       hatch: SUN.hatch, tier: SHADE_TIERS[this.lodLevel ?? 0] ?? 1, px: this.camera.tile, stroke: this.strokeK,
     };
-    if (this.glShadows) {
-      // (the objects' as hideShadows and showShadows have their canvas)
-      const { style } = this.shadeCanvas.canvas;
-      const shown = style.visibility === 'hidden' ? 0 : parseFloat(style.getPropertyValue('--shown') || '1');
-      this.glShadows.draw({ ...look, hold: (this.shadesOff && !this.shadesComing) || this.turning, shown });
-      return;
-    }
-    // (mid-turn the hills' as far as it has turned, turnFrame)
-    const sheet = this.turning ? this.hillSheet : null;
-    this.hillCanvas.draw({ ...look, sheet });
-    this.shadeCanvas.draw({ ...look, hold: (this.shadesOff && !this.shadesComing) || this.turning });
-    this.hillCanvas.place(look.view, sheet);
-    this.shadeCanvas.place(look.view);
+    this.glShadows.draw({ ...look, hold: (this.shadesOff && !this.shadesComing) || this.turning, shown: this.shadesShown ?? 1 });
   }
 
   hideShadows() {
@@ -3048,27 +2979,20 @@ export class Renderer {
     this.shadesOff = true;
     cancelAnimationFrame(this.shadesIn);
     this.sweep?.end();
-    const { style } = this.shadeCanvas.canvas;
-    style.visibility = 'hidden';
-    style.removeProperty('--shown');
+    this.shadesShown = 0;
   }
 
   // The shadows hatched in again once the view rests and what it redraws
   // is drawn (frame).
   showShadows() {
     this.shadesOff = this.shadesComing = false;
-    const { style } = this.shadeCanvas.canvas, { steps, step } = DRAFT;
-    style.visibility = '';
+    const { steps, step } = DRAFT;
+    this.shadesShown = 1;
     if (!drawEnabled()) return;
     const start = performance.now();
-    let shown = -1;
     const next = () => {
       const i = Math.min(steps, Math.floor((performance.now() - start) / step) + 1);
-      if (i !== shown) {
-        shown = i;
-        if (i < steps) style.setProperty('--shown', String(i / steps));
-        else style.removeProperty('--shown');
-      }
+      this.shadesShown = i / steps;
       if (i < steps) this.shadesIn = requestAnimationFrame(next);
     };
     next();
@@ -3118,7 +3042,7 @@ export class Renderer {
       const front = off.map((o, i) => [u0 + ((u1 - u0) * i) / n, f + o - jag / 2]);
       pNew.setAttribute('d', `M${at(u0, v0 - jag * 2)}L${at(u1, v0 - jag * 2)}${front.slice().reverse().map(([u, v]) => `L${at(u, v)}`).join('')}Z`);
       pOld.setAttribute('d', `M${at(u0, v1 + jag * 2)}L${at(u1, v1 + jag * 2)}${front.slice().reverse().map(([u, v]) => `L${at(u, v)}`).join('')}Z`);
-      this.hillCanvas.dirty = this.shadeCanvas.dirty = true; // (the clips are outside the sheets they watch)
+      if (this.glShadows) this.glShadows.dirty.hills = this.glShadows.dirty.objects = true; // (the clips are outside the sheets they watch)
       if (t < 1) this.sweep.raf = requestAnimationFrame(step);
       else this.sweep.end();
     };

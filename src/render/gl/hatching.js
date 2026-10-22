@@ -30,8 +30,8 @@ import { flattenPath, triangulate } from './geometry.js';
 import { hatchTileLines, TILE } from '../hatch.js';
 
 // The ragged edge of a shadow or a light, as the masks have it (styles.css
-// .shade-mask .shade): a dashed line round it (its own units); the trunks'
-// lines (shadeWorker.js).
+// .shade-mask .shade): a dashed line round it (its own units); the width of
+// the trunks' lines in a shadow.
 export const EDGE = { width: 2.5, dash: [3, 2, 1.5, 3.5, 2.5, 1, 4, 2.5, 1, 3] };
 const LINE = 2.2;
 // Curves flattened to within this of the true line (scene px).
@@ -411,8 +411,8 @@ export class Hatching {
   }
 
   // The tile of the paper's strokes up to `tier` (hatch.js), drawn with a
-  // pen `width` scene px wide at `q` device px to a scene px – as the 2D
-  // canvases' patterns (shadeWorker.js, NightCanvas.tileFor).
+  // pen `width` scene px wide at `q` device px to a scene px (the callers
+  // step `q` by a quarter of a doubling, so zooming draws it only now and then).
   tile(tier, hatch, px, width, q) {
     const key = `${tier}|${JSON.stringify(hatch)}|${px}|${width}|${q}`;
     let t = this.tiles.get(key);

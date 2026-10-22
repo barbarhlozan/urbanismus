@@ -96,10 +96,10 @@ html, body {
 #clouds-above { isolation: isolate; }
 /* a cloud overhead: drawn once, slid along with the map (cloudsAbove.js) */
 #clouds-above .cloud-above { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform, opacity; }
-/* the shadows, the hills' and the objects' (shadeCanvas.js): drawn as large
+/* the shadows, the hills' and the objects' (gl/shadows.js): drawn as large
    as the SVGs beside them, fading with the weather (--sun, set by the
    renderer) */
-.shade-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transform-origin: 0 0; will-change: transform; opacity: calc(var(--sun) * var(--shown, 1)); transition: --sun 4s; }
+.shade-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: var(--sun); transition: --sun 4s; }
 /* a grey sky's shade over the whole map (config.weather.gloom) */
 #gloom { position: fixed; inset: 0; pointer-events: none; background: var(--detail); opacity: 0; transition: opacity 4s; }
 /* mist in the valleys (src/render/mist.js): on the map the paper's strokes
@@ -296,12 +296,8 @@ html, body {
 :is(.shadow, .layer-objects .wall-shade).p3 { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 :is(.shadow, .layer-objects .wall-shade).p4 { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
 :is(.shadow, .layer-objects .wall-shade).p5 { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
-/* the shadows on the map (Renderer.renderShadeTiles): sheets of the paper's
-   strokes (render/hatch.js) shown through masks of the shadows' shapes – the
-   objects' and the hills' alike, in the finest pen, as the night's. A shape's edge is
-   drawn into the mask too, broken, so the strokes stop unevenly there, as a
-   hand's do */
-.shade-veil { pointer-events: none; opacity: var(--sun); }
+/* the shadows' shapes (Renderer: the mask, never painted – gl/shadows.js
+   draws the paper's strokes through them) */
 .shade-line { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
 .shade-mask .shade { fill: #fff; stroke: #fff; stroke-width: 2.5px; stroke-dasharray: 3 2 1.5 3.5 2.5 1 4 2.5 1 3; stroke-linejoin: round; }
 .shade-mask .shade-line { fill: none; stroke: #fff; stroke-width: 2.2px; stroke-linecap: round; }

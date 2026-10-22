@@ -1,7 +1,6 @@
-// The shadows drawn with WebGL2 (gl/hatching.js) instead of on the two 2D
-// canvases (shadeCanvas.js), from the same shapes: the shadows' mask in
-// the map's SVG – the hills' shadows, the objects', the lamps' pools left
-// out, and mid-sweep (Renderer.sweepShadows) the sheet as the sun was
+// The shadows drawn with WebGL2 (gl/hatching.js) from their shapes: the
+// shadows' mask in the map's SVG – the hills' shadows, the objects', the
+// lamps' pools left out, and mid-sweep (Renderer.sweepShadows) the sheet as the sun was
 // beside it, each clipped to its side of the front. One canvas in the
 // map's wrapper, drawn for the view the SVGs were last drawn at (as
 // gl/lines.js), at once: no worker, nothing copied to the GPU but the
@@ -17,7 +16,6 @@
 //   s.current                                   drawn as last asked
 
 import { THEME } from '../../theme.js';
-import { collect, clipOf } from '../shadeCanvas.js';
 import { Hatching, Pieces, meshOf, rgb, STRIDE } from './hatching.js';
 
 // Where each part's shapes are in the mask (and the lamps' pools, cut out
@@ -203,4 +201,31 @@ export class GLShadows {
       if (shown > 0) h.pieces(s.objects, { ...look, test });
     }
   }
+}
+
+// An element's shapes as they are drawn – each element's transform and
+// opacity, those not displayed left out: [kind ('shape', 'line'),
+// path data, matrix, alpha, cut, evenodd].
+function collect(el, m, alpha, cut, out) {
+  if (el.style?.display === 'none') return;
+  const t = el.transform?.baseVal;
+  if (t?.numberOfItems) {
+    const { a, b, c, d, e, f } = t.consolidate().matrix;
+    m = m.multiply(new DOMMatrix([a, b, c, d, e, f]));
+  }
+  if (el.style?.opacity) alpha *= parseFloat(el.style.opacity);
+  if (alpha <= 0) return;
+  if (el.tagName !== 'path') {
+    for (const child of el.children) collect(child, m, alpha, cut, out);
+    return;
+  }
+  const d = el.getAttribute('d');
+  if (!d) return;
+  out.push([el.classList.contains('shade-line') ? 'line' : 'shape', d, [m.a, m.b, m.c, m.d, m.e, m.f], alpha, cut, el.getAttribute('fill-rule') === 'evenodd']);
+}
+
+// A sheet's clip (the sun's front, mid-sweep): its <clipPath>'s path data.
+function clipOf(g) {
+  const id = g.getAttribute('clip-path')?.match(/url\(#([^)]+)\)/)?.[1];
+  return (id && document.getElementById(id)?.querySelector('path')?.getAttribute('d')) || null;
 }
