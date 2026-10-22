@@ -47,6 +47,7 @@ layout(location = 2) in vec4 cp;      // a fill: its third point; a stroke: the 
 layout(location = 3) in vec4 kind;    // fill (0) or stroke (1), the stroke's half width (scene px), its ends at a and b (0 a join, 1 round, 2 butt)
 layout(location = 4) in vec4 paint;   // alpha, group (its alpha a uniform), the value it writes to a mask
 uniform vec3 base;                    // scene px -> device px: scale, x, y
+uniform mat3 pre;                     // the pieces' own px -> scene px (all of them alike: a turn's sheet)
 uniform vec2 size;                    // the canvas, device px
 uniform vec4 alphas;                  // per group
 out vec2 local;
@@ -57,9 +58,9 @@ flat out vec4 kindF;
 flat out float alpha;
 flat out float value;
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
-vec2 dev(vec2 p) { return p * base.x + base.yz; }
+vec2 dev(vec2 p) { return (pre * vec3(p, 1.0)).xy * base.x + base.yz; }
 void main() {
-  kindF = vec4(kind.x, kind.y * base.x, kind.zw);
+  kindF = vec4(kind.x, kind.y * base.x * sqrt(abs(pre[0][0] * pre[1][1] - pre[0][1] * pre[1][0])), kind.zw);
   alpha = paint.x * alphas[int(paint.y)];
   value = paint.z;
   vec2 p;
@@ -340,7 +341,7 @@ export class Hatching {
   constructor(canvas, gl) {
     this.canvas = canvas;
     this.gl = gl;
-    this.prog = program(gl, VS, FS, ['base', 'size', 'alphas', 'mode', 'tile', 'tileAt', 'colour']);
+    this.prog = program(gl, VS, FS, ['base', 'pre', 'size', 'alphas', 'mode', 'tile', 'tileAt', 'colour']);
     this.sheetProg = program(gl, SHEET_VS, SHEET_FS, ['base', 'size', 'tile', 'mask', 'masked', 'tileSize', 'grey', 'colour', 'sets', 'reveal', 'band']);
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
@@ -377,6 +378,7 @@ export class Hatching {
     gl.bindBuffer(gl.ARRAY_BUFFER, b.buf);
     gl.bufferData(gl.ARRAY_BUFFER, pieces.data.subarray(0, pieces.n * STRIDE), gl.DYNAMIC_DRAW);
     b.n = pieces.n;
+    b.pre = null;
     return b;
   }
 
@@ -446,11 +448,13 @@ export class Hatching {
   // Pieces drawn: `base` [scale, x, y] scene px -> device px; with the
   // tile's strokes in `colour` ([r, g, b]) where they lie, the groups'
   // `alphas`; or (`stencil`: { ref, write, test }) into the stencil only.
-  pieces(b, { base, tile = null, colour = [0, 0, 0], alphas = [1, 1, 1, 1], stencil = null, test = null }) {
+  pieces(b, { base, pre = b?.pre, tile = null, colour = [0, 0, 0], alphas = [1, 1, 1, 1], stencil = null, test = null }) {
     if (!b?.n) return;
     const { gl } = this, { p, u } = this.prog;
     gl.useProgram(p);
     gl.uniform3fv(u.base, base);
+    const m = pre ?? [1, 0, 0, 1, 0, 0];
+    gl.uniformMatrix3fv(u.pre, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
     gl.uniform2f(u.size, this.w, this.h);
     gl.uniform4fv(u.alphas, alphas);
     if (stencil) {
@@ -513,6 +517,8 @@ export class Hatching {
       const { p, u } = this.prog;
       gl.useProgram(p);
       gl.uniform3fv(u.base, base);
+      const m = b.pre ?? [1, 0, 0, 1, 0, 0];
+      gl.uniformMatrix3fv(u.pre, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
       gl.uniform2f(u.size, this.w, this.h);
       gl.uniform4fv(u.alphas, [1, 1, 1, 1]);
       gl.uniform1i(u.mode, 1);

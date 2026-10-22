@@ -76,13 +76,29 @@ export class GLShadows {
     return this.free.pop() ?? this.h.buffer();
   }
 
-  // The shapes of `cls` in a mask as pieces (in scene px), into `b`.
-  read(mask, classes, b, group) {
+  // The shapes of `classes` in a mask, into the buffers `b` (cuts: `cutB`).
+  // Shapes all moved alike (a turn's sheet) are laid in their own px and
+  // the matrix given with them – the same shapes again only move it.
+  read(mask, classes, group, b, cutB) {
     const shapes = [];
     for (const cls of classes) for (const el of mask.getElementsByClassName(cls)) collect(el, new DOMMatrix(), 1, cls === 'lights-cut', shapes);
-    const p = new Pieces(), cuts = new Pieces();
-    for (const [kind, d, m, alpha, cut, evenodd] of shapes) (cut ? cuts : p).shape(meshOf(kind, d, evenodd), m, alpha, group);
-    return { p, cuts };
+    for (const [buf, cut] of [[b, false], [cutB, true]]) {
+      if (!buf) continue;
+      const mine = shapes.filter((s) => s[4] === cut);
+      const m0 = mine[0]?.[2];
+      const alike = m0 && mine.every((s) => s[2].every((v, i) => v === m0[i]));
+      const sig = mine.map((s) => `${s[0]}|${s[3]}|${s[5]}`);
+      if (alike && buf.sig && buf.sig.length === mine.length && mine.every((s, i) => s[1] === buf.ds[i] && sig[i] === buf.sig[i])) {
+        buf.pre = m0;
+        continue;
+      }
+      const p = new Pieces();
+      for (const [kind, d, m, alpha, , evenodd] of mine) p.shape(meshOf(kind, d, evenodd), alike ? ID : m, alpha, group);
+      this.h.load(buf, p);
+      buf.pre = alike ? m0 : null;
+      buf.sig = alike ? sig : null;
+      buf.ds = alike ? mine.map((s) => s[1]) : null;
+    }
   }
 
   // Each frame: `view` the SVGs' drawn view and wrapper ({ zoom, panX,
@@ -99,9 +115,7 @@ export class GLShadows {
       groups.forEach(({ g, mask }, i) => {
         const s = (this.sheets[i] ??= {});
         if (this.dirty.hills) {
-          const { p, cuts } = this.read(mask, PARTS.hills, null, 0);
-          h.load((s.hills ??= this.buffer()), p);
-          h.load((s.cuts ??= this.buffer()), cuts);
+          this.read(mask, PARTS.hills, 0, (s.hills ??= this.buffer()), (s.cuts ??= this.buffer()));
           const clip = clipOf(g);
           if (clip) {
             const c = new Pieces();
@@ -112,7 +126,7 @@ export class GLShadows {
             s.clip = null;
           }
         }
-        if (readObjects) h.load((s.objects ??= this.buffer()), this.read(mask, PARTS.objects, null, 1).p);
+        if (readObjects) this.read(mask, PARTS.objects, 1, (s.objects ??= this.buffer()), null);
       });
       for (const s of this.sheets.splice(groups.length)) for (const b of Object.values(s)) if (b) this.free.push(b);
       this.dirty.hills = false;
