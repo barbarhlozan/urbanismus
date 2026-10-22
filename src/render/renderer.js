@@ -180,7 +180,10 @@ const hashKey = (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)
 // night keep at each level of detail: every line close up (3), every other
 // further out, every 4th far out.
 const SHADE_TIERS = [3, 2, 1];
-const NO_COVER = []; // (the objects' night while the view turns: none)
+const NO_COVER = [];
+// The steps of a turn either way whose drawings are made ready on the GPU
+// as well (gl/objects.js), while the view rests.
+const GL_AHEAD = 3; // (the objects' night while the view turns: none)
 // Seconds the night's strokes take to be hatched in, a set at a time
 // (renderNightCanvases); a share of the windows going out (or coming on)
 // each second; ms the shadows take to be drawn anew as the sun moves
@@ -1539,6 +1542,19 @@ export class Renderer {
         canvas.remove();
         return false;
       }
+      // (the drawings made ready for a turn kept on the GPU: those of the
+      // nearest steps)
+      this.glObjects.kept = () => {
+        const out = new Set(), k = this.camera.step();
+        for (const e of this.objs.values()) {
+          for (const [j, v] of e.views ?? []) {
+            const d = Math.min(Math.abs(j - k) % STEPS, STEPS - (Math.abs(j - k) % STEPS));
+            if (d <= GL_AHEAD) out.add(v.g);
+          }
+        }
+        return out;
+      };
+      this.preparedAt = null;
       layer.style.visibility = 'hidden';
       layer.classList.add('gl-drawn'); // (still planned by the pen, draw.js)
     } else if (!on && this.glObjects) {
@@ -2084,12 +2100,19 @@ export class Renderer {
         for (const e of this.objs.values()) {
           if (e.key[0] !== kind || e.shown === false || e.k !== k) continue;
           for (const j of [(k + d) % STEPS, (k - d + STEPS) % STEPS]) {
-            if (e.views?.has(j)) continue;
-            if (performance.now() - t0 > prepareBudget) return;
-            const view = this.buildView(e, j);
-            if (!view) continue;
-            (e.views ??= new Map()).set(j, view);
-            this.keepViews(e);
+            let view = e.views?.get(j);
+            if (!view) {
+              if (performance.now() - t0 > prepareBudget) return;
+              view = this.buildView(e, j);
+              if (!view) continue;
+              (e.views ??= new Map()).set(j, view);
+              this.keepViews(e);
+            }
+            // (with WebGL, the nearest steps' drawings made ready on the GPU too)
+            if (this.glObjects && d <= GL_AHEAD && !this.glObjects.has(view.g)) {
+              if (performance.now() - t0 > prepareBudget) return;
+              this.glObjects.prebuild(view.g);
+            }
           }
         }
       }

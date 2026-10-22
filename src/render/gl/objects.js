@@ -525,6 +525,36 @@ export class GLObjects {
     return rec;
   }
 
+  // The new kinds asked for their style, all at once; a drawing built with
+  // one whose fill goes by even-odd, or whose pen ends aren't round, built again.
+  askPending() {
+    if (!this.pending?.length) return;
+    const asked = new Set(this.pending);
+    this.pending = [];
+    for (const st of asked) {
+      st.pending = false;
+      this.probe(st);
+    }
+    for (const rec of this.records.values()) {
+      if (!rec.pending) continue;
+      if ([...rec.pending].some((st) => st.evenodd || st.cap !== 1)) {
+        rec.dirty = true;
+        this.changed = true;
+      }
+      rec.pending = null;
+    }
+  }
+
+  has(g) {
+    return this.records.has(g);
+  }
+
+  // A drawing not in the page yet (made ready for a turn) built ahead.
+  prebuild(g) {
+    this.build(g, this.records.get(g));
+    this.askPending();
+  }
+
   // An object's elements' times as the pen's plan for it has them (draw.js;
   // none: all drawn).
   writePen(g, rec) {
@@ -558,32 +588,20 @@ export class GLObjects {
       canvas.height = h;
     }
     // the drawings that changed built again; those gone let go
-    const seen = new Set();
+    const seen = new Set(), now0 = performance.now();
     for (const e of order ?? []) {
       if (e.shown === false || !e.g?.isConnected) continue;
       seen.add(e.g);
       const rec = this.records.get(e.g);
       if (!rec || rec.dirty) this.build(e.g, rec);
     }
-    // the new kinds asked for their style; a drawing built with one whose
-    // fill goes by even-odd, or whose pen ends aren't round, built again
-    if (this.pending?.length) {
-      const asked = new Set(this.pending);
-      this.pending = [];
-      for (const st of asked) {
-        st.pending = false;
-        this.probe(st);
-      }
-      for (const rec of this.records.values()) {
-        if (!rec.pending) continue;
-        if ([...rec.pending].some((st) => st.evenodd || st.cap !== 1)) {
-          rec.dirty = true;
-          this.changed = true;
-        }
-        rec.pending = null;
-      }
+    this.askPending();
+    // (now and then: those out of the page and not kept for a turn let go)
+    if (!(now0 - (this.sweptAt ?? 0) < 2000)) {
+      this.sweptAt = now0;
+      const kept = this.kept?.() ?? new Set();
+      for (const [g, rec] of this.records) if (!seen.has(g) && !g.isConnected && !kept.has(g)) this.freeRecord(g, rec);
     }
-    for (const [g, rec] of this.records) if (!seen.has(g) && !g.isConnected) this.freeRecord(g, rec);
     // the matrices sent
     gl.bindTexture(gl.TEXTURE_2D, this.matTex);
     if (this.matsDirty.size) {
