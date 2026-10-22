@@ -105,7 +105,7 @@ export { agentShape } from './marks.js';
 export { mergeRuns, placeInOrder } from './order.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
-const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'paths', 'rails', 'roads', 'fences', 'hillshade', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'notes', 'overlay'];
+const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'hillshade', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'notes', 'overlay'];
 const TOP = ['mist', 'objects', 'notes', 'overlay']; // in the #objects <svg>, see the constructor
 const SVGNS = 'http://www.w3.org/2000/svg';
 // Moving the camera (see placeView): ms it must rest before the map is
@@ -137,7 +137,8 @@ const OVERSCAN = 0.25;
 // the turning angle every frame. Buildings, trees and lamps go their own way.
 const SHEET = ['forest', 'mist', 'hillshade'];
 const LINES = ['roads', 'paths', 'rails', 'fences', 'notes'];
-// …of which these can be drawn with WebGL instead (setGlLines, gl/lines.js)
+// …of which these are on the ground in world space (gl/lines.js): the
+// camera turns them
 const GL_LINES = ['paths', 'rails', 'roads', 'fences'];
 // The steps of a whole turn (Camera.STEP); the views an object keeps of
 // the steps it has been drawn at, at most (Renderer.swapIn); and ms the
@@ -367,11 +368,14 @@ export class Renderer {
     // hover rings and tags on their way out, over the overlay (see letGo)
     this.leaving = this.layers.overlay.parentNode.appendChild(document.createElementNS(SVGNS, 'g'));
     this.leaving.setAttribute('class', 'overlay leaving');
+    // the roads, footpaths, railways and fences on the GPU (gl/lines.js),
+    // their pen's timing in ink layers (ink.js)
+    this.glLines = GLLines.make(document.getElementById('map-gl'));
     this.ink = {
-      roads: new InkLayer(this.layers.roads, ['driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
-      paths: new InkLayer(this.layers.paths, ['footpath', 'bridge', 'bridge-post']),
-      rails: new InkLayer(this.layers.rails, ['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'bridge', 'bridge-post']),
-      fences: new InkLayer(this.layers.fences, ['fence-post', 'fence-pillar', 'fence']),
+      roads: new InkLayer(['driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
+      paths: new InkLayer(['footpath', 'bridge', 'bridge-post']),
+      rails: new InkLayer(['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'bridge', 'bridge-post']),
+      fences: new InkLayer(['fence-post', 'fence-pillar', 'fence']),
     };
     this.buildOrder = new Map(); // network layer -> Map dot -> its place in the last build, for the pen
 
@@ -479,6 +483,7 @@ export class Renderer {
     this.roadLines = this.railLines = this.pathLines = null;
     this.worldStamp = null;
     for (const l of LAYERS) if (l !== 'agents' && l !== 'overlay' && l !== 'objects' && l !== 'lots' && l !== 'shadows') this.dirty.add(l);
+    for (const l of GL_LINES) this.dirty.add(l); // (drawn with WebGL: no layer of their own)
     this.objsAll = true;
     this.lastOverlay = null;
     for (const ink of Object.values(this.ink ?? {})) ink.clearErasing(); // drawn for the old view
@@ -1179,10 +1184,9 @@ export class Renderer {
   // for each piece, a / b the dots it runs between, for the pen's order.
   inkItems(sway) {
     const items = [];
-    // (on the ground for WebGL, glWorld: renderGlLines)
-    const lines = (ls) => (this.glWorld ? ls.map((l) => this.worldLine(l, sway, true)) : this.screenLines(ls, true, sway, true));
+    // (on the ground in world space: renderGlLines)
+    const lines = (ls) => ls.map((l) => this.worldLine(l, sway, true));
     const add = (key, cls, line, a, b) => {
-      // (one line, or its parts in front of a photo camera)
       for (const pts of lines([line])) if (pts.length > 1) items.push({ key, cls, pts, a, b });
     };
     // several separate lines as one item (ink.js `runs`)
@@ -1371,53 +1375,21 @@ export class Renderer {
     this.inkUpdate('rails', () => this.railItems(), this.world.networks.rail);
   }
 
-  // A network's ink layer given its items – with WebGL (setGlLines) on the
-  // ground in world space, for gl/lines.js, the layer keeping only the
-  // pen's timing (ink.js headless).
+  // A network's ink layer given its items, on the ground in world space,
+  // for gl/lines.js – the layer keeping the pen's timing (ink.js).
   inkUpdate(name, itemsOf, network) {
-    const gl = this.glLines && GL_LINES.includes(name) ? this.glLines : null;
-    this.glWorld = !!gl;
-    let items;
-    try {
-      items = itemsOf();
-    } finally {
-      this.glWorld = false;
-    }
+    const items = itemsOf();
     this.ink[name].update(items, { rankOf: this.rankOf(network) });
-    gl?.setLayer(name, items, this.ink[name].classes, this.ink[name]);
+    this.glLines?.setLayer(name, items, this.ink[name].classes, this.ink[name]);
   }
 
   // The map drawn with WebGL2 wherever it can be (webgl-plan.md) – each
   // part keeps its SVG or 2D canvas without it, and in the Debug panel.
   useWebGL() {
-    this.setGlLines(true);
     this.setGlObjects(true);
     this.setGlRain(true);
     this.setGlSmoke(true);
     this.setGlClouds(true);
-  }
-
-  // The roads, footpaths, railways and fences drawn with WebGL (gl/lines.js)
-  // instead of their SVG layers, or not (the Debug panel). False if the
-  // browser has no WebGL2.
-  setGlLines(on) {
-    if (on && !this.glLines) {
-      const canvas = document.createElement('canvas');
-      canvas.id = 'map-gl';
-      Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' });
-      this.svg.after(canvas); // (over the map's ground drawing, under the shadows and parked cars)
-      this.glLines = GLLines.make(canvas);
-      if (!this.glLines) canvas.remove();
-    } else if (!on && this.glLines) {
-      this.glLines.canvas.remove();
-      this.glLines = null;
-    }
-    for (const l of GL_LINES) {
-      this.ink[l].headless = !!this.glLines;
-      this.layers[l].style.display = this.glLines ? 'none' : '';
-      this.dirty.add(l);
-    }
-    return !on || !!this.glLines;
   }
 
   // The clouds' shadows drawn with WebGL, or not (the Debug panel; main.js
@@ -1835,7 +1807,7 @@ export class Renderer {
     ground.style.willChange = 'transform';
     if (this.linesAngle !== a) {
       for (const l of LINES) {
-        if (this.glLines && GL_LINES.includes(l)) continue; // (on the GPU the camera turns them)
+        if (GL_LINES.includes(l)) continue; // (on the GPU the camera turns them)
         this.ink[l]?.clearErasing();
         this[`render${l[0].toUpperCase()}${l.slice(1)}`]();
       }
@@ -2209,7 +2181,6 @@ export class Renderer {
     // parked cars switch between dots and models (src/render/vehicles.js),
     // railways between the map symbol and the track (trackItems)
     const close = z >= VEHICLES.minZoom;
-    this.layers.rails.classList.toggle('near', close);
     this.railsNear = close;
     if (close !== this.carsClose) {
       this.carsClose = close;

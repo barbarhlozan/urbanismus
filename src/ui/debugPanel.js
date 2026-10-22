@@ -39,7 +39,7 @@ export class DebugPanel {
       ['Trees', (on) => { kind('f')(on); show(layer('forest'), on); document.body.classList.toggle('debug-no-trees', !on); }],
       ['Street lamps', kind('k')],
       ['Parked cars', (on) => show(layer('parked'), on)],
-      ['Roads and paths', (on) => { show(layer('roads'), on); show(layer('paths'), on); }],
+      ['Roads, paths, rails, fences', (on) => { if (renderer.glLines) show(renderer.glLines.canvas, on); }],
       ['Meadow grass', (on) => show(layer('meadow'), on)],
       ['Grid dots', (on) => show(layer('grid'), on)],
       ['Hover tags', (on) => { STYLE.hoverTags = on; }],

@@ -1,25 +1,17 @@
-// Linework layers that draw themselves: roads, kerbs, driveways, footpaths
-// and railways. The pen counterpart of draw.js for things that the renderer
-// draws as a few long paths per layer rather than per object.
+// The pen's timing for the map's linework: roads, kerbs, driveways,
+// footpaths, railways and fences (drawn with WebGL, gl/lines.js). The pen
+// counterpart of draw.js for things that the renderer draws as a few long
+// lines per layer rather than per object.
 //
 // The renderer hands over the whole layer as items, one per network segment
-// (or exit, buffer, driveway), each with a stable key and its points on
-// screen – or with `runs`, several separate lines drawn in one after
-// another (a track's sleepers). A key that wasn't there last time is drawn in along its line; a
+// (or exit, buffer, driveway), each with a stable key and its points – or
+// with `runs`, several separate lines drawn in one after another (a track's
+// sleepers). A key that wasn't there last time is drawn in along its line; a
 // key that is gone is erased back along it. Segments built in one go are
 // ranked along the way they were drawn (the order of the dots in the build
 // event), so the pen runs down the new road from where the player started.
-//
-// DOM per layer: for each class, a group of settled lines, then a path of
-// the lines on the move. Settled lines that continue each other are joined
-// into one subpath, so dash patterns (footpaths, rail dashes) run on
-// unbroken. The settled lines are a path per chunk of the map (CHUNK), not
-// one across the whole network: a path's outline box decides which patches
-// of the screen have to go through it, so the browser draws a patch with
-// only the lines near it. Solid lines are cut where they cross into the
-// next chunk; a dashed run stays whole, in the chunk it starts in.
-// Moving lines are redrawn every frame as the part of their points the pen
-// has reached – this works for dashed lines too, where a dash reveal can't.
+// What is on the move, and how far it has got (frac), is all this keeps:
+// gl/lines.js draws each item as far as that.
 
 import { DRAW } from './draw.js';
 
@@ -31,65 +23,15 @@ export const INK = {
   cap: 240,     // more new segments at once than this (a new map) just appear
 };
 
-const SVGNS = 'http://www.w3.org/2000/svg';
-const CHUNK = 320; // scene px
-const chunkOf = ([x, y]) => `${Math.floor(x / CHUNK)},${Math.floor(y / CHUNK)}`;
-const r2 = (n) => Math.round(n * 100) / 100;
 const clamp01 = (u) => (u < 0 ? 0 : u > 1 ? 1 : u);
 const ease = (u) => (u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u));
-const near = (p, q) => p && q && Math.abs(p[0] - q[0]) < 0.05 && Math.abs(p[1] - q[1]) < 0.05;
-
-// The first f (0..1) of a polyline, by length; from its end when `flip`.
-function partial(pts, f, flip) {
-  if (flip) pts = pts.slice().reverse();
-  if (f >= 1) return pts;
-  let total = 0;
-  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-  let left = total * f;
-  const out = [pts[0]];
-  for (let i = 1; i < pts.length; i++) {
-    const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
-    const l = Math.hypot(bx - ax, by - ay);
-    if (l >= left) {
-      const t = l ? left / l : 0;
-      out.push([ax + (bx - ax) * t, ay + (by - ay) * t]);
-      break;
-    }
-    out.push(pts[i]);
-    left -= l;
-  }
-  return out;
-}
-
-const pathD = (pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x)} ${r2(y)}`).join('');
-
-// An item of several separate lines (`runs`, e.g. a track's sleepers): the
-// first f of them, by count, the last one partly; from the end when `flip`.
-function partialRuns(runs, f, flip) {
-  if (flip) runs = runs.slice().reverse();
-  const k = f * runs.length, n = Math.floor(k);
-  return runs.slice(0, n).map(pathD).join('') + (n < runs.length && k > n ? pathD(partial(runs[n], k - n, false)) : '');
-}
-
 export class InkLayer {
   // `classes`: the layer's path classes, back to front.
-  constructor(el, classes) {
+  constructor(classes) {
     this.classes = classes;
-    this.headless = false;   // drawn elsewhere (gl/lines.js): the pen's timing kept, no DOM written
     this.items = new Map();  // key -> { key, cls, pts, a, b }
     this.moving = new Map(); // key -> { item, batch, rank, flip, out, cap }
     this.first = true;
-    this.settledDirty = true;
-    this.paths = {};
-    el.innerHTML = '';
-    for (const cls of classes) {
-      const settled = el.appendChild(document.createElementNS(SVGNS, 'g'));
-      const moving = el.appendChild(document.createElementNS(SVGNS, 'path'));
-      moving.setAttribute('class', cls);
-      // dashed lines' runs aren't cut at chunk edges (see above)
-      const dashed = getComputedStyle(moving).strokeDasharray !== 'none';
-      this.paths[cls] = { settled, moving, chunks: new Map(), dashed }; // chunks: key -> <path>
-    }
   }
 
   get busy() {
@@ -138,7 +80,6 @@ export class InkLayer {
     }
 
     this.items = next;
-    this.settledDirty = true;
     this.tick(now);
   }
 
@@ -154,61 +95,8 @@ export class InkLayer {
     return m.out ? Math.min(m.cap, 1 - clamp01(e)) : clamp01(e - m.rank);
   }
 
+  // Lines whose pen is done let go.
   tick(now = performance.now()) {
-    if (this.headless) {
-      for (const [k, m] of this.moving) if (now >= m.batch.t0 + m.batch.T) this.moving.delete(k);
-      this.settledDirty = true; // (for when it is shown again)
-      return;
-    }
-    const moving = {};
-    for (const [k, m] of this.moving) {
-      if (now >= m.batch.t0 + m.batch.T) {
-        this.moving.delete(k);
-        if (!m.out) this.settledDirty = true;
-        continue;
-      }
-      const f = this.frac(m, now);
-      if (f <= 0) continue;
-      const { cls, pts, runs } = m.item;
-      moving[cls] = (moving[cls] ?? '') + (runs ? partialRuns(runs, f, m.flip) : pathD(partial(pts, f, m.flip)));
-    }
-    for (const [cls, { settled, moving: el, chunks, dashed }] of Object.entries(this.paths)) {
-      const d = moving[cls] ?? '';
-      if (el.getAttribute('d') !== d) el.setAttribute('d', d);
-      if (!this.settledDirty) continue;
-      // lines that continue each other become one subpath, in a chunk's path
-      const out = new Map(); // chunk -> path data
-      let end = null, chunk = null;
-      for (const it of this.items.values()) {
-        if (it.cls !== cls || this.moving.has(it.key)) continue;
-        if (it.runs) {
-          // separate lines: never joined on
-          const c = chunkOf(it.runs[0][0]);
-          out.set(c, (out.get(c) ?? '') + it.runs.map(pathD).join(''));
-          end = null;
-          continue;
-        }
-        const [first, ...rest] = it.pts;
-        const c = dashed && near(end, first) ? chunk : chunkOf(first);
-        out.set(c, (out.get(c) ?? '') + (near(end, first) && c === chunk ? rest.map(([x, y]) => `L${r2(x)} ${r2(y)}`).join('') : pathD(it.pts)));
-        end = it.pts[it.pts.length - 1];
-        chunk = c;
-      }
-      for (const [c, path] of chunks) {
-        if (out.has(c)) continue;
-        path.remove();
-        chunks.delete(c);
-      }
-      for (const [c, data] of out) {
-        let path = chunks.get(c);
-        if (!path) {
-          path = settled.appendChild(document.createElementNS(SVGNS, 'path'));
-          path.setAttribute('class', cls);
-          chunks.set(c, path);
-        }
-        if (path.getAttribute('d') !== data) path.setAttribute('d', data); // an unchanged write still re-lays it out
-      }
-    }
-    this.settledDirty = false;
+    for (const [k, m] of this.moving) if (now >= m.batch.t0 + m.batch.T) this.moving.delete(k);
   }
 }
