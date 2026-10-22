@@ -652,7 +652,7 @@ export class Renderer {
         this.preparedAt = null;
       }
       if (this.objsPlace) this.placeObjects();
-      this.prepareTurn();
+      this.schedulePrepare();
       if (this.drafting && performance.now() - this.movedAt > VIEW_SETTLE) this.endDraft();
       // (drawn first, shown once its drawing is back: renderShadeCanvas)
       if (this.shadesOff && !this.rebuildQueue.size && !this.landing.size && performance.now() - this.movedAt > VIEW_SETTLE) {
@@ -2127,11 +2127,23 @@ export class Renderer {
   // either side (config.render.turnAhead each way, the nearest first,
   // buildings first) are made ready for the objects in sight, for at most
   // config.render.prepareBudget ms each frame, so a turn finds them drawn.
-  prepareTurn() {
+  // (in the browser's idle time between frames, as much as it has – never
+  // holding a frame up; in a frame's budget where there's no such time)
+  schedulePrepare() {
+    if (typeof requestIdleCallback !== 'function') return this.prepareTurn();
+    if (this.prepareIdle) return;
+    this.prepareIdle = requestIdleCallback((deadline) => {
+      this.prepareIdle = null;
+      this.prepareTurn(Math.min(this.config.render.prepareBudget, deadline.timeRemaining() - 1));
+    }, { timeout: 500 });
+  }
+
+  prepareTurn(budget = this.config.render.prepareBudget) {
+    if (!(budget > 0)) return;
     const k = this.camera.step();
     if (k == null || this.turning || this.objsAll || this.objsDirty.size || performance.now() - this.movedAt < PREPARE_REST) return;
     if (this.preparedAt === k) return;
-    const { turnAhead, prepareBudget } = this.config.render;
+    const { turnAhead } = this.config.render, prepareBudget = budget;
     const t0 = performance.now();
     for (let d = 1; d <= turnAhead; d++) {
       for (const kind of ['s', 'f', 'k']) {
