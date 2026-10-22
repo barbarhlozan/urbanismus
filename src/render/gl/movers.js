@@ -135,8 +135,8 @@ function meshOf(shape) {
 }
 
 export class GLMovers {
-  static make(canvas) {
-    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: true, alpha: true });
+  static make(canvas, { antialias = true } = {}) {
+    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias, alpha: true });
     return gl ? new GLMovers(canvas, gl) : null;
   }
 
@@ -211,6 +211,13 @@ export class GLMovers {
     this.notes.push({ shapes: [shape], a: dpr * zoom, b: 0, d: dpr * zoom, e: dpr * this.panX, f: dpr * this.panY, alpha, own: true });
   }
 
+  // Straight pen strokes with round ends, `segs` [x0, y0, x1, y1, …] in
+  // window px, `width` device px wide, in the palette's `colour`, `alpha`
+  // (the rain).
+  segments(segs, width, colour = 'detail', alpha = 1) {
+    this.notes.push({ segs, width, colour, alpha });
+  }
+
   // The frame drawn: every note's shapes as pieces where they show, in order.
   end() {
     const { gl, canvas, dpr } = this;
@@ -235,6 +242,19 @@ export class GLMovers {
     const px = this.strokeK * this.zoom * dpr;
     const P = new Float32Array(2 * 1024);
     for (const note of this.notes) {
+      if (note.segs) {
+        const { segs, width, alpha } = note, c = colourIndex[note.colour] ?? 2, hw = width / 2;
+        for (let i = 0; i + 3 < segs.length; i += 4) {
+          room();
+          const o = n++ * STRIDE;
+          const x0 = segs[i] * dpr, y0 = segs[i + 1] * dpr, x1 = segs[i + 2] * dpr, y1 = segs[i + 3] * dpr;
+          D[o] = x0; D[o + 1] = y0; D[o + 2] = x1; D[o + 3] = y1;
+          D[o + 4] = x0; D[o + 5] = y0; D[o + 6] = x1; D[o + 7] = y1;
+          D[o + 8] = 1; D[o + 9] = hw; D[o + 10] = 1; D[o + 11] = 1;
+          D[o + 12] = c; D[o + 13] = alpha; D[o + 14] = D[o + 15] = 0;
+        }
+        continue;
+      }
       const { a, b, d, e, f, alpha } = note;
       for (const shape of note.shapes) {
         const mesh = meshOf(shape);

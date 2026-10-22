@@ -1535,6 +1535,12 @@ export class Renderer {
     return this.cloudShadows?.setGl(on) ?? false;
   }
 
+  // The rain drawn with WebGL, or not (the Debug panel; main.js gives the
+  // renderer its rain).
+  setGlRain(on) {
+    return this.rain?.setGl(on) ?? false;
+  }
+
   // The buildings, trees and lamps drawn with WebGL (gl/objects.js) from
   // their SVG, which stays in the page unpainted, or not (the Debug panel):
   // a canvas under the objects' <svg> (its notes and overlay over it).

@@ -12,6 +12,7 @@
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
 import { Follow } from './follow.js';
+import { GLMovers } from './gl/movers.js';
 
 export const RAIN = {
   density: 1 / 2600,  // drops on screen at full rain, per screen px²
@@ -87,6 +88,7 @@ export class RainCanvas {
     // each drop on its way, those landed and splashed let go
     if (!still) for (const d of this.drops) d.t += dt;
     this.drops = this.drops.filter((d) => d.t < d.fall + RAIN.splash);
+    if (this.gl) return this.drawGl(camera, over); // (every frame: no copy of a picture to send)
     if (!this.empty && !this.follow.due(camera)) return this.follow.place(camera);
     this.follow.drawn(camera);
 
@@ -118,7 +120,61 @@ export class RainCanvas {
     this.empty = false;
   }
 
+  // With WebGL (gl/movers.js) instead of the 2D canvas, or not (the Debug
+  // panel): a canvas of its own over it.
+  setGl(on) {
+    if (on && !this.gl) {
+      const canvas = document.createElement('canvas');
+      Object.assign(canvas.style, { position: 'fixed', left: '0', top: '0', pointerEvents: 'none' });
+      this.canvas.after(canvas);
+      this.gl = GLMovers.make(canvas, { antialias: false });
+      if (!this.gl) {
+        canvas.remove();
+        return false;
+      }
+      this.clear();
+      this.canvas.style.display = 'none';
+    } else if (!on && this.gl) {
+      this.gl.canvas.remove();
+      this.gl = null;
+      this.canvas.style.display = '';
+    }
+    this.empty = false;
+    this.clear();
+    return true;
+  }
+
+  // The drops as pen strokes on the GPU (as draw below).
+  drawGl(camera, over) {
+    const segs = (this.segs ??= []);
+    segs.length = 0;
+    const slant = RAIN.slant + RAIN.storm.slant * over;
+    for (const d of this.drops) {
+      if (d.t < d.fall) {
+        const left = d.dist * (1 - d.t / d.fall);
+        const x1 = d.x + left * slant, y1 = d.y - left;
+        segs.push(x1 + d.len * slant, y1 - d.len, x1, y1);
+      } else if (d.t < d.fall + RAIN.splash) {
+        const k = 1 + 2 * ((d.t - d.fall) / RAIN.splash);
+        segs.push(d.x - k, d.y - 0.6 * k, d.x - 2 * k, d.y - 1.4 * k, d.x + k, d.y - 0.6 * k, d.x + 2 * k, d.y - 1.4 * k);
+      }
+    }
+    const pen = this.gl;
+    pen.begin(camera);
+    pen.segments(segs, RAIN.width * (CONFIG.render.lineWeight ?? 1), 'detail', RAIN.alpha);
+    pen.end();
+    this.empty = false;
+  }
+
   clear() {
+    if (this.gl) {
+      if (!this.empty) {
+        this.gl.clear();
+        this.empty = true;
+      }
+      this.pan = null;
+      return;
+    }
     if (this.empty) return;
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
