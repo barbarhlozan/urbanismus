@@ -1,10 +1,9 @@
 // What moves on the map – people, cyclists, cars, trucks, trains, boats,
-// animals, the crossing signs – drawn with WebGL2 instead of a 2D canvas
-// (agentCanvas.js, whose place it takes, the same calls): a 2D canvas is a
-// new picture each frame, which Firefox copies to the GPU whole; this one
-// is drawn on the GPU and stays there.
+// animals, the crossing signs – and the rain and the chimneys' smoke, drawn
+// with WebGL2: a 2D canvas would be a new picture each frame, which Firefox
+// copies to the GPU whole; this one is drawn on the GPU and stays there.
 //
-// The drawings are the same SVG snippets (vehicles.js, people.js…), their
+// The drawings are SVG snippets (vehicles.js, people.js…, agentCanvas.js), their
 // paths flattened and filled once (geometry.js) and kept per shape. Each
 // frame what is drawn is noted in order (draw, drawScene) and laid out at
 // its end (end) as one stream of pieces, each a filled triangle or a pen
@@ -19,8 +18,7 @@
 import { THEME } from '../../theme.js';
 import { flattenPath, triangulate } from './geometry.js';
 
-// How far (css px) past the window edge something may stand and still show
-// (as agentCanvas.js).
+// How far (css px) past the window edge something may stand and still show.
 const MARGIN = 60;
 // Curves flattened to within this of the true line, in a shape's own units
 // (drawn up to a few device px per unit close up).
@@ -170,7 +168,7 @@ export class GLMovers {
     this.data = new Float32Array(STRIDE * 4096);
   }
 
-  // Start a frame at the camera's current view (agentCanvas.js).
+  // Start a frame at the camera's current view; `stroke` the map's --stroke.
   begin(camera, stroke) {
     const dpr = devicePixelRatio || 1;
     this.dpr = dpr;
@@ -260,7 +258,7 @@ export class GLMovers {
       more.set(D);
       this.data = D = more;
     };
-    // the pens (agentCanvas.js paint): a stroke's width on the screen is its
+    // the pens (agentCanvas.js PEN): a stroke's width on the screen is its
     // style's times --stroke, the zoom and the pixel ratio, at any size
     const colourIndex = { bg: 0, main: 1, detail: 2 };
     const px = this.strokeK * this.zoom * dpr;

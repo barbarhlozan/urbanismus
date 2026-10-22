@@ -64,7 +64,7 @@ import { GLObjects } from './gl/objects.js';
 import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
-import { AgentCanvas, AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
+import { AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
 import { ParticleCanvas } from './particles.js';
 import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
@@ -203,15 +203,8 @@ const SHADE_SWEEP = 1600;
 const DRAFT = { pan: 0.12, steps: 3, step: 80 };
 const SWEEP_STEPS = 6; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
-// A closed outline as a 2D canvas path, its points kept on it (for WebGL,
-// gl/movers.js drawScene).
-const outline = (pts) => {
-  const path = new Path2D();
-  pts.forEach(([x, y], i) => (i ? path.lineTo(x, y) : path.moveTo(x, y)));
-  path.closePath();
-  path.pts = pts;
-  return path;
-};
+// A closed outline, its points (gl/movers.js drawScene).
+const outline = (pts) => ({ pts });
 const r2 = (n) => Math.round(n * 100) / 100;
 
 // The squash of a building pointed at (Renderer.markHovered): how long, the
@@ -271,15 +264,15 @@ export class Renderer {
     this.ground = ground;
     // Buildings, trees and the overlay sit in their own <svg> on top, in
     // their own wrapper (#view-top), over the canvas with the moving people
-    // and trains (agentCanvas.js). See styles.css.
+    // and trains (gl/movers.js). See styles.css.
     this.top = document.getElementById('objects');
     // the parked cars in an <svg> of their own over the shadows' canvas
     // (gl/shadows.js), in the map's wrapper
     this.parkedSvg = document.getElementById('parked');
     this.wrappers = [svg.parentNode, this.top.parentNode];
-    this.pen = new AgentCanvas(document.getElementById('agents'));
+    this.pen = GLMovers.make(document.getElementById('agents'));
     // over the buildings: carriages nothing nearer could hide (see screened)
-    this.penTop = new AgentCanvas(document.getElementById('trains-top'));
+    this.penTop = GLMovers.make(document.getElementById('trains-top'));
     // over those: chimney smoke (particles.js, smokeFrame)
     this.smoke = new ParticleCanvas(document.getElementById('smoke'));
     this.parking = parking;
@@ -667,8 +660,8 @@ export class Renderer {
       this.renderAnimals();
       this.renderTrains(); // under the people and cars (or over everything)
       this.renderAgents();
-      this.pen.end?.(); // (WebGL: drawn at the frame's end, gl/movers.js)
-      this.penTop.end?.();
+      this.pen.end(); // (drawn at the frame's end, gl/movers.js)
+      this.penTop.end();
     } else {
       this.agentsShown = false;
       this.pen.clear();
@@ -1398,7 +1391,6 @@ export class Renderer {
   // part keeps its SVG or 2D canvas without it, and in the Debug panel.
   useWebGL() {
     this.setGlLines(true);
-    this.setGlMovers(true);
     this.setGlObjects(true);
     this.setGlRain(true);
     this.setGlSmoke(true);
@@ -1426,37 +1418,6 @@ export class Renderer {
       this.dirty.add(l);
     }
     return !on || !!this.glLines;
-  }
-
-  // The moving things (people, vehicles, trains, boats, animals, crossing
-  // signs) drawn with WebGL (gl/movers.js) instead of on 2D canvases, or
-  // not (the Debug panel): canvases of their own where the 2D ones stand.
-  setGlMovers(on) {
-    this.pens2d ??= [this.pen, this.penTop];
-    if (on && !this.glMovers) {
-      const pens = this.pens2d.map((pen) => {
-        const canvas = document.createElement('canvas');
-        Object.assign(canvas.style, { position: 'fixed', left: '0', top: '0', pointerEvents: 'none' });
-        pen.canvas.after(canvas);
-        return GLMovers.make(canvas);
-      });
-      if (pens.some((p) => !p)) {
-        for (const p of pens) p?.canvas.remove();
-        return false;
-      }
-      this.glMovers = pens;
-      for (const pen of this.pens2d) {
-        pen.clear();
-        pen.canvas.style.display = 'none';
-      }
-      [this.pen, this.penTop] = pens;
-    } else if (!on && this.glMovers) {
-      for (const p of this.glMovers) p.canvas.remove();
-      this.glMovers = null;
-      for (const pen of this.pens2d) pen.canvas.style.display = '';
-      [this.pen, this.penTop] = this.pens2d;
-    }
-    return true;
   }
 
   // The clouds' shadows drawn with WebGL, or not (the Debug panel; main.js
