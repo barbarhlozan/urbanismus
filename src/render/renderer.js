@@ -1432,6 +1432,7 @@ export class Renderer {
     this.setGlNight(true);
     this.setGlObjects(true);
     this.setGlRain(true);
+    this.setGlSmoke(true);
     this.setGlClouds(true);
   }
 
@@ -1551,6 +1552,11 @@ export class Renderer {
   // renderer its rain).
   setGlRain(on) {
     return this.rain?.setGl(on) ?? false;
+  }
+
+  // The chimneys' smoke drawn with WebGL, or not (the Debug panel).
+  setGlSmoke(on) {
+    return this.smoke?.setGl(on) ?? false;
   }
 
   // The buildings, trees and lamps drawn with WebGL (gl/objects.js) from

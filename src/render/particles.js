@@ -23,6 +23,7 @@
 import { Follow } from './follow.js';
 import { THEME } from '../theme.js';
 import { PEN } from './agentCanvas.js';
+import { GLMovers } from './gl/movers.js';
 
 //   rate    particles a second
 //   life    seconds each lasts
@@ -275,6 +276,34 @@ export function paintParticles(ctx, shown, { time, env = CALM, tile = 32, zScale
   }
 }
 
+// ---------- as marks for the GPU (gl/movers.js) ----------
+
+// A stand-in for a canvas context that notes what is drawn as polylines in
+// scene px (curves flattened), each with its pen or paper, for GLMovers.
+// The ink and paper are given as palette names (paintParticles' `pal`).
+class MarkPen {
+  constructor() { this.marks = []; this.subs = []; this.pts = null; }
+  beginPath() { this.subs = []; this.pts = null; }
+  moveTo(x, y) { this.subs.push({ pts: (this.pts = [[x, y]]), closed: false }); }
+  lineTo(x, y) { this.pts.push([x, y]); }
+  quadraticCurveTo(a, b, x, y) {
+    const [x0, y0] = this.pts[this.pts.length - 1];
+    for (let j = 1; j <= CURVE; j++) {
+      const t = j / CURVE, u = 1 - t;
+      this.pts.push([u * u * x0 + 2 * u * t * a + t * t * x, u * u * y0 + 2 * u * t * b + t * t * y]);
+    }
+  }
+  rect(x, y, w, h) {
+    this.subs.push({ pts: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], closed: true });
+    this.pts = null;
+  }
+  stroke() { if (this.subs.length) this.marks.push({ colour: this.strokeStyle, width: this.lineWidth, subs: this.subs }); }
+  fill() { if (this.subs.length) this.marks.push({ colour: this.fillStyle, fill: true, subs: this.subs }); }
+}
+// pieces a quadratic curve is cut into
+const CURVE = 8;
+const NAMES = { bg: 'bg', main: 'main', detail: 'detail' };
+
 // ---------- the canvas ----------
 
 // How far (css px) past the window an emitter may be and its marks still show.
@@ -301,6 +330,31 @@ export class ParticleCanvas {
     this.drawnCount = 0;
   }
 
+  // With WebGL (gl/movers.js) instead of the 2D canvas, or not (the Debug
+  // panel): a canvas of its own over it.
+  setGl(on) {
+    if (on && !this.gl) {
+      const canvas = document.createElement('canvas');
+      Object.assign(canvas.style, { position: 'fixed', left: '0', top: '0', pointerEvents: 'none' });
+      this.canvas.after(canvas);
+      this.gl = GLMovers.make(canvas, { antialias: true });
+      if (!this.gl) {
+        canvas.remove();
+        return false;
+      }
+      this.clear();
+      this.canvas.style.display = 'none';
+    } else if (!on && this.gl) {
+      this.gl.canvas.remove();
+      this.gl = null;
+      this.canvas.style.display = '';
+    }
+    this.empty = false;
+    this.marks = null;
+    this.clear();
+    return true;
+  }
+
   // One frame. `emitters`: [{ x, y, kind, k, seed }] in scene px; `stroke`
   // the map's --stroke; `time` simulated seconds; `env` the weather.
   frame(camera, stroke, emitters, time, env = CALM, draw = SMOKE_DRAW) {
@@ -311,9 +365,21 @@ export class ParticleCanvas {
     const now = performance.now();
     const follow = (this.follow ??= new Follow(canvas, draw.fps));
     const resized = canvas.width !== w || canvas.height !== h;
-    if (!resized && !follow.due(camera, now)) return follow.place(camera);
+    if (this.gl) {
+      // (drawn again at once: no picture to send; the marks are kept between
+      // drawings, as the map moves)
+      const v = this.glView;
+      if (!resized && v && !follow.due(camera, now)) {
+        if (this.marks && (v.zoom !== camera.zoom || v.panX !== camera.panX || v.panY !== camera.panY)) this.drawGl(camera, stroke);
+        return;
+      }
+    } else {
+      if (!resized && !follow.due(camera, now)) return follow.place(camera);
+    }
     follow.drawn(camera, now);
-    if (resized) {
+    if (this.gl) {
+      this.glView = null;
+    } else if (resized) {
       canvas.width = w;
       canvas.height = h;
       canvas.style.width = `${W}px`;
@@ -340,19 +406,49 @@ export class ParticleCanvas {
       if (K.on) load += n; else fixed += n;
       shown.push([e, K]);
     }
-    if (!shown.length) return;
+    if (!shown.length) {
+      if (this.gl) { this.marks = null; this.drawGl(camera, stroke); }
+      return;
+    }
     const keepHouses = Math.min(1, Math.max(0, draw.most - fixed) / Math.max(1, load));
     const keepWorks = Math.min(1, draw.most / Math.max(1, fixed));
 
+    if (this.gl) {
+      const pen = new MarkPen();
+      paintParticles(pen, shown, { time, env, tile: T, zScale: camera.zScale, unit: stroke ?? 1 / zoom, style: draw.style, keep: keepHouses, keepFixed: keepWorks, pal: NAMES });
+      this.marks = pen.marks;
+      this.drawnCount = shown.length;
+      return this.drawGl(camera, stroke);
+    }
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * panX, dpr * panY);
     paintParticles(ctx, shown, { time, env, tile: T, zScale: camera.zScale, unit: stroke ?? 1 / zoom, style: draw.style, keep: keepHouses, keepFixed: keepWorks, pal: this.pal ?? THEME.palette });
     this.drawnCount = shown.length;
     this.empty = false;
   }
 
+  // The marks kept, laid out for the camera as it is (movers.js marks).
+  drawGl(camera, stroke) {
+    const pen = this.gl;
+    pen.begin(camera, stroke);
+    if (this.pal) pen.pal = this.pal;
+    if (this.marks) pen.marks(this.marks);
+    pen.end();
+    this.glView = { zoom: camera.zoom, panX: camera.panX, panY: camera.panY };
+    this.empty = !this.marks;
+  }
+
   clear() {
     this.follow?.set('');
     if (this.follow) this.follow.view = null;
+    this.glView = null;
+    this.marks = null;
+    if (this.gl) {
+      if (!this.empty) {
+        this.gl.clear();
+        this.empty = true;
+      }
+      return;
+    }
     if (this.empty) return;
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);

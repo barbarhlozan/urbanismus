@@ -115,6 +115,7 @@ const COLOURS = ['bg', 'main', 'detail'];
 // A shape's fill (triangles) and stroke (polylines) in its own units, kept.
 const meshes = new WeakMap();
 function meshOf(shape) {
+  if (shape.mesh) return shape.mesh; // (made by whoever drew it: marks)
   let m = meshes.get(shape);
   if (m) return m;
   const d = shape.d ?? '';
@@ -211,6 +212,29 @@ export class GLMovers {
     this.notes.push({ shapes: [shape], a: dpr * zoom, b: 0, d: dpr * zoom, e: dpr * this.panX, f: dpr * this.panY, alpha, own: true });
   }
 
+  // Marks already in scene px (particles.js, the smoke): [{ colour, fill,
+  // width (scene px), subs: [{ pts, closed }] }…], in order, each filled or
+  // stroked with round ends and joins.
+  marks(list, alpha = 1) {
+    const { dpr, zoom } = this;
+    const shapes = [];
+    for (const { colour, fill, width, subs } of list) {
+      let mesh;
+      if (fill) {
+        const { positions, indices } = triangulate(subs, 'nonzero');
+        const tris = new Float32Array(indices.length * 2);
+        for (let i = 0; i < indices.length; i++) {
+          tris[i * 2] = positions[indices[i] * 2];
+          tris[i * 2 + 1] = positions[indices[i] * 2 + 1];
+        }
+        mesh = { tris, lines: [] };
+      } else mesh = { tris: new Float32Array(0), lines: subs.filter((sub) => sub.pts.length > 1) };
+      // (a pen's width is in pens times --stroke, end(): back from scene px)
+      shapes.push({ style: fill ? { fill: colour } : { stroke: colour, width: width / this.strokeK, cap: 'round' }, mesh });
+    }
+    this.notes.push({ shapes, a: dpr * zoom, b: 0, d: dpr * zoom, e: dpr * this.panX, f: dpr * this.panY, alpha });
+  }
+
   // Straight pen strokes with round ends, `segs` [x0, y0, x1, y1, …] in
   // window px, `width` device px wide, in the palette's `colour`, `alpha`
   // (the rain).
@@ -272,7 +296,7 @@ export class GLMovers {
           }
         }
         if (style.stroke) {
-          const hw = (style.width * px) / 2, c = colourIndex[style.stroke] ?? 1;
+          const hw = (style.width * px) / 2, c = colourIndex[style.stroke] ?? 1, cap = style.cap === 'round' ? 1 : 2;
           for (const { pts, closed } of mesh.lines) {
             // the line where it shows (closed: its first point again at the end)
             let k = 0;
@@ -292,8 +316,8 @@ export class GLMovers {
               // round everywhere), butt ends (its default)
               const t1 = Math.atan2(P[ia + 1] - P[ip + 1], P[ia] - P[ip]), t2 = Math.atan2(P[ib + 1] - P[ia + 1], P[ib] - P[ia]);
               const turn = Math.abs(Math.atan2(Math.sin(t2 - t1), Math.cos(t2 - t1)));
-              const endA = i === 1 && !ring ? 2 : ip !== ia && turn > 0.35 ? 1 : 0;
-              const endB = i === count - 1 && !ring ? 2 : 0;
+              const endA = i === 1 && !ring ? cap : ip !== ia && turn > 0.35 ? 1 : 0;
+              const endB = i === count - 1 && !ring ? cap : 0;
               room();
               const o = n++ * STRIDE;
               D[o] = P[ia]; D[o + 1] = P[ia + 1]; D[o + 2] = P[ib]; D[o + 3] = P[ib + 1];
