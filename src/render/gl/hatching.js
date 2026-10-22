@@ -37,7 +37,7 @@ const LINE = 2.2;
 // Curves flattened to within this of the true line (scene px).
 const TOLERANCE = 0.1;
 // floats per piece
-const STRIDE = 16;
+export const STRIDE = 16;
 
 const VS = `#version 300 es
 precision highp float;

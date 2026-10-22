@@ -18,7 +18,7 @@
 
 import { THEME } from '../../theme.js';
 import { collect, clipOf } from '../shadeCanvas.js';
-import { Hatching, Pieces, meshOf, rgb } from './hatching.js';
+import { Hatching, Pieces, meshOf, rgb, STRIDE } from './hatching.js';
 
 // Where each part's shapes are in the mask (and the lamps' pools, cut out
 // of both, read with the hills').
@@ -39,6 +39,8 @@ export class GLShadows {
     this.sheets = []; // [{ clip, cuts, hills, objects }] buffers
     this.free = [];   // buffers no longer used
     this.drawnKey = null;
+    this.kept = new WeakMap(); // an object's shadow group -> its pieces, kept until it changes
+    this.changed = new Set();
     for (const part of Object.keys(PARTS)) {
       const mine = PARTS[part];
       const touches = (r) => {
@@ -50,6 +52,7 @@ export class GLShadows {
       };
       new MutationObserver((records) => {
         if (!this.dirty[part] && records.some(touches)) this.dirty[part] = true;
+        if (part === 'objects') for (const r of records) this.changedGroup(r.target);
       }).observe(veil, { subtree: true, childList: true, attributes: true });
     }
     // (a sweep's copy put beside the sheet or taken away)
@@ -101,6 +104,46 @@ export class GLShadows {
     }
   }
 
+  // An object's shadow group changed (or, above them, all of them).
+  changedGroup(n) {
+    for (let c = n; c; c = c.parentNode) {
+      const up = c.parentNode;
+      if (c.classList?.contains('shade-shapes')) return; // (groups come or go: their pieces hold)
+      if (up?.classList?.contains('shade-shapes')) {
+        this.changed.add(c);
+        return;
+      }
+      if (c.tagName === 'mask') return; // (another part of the mask: not theirs)
+    }
+    this.kept = new WeakMap();
+  }
+
+  // The objects' shadows: each object's group read alone and kept until it
+  // changes, all of them laid end to end.
+  readObjects(mask, b) {
+    const root = mask.getElementsByClassName('shade-shapes')[0];
+    if (!root || root.hasAttribute('transform')) return this.read(mask, PARTS.objects, 1, b, null);
+    const p = new Pieces();
+    for (const c of root.children) {
+      const t = c.getAttribute('transform') ?? '', shown = c.style.display !== 'none';
+      let k = this.kept.get(c);
+      if (!k || this.changed.has(c) || k.t !== t || k.shown !== shown) {
+        const shapes = [];
+        collect(c, new DOMMatrix(), 1, false, shapes);
+        const q = new Pieces();
+        for (const [kind, d, m, alpha, , evenodd] of shapes) q.shape(meshOf(kind, d, evenodd), m, alpha, 1);
+        k = { t, shown, data: q.data.slice(0, q.n * STRIDE), n: q.n };
+        this.kept.set(c, k);
+      }
+      p.room(k.n);
+      p.data.set(k.data, p.n * STRIDE);
+      p.n += k.n;
+    }
+    this.changed.clear();
+    this.h.load(b, p);
+    b.sig = b.ds = null;
+  }
+
   // Each frame: `view` the SVGs' drawn view and wrapper ({ zoom, panX,
   // panY, ox, oy, W, H }), the paper's strokes (`hatch`, `tier`, `px`,
   // `stroke`), the objects' held (`hold`), faded (`shown` 0 … 1, 0 hidden).
@@ -126,7 +169,7 @@ export class GLShadows {
             s.clip = null;
           }
         }
-        if (readObjects) this.read(mask, PARTS.objects, 1, (s.objects ??= this.buffer()), null);
+        if (readObjects) this.readObjects(mask, (s.objects ??= this.buffer()));
       });
       for (const s of this.sheets.splice(groups.length)) for (const b of Object.values(s)) if (b) this.free.push(b);
       this.dirty.hills = false;
