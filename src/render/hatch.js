@@ -27,8 +27,7 @@
 //
 //   hatchFrame(h)                        -> { u, v, gap } (gap in grid units)
 //   hatchStrokes(k, t0, t1, h, px)       -> path data, line k from t0 to t1 px
-//   hatchTile(id, tier, h, px, cls)      -> an SVG <pattern>, lines up to tier
-//   hatchTileLines(tier, h, px)          -> { d, size }: the same tile's strokes
+//   hatchTileLines(tier, h, px)          -> { d, size }: a tile's strokes, lines up to tier
 //   hatchPoints(k, t, h, px)             -> line k's points at t, one a stroke
 
 // The repeat, in grid units: long enough that the tiles don't show as
@@ -135,17 +134,11 @@ export function hatchPoints(k, t, h, px, frame = hatchFrame(h)) {
   return out;
 }
 
-// The night's tile: every line up to density tier `tier` (0 every 8th … 3
-// all), as strokes, over one repeat each way, turned to the lines' angle.
-export function hatchTile(id, tier, h, px, cls = 'night-line') {
-  const { d, size } = hatchTileLines(tier, h, px);
-  return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${r2(size)}" height="${r2(size)}" patternTransform="rotate(${h.angle})"><path class="${cls}" d="${d}"/></pattern>`;
-}
-
-// The tile's strokes as path data, in its own axes (before it is turned to
-// the lines' angle), and its size: scene px (drawn once into a texture
-// the shadows, the night and the clouds' shadows are hatched with,
-// gl/hatching.js).
+// The tile's strokes: every line up to density tier `tier` (0 every 8th …
+// 3 all), over one repeat each way, as path data in its own axes (before
+// it is turned to the lines' angle), and its size: scene px (drawn once
+// into a texture the shadows, the night, the clouds' shadows and the mist
+// are hatched with, gl/hatching.js, gl/objects.js).
 export function hatchTileLines(tier, h, px) {
   const frame = hatchFrame(h), { n } = frame;
   let d = '';

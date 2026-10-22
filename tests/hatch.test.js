@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SUN, sunFor, shadowPaths } from '../src/render/shadows.js';
-import { TILE, hatchFrame, hatchStrokes, hatchPoints, hatchTile, tierOf } from '../src/render/hatch.js';
+import { TILE, hatchFrame, hatchStrokes, hatchPoints, hatchTileLines, tierOf } from '../src/render/hatch.js';
 
 const h = SUN.hatch, px = 32, f = hatchFrame(h);
 const near = (p, q, eps = 0.02) => Math.hypot(p[0] - q[0], p[1] - q[1]) < eps;
@@ -48,7 +48,7 @@ test('mostly strokes, and now and then a little paper between them', () => {
 });
 
 test('the night tile has as many lines as its tier asks for', () => {
-  const count = (tier) => (hatchTile('n', tier, h, px).match(/M/g) ?? []).length;
+  const count = (tier) => (hatchTileLines(tier, h, px).d.match(/M/g) ?? []).length;
   const [c0, c1, c2, c3] = [0, 1, 2, 3].map(count);
   for (const [lo, hi] of [[c0, c1], [c1, c2], [c2, c3]]) assert.ok(hi > lo * 1.7 && hi < lo * 2.3, `${lo} → ${hi}`);
   assert.equal(tierOf(f.n), 0);

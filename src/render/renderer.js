@@ -48,7 +48,7 @@
 
 import { THEME, mixColour } from '../theme.js';
 import { STYLE } from './style.js';
-import { MIST, mistLevel, mistSurface, mistSVG, mistTile, coverSVG, mistIn, mistOut } from './mist.js';
+import { MIST, mistLevel, mistSurface, mistSVG, mistHatch, coverSVG, mistIn, mistOut } from './mist.js';
 import { Painter, LOOK, wobble } from './painter.js';
 import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex } from './vehicles.js';
 import { PEOPLE, bodyFor, walkerSVG, cyclistSVG, canoeSVG, canoeMarkSVG } from './people.js';
@@ -90,7 +90,7 @@ import { BROWS, visibility, browLines, browRuns, hiddenAt } from './brows.js';
 import { rockLines, ROCK_LOOK } from './rocks.js';
 import { STEEP_LINES, steepLines } from './steep.js';
 import { carMark, personMark } from './marks.js';
-import { mergeRuns, placeInOrder, isoSort } from './order.js';
+import { mergeRuns, isoSort } from './order.js';
 import { Camera } from './camera.js';
 import { SUN, DAY, sunFor, shadowMask } from './shadows.js';
 import { HILL_SHADOWS, hillShade, hillShadeRings } from './hillShadows.js';
@@ -102,7 +102,7 @@ import { ROAD_MARK, unserved, markPlace, roadMarkPath } from './roadMarks.js';
 
 // (gallery.html and others import these from here)
 export { agentShape } from './marks.js';
-export { mergeRuns, placeInOrder } from './order.js';
+export { mergeRuns } from './order.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
 const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'hillshade', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'notes', 'overlay'];
@@ -1407,32 +1407,21 @@ export class Renderer {
     };
     layer.style.display = 'none';
     layer.classList.add('gl-drawn');
+    // (the mist under them, and its covers over them, drawn alike)
+    this.glObjects.watch(this.layers.mist, { under: true });
+    this.layers.mist.style.display = 'none';
   }
 
-  // The objects' groups put in the painter's order in their layer – or,
-  // drawn with WebGL (which keeps its own order), only put back in it.
+  // The objects' groups put back in their layer (drawn with WebGL, which
+  // keeps their order).
   placeObjectGroups(els) {
     const layer = this.layers.objects;
-    if (!layer.classList.contains('gl-drawn')) return placeInOrder(layer, els);
     for (const el of els) if (el.parentNode !== layer) layer.appendChild(el);
   }
 
   renderGlObjects() {
     const d = this.drawn;
     if (!this.glObjects || !d) return;
-    // (in mist the SVG's: its covers are filled with a pattern, and the mist
-    // lies under the objects in their <svg> – not drawn on the GPU yet)
-    const svgNow = this.mistLevel != null;
-    if (svgNow !== !!this.glObjectsAside) {
-      this.glObjectsAside = svgNow;
-      const layer = this.layers.objects;
-      layer.style.display = svgNow ? '' : 'none';
-      layer.classList.toggle('gl-drawn', !svgNow);
-      if (svgNow && this.order) this.placeObjectGroups(this.order.filter((e) => e.shown !== false).map((e) => e.g));
-      this.glObjects.canvas.style.display = svgNow ? 'none' : '';
-      this.glObjects.changed = true;
-    }
-    if (svgNow) return;
     this.glObjects.draw({ zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH }, this.order);
   }
 
@@ -1923,7 +1912,8 @@ export class Renderer {
       this.placeGroups(e);
     }
     this.keepViews(e);
-    if (this.mistLevel != null) this.coverMist(e);
+    // (a view kept from before the mist came or went: covered as it is now)
+    if (this.mistLevel != null || e.g.querySelector(':scope > .mist-cover') || e.g.mistUnderTo) this.coverMist(e);
   }
 
   // At most VIEWS kept for an object: those furthest from the step it shows
@@ -3683,12 +3673,10 @@ export class Renderer {
     const animate = drawEnabled() && level !== this.mistLevel && this.mistLevel !== undefined;
     const seed = Math.round((level ?? 0) * 1000) ^ world.seed;
     let svg = '';
-    // the paper's strokes it is filled with (mistTile), in the objects'
-    // <svg>, as are its covers
-    const tileKey = `${JSON.stringify(SUN.hatch)}|${camera.tile}`;
-    if (level != null && SUN.hatch && tileKey !== this.mistTileKey) {
-      this.mistTileKey = tileKey;
-      (this.mistDefs ??= this.top.insertBefore(document.createElementNS(SVGNS, 'defs'), this.top.firstChild)).innerHTML = mistTile(SUN.hatch, camera.tile);
+    // the paper's strokes it is filled with, as are its covers (gl/objects.js)
+    if (level != null && SUN.hatch) {
+      const { hatch, width } = mistHatch(SUN.hatch);
+      this.glObjects?.setTile(hatch, camera.tile, width * camera.tile);
     }
     if (level != null) {
       const { grid } = world;
@@ -3715,7 +3703,7 @@ export class Renderer {
     animate &&= e.shown !== false;
     const seed = detailRank(e.key ?? '') * 1e9;
     for (const old of e.g.querySelectorAll(':scope > .mist-cover:not(.leaving)')) {
-      if (animate) mistOut(old, { seed });
+      if (animate) mistOut(old, { seed, owner: e.g });
       else old.remove();
     }
     if (!animate) for (const old of e.g.querySelectorAll(':scope > .mist-cover')) old.remove();
@@ -3727,28 +3715,29 @@ export class Renderer {
       svg = coverSVG(this.camera, e.at, height(ax, ay), height, level, seed);
     }
     const under = svg === 'under';
-    if (under !== e.g.classList.contains('mist-under')) {
+    if (under !== (e.g.mistUnderTo ?? e.g.classList.contains('mist-under'))) {
       // sinking out of sight or coming up again: it fades
-      e.g.getAnimations().forEach((a) => a.id === 'mist-under' && a.cancel());
+      const g = e.g, ms = MIST.fade * 0.85;
+      clearTimeout(g.mistUnder);
+      g.mistUnderTo = under;
       if (animate) {
-        const kf = [{ opacity: 1 }, { opacity: 1 - MIST.paper }];
-        const a = e.g.animate(under ? kf : kf.reverse(), { duration: MIST.fade * 0.85, easing: 'ease-in-out', fill: 'forwards', id: 'mist-under' });
-        const g = e.g;
-        g.fade = { at: performance.now(), ms: MIST.fade * 0.85, from: under ? 1 : 1 - MIST.paper, to: under ? 1 - MIST.paper : 1, ease: 'in-out' }; // (gl/objects.js)
+        g.fade = { at: performance.now(), ms, from: under ? 1 : 1 - MIST.paper, to: under ? 1 - MIST.paper : 1, ease: 'in-out' }; // (gl/objects.js)
         g.classList.remove('mist-under');
-        a.onfinish = () => {
+        g.mistUnder = setTimeout(() => {
           g.classList.toggle('mist-under', under);
           g.fade = null;
-          a.cancel();
-        };
-      } else e.g.classList.toggle('mist-under', under);
+        }, ms);
+      } else {
+        g.fade = null;
+        g.classList.toggle('mist-under', under);
+      }
     }
     if (!svg || under) return;
     const g = document.createElementNS(SVGNS, 'g');
     g.setAttribute('class', 'mist-cover');
     g.innerHTML = svg;
     e.g.appendChild(g);
-    if (animate) mistIn(g, { seed });
+    if (animate) mistIn(g, { seed, owner: e.g });
   }
 
   // Put the drawings of the objects in sight back in the objects layer, in

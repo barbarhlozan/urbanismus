@@ -1,6 +1,5 @@
 // Getting a lot of SVG onto the page cheaply and in the right order: line
-// paths merged into fewer elements, elements put in order with as few moves
-// as possible, and the painter's order for buildings.
+// paths merged into fewer elements, and the painter's order for buildings.
 
 // Fewer elements for the same drawing: a run of neighbouring <path>s of the
 // same class that draw lines only – no fill (ln, glyph, gnd), or one in
@@ -40,38 +39,6 @@ export function mergeRuns(svg) {
   }
   flush();
   return out + svg.slice(last);
-}
-
-// Put `parent`'s children `els` in this order, moving as few as possible:
-// the longest run of them already in order stays, the rest are moved in
-// around it. (Moving an element makes the browser restyle and lay it out
-// again, and there are thousands of buildings.)
-export function placeInOrder(parent, els) {
-  const at = new Map();
-  let i = 0;
-  for (let c = parent.firstChild; c; c = c.nextSibling) at.set(c, i++);
-  // longest increasing subsequence of the current positions (patience sort)
-  const tails = [], prev = new Array(els.length);
-  els.forEach((el, k) => {
-    const p = at.get(el);
-    if (p === undefined) return;
-    let lo = 0, hi = tails.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (at.get(els[tails[mid]]) < p) lo = mid + 1; else hi = mid;
-    }
-    prev[k] = lo ? tails[lo - 1] : -1;
-    tails[lo] = k;
-  });
-  const keep = new Set();
-  for (let k = tails.length ? tails[tails.length - 1] : -1; k >= 0; k = prev[k]) keep.add(els[k]);
-  // back to front: each one goes right before the one after it
-  let next = null;
-  for (let k = els.length - 1; k >= 0; k--) {
-    const el = els[k];
-    if (!keep.has(el) && (el.parentNode !== parent || el.nextSibling !== next)) parent.insertBefore(el, next);
-    next = el;
-  }
 }
 
 // Painter's-algorithm order for objects with rectangular ground areas of any

@@ -219,6 +219,14 @@ uploaded per frame.
   objects show as SVG (glObjectsAside)** until mist is on the GPU.
   Re-reading every object's shadow costs ~9 ms (on a change of objects);
   cache pieces per element if that shows.
+- **Mist on the GPU, 2026-10-22 night**: the last switch gone. The mist's
+  layer is drawn by GLObjects under the objects (`watch(layer, { under })`),
+  its covers as part of each object; a fill whose computed fill is a
+  `url()` is filled with the paper's strokes (`setTile`: mistHatch's
+  settings, tier 3, drawn per quarter-doubling of zoom), in `--bg`. The
+  mist's coming and going is a pen plan (draw.js `group.pen`, marked
+  `mist`): times with the end before the start take a line back / thin a
+  fill away. `hatchTile`, `mistTile`, `placeInOrder` removed.
 
 ## The plan
 

@@ -23,6 +23,7 @@
 
 import { flattenPath, triangulate } from './geometry.js';
 import { penWatch, penLength } from '../draw.js';
+import { hatchTileLines } from '../hatch.js';
 
 // Curves flattened to within this of the true line (scene px).
 const TOLERANCE = 0.08;
@@ -44,7 +45,7 @@ layout(location = 5) in vec4 slots;   // the object's matrix, its child's (-1 no
 uniform vec3 base;                    // scene px -> device px
 uniform vec2 size;
 uniform highp sampler2D mats;
-uniform highp sampler2D styles;       // per kind: fill, stroke (premultiplied), width and shown
+uniform highp sampler2D styles;       // per kind: fill, stroke (premultiplied), width, shown, hatched
 uniform float alpha;                  // the object's whole drawing faded (its group's opacity)
 uniform int penOn;                    // the pen drawing this object in or out (draw.js)…
 uniform float penT;                   // …this many ms into its drawing (erasing: counted back)
@@ -55,6 +56,9 @@ flat out vec4 kindF;
 flat out vec4 colourF;
 out float alongF;                     // how far along its line (a stroke)
 flat out float penVis;                // the pen has got this far along it
+out vec2 scene;                       // where it is (scene px: a hatched fill's strokes)
+// (an end before its start: taken back, from all there to none)
+float span(float a, float b) { float d = b - a; return abs(d) < 1e-3 ? 1e-3 : d; }
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
 mat3 matAt(float s) {
   if (s < 0.0) return mat3(1.0);
@@ -71,7 +75,7 @@ void main() {
   vec4 look = texelFetch(styles, ivec2(sid + 2, 0), 0);
   colourF = texelFetch(styles, ivec2(sid + int(style.y), 0), 0) * alpha;
   float det = sqrt(abs(m[0][0] * m[1][1] - m[0][1] * m[1][0]));
-  kindF = vec4(kind.x, kind.y * look.x * 0.5 * base.x * det, kind.zw);
+  kindF = vec4(kind.x < 0.5 ? -look.z : kind.x, kind.y * look.x * 0.5 * base.x * det, kind.zw);
   if (look.y < 0.5 || colourF.a <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   // the pen: an outline revealed along its length (eased in and out, as the
   // dash slid in), a fill fading in as it closes, a mark without an
@@ -81,10 +85,10 @@ void main() {
     int e = int(style.z) * 2;
     vec4 t = texelFetch(mats, ivec2(e % ${ROW}, e / ${ROW}), 0);
     vec4 q = texelFetch(mats, ivec2((e + 1) % ${ROW}, (e + 1) / ${ROW}), 0);
-    float fade = clamp((penT - t.z) / max(t.w - t.z, 1e-3), 0.0, 1.0);
+    float fade = clamp((penT - t.z) / span(t.z, t.w), 0.0, 1.0);
     if (q.y > 0.5 || kind.x < 0.5) colourF *= fade;
     else {
-      float k = clamp((penT - t.x) / max(t.y - t.x, 1e-3), 0.0, 1.0);
+      float k = clamp((penT - t.x) / span(t.x, t.y), 0.0, 1.0);
       k = k * k * (3.0 - 2.0 * k);
       penVis = k * (q.x + 1.0) - 1.0;
     }
@@ -112,6 +116,7 @@ void main() {
     joins = vec2(kind.z < 0.5 ? dot(p - pa, tA) : 1e6, kind.w < 0.5 ? dot(pb - p, tB) : 1e6);
     alongF = slots.z + local.x / max(len, 1e-4) * (slots.w - slots.z);
   }
+  scene = (p - base.yz) / base.x;
   gl_Position = vec4(p / size * 2.0 - 1.0, 0.0, 1.0);
   gl_Position.y = -gl_Position.y;
 }`;
@@ -125,8 +130,16 @@ flat in vec4 kindF;
 flat in vec4 colourF;
 in float alongF;
 flat in float penVis;
+in vec2 scene;
+uniform sampler2D tile;               // the mist's strokes (setTile)
+uniform vec3 tileAt;                  // cos, sin of their angle, the tile's size (scene px)
 out vec4 outColour;
 void main() {
+  if (kindF.x < -0.5) {
+    vec2 t = vec2(scene.x * tileAt.x + scene.y * tileAt.y, -scene.x * tileAt.y + scene.y * tileAt.x) / tileAt.z;
+    outColour = colourF * texture(tile, t).a;
+    return;
+  }
   if (kindF.x < 0.5) { outColour = colourF; return; }
   if (joins.x < 0.0 || joins.y < 0.0 || alongF > penVis) discard;
   float hw = kindF.y, d, edge = 1.0;
@@ -223,7 +236,7 @@ export class GLObjects {
     gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha'].map((n) => [n, gl.getUniformLocation(p, n)]));
+    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt'].map((n) => [n, gl.getUniformLocation(p, n)]));
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -242,30 +255,8 @@ export class GLObjects {
     this.stylesDirty = true;
     this.epoch = 0;
     this.changed = true;
-    // anything in an object's drawing changed: its pieces built again; a
-    // transform on its group or a child: only that matrix
-    new MutationObserver((records) => {
-      for (const r of records) {
-        const t = r.target;
-        if (t === layer) continue;
-        let g = t, child = null;
-        while (g && g.parentNode !== layer) {
-          child = g;
-          g = g.parentNode;
-        }
-        const rec = g && this.records.get(g);
-        if (!rec) continue;
-        this.changed = true;
-        if (r.type === 'attributes' && r.attributeName === 'transform' && (t === g || t === child && t.parentNode === g)) {
-          if (t === g) this.setMat(rec.slot, own(g));
-          else {
-            const s = rec.children.get(t);
-            if (s != null) this.setMat(s, own(t));
-            else rec.dirty = true;
-          }
-        } else rec.dirty = true;
-      }
-    }).observe(layer, { subtree: true, childList: true, attributes: true, characterData: true });
+    this.roots = new Map(); // a layer drawn here -> its probe (copy)
+    this.watch(layer);
     // the pen's plans (draw.js): its times beside the matrices
     penWatch.add((groups) => {
       for (const g of groups) {
@@ -305,6 +296,78 @@ export class GLObjects {
     // (the groups' opacities depend on classes only)
     new MutationObserver(() => this.opacities?.clear()).observe(svg, { attributes: true, attributeFilter: ['class'] });
     if (sunCss) new MutationObserver(restyle).observe(sunCss, { childList: true, characterData: true, subtree: true });
+  }
+
+  // A layer whose groups are drawn here (the objects', and `under` them
+  // the mist's): anything in a group's drawing changed, its pieces built
+  // again; a transform on the group or a child, only that matrix.
+  watch(layer, { under = false } = {}) {
+    this.roots.set(layer, null);
+    if (under) this.under = layer;
+    new MutationObserver((records) => {
+      for (const r of records) {
+        const t = r.target;
+        if (t === layer) {
+          this.changed = true;
+          continue;
+        }
+        let g = t, child = null;
+        while (g && g.parentNode !== layer) {
+          child = g;
+          g = g.parentNode;
+        }
+        const rec = g && this.records.get(g);
+        if (!rec) continue;
+        this.changed = true;
+        if (r.type === 'attributes' && r.attributeName === 'transform' && (t === g || t === child && t.parentNode === g)) {
+          if (t === g) this.setMat(rec.slot, own(g));
+          else {
+            const s = rec.children.get(t);
+            if (s != null) this.setMat(s, own(t));
+            else rec.dirty = true;
+          }
+        } else rec.dirty = true;
+      }
+    }).observe(layer, { subtree: true, childList: true, attributes: true, characterData: true });
+  }
+
+  // The tile the hatched fills (the mist's paper, `fill: url(…)`) are
+  // filled with: the strokes of `hatch` (hatch.js, all tiers) at `px` a
+  // grid unit, `width` scene px wide.
+  setTile(hatch, px, width) {
+    const key = `${JSON.stringify(hatch)}|${px}|${width}`;
+    if (key === this.tileKey) return;
+    this.tileKey = key;
+    this.tileArgs = { hatch, px, width };
+    this.tileQ = null;
+    this.changed = true;
+  }
+
+  // …drawn for `q` device px to a scene px (a quarter of a doubling at a time).
+  tileFor(q) {
+    if (!this.tileArgs || q === this.tileQ) return;
+    this.tileQ = q;
+    const { hatch, px, width } = this.tileArgs;
+    const { d, size } = hatchTileLines(3, hatch, px);
+    const n = Math.max(1, Math.min(4096, Math.round(size * q)));
+    const off = new OffscreenCanvas(n, n), c = off.getContext('2d');
+    c.scale(n / size, n / size);
+    c.strokeStyle = '#fff';
+    c.lineWidth = width;
+    c.lineCap = c.lineJoin = 'round';
+    c.stroke(new Path2D(d));
+    const { gl } = this;
+    this.tileTex ??= gl.createTexture();
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.tileTex);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.activeTexture(gl.TEXTURE0);
+    this.tileSize = size;
   }
 
   allocTex() {
@@ -372,18 +435,23 @@ export class GLObjects {
   // no geometry), kept in a probe of its own beside the objects: asked for
   // its style it needs no restyle of anything that changed in the drawings.
   copy(el) {
-    if (!this.probeRoot) {
-      // (as the objects' layer is: in a scene, in the same <svg>)
-      const scene = document.createElementNS(SVGNS, 'g');
-      scene.setAttribute('class', 'scene');
-      scene.style.visibility = 'hidden';
-      this.probeRoot = scene.appendChild(document.createElementNS(SVGNS, 'g'));
-      this.probeRoot.setAttribute('class', this.layer.getAttribute('class') ?? '');
-      this.layer.closest('svg').append(scene);
-    }
     const chain = [];
-    for (let n = el; n && n !== this.layer; n = n.parentNode) chain.unshift(n);
-    let at = this.probeRoot;
+    let n = el;
+    for (; n && !this.roots.has(n); n = n.parentNode) chain.unshift(n);
+    const layer = n ?? this.layer; // (a drawing made ready for a turn: an object's)
+    let at = this.roots.get(layer);
+    if (!at) {
+      // (as the layer is: in a scene, in the same <svg>)
+      const scene = (this.probeScene ??= document.createElementNS(SVGNS, 'g'));
+      if (!scene.parentNode) {
+        scene.setAttribute('class', 'scene');
+        scene.style.visibility = 'hidden';
+        this.layer.closest('svg').append(scene);
+      }
+      at = scene.appendChild(document.createElementNS(SVGNS, 'g'));
+      at.setAttribute('class', layer.getAttribute('class') ?? '');
+      this.roots.set(layer, at);
+    }
     for (const n of chain) {
       const c = n.cloneNode(false);
       c.removeAttribute('d');
@@ -398,13 +466,21 @@ export class GLObjects {
     const cs = getComputedStyle(s.el);
     const alpha = parseFloat(cs.opacity) || 0;
     s.shown = cs.display !== 'none';
-    s.fill = paint(cs.fill, alpha * (parseFloat(cs.fillOpacity) || 0));
+    // (filled with a pattern: the mist's paper, in its strokes, setTile)
+    s.hatched = cs.fill.startsWith('url(');
+    let fill = cs.fill;
+    if (s.hatched) {
+      s.el.style.fill = 'var(--bg)';
+      fill = getComputedStyle(s.el).fill;
+      s.el.style.removeProperty('fill');
+    }
+    s.fill = paint(fill, alpha * (parseFloat(cs.fillOpacity) || 0));
     s.stroke = paint(cs.stroke, alpha * (parseFloat(cs.strokeOpacity) || 0));
     s.width = parseFloat(cs.strokeWidth) || 0;
     s.cap = CAPS[cs.strokeLinecap] ?? 2;
     s.evenodd = cs.fillRule === 'evenodd';
     if (!(s.width > 0)) s.stroke = null;
-    this.styleData.set([...(s.fill ?? [0, 0, 0, 0]), ...(s.stroke ?? [0, 0, 0, 0]), s.width, s.shown ? 1 : 0, 0, 0], s.id * 12);
+    this.styleData.set([...(s.fill ?? [0, 0, 0, 0]), ...(s.stroke ?? [0, 0, 0, 0]), s.width, s.shown ? 1 : 0, s.hatched ? 1 : 0, 0], s.id * 12);
     this.stylesDirty = true;
   }
 
@@ -543,7 +619,8 @@ export class GLObjects {
         }
       }
     };
-    const root = `g.${g.getAttribute('class') ?? ''}`;
+    const up = g.parentNode && g.parentNode !== this.layer ? `${g.parentNode.getAttribute('class')}>` : '';
+    const root = `${up}g.${g.getAttribute('class') ?? ''}`;
     children.forEach((c, i) => {
       const slot = rec.slot + 1 + i;
       rec.children.set(c, slot);
@@ -577,7 +654,7 @@ export class GLObjects {
     if (this.opacityPending?.size) {
       this.copy(this.layer); // (the probe made)
       for (const [cls, rec] of this.opacityPending) {
-        const c = this.probeRoot.appendChild(document.createElementNS(SVGNS, 'g'));
+        const c = this.roots.get(this.layer).appendChild(document.createElementNS(SVGNS, 'g'));
         if (cls) c.setAttribute('class', cls);
         let o = parseFloat(getComputedStyle(c).opacity);
         if (!(o >= 0)) o = 1;
@@ -651,7 +728,7 @@ export class GLObjects {
 
   // Each frame. `view`: the SVGs' drawn view and wrapper ({ zoom, panX,
   // panY, ox, oy, W, H }); `order`: the objects from the furthest (entries
-  // with g, shown).
+  // with g, shown) – after the groups of the layer under them (watch).
   draw(view, order) {
     const { gl, canvas } = this;
     const dpr = devicePixelRatio || 1;
@@ -661,6 +738,7 @@ export class GLObjects {
     if (!this.changed && key === this.key) return;
     this.key = key;
     this.lastOrder = order;
+    if (this.under?.firstElementChild) order = [...[...this.under.children].map((g) => ({ g })), ...(order ?? [])];
     this.changed = false;
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
@@ -722,6 +800,14 @@ export class GLObjects {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.styleTex);
     gl.uniform1i(this.u.styles, 1);
+    this.tileFor(2 ** (Math.round(Math.log2(dpr * view.zoom) * 4) / 4));
+    if (this.tileTex) {
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, this.tileTex);
+      gl.uniform1i(this.u.tile, 2);
+      const a = (this.tileArgs.hatch.angle * Math.PI) / 180;
+      gl.uniform3f(this.u.tileAt, Math.cos(a), Math.sin(a), this.tileSize);
+    }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.matTex);
     gl.uniform1i(this.u.mats, 0);

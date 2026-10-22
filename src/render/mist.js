@@ -5,7 +5,7 @@
 // lower part of every house standing in it. It is laid as every shadow
 // and the night are, in the paper's strokes (hatch.js), only in the
 // paper's own colour and broad: they rub out what is under them, a sliver
-// of it showing between each two (mistTile). Its far shore, where it lies
+// of it showing between each two (mistHatch). Its far shore, where it lies
 // against a hillside, stands up in long shallow lobes drawn in the pen with
 // one line inside along it; its near edge, where the ground in front comes
 // out of it, is a plain pen line; and where it closes round a roof or a
@@ -18,8 +18,9 @@
 //                     column from the front back, the mist shows where it
 //                     is above all the nearer ground and mist seen so far
 //   mistSVG(surface, camera, seed)   the paper, the lobes and the lines
-//   mistTile(h, px)   the paper's strokes it is filled with: an SVG <pattern>
-//                     #mist-tile, in scene px (h: SUN.hatch)
+//   mistHatch(h)      the paper's strokes it is filled with (h: SUN.hatch):
+//                     their settings and width (grid units), for the tile
+//                     of gl/objects.js (setTile)
 //   coverSVG(camera, at, base, height, level, seed)   what an object standing in it
 //                     gets drawn over itself: paper over its front below
 //                     the top, lumps along where it is cut; or 'under' when
@@ -33,7 +34,8 @@
 // followed (STYLE.warp is 0).
 
 import { mulberry32 } from '../core/random.js';
-import { hatchFrame, hatchTile } from './hatch.js';
+import { hatchFrame } from './hatch.js';
+import { penWatch, penLength } from './draw.js';
 
 const COS30 = Math.cos(Math.PI / 6);
 
@@ -187,9 +189,9 @@ export function mistSVG({ runs, far, near, level, du }, camera, seed = 1) {
   return `<path class="mist" d="${fill}"/><path class="mist" d="${lobeFill}"/>${lines}`;
 }
 
-export function mistTile(h, px) {
-  const lines = { ...h, gap: MIST.gap }, width = MIST.broad * hatchFrame(lines).gap * px;
-  return hatchTile('mist-tile', 3, lines, px, 'mist-hatch').replace('<path ', `<path stroke-width="${r2(width)}" `);
+export function mistHatch(h) {
+  const hatch = { ...h, gap: MIST.gap };
+  return { hatch, width: MIST.broad * hatchFrame(hatch).gap };
 }
 
 // An object's cover. `at`: its place (Renderer.placeOf: world `points`,
@@ -256,38 +258,49 @@ export function coverSVG(camera, at, base, height, level, seed = 1) {
 // and the pen draws its lines one by one, each along its length, the
 // strokes overlapping as a hand would; going, the lines are taken back
 // the same way and the paper thins away – so for a while the drawing
-// below shows through. `g`: a group of mistSVG / coverSVG's output.
-export function mistIn(g, { fade = MIST.fade, seed = 1 } = {}) {
-  return animate(g, fade, false, seed);
+// below shows through. `g`: a group of mistSVG / coverSVG's output; `owner`
+// the group drawn as one (gl/objects.js: the mist's own, or the object a
+// cover is part of), whose pen's plan (draw.js) times its elements.
+export function mistIn(g, { fade = MIST.fade, seed = 1, owner = g } = {}) {
+  plan(g, owner, fade, false, seed);
 }
 
 // …and away; `g` is removed once it is gone.
-export function mistOut(g, { fade = MIST.fade, seed = 1 } = {}) {
+export function mistOut(g, { fade = MIST.fade, seed = 1, owner = g } = {}) {
   g.classList.add('leaving');
-  const done = animate(g, fade, true, seed);
-  setTimeout(() => g.remove(), done + 50);
+  plan(g, owner, fade, true, seed);
+  setTimeout(() => g.remove(), fade + 50);
 }
 
-function animate(g, T, reverse, seed) {
+function plan(g, owner, T, out, seed) {
+  // (one plan an owner: a cover coming as the last goes shares it; an
+  // object being drawn by the pen just gets its cover, or loses it)
+  const now = performance.now();
+  let pen = owner.pen;
+  if (pen && !pen.mist) {
+    if (out) g.remove();
+    return;
+  }
+  if (!pen || now - pen.origin >= pen.T) pen = owner.pen = { origin: now, T: 0, reverse: false, mist: true, items: new Map() };
+  const at = now - pen.origin;
+  // (its elements hidden until the group is gone, a while after it)
+  pen.T = Math.max(pen.T, at + T + 1000);
   const rnd = mulberry32(seed);
-  const run = (el, kf, a, b, easing) => {
-    if (reverse) kf = kf.slice().reverse();
-    el.animate(kf, { duration: Math.max(1, b - a), delay: reverse ? T - b : a, easing, fill: reverse ? 'forwards' : 'backwards' });
-  };
+  // `out`: from all there to none (an end before its start)
+  const put = (el, a, b, len, stroke) => pen.items.set(el, {
+    t0: at + (out ? T - a : a), t1: at + (out ? T - b : b), f0: at + (out ? T - a : a), f1: at + (out ? T - b : b), px: len, stroke, fill: !stroke,
+  });
   for (const el of g.querySelectorAll('path')) {
     if (el.classList.contains('mist')) {
-      run(el, [{ opacity: 0 }, { opacity: 1 }], 0, T * 0.85, 'ease-in-out');
+      put(el, 0, T * 0.85, 0, false);
       continue;
     }
-    let len = 0;
-    try { len = el.getTotalLength(); } catch { /* not measurable */ }
+    const len = penLength.of?.(el) ?? 0;
     if (!(len > 0)) continue;
     // each stroke in its own part of the time, the longer the longer
     const d = Math.min(T * 0.6, T * 0.15 + len * 12);
     const a = rnd() * (T - d);
-    const n = len * 1.05 + 4;
-    run(el, [{ strokeDasharray: `${n} ${n}`, strokeDashoffset: n + 1 }, { strokeDasharray: `${n} ${n}`, strokeDashoffset: 0 }], a, a + d, 'ease-in-out');
+    put(el, a, a + d, len, true);
   }
-  return T;
+  for (const f of penWatch) f([owner]);
 }
-
