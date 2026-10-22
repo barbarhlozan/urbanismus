@@ -54,6 +54,9 @@ export const drawEnabled = () => DRAW.on && !reduced?.matches;
 // element -> { t0, t1, f0, f1, px, stroke, fill } }, times in ms from
 // `origin`, a performance.now()).
 export const penWatch = new Set();
+// …and how long a line it draws is (an element of a .gl-drawn group: not
+// laid out by the browser, measured by whoever draws it).
+export const penLength = { of: null };
 
 // Strokes to draw in `groups` (ground first), with their share of the time.
 // `tile` converts screen px to grid units for the overall duration; `scale`
@@ -72,10 +75,10 @@ function plan(groups, tile, speed, scale, only) {
     for (const el of root.querySelectorAll(SHAPES)) {
       if (only && !only.has(el)) continue;
       const cs = getComputedStyle(el);
-      // (hidden, unless only because something else draws it: .gl-drawn, gl/objects.js)
-      if (cs.display === 'none' || (cs.visibility === 'hidden' && !el.closest('.gl-drawn'))) continue;
+      if (cs.display === 'none' || cs.visibility === 'hidden') continue;
       let len = 0;
-      try { len = el.getTotalLength(); } catch { /* not measurable */ }
+      if (penLength.of && el.closest('.gl-drawn')) len = penLength.of(el);
+      else try { len = el.getTotalLength(); } catch { /* not measurable */ }
       if (!(len > 0)) continue;
       const stroke = cs.stroke !== 'none' && parseFloat(cs.strokeWidth) > 0;
       const fill = cs.fill !== 'none';

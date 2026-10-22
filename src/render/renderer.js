@@ -551,8 +551,12 @@ export class Renderer {
   // right, bottom), or null when it isn't drawn.
   buildingBox(key) {
     let box = null;
+    const gl = this.glObjects, cam = this.camera;
     for (const el of this.buildingParts(key)) {
-      const r = el.getBoundingClientRect();
+      // (with WebGL the drawing isn't laid out: its box from gl/objects.js)
+      const b = gl?.boxOf(el);
+      const r = b ? { left: cam.panX + cam.zoom * b[0], top: cam.panY + cam.zoom * b[1], width: cam.zoom * (b[2] - b[0]), height: cam.zoom * (b[3] - b[1]) } : el.getBoundingClientRect();
+      if (b) Object.assign(r, { right: r.left + r.width, bottom: r.top + r.height });
       if (!r.width && !r.height) continue;
       box = box ? { left: Math.min(box.left, r.left), top: Math.min(box.top, r.top), right: Math.max(box.right, r.right), bottom: Math.max(box.bottom, r.bottom) }
         : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
@@ -577,7 +581,8 @@ export class Renderer {
     const parts = this.buildingParts(key);
     let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const el of parts) {
-      const b = el.getBBox();
+      const gb = this.glObjects?.boxOf(el); // (with WebGL: not laid out)
+      const b = gb ? { x: gb[0], y: gb[1], width: gb[2] - gb[0], height: gb[3] - gb[1] } : el.getBBox();
       if (!b.width && !b.height) continue;
       x0 = Math.min(x0, b.x); x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
     }
@@ -1555,12 +1560,14 @@ export class Renderer {
         return out;
       };
       this.preparedAt = null;
-      layer.style.visibility = 'hidden';
-      layer.classList.add('gl-drawn'); // (still planned by the pen, draw.js)
+      // (not displayed: the browser neither styles nor lays it out; the
+      // pen measures it through gl/objects.js, draw.js)
+      layer.style.display = 'none';
+      layer.classList.add('gl-drawn');
     } else if (!on && this.glObjects) {
       this.glObjects.canvas.remove();
       this.glObjects = null;
-      layer.style.visibility = '';
+      layer.style.display = '';
       layer.classList.remove('gl-drawn');
     }
     return true;

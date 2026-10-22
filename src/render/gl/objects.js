@@ -22,7 +22,7 @@
 //   objs.draw(view, order)     each frame: draws when something changed
 
 import { flattenPath, triangulate } from './geometry.js';
-import { penWatch } from '../draw.js';
+import { penWatch, penLength } from '../draw.js';
 
 // Curves flattened to within this of the true line (scene px).
 const TOLERANCE = 0.08;
@@ -166,6 +166,7 @@ function paint(c, alpha) {
 
 const CAPS = { round: 1, butt: 2, square: 2 };
 const SVGNS = 'http://www.w3.org/2000/svg';
+const lengths = new WeakMap(); // element -> { d, len }
 const ATTRS = ['style', 'fill', 'stroke', 'stroke-width', 'fill-rule', 'opacity', 'fill-opacity', 'stroke-opacity', 'stroke-linecap', 'display'];
 const SHAPES = new Set(['path', 'polygon', 'polyline', 'line', 'rect', 'circle', 'ellipse']);
 
@@ -270,6 +271,19 @@ export class GLObjects {
       }
       this.changed = true;
     });
+    // (the pen's lengths, as the browser would measure them: the layer isn't laid out)
+    penLength.of = (el) => {
+      const d = dOf(el);
+      let l = lengths.get(el);
+      if (l?.d === d) return l.len;
+      let len = 0;
+      for (const { pts, closed } of flattenPath(d, TOLERANCE)) {
+        for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+        if (closed && pts.length > 1) len += Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]);
+      }
+      lengths.set(el, { d, len });
+      return len;
+    };
     // what the styles depend on: the map's classes and properties, the sun's sheet
     // (asked again of an element of each kind, into the table: nothing is built anew
     // unless a kind gains a fill or a pen it had none of)
@@ -413,6 +427,7 @@ export class GLObjects {
       this.records.set(g, rec);
     }
     rec.children = new Map();
+    rec.boxes = new Map(); // child -> [x0, y0, x1, y1] in the group's px
     rec.els = [];
     rec.elBase = rec.slot + 1 + children.length;
     rec.dirty = false;
@@ -428,6 +443,7 @@ export class GLObjects {
       more.set(out.data);
       out.data = more;
     };
+    let child = null;
     const visit = (el, chain, m, slot) => {
       const tag = el.tagName;
       const cls = el.getAttribute('class') ?? '';
@@ -452,6 +468,17 @@ export class GLObjects {
       if (!subs.length) return;
       const X = (p) => (m ? m[0] * p[0] + m[2] * p[1] + m[4] : p[0]);
       const Y = (p) => (m ? m[1] * p[0] + m[3] * p[1] + m[5] : p[1]);
+      // (its child's box: what getBBox would say, the layer not being laid out)
+      const box = rec.boxes.get(child);
+      for (const { pts } of subs) {
+        for (const p of pts) {
+          const x = X(p), y = Y(p);
+          if (x < box[0]) box[0] = x;
+          if (y < box[1]) box[1] = y;
+          if (x > box[2]) box[2] = x;
+          if (y > box[3]) box[3] = y;
+        }
+      }
       let D = out.data;
       if (st.fill) {
         const { positions: P, indices: I } = triangulate(subs, st.evenodd ? 'evenodd' : 'nonzero');
@@ -503,6 +530,8 @@ export class GLObjects {
     children.forEach((c, i) => {
       const slot = rec.slot + 1 + i;
       rec.children.set(c, slot);
+      child = c;
+      rec.boxes.set(c, [Infinity, Infinity, -Infinity, -Infinity]);
       this.setMat(slot, own(c));
       // (transforms below a child are kept in the pieces)
       const inner = (el, chain, m) => {
@@ -543,6 +572,13 @@ export class GLObjects {
       }
       rec.pending = null;
     }
+  }
+
+  // A drawn object's child's box ([x0, y0, x1, y1] in its group's px; null
+  // if not drawn here or empty).
+  boxOf(el) {
+    const b = this.records.get(el.parentNode)?.boxes?.get(el);
+    return b && b[2] >= b[0] ? b : null;
   }
 
   has(g) {
