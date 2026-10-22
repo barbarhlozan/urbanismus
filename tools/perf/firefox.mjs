@@ -4,9 +4,11 @@
 // profile (your own browser's tabs and data are not touched), so run it
 // from a terminal of your own: an app sandbox can't open windows.
 //
-//   node tools/perf/firefox.mjs <town.urbanismus.json> [--night] [--pref name=value …] [--only idle,pan,…] [--browser path]
+//   node tools/perf/firefox.mjs <town.urbanismus.json> [--night] [--pref name=value …] [--only idle,pan,…] [--setup '<js>'] [--browser path]
 //
 // --browser: the app's binary (default: Zen, else Firefox, in /Applications);
+// --setup: run in the page before measuring (R is the renderer), e.g.
+// 'R.setGlLines(true); R.setGlMovers(true)';
 // --pref sets a preference for the run, e.g. --pref gfx.canvas.accelerated=true.
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -22,6 +24,7 @@ for (let i = argv.indexOf('--pref'); i >= 0; i = argv.indexOf('--pref')) {
   prefs[k] = v === 'true' ? true : v === 'false' ? false : isNaN(v) ? v : Number(v);
 }
 const only = opt('--only', null)?.split(',');
+const setup = opt('--setup', '');
 const port = Number(opt('--port', 9226));
 const binary = opt('--browser', ['/Applications/Zen.app/Contents/MacOS/zen', '/Applications/Firefox.app/Contents/MacOS/firefox'].find(existsSync));
 const night = argv.includes('--night');
@@ -122,6 +125,7 @@ try {
     await evaluate(`(cmd.weather('fair'), cmd.day(1), true)`);
     await new Promise((r) => setTimeout(r, 8000));
   }
+  if (setup) await evaluate(`(async () => { ${setup}; return true; })()`);
   const t0 = Date.now();
   while (Date.now() - t0 < 60000 && !(await evaluate('R.preparedAt != null'))) await new Promise((r) => setTimeout(r, 500));
   await new Promise((r) => setTimeout(r, 1500));
@@ -145,9 +149,14 @@ try {
         requestAnimationFrame(tick);
       });
       gaps.shift();
+      if (gaps.length < 3) return null;
       const s = [...gaps].sort((a, b) => a - b);
       return { fps: +(1000 * gaps.length / gaps.reduce((a, b) => a + b, 0)).toFixed(1), p95: Math.round(s[Math.floor(s.length * 0.95)]), worst: Math.round(s[s.length - 1]) };
     })()`);
+    if (!r) {
+      console.log(`${name.padEnd(9)} no frames drawn: the window must be in sight (not hidden, minimised, or behind a locked screen)`);
+      continue;
+    }
     console.log([name.padEnd(9), ...['fps', 'p95', 'worst'].map((k) => String(r[k]).padStart(6))].join(' '));
   }
   await send('session.end').catch(() => {});
