@@ -181,6 +181,8 @@ const hashKey = (k) => [...String(k)].reduce((h, c) => (h * 31 + c.charCodeAt(0)
 // further out, every 4th far out.
 const SHADE_TIERS = [3, 2, 1];
 const NO_COVER = [];
+// Objects' box corners lifted and warped, per their points (sceneBox).
+const BOX_CORNERS = new WeakMap();
 // The steps of a turn either way whose drawings are made ready on the GPU
 // as well (gl/objects.js), while the view rests.
 const GL_AHEAD = 3; // (the objects' night while the view turns: none)
@@ -3567,14 +3569,42 @@ export class Renderer {
   // margin for what leans out (tree crowns, overshooting strokes) – for
   // cull(), so it errs on the large side.
   sceneBox(points, pad, top = 0) {
-    const t = this.camera.tile;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const [px, py] of points) {
-      for (const [dx, dy] of [[-pad, -pad], [pad, -pad], [pad, pad], [-pad, pad]]) {
-        const [sx, sy] = this.project(px + dx, py + dy);
-        x0 = Math.min(x0, sx); x1 = Math.max(x1, sx);
-        y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+    const cam = this.camera, t = cam.tile;
+    // (the corners lifted and warped – the same at any angle: kept per
+    // object's points while the relief and the warp stay, so a turn only
+    // turns them)
+    let byPad = BOX_CORNERS.get(points);
+    if (byPad?.lift !== cam.lift || byPad.warp !== cam.warp || byPad.terrain !== this.world.terrain) {
+      byPad = Object.assign(new Map(), { lift: cam.lift, warp: cam.warp, terrain: this.world.terrain });
+      BOX_CORNERS.set(points, byPad);
+    }
+    let c = byPad.get(pad);
+    if (!c) {
+      c = new Float64Array(points.length * 12);
+      let i = 0;
+      for (const [px, py] of points) {
+        for (const [dx, dy] of [[-pad, -pad], [pad, -pad], [pad, pad], [-pad, pad]]) {
+          let x = px + dx, y = py + dy, z = this.world.terrain.heightAt(x, y);
+          if (cam.lift) z += cam.lift(x, y);
+          if (cam.warp) {
+            const [wx, wy] = cam.warp(x, y);
+            x = wx;
+            y = wy;
+          }
+          c[i++] = x - cam.cx; c[i++] = y - cam.cy; c[i++] = z;
+        }
       }
+      byPad.set(pad, c);
+    }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const cs = cam._cos, sn = cam._sin, kx = COS30 * t, ky = 0.5 * t, kz = cam.zScale * t;
+    for (let i = 0; i < c.length; i += 3) {
+      const rx = c[i] * cs - c[i + 1] * sn, ry = c[i] * sn + c[i + 1] * cs;
+      const sx = (rx - ry) * kx, sy = (rx + ry) * ky - c[i + 2] * kz;
+      if (sx < x0) x0 = sx;
+      if (sx > x1) x1 = sx;
+      if (sy < y0) y0 = sy;
+      if (sy > y1) y1 = sy;
     }
     // its shadow reaches out along the sun as far as it is tall, any way it falls
     const s = SUN.on && SUN.hatch ? SUN.length * top * t * 1.2 : 0;
