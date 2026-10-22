@@ -1570,8 +1570,17 @@ export class Renderer {
       this.glObjectsAside = false;
       layer.style.display = '';
       layer.classList.remove('gl-drawn');
+      if (this.order) this.placeObjectGroups(this.order.filter((e) => e.shown !== false).map((e) => e.g));
     }
     return true;
+  }
+
+  // The objects' groups put in the painter's order in their layer – or,
+  // drawn with WebGL (which keeps its own order), only put back in it.
+  placeObjectGroups(els) {
+    const layer = this.layers.objects;
+    if (!layer.classList.contains('gl-drawn')) return placeInOrder(layer, els);
+    for (const el of els) if (el.parentNode !== layer) layer.appendChild(el);
   }
 
   renderGlObjects() {
@@ -1585,6 +1594,7 @@ export class Renderer {
       const layer = this.layers.objects;
       layer.style.display = svgNow ? '' : 'none';
       layer.classList.toggle('gl-drawn', !svgNow);
+      if (svgNow && this.order) this.placeObjectGroups(this.order.filter((e) => e.shown !== false).map((e) => e.g));
       this.glObjects.canvas.style.display = svgNow ? 'none' : '';
       this.glObjects.changed = true;
     }
@@ -2100,7 +2110,7 @@ export class Renderer {
     const live = [...this.objs.values(), ...this.ghosts.values()];
     const sorted = all ? live : live.filter((e) => e.shown !== false);
     const order = isoSort(sorted.map((e) => ({ ...e.bounds, entry: e })), this.camera.quarterView()).map((i) => i.entry);
-    placeInOrder(this.layers.objects, order.filter((e) => e.shown !== false).map((e) => e.g));
+    this.placeObjectGroups(order.filter((e) => e.shown !== false).map((e) => e.g));
     this.order = all ? order : order.concat(live.filter((e) => e.shown === false));
     this.orderAngle = this.camera.angle;
   }
@@ -2545,7 +2555,7 @@ export class Renderer {
     if (orderChanged) {
       const order = isoSort([...this.objs.values(), ...this.ghosts.values()].map((e) => ({ ...e.bounds, entry: e })), this.camera.quarterView()).map((i) => i.entry);
       this.orderAngle = this.camera.angle;
-      placeInOrder(this.layers.objects, order.filter((e) => e.shown !== false).map((e) => e.g)); // (out of sight: out of the page, see cull)
+      this.placeObjectGroups(order.filter((e) => e.shown !== false).map((e) => e.g)); // (out of sight: out of the page, see cull)
       this.order = order;
       this.objsPlace = false;
     }
@@ -3908,7 +3918,7 @@ export class Renderer {
     this.objsPlace = false;
     if (!this.order) return;
     const live = new Set([...this.objs.values(), ...this.ghosts.values()]);
-    placeInOrder(this.layers.objects, this.order.filter((e) => e.shown !== false && live.has(e)).map((e) => e.g));
+    this.placeObjectGroups(this.order.filter((e) => e.shown !== false && live.has(e)).map((e) => e.g));
   }
 
   // Does a scene box overlap the drawn view?
