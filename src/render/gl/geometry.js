@@ -29,6 +29,9 @@ const MAX_STEPS = 500; // the most pieces one curve or arc is cut into
 // How many numbers each path command takes.
 const ARGS = { m: 2, l: 2, h: 1, v: 1, c: 6, s: 4, q: 4, t: 2, a: 7, z: 0 };
 const ARGV = new Float64Array(7); // the numbers of the segment being read
+// (the same by character code, lower case: -1 not a command)
+const ARGC = new Int8Array(128).fill(-1);
+for (const [c, n] of Object.entries(ARGS)) ARGC[c.charCodeAt(0)] = n;
 
 // ---------------------------------------------------------------- the reader
 
@@ -223,19 +226,23 @@ export function flattenPath(d, tolerance = 0.25) {
     pts = null;
   };
 
+  let c = '', rel = false;
   for (;;) {
     const i = skipSpace(sc.s, sc.i);
     if (i >= sc.s.length) break;
-    const ch = sc.s[i];
-    if (ARGS[ch.toLowerCase()] !== undefined) {
-      cmd = ch;
+    const code = sc.s.charCodeAt(i), lower = code | 32;
+    if (lower < 128 && ARGC[lower] >= 0) {
+      if (code !== cmd) {
+        cmd = code;
+        c = String.fromCharCode(lower);
+        rel = code === lower;
+      }
       sc.i = i + 1;
-    } else if (cmd === '' || cmd === 'z' || cmd === 'Z') {
+    } else if (cmd === '' || c === 'z') {
       break; // numbers with no command to go on with
     } else {
       sc.i = i;
     }
-    const c = cmd.toLowerCase(), rel = cmd === c;
     if (!started && c !== 'm') break;
     if (c === 'z') {
       flush(true);
@@ -254,7 +261,8 @@ export function flattenPath(d, tolerance = 0.25) {
         y = sy = ARGV[1] + oy;
         pts = [[x, y]];
         started = true;
-        cmd = rel ? 'l' : 'L'; // more pairs after a moveto are linetos
+        cmd = rel ? 108 : 76; // more pairs after a moveto are linetos ('l', 'L')
+        c = 'l';
         kind = '';
         break;
       case 'l':

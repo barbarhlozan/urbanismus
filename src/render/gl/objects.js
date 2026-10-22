@@ -28,6 +28,8 @@ import { penWatch, penLength } from '../draw.js';
 const TOLERANCE = 0.08;
 // floats per piece
 const STRIDE = 20;
+// ms a frame spent reading drawings that changed (the rest the next frames)
+const BUILD_BUDGET = 6;
 // matrices in the texture: two texels each, a row of this many texels
 const ROW = 2048;
 
@@ -459,9 +461,12 @@ export class GLObjects {
       if (!SHAPES.has(tag)) return;
       // (an inline style or a presentation attribute makes it a kind of its own)
       let own = '';
-      for (const a of ATTRS) {
-        const v = el.getAttribute(a);
-        if (v != null) own += `|${a}:${v}`;
+      // (most have only their class and their geometry)
+      if (el.attributes.length > 2) {
+        for (const a of ATTRS) {
+          const v = el.getAttribute(a);
+          if (v != null) own += `|${a}:${v}`;
+        }
       }
       const st = this.styleOf(el, own ? chain + own : chain);
       if (st.pending) (rec.pending ??= new Set()).add(st);
@@ -663,11 +668,25 @@ export class GLObjects {
     }
     // the drawings that changed built again; those gone let go
     const seen = new Set(), now0 = performance.now();
+    // (within a budget a frame – new ones first; one whose drawing changed
+    // shows its last pieces until its turn – unless nothing is built yet)
+    const t0 = performance.now(), budget = this.records.size ? BUILD_BUDGET : Infinity;
+    const later = [];
     for (const e of order ?? []) {
       if (e.shown === false || !e.g?.isConnected) continue;
       seen.add(e.g);
       const rec = this.records.get(e.g);
-      if (!rec || rec.dirty) this.build(e.g, rec);
+      if (!rec) {
+        if (performance.now() - t0 < budget) this.build(e.g, rec);
+        else this.changed = true;
+      } else if (rec.dirty) later.push(e.g);
+    }
+    for (const g of later) {
+      if (performance.now() - t0 >= budget) {
+        this.changed = true;
+        break;
+      }
+      this.build(g, this.records.get(g));
     }
     this.askPending();
     // (now and then: those out of the page and not kept for a turn let go)
