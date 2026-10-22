@@ -164,7 +164,9 @@ uploaded per frame.
   (shadows), 0.999 (night), 0.998 (clouds). Chrome: no change. **Zen at
   night: pan 4.3 → 36 fps, zoom 4.3 → 30, idle 44 → 59, turn 4 → 8; by
   day pan 23 → 39, zoom 28 → 34.** What holds turns (7 fps) and settles
-  (16–18) back now is the objects' SVG: step 5.
+  (16–18) back now is the objects' SVG: step 5. Its ceiling, measured in
+  Zen at night with all of the above on and #view-top hidden: idle and pan
+  60, zoom 52, settle 35, turn 14 (the objects' turn work still runs).
   Re-reading every object's shadow costs ~9 ms (on a change of objects);
   cache pieces per element if that shows.
 
