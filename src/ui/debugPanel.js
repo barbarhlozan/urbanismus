@@ -50,6 +50,7 @@ export class DebugPanel {
       ['People, vehicles, trains on 2D canvases (unticked: WebGL)', (on) => { renderer.setGlMovers(!on); }],
       ['Shadows on 2D canvases (unticked: WebGL)', (on) => { renderer.setGlShadows(!on); }],
       ['Night on 2D canvases (unticked: WebGL)', (on) => { renderer.setGlNight(!on); }],
+      ['Buildings, trees, lamps in SVG (unticked: WebGL)', (on) => { renderer.setGlObjects(!on); }],
       ['Clouds\' shadows on a 2D canvas (unticked: WebGL)', (on) => { renderer.setGlClouds(!on); }],
     ];
 

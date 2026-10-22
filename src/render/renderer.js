@@ -61,6 +61,7 @@ import { GLLines } from './gl/lines.js';
 import { GLMovers } from './gl/movers.js';
 import { GLShadows } from './gl/shadows.js';
 import { GLNight } from './gl/night.js';
+import { GLObjects } from './gl/objects.js';
 import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
@@ -681,6 +682,7 @@ export class Renderer {
     this.markHovered();
     this.renderShadeCanvas();
     this.renderGlLines();
+    this.renderGlObjects();
     if (overlaySVG !== this.lastOverlay) {
       this.letGo(overlaySVG);
       this.layers.overlay.innerHTML = overlaySVG;
@@ -1521,6 +1523,35 @@ export class Renderer {
   // gives the renderer its cloudShadows).
   setGlClouds(on) {
     return this.cloudShadows?.setGl(on) ?? false;
+  }
+
+  // The buildings, trees and lamps drawn with WebGL (gl/objects.js) from
+  // their SVG, which stays in the page unpainted, or not (the Debug panel):
+  // a canvas under the objects' <svg> (its notes and overlay over it).
+  setGlObjects(on) {
+    const layer = this.layers.objects;
+    if (on && !this.glObjects) {
+      const canvas = document.createElement('canvas');
+      Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' });
+      this.top.before(canvas);
+      this.glObjects = GLObjects.make(canvas, layer, this.top, this.sunCss);
+      if (!this.glObjects) {
+        canvas.remove();
+        return false;
+      }
+      layer.style.visibility = 'hidden';
+    } else if (!on && this.glObjects) {
+      this.glObjects.canvas.remove();
+      this.glObjects = null;
+      layer.style.visibility = '';
+    }
+    return true;
+  }
+
+  renderGlObjects() {
+    const d = this.drawn;
+    if (!this.glObjects || !d) return;
+    this.glObjects.draw({ zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH }, this.order);
   }
 
   // The WebGL lines for the view the map's SVGs are drawn at (their wrapper
