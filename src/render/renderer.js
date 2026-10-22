@@ -1567,6 +1567,7 @@ export class Renderer {
     } else if (!on && this.glObjects) {
       this.glObjects.canvas.remove();
       this.glObjects = null;
+      this.glObjectsAside = false;
       layer.style.display = '';
       layer.classList.remove('gl-drawn');
     }
@@ -1576,6 +1577,18 @@ export class Renderer {
   renderGlObjects() {
     const d = this.drawn;
     if (!this.glObjects || !d) return;
+    // (in mist the SVG's: its covers are filled with a pattern, and the mist
+    // lies under the objects in their <svg> – not drawn on the GPU yet)
+    const svgNow = this.mistLevel != null;
+    if (svgNow !== !!this.glObjectsAside) {
+      this.glObjectsAside = svgNow;
+      const layer = this.layers.objects;
+      layer.style.display = svgNow ? '' : 'none';
+      layer.classList.toggle('gl-drawn', !svgNow);
+      this.glObjects.canvas.style.display = svgNow ? 'none' : '';
+      this.glObjects.changed = true;
+    }
+    if (svgNow) return;
     this.glObjects.draw({ zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH }, this.order);
   }
 
@@ -2153,6 +2166,7 @@ export class Renderer {
           const old = e[g];
           if (!old.parentNode) continue;
           e[g] = old.parentNode.insertBefore(document.createElementNS(SVGNS, 'g'), old);
+          old.fade = { at: performance.now(), ms: SETTLE_FADE, from: 1, to: 0, ease: 'out' }; // (as gl/objects.js draws it)
           old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SETTLE_FADE, easing: 'ease-out', fill: 'forwards' }).finished.then(() => old.remove(), () => old.remove());
         }
       } else if (e.slid) {
@@ -3870,9 +3884,12 @@ export class Renderer {
       if (animate) {
         const kf = [{ opacity: 1 }, { opacity: 1 - MIST.paper }];
         const a = e.g.animate(under ? kf : kf.reverse(), { duration: MIST.fade * 0.85, easing: 'ease-in-out', fill: 'forwards', id: 'mist-under' });
-        e.g.classList.remove('mist-under');
+        const g = e.g;
+        g.fade = { at: performance.now(), ms: MIST.fade * 0.85, from: under ? 1 : 1 - MIST.paper, to: under ? 1 - MIST.paper : 1, ease: 'in-out' }; // (gl/objects.js)
+        g.classList.remove('mist-under');
         a.onfinish = () => {
-          e.g.classList.toggle('mist-under', under);
+          g.classList.toggle('mist-under', under);
+          g.fade = null;
           a.cancel();
         };
       } else e.g.classList.toggle('mist-under', under);

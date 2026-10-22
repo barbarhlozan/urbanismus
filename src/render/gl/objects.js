@@ -43,6 +43,7 @@ uniform vec3 base;                    // scene px -> device px
 uniform vec2 size;
 uniform highp sampler2D mats;
 uniform highp sampler2D styles;       // per kind: fill, stroke (premultiplied), width and shown
+uniform float alpha;                  // the object's whole drawing faded (its group's opacity)
 uniform int penOn;                    // the pen drawing this object in or out (draw.js)…
 uniform float penT;                   // …this many ms into its drawing (erasing: counted back)
 out vec2 local;
@@ -66,7 +67,7 @@ void main() {
   vec2 A = (M * vec3(ab.xy, 1.0)).xy, B = (M * vec3(ab.zw, 1.0)).xy;
   int sid = int(style.x) * 3;
   vec4 look = texelFetch(styles, ivec2(sid + 2, 0), 0);
-  colourF = texelFetch(styles, ivec2(sid + int(style.y), 0), 0);
+  colourF = texelFetch(styles, ivec2(sid + int(style.y), 0), 0) * alpha;
   float det = sqrt(abs(m[0][0] * m[1][1] - m[0][1] * m[1][0]));
   kindF = vec4(kind.x, kind.y * look.x * 0.5 * base.x * det, kind.zw);
   if (look.y < 0.5 || colourF.a <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
@@ -220,7 +221,7 @@ export class GLObjects {
     gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT'].map((n) => [n, gl.getUniformLocation(p, n)]));
+    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha'].map((n) => [n, gl.getUniformLocation(p, n)]));
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -426,6 +427,7 @@ export class GLObjects {
       rec = { slot: this.alloc(n), n, vao, buf, count: 0 };
       this.records.set(g, rec);
     }
+    rec.opacity = parseFloat(getComputedStyle(g).opacity) || 0; // (its classes' own: .mist-under)
     rec.children = new Map();
     rec.boxes = new Map(); // child -> [x0, y0, x1, y1] in the group's px
     rec.els = [];
@@ -671,9 +673,8 @@ export class GLObjects {
     const now = performance.now();
     let penning = false, penWas = false;
     gl.uniform1i(this.u.penOn, 0);
-    for (const e of order ?? []) {
-      const rec = e.shown !== false && this.records.get(e.g);
-      if (!rec?.count) continue;
+    let alphaWas = -1;
+    const one = (g, rec) => {
       // (the pen still at it: drawn again next frame; done drawing in: let go)
       const pen = rec.pen;
       let t = 0;
@@ -681,7 +682,7 @@ export class GLObjects {
         t = now - pen.origin;
         if (!pen.reverse && t >= pen.T) {
           rec.pen = null;
-          if (e.g.pen === pen) e.g.pen = null;
+          if (g.pen === pen) g.pen = null;
         } else {
           if (pen.reverse) t = pen.T - t;
           if (!pen.reverse || t > -100) penning = true;
@@ -692,8 +693,31 @@ export class GLObjects {
         gl.uniform1f(this.u.penT, t);
         penWas = !!rec.pen;
       }
+      // its opacity: a fade under way (the renderer's group.fade), else its classes'
+      let a = rec.opacity ?? 1;
+      const f = g.fade;
+      if (f) {
+        const k = Math.min(1, Math.max(0, (now - f.at) / f.ms));
+        const e = f.ease === 'out' ? 1 - (1 - k) ** 2 : k * k * (3 - 2 * k);
+        a = f.from + (f.to - f.from) * e;
+        if (k < 1) penning = true;
+      }
+      if (a <= 0) return;
+      if (a !== alphaWas) {
+        gl.uniform1f(this.u.alpha, a);
+        alphaWas = a;
+      }
       gl.bindVertexArray(rec.vao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, rec.count);
+    };
+    for (const e of order ?? []) {
+      const rec = e.shown !== false && this.records.get(e.g);
+      if (rec?.count) one(e.g, rec);
+      // (a drawing it replaced, fading out after it: Renderer.land)
+      for (let n = e.g?.nextElementSibling; n?.fade; n = n.nextElementSibling) {
+        const r = this.records.get(n);
+        if (r?.count) one(n, r);
+      }
     }
     gl.bindVertexArray(null);
     if (penning) this.changed = true;
