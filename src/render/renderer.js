@@ -1540,10 +1540,12 @@ export class Renderer {
         return false;
       }
       layer.style.visibility = 'hidden';
+      layer.classList.add('gl-drawn'); // (still planned by the pen, draw.js)
     } else if (!on && this.glObjects) {
       this.glObjects.canvas.remove();
       this.glObjects = null;
       layer.style.visibility = '';
+      layer.classList.remove('gl-drawn');
     }
     return true;
   }

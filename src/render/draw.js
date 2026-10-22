@@ -49,6 +49,12 @@ const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced
 
 export const drawEnabled = () => DRAW.on && !reduced?.matches;
 
+// Who else draws what the pen draws (gl/objects.js): told of each plan, as
+// it is kept on the groups (`group.pen`: { origin, T, reverse, items: Map
+// element -> { t0, t1, f0, f1, px, stroke, fill } }, times in ms from
+// `origin`, a performance.now()).
+export const penWatch = new Set();
+
 // Strokes to draw in `groups` (ground first), with their share of the time.
 // `tile` converts screen px to grid units for the overall duration; `scale`
 // is screen px per unit of the groups' drawing (measured when not given –
@@ -66,7 +72,8 @@ function plan(groups, tile, speed, scale, only) {
     for (const el of root.querySelectorAll(SHAPES)) {
       if (only && !only.has(el)) continue;
       const cs = getComputedStyle(el);
-      if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+      // (hidden, unless only because something else draws it: .gl-drawn, gl/objects.js)
+      if (cs.display === 'none' || (cs.visibility === 'hidden' && !el.closest('.gl-drawn'))) continue;
       let len = 0;
       try { len = el.getTotalLength(); } catch { /* not measurable */ }
       if (!(len > 0)) continue;
@@ -123,6 +130,15 @@ function animate(groups, tile, reverse, skip, speed = 1, scale, only) {
   const elapsed = skip(p.T);
   if (elapsed >= p.T) return 0;
   const o = { T: p.T, reverse, elapsed };
+  // (the plan kept for whoever draws these groups otherwise)
+  const origin = performance.now() - elapsed;
+  for (const g of groups) if (g) g.pen = { origin, T: p.T, reverse, items: new Map() };
+  for (const it of p.items) {
+    const g = groups.find((r) => r?.contains(it.el));
+    const f0 = it.fill && it.stroke ? it.t0 + (it.t1 - it.t0) * 0.75 : it.t0;
+    g?.pen.items.set(it.el, { t0: it.t0, t1: it.t1, f0, f1: it.fill && it.stroke ? Math.min(p.T, f0 + 140) : it.t1, px: it.px, stroke: it.stroke, fill: it.fill });
+  }
+  for (const f of penWatch) f(groups);
   for (const it of p.items) {
     const { el, t0, t1 } = it;
     if (it.stroke) {
