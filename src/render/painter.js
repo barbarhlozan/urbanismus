@@ -88,6 +88,9 @@ import { SUN, sunFor, tierOf, tierClass, penClass, awayFrom, strokeShare, wallSt
 import { SUN_FREE, wallDir, strokeLevel } from './sunFree.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
+// The watercolour scheme (theme.js, a scheme with `wash`) is on: faces get
+// classes for their paint (Painter._wash), and no overshoots at corners.
+const washOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('wc');
 // Photos (a perspective camera): roof hatching at most this many px apart
 // on the picture; windows are drawn open, as frames (Painter._window), with
 // their glazing bars from this many px wide
@@ -252,6 +255,9 @@ export class Painter {
   constructor(camera, origin, rotation = 0, seed = 1) {
     this.camera = camera;
     this.random = mulberry32(seed);
+    // the watercolour scheme's colours for this drawing (wash()): which roof
+    // and which wall paint, seeded apart from the drawing's own randomness
+    this.paint = Math.floor(mulberry32(seed ^ 0x51ed27)() * 12);
     // drawn to hold for any sun (sunFree.js): the map's, not a photo's
     this.sunFree = SUN_FREE.on && !camera.perspective;
     this.ox = origin.x;
@@ -353,7 +359,7 @@ export class Painter {
     // the overshoots go in the same path: open strokes have no area, so the
     // fill ignores them, and it saves an element per face
     let ticks = '';
-    const os = LOOK.overshoot * this.camera.tile / 32;
+    const os = washOn() ? 0 : LOOK.overshoot * this.camera.tile / 32;
     if (closed && os && size > os * 5) {
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1], b = pts[i];
@@ -665,9 +671,30 @@ export class Painter {
     const n = newellNormal(points);
     if (opts.shadow !== false && !this._footOf(points, n)) this._castFace(points);
     if (!this._facing(n, points[0])) return this;
+    const paint = this._wash(n, points);
+    if (paint) opts = { ...opts, cls: opts.cls ? `${opts.cls} ${paint}` : paint };
     if (this._lod(opts) <= this.keep) this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
     if (opts.shadow !== false && Math.max(1, this.lod) <= this.keep) this._shade(points, n);
     return this;
+  }
+
+  // The watercolour scheme's classes for a face (styles.css, html.wc): what
+  // it is – a wall (ww), a pitched roof (wp) or a flat top (wt) –, dark (wd)
+  // when it is turned to the right on screen, as the light falls from the
+  // left in a painted view, and the paint of this drawing's walls (v0–2)
+  // or roofs (r0–3). '' when the scheme is another or the face is a floor.
+  _wash(n, points) {
+    if (!washOn()) return '';
+    const len = Math.hypot(n[0], n[1], n[2]);
+    if (len < 1e-9) return '';
+    const wall = this._wallNormal(n);
+    if (!wall && n[2] > 0.985 * len) return `wt r${this.paint % 4}`;
+    if (!wall && n[2] <= 0) return '';
+    const [tx, ty] = wall ?? this._turn(n[0], n[1]);
+    const o = this._world(...points[0]);
+    const a = this._project(o[0], o[1], o[2]), b = this._project(o[0] + tx * 0.2, o[1] + ty * 0.2, o[2]);
+    const dark = b[0] > a[0] + 1e-6 ? ' wd' : '';
+    return wall ? `ww${dark} v${this.paint % 3}` : `wp${dark} r${this.paint % 4}`;
   }
 
   // A wall turned away from the sun gets hatched (SUN.strokes,
@@ -1350,6 +1377,11 @@ export class Painter {
     const [sx, sy, t] = a;
     const p = points.map(([u, v]) => [r2(sx + u * t), r2(sy - v * t)]);
     this._cover(p);
+    // (watercolour: a crown's paint, by where the tree stands, see _wash)
+    if (washOn() && /\bcrown\b/.test(opts.cls ?? '')) {
+      const [wx, wy] = this._world(x, y, z);
+      opts = { ...opts, cls: `${opts.cls} t${Math.floor((hash2(wx, wy, 11) + 1) * 2.5) % 5}` };
+    }
     if (!opts.smooth) {
       this.current.parts.push(`<polygon points="${p.map((q) => q.join(',')).join(' ')}"${attrs(opts, this._lod(opts))}/>`);
       return this;

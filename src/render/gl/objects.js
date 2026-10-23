@@ -133,14 +133,33 @@ flat in float penVis;
 in vec2 scene;
 uniform sampler2D tile;               // the mist's strokes (setTile)
 uniform vec3 tileAt;                  // cos, sin of their angle, the tile's size (scene px)
+uniform int wash;                     // the watercolour scheme: paint laid unevenly (washTone)
 out vec4 outColour;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+// how much pigment a wash left here (1 as laid): blooms where it pooled
+// and dried darker, paler where it ran thin, and the paper's tooth – all
+// fixed to the map (scene px), so the paint stays put as the view moves
+float washTone(vec2 s) {
+  float bloom = noise(s * 0.06) * 0.5 + noise(s * 0.16 + 7.3) * 0.32 + noise(s * 0.45 + 3.1) * 0.18;
+  float tooth = noise(s * 1.9) - 0.5;
+  return 0.84 + 0.32 * bloom + 0.07 * tooth;
+}
 void main() {
   if (kindF.x < -0.5) {
     vec2 t = vec2(scene.x * tileAt.x + scene.y * tileAt.y, -scene.x * tileAt.y + scene.y * tileAt.x) / tileAt.z;
     outColour = colourF * texture(tile, t).a;
     return;
   }
-  if (kindF.x < 0.5) { outColour = colourF; return; }
+  if (kindF.x < 0.5) {
+    outColour = colourF;
+    if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene), vec3(outColour.a));
+    return;
+  }
   if (joins.x < 0.0 || joins.y < 0.0 || alongF > penVis) discard;
   float hw = kindF.y, d, edge = 1.0;
   float u = local.x, v = local.y;
@@ -153,6 +172,7 @@ void main() {
   float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
   if (cover <= 0.0) discard;
   outColour = colourF * cover;
+  if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene + 40.0), vec3(outColour.a));
 }`;
 
 function compile(gl, type, src) {
@@ -236,7 +256,7 @@ export class GLObjects {
     gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt'].map((n) => [n, gl.getUniformLocation(p, n)]));
+    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'wash'].map((n) => [n, gl.getUniformLocation(p, n)]));
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -797,6 +817,7 @@ export class GLObjects {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.uniform3f(this.u.base, dpr * view.zoom, dpr * (view.panX + view.ox), dpr * (view.panY + view.oy));
     gl.uniform2f(this.u.size, w, h);
+    gl.uniform1i(this.u.wash, document.documentElement.classList.contains('wc') ? 1 : 0);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.styleTex);
     gl.uniform1i(this.u.styles, 1);

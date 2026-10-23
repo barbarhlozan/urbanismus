@@ -149,7 +149,7 @@ void main() {
     } else d = abs(v);
     cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
     // (a cast shadow's ragged edge: dashed, as EDGE.dash, from where dash says)
-    if (dash >= 0.0) {
+    if (dash >= 0.0 && mode != 2) {
       float t = mod(dash + u / base.x, ${EDGE.dash.reduce((a, b) => a + b, 0).toFixed(2)});
       bool on = true;
       for (int k = 0; k < ${EDGE.dash.length}; k++) {
@@ -167,6 +167,17 @@ void main() {
     return;
   }
   if (cover <= 0.0) discard;
+  // (the watercolour scheme: a see-through wash instead of the strokes,
+  // thicker in places as a wash dries)
+  if (mode == 2) {
+    vec2 c = floor(scene * 0.06), f = fract(scene * 0.06);
+    f = f * f * (3.0 - 2.0 * f);
+    float h00 = fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453), h10 = fract(sin(dot(c + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+    float h01 = fract(sin(dot(c + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453), h11 = fract(sin(dot(c + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+    float n = mix(mix(h00, h10, f.x), mix(h01, h11, f.x), f.y);
+    outColour = colour * ((0.17 + 0.07 * n) * cover * alpha);
+    return;
+  }
   vec2 t = vec2(scene.x * tileAt.x + scene.y * tileAt.y, -scene.x * tileAt.y + scene.y * tileAt.x) / tileAt.z;
   outColour = colour * (texture(tile, t).a * cover * alpha);
 }`;
@@ -494,7 +505,7 @@ export class Hatching {
   // Pieces drawn: `base` [scale, x, y] scene px -> device px; with the
   // tile's strokes in `colour` ([r, g, b]) where they lie, the groups'
   // `alphas`; or (`stencil`: { ref, write, test }) into the stencil only.
-  pieces(b, { base, pre = b?.pre, tile = null, colour = [0, 0, 0], alphas = [1, 1, 1, 1], stencil = null, test = null, sun = null }) {
+  pieces(b, { base, pre = b?.pre, tile = null, colour = [0, 0, 0], alphas = [1, 1, 1, 1], stencil = null, test = null, sun = null, wash = false }) {
     if (!b?.n) return;
     const { gl } = this, { p, u } = this.prog;
     gl.useProgram(p);
@@ -515,7 +526,7 @@ export class Hatching {
       gl.stencilFunc(gl.ALWAYS, stencil.ref, 0xff);
       gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
     } else {
-      gl.uniform1i(u.mode, 0);
+      gl.uniform1i(u.mode, wash ? 2 : 0);
       gl.colorMask(true, true, true, true);
       gl.enable(gl.BLEND);
       gl.blendEquation(gl.MAX);

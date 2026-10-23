@@ -1926,3 +1926,68 @@ svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: calc(v
 svg.photo .photo-hatch { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
 svg.photo .photo-ripples { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.8; }
 svg.photo .photo-shore { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Watercolour (the scheme with `wash` in src/theme.js) ----------
+   An experiment: the map painted in washes on cream paper instead of drawn
+   in pen. html.wc is set with the scheme; Painter._wash tags each face with
+   what it is – a wall (ww), a pitched roof (wp), a flat top (wt) –, wd when
+   it is turned from the light, and the paint of its building's walls
+   (v0–2) or roofs (r0–3); crowns get t0–4 by where the tree stands. Each
+   face is filled with its --paint and rimmed in a darker, see-through edge
+   of it, as a wash dries darker at its edge (the grain and the patchy tone
+   inside are the GPU's, gl/objects.js). */
+html.wc body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.38 0 0 0 0 0.28 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+html.wc .layer-objects :is(polygon, circle, .filled) {
+  stroke: color-mix(in srgb, var(--main) 40%, transparent);
+  stroke-width: calc(var(--pen-2) * var(--stroke, 1));
+}
+html.wc .layer-objects .filled:is(.ww, .wp, .wt) {
+  fill: var(--paint);
+  stroke: color-mix(in srgb, color-mix(in srgb, var(--paint) 62%, #3a2a24) 55%, transparent);
+  stroke-width: calc(var(--pen-3) * var(--stroke, 1));
+}
+html.wc .ww.v0 { --paint: #f1ebdf; }
+html.wc .ww.v1 { --paint: #f0e0c0; }
+html.wc .ww.v2 { --paint: #e6e1d8; }
+html.wc .wp.r0 { --paint: #d98238; }
+html.wc .wp.r1 { --paint: #cf9c47; }
+html.wc .wp.r2 { --paint: #9396b0; }
+html.wc .wp.r3 { --paint: #8c6e56; }
+html.wc .wt { --paint: #d9d3c6; }
+html.wc .wt:is(.r0, .r1) { --paint: #e0c9a3; }
+/* the side turned from the light: the same paint, a second wash over it */
+html.wc .ww.wd { --paint: color-mix(in srgb, var(--wall) 76%, #7d7488); }
+html.wc .ww.v0 { --wall: #f1ebdf; }
+html.wc .ww.v1 { --wall: #f0e0c0; }
+html.wc .ww.v2 { --wall: #e6e1d8; }
+html.wc .wp.wd.r0 { --paint: #b9632b; }
+html.wc .wp.wd.r1 { --paint: #ad7f35; }
+html.wc .wp.wd.r2 { --paint: #767a96; }
+html.wc .wp.wd.r3 { --paint: #6f5442; }
+/* no pen work of the sketch: roof strokes, hatched shade, the foot line */
+html.wc .layer-objects :is(.roof-hatch, .wall-shade, .foot) { display: none; }
+html.wc .layer-objects .ln { stroke: color-mix(in srgb, var(--main) 55%, transparent); }
+html.wc .layer-objects .ink { fill: #5a3a2a; stroke: #5a3a2a; }
+html.wc .layer-objects .pane { fill: #6a4a36; stroke: #4a3020; }
+html.wc .layer-objects .pane.bar { fill: none; stroke: #e9dcc0; }
+/* trees: a crown of colour, its outline a little darker, veins of paper */
+html.wc .filled.tree.crown { fill: var(--paint); }
+html.wc .crown.t0 { --paint: #93ad5c; }
+html.wc .crown.t1 { --paint: #6f8b3d; }
+html.wc .crown.t2 { --paint: #d9a03c; }
+html.wc .crown.t3 { --paint: #c8693a; }
+html.wc .crown.t4 { --paint: #b4b64c; }
+html.wc .crown.spruce.t0, html.wc .crown.spruce.t2 { --paint: #4f6d3d; }
+html.wc .crown.spruce.t1, html.wc .crown.spruce.t4 { --paint: #627d47; }
+html.wc .crown.spruce.t3 { --paint: #a0582f; }
+html.wc .glyph.crown-line { stroke: color-mix(in srgb, #3e4a26 45%, transparent); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+html.wc .glyph.leaf { stroke: color-mix(in srgb, #fff6dc 55%, transparent); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+html.wc .glyph:is(.trunk, .limb) { stroke: #7b5636; }
+html.wc .glyph.twig, html.wc .glyph.tree-foot { stroke: color-mix(in srgb, #7a8a45 70%, transparent); }
+html.wc .layer-forest .filled { fill: #6f8b3d; }
+html.wc .layer-forest .forest { fill: color-mix(in srgb, #6f8b3d 75%, var(--bg)); }
+/* grass and flowers: green tufts, ochre dabs */
+html.wc .layer-meadow path { stroke: #93a35a; }
+html.wc .layer-meadow .ink { fill: #d6a043; stroke: #d6a043; }

@@ -195,7 +195,9 @@ export class GLShadows {
     }
     const pen = (this.pen ??= parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pen-2')) || 0.7);
     const q = 2 ** (Math.round(Math.log2(dpr * view.zoom) * 4) / 4);
-    const colour = THEME.palette.detail;
+    // (watercolour: a cool grey wash, see Hatching.pieces)
+    const wash = !!THEME.palette.wash;
+    const colour = wash ? '#6f6a8c' : THEME.palette.detail;
     const key = `${view.zoom}|${view.panX}|${view.panY}|${view.ox}|${view.oy}|${w}|${hgt}|${tier}|${JSON.stringify(hatch)}|${px}|${stroke}|${q}|${colour}|${shown}|${sun?.cast}|${sun?.iso}`;
     if (!changed && key === this.drawnKey) return;
     this.drawnKey = key;
@@ -205,7 +207,7 @@ export class GLShadows {
     const gl = h.gl;
     const tile = h.tile(tier, hatch, px, pen * stroke, q);
     const base = [dpr * view.zoom, dpr * (view.panX + view.ox), dpr * (view.panY + view.oy)];
-    const look = { base, tile, colour: rgb(colour), alphas: [1, shown, 1, 1] };
+    const look = { base, tile, colour: rgb(colour), alphas: [1, shown, 1, 1], wash };
     for (const s of this.sheets) {
       gl.stencilMask(0xff);
       gl.clear(gl.STENCIL_BUFFER_BIT);

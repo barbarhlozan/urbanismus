@@ -21,6 +21,9 @@ export const SCHEMES = [
   { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486' },
   { name: 'Night', bg: '#000000', main: '#64645b', detail: '#363f46' },
   { name: 'Countryside', bg: '#d3d0c9', main: '#ce4919', detail: '#44499a' },
+  // painted in watercolour on cream paper: the faces washed in colour by
+  // what they are (html.wc in styles.css, Painter._wash), no pen round them
+  { name: 'Watercolour', bg: '#f6f0e3', main: '#4b3324', detail: '#8d8a5e', wash: true },
 ];
 
 export const COLOR_NAMES = ['bg', 'main', 'detail'];
@@ -57,6 +60,8 @@ export function applyTheme(choice = load(SCHEME_KEY) ?? 0, root = document.docum
   schemeChoice = choice;
   const scheme = choice === 'custom' ? CUSTOM : SCHEMES[choice];
   Object.assign(THEME.palette, scheme);
+  THEME.palette.wash = !!scheme.wash;
+  root.classList.toggle('wc', THEME.palette.wash);
   for (const name of COLOR_NAMES) root.style.setProperty(`--${name}`, scheme[name]);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', scheme.bg);
   save(SCHEME_KEY, String(choice));

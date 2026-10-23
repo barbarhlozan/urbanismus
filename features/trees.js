@@ -361,7 +361,7 @@ function sketchSpruce(g, x, y, H, simple) {
   footStroke(g, x, y, H);
   if (!simple && g.chance(0.4)) grassTicks(g, x, y, H);
   g.strokes(x, y, 0, [[at(0, 0), at(0, crown0 + ch * 0.3)]], { cls: 'trunk' });
-  g.shape(x, y, 0, fill, { smooth: true, cls: 'tree crown' });
+  g.shape(x, y, 0, fill, { smooth: true, cls: 'tree crown spruce' });
   g.strokes(x, y, 0, [pen], { cls: 'crown-line' });
   // short hanging tier strokes inside, on the side away from the light
   shaded(g, x, y, (light) => {
