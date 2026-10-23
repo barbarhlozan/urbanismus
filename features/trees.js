@@ -486,6 +486,18 @@ export function treeLightSector(camera) {
 // A short stroke on the ground at a tree's foot, a little aslant, as each
 // building stands on one (LOOK.ground in painter.js); far out it goes.
 function footStroke(g, x, y, H) {
+  // (watercolour: a pool of the crown's colour on the ground under it)
+  if (g.wash) {
+    // (its wobble from where it stands, not from g.random: the tree itself
+    // stays as in the other schemes)
+    const rx = H * 0.24, ry = rx * 0.42, pts = [], [wx, wy] = g.toWorld(x, y);
+    const j = (k) => 0.9 + 0.2 * ((Math.sin(k * 12.9898 + wx * 78.233 + wy * 37.719) * 43758.5453) % 1 + 1) % 1;
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      pts.push([Math.cos(a) * rx * j(k), Math.sin(a) * ry * j(k + 10)]);
+    }
+    g.shape(x, y, 0, pts, { smooth: true, cls: 'pool', lod: 1 });
+  }
   const w = H * g.range(0.1, 0.15);
   g.strokes(x, y, 0, [[[-w * g.range(0.6, 1), H * 0.006], [w, -H * 0.008]]], { cls: 'tree-foot', lod: 1 });
 }

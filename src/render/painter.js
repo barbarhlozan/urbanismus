@@ -296,6 +296,11 @@ export class Painter {
     this.casting = true;  // false: draw no shadows (icons)
   }
 
+  // The watercolour scheme is on (drawings that paint differently in it)
+  get wash() {
+    return washOn();
+  }
+
   // Turn the whole drawing by a small angle (radians, counter-clockwise
   // seen from above) on top of its quarter-turn rotation – houses standing a
   // little askew (tiltOf in structures/index.js). Call before drawing.
@@ -674,6 +679,7 @@ export class Painter {
     const paint = this._wash(n, points);
     if (paint) opts = { ...opts, cls: opts.cls ? `${opts.cls} ${paint}` : paint };
     if (this._lod(opts) <= this.keep) this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
+    if (paint.startsWith('ww')) this._washDetail(points, n, paint);
     if (opts.shadow !== false && Math.max(1, this.lod) <= this.keep) this._shade(points, n);
     return this;
   }
@@ -694,7 +700,49 @@ export class Painter {
     const o = this._world(...points[0]);
     const a = this._project(o[0], o[1], o[2]), b = this._project(o[0] + tx * 0.2, o[1] + ty * 0.2, o[2]);
     const dark = b[0] > a[0] + 1e-6 ? ' wd' : '';
-    return wall ? `ww${dark} v${this.paint % 3}` : `wp${dark} r${this.paint % 4}`;
+    if (!wall) return `wp${dark} r${this.paint % 4}`;
+    const mat = this._wallMat(points);
+    return `ww${dark} v${this.paint % 3}${mat ? ` ${mat}` : ''}`;
+  }
+
+  // What a wall standing on the ground is built of, in the watercolour
+  // scheme: timber boards under a brown roof (barns, sheds), logs on some
+  // one-storey cottages under tiles (roubenky, their gables plastered), else plaster
+  // ('').
+  _wallMat(points) {
+    if (!points.some((p) => p[2] <= ON_GROUND)) return '';
+    if (this.paint % 4 === 3) return 'wtimber';
+    const level = Math.min(...points.filter((p) => p[2] > ON_GROUND).map((p) => p[2]));
+    // (not under slate: that is the 70s cube house's roof, never a log one's)
+    return level <= 0.22 && this.paint % 5 < 2 && this.paint % 4 !== 2 ? 'wlogs' : '';
+  }
+
+  // The painted detail on a wall in the watercolour scheme (`paint` its
+  // classes from _wash): a stone plinth along its foot, and logs or boards
+  // up to its eaves (a gable above stays plastered).
+  _washDetail(points, n, paint) {
+    const L = points.length;
+    const i = points.findIndex((p, k) => p[2] <= ON_GROUND && points[(k + 1) % L][2] <= ON_GROUND);
+    if (i < 0) return;
+    const a = points[i], b = points[(i + 1) % L];
+    const level = Math.min(...points.filter((p) => p[2] > ON_GROUND).map((p) => p[2]));
+    const lod = Math.max(1, this.lod);
+    if (lod > this.keep) return;
+    const dark = /\bwd\b/.test(paint) ? ' wd' : '';
+    const band = (z0, z1, cls) => this.current.parts.push(this._outline(
+      [[a[0], a[1], z0], [b[0], b[1], z0], [b[0], b[1], z1], [a[0], a[1], z1]], true, { cls: cls + dark, wobble: 0.08 }, lod));
+    const PLINTH = 0.022;
+    if (/\bwlogs\b/.test(paint)) {
+      for (let z = PLINTH + 0.006; z + 0.01 < level; z += 0.021) band(z, Math.min(z + 0.012, level), 'wlog');
+    } else if (/\bwtimber\b/.test(paint)) {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const k = Math.max(2, Math.round(len / 0.028));
+      for (let j = 1; j < k; j++) {
+        const t = j / k, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t;
+        this.line([[x, y, PLINTH], [x, y, level - 0.004]], { facing: n, cls: `wboard${dark}`, wobble: 0.3, lod });
+      }
+    }
+    band(0, PLINTH, 'wplinth');
   }
 
   // A wall turned away from the sun gets hatched (SUN.strokes,
@@ -1378,7 +1426,7 @@ export class Painter {
     const p = points.map(([u, v]) => [r2(sx + u * t), r2(sy - v * t)]);
     this._cover(p);
     // (watercolour: a crown's paint, by where the tree stands, see _wash)
-    if (washOn() && /\bcrown\b/.test(opts.cls ?? '')) {
+    if (washOn() && /\b(crown|pool)\b/.test(opts.cls ?? '')) {
       const [wx, wy] = this._world(x, y, z);
       opts = { ...opts, cls: `${opts.cls} t${Math.floor((hash2(wx, wy, 11) + 1) * 2.5) % 5}` };
     }
