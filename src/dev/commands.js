@@ -127,8 +127,23 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
     return true;
   }
 
+  // A building by its house number (č. p.): what it is, where, who lives
+  // there; with no number, every one standing, in order.
+  function house(no) {
+    const about = (s) => {
+      const def = STRUCTURE_TYPES[s.type];
+      const [x, y] = world.grid.xy(s.node);
+      return { no: s.no, type: s.type, name: def.name, x, y, residents: def.stats?.residents ?? 0, served: world.isServed(s), id: s.id };
+    };
+    if (no === undefined) return [...world.structures.values()].filter((s) => s.no != null).sort((a, b) => a.no - b.no).map(about);
+    const s = world.structureByNo(no);
+    if (s) return about(s);
+    return fail(`No building č. p. ${no}`, no > 0 && no < world.nextNo ? 'it stood once, and is gone' : `numbers run 1 … ${world.nextNo - 1}`);
+  }
+
   const cmd = {
     spawn,
+    house,
     build,
     road,
     tree,
@@ -205,6 +220,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         "cmd.build('house', x, y, { rotation: 0..3 })   see cmd.types()",
         "cmd.road('road' | 'lane' | 'path' | 'rail' | 'fence', [x, y], [x, y])",
         'cmd.tree(x, y)',
+        'cmd.house(4)              the building č. p. 4; cmd.house() every one',
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',

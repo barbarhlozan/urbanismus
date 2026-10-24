@@ -777,6 +777,10 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .popup-block { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
 .bi-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .bi-kind { color: var(--detail); font-size: 11px; }
+/* the house number, a small plate by the door: a frame with rounded
+   corners, the "č. p." small before the number, a touch askew */
+.bi-no { align-self: center; display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 7px 0; border: var(--line) solid var(--fg); border-radius: 3px; font-size: 14px; color: var(--fg); transform: rotate(-1.5deg); }
+.bi-no small { font-size: 9px; color: var(--detail); }
 .popup-block .stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .popup-block .stat b { font-weight: 700; }
 .popup-block .warn { color: var(--detail); }

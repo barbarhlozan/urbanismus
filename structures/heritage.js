@@ -320,6 +320,7 @@ export const memorial = {
   id: 'memorial',
   name: 'Memorial',
   blurb: 'Stone memorial',
+  numbered: false,
   footprint: [[0, 0]],
   plot: { props: 'green', boundary: 0, density: 0.3 },
   stats: {},

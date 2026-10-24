@@ -1,4 +1,5 @@
-// Default tool: click a building to get its card – its name, how many live
+// Default tool: click a building to get its card – its name, its house
+// number (č. p., World.numberStructure), how many live
 // there under it (a little figure for each), and a row of drawings, all in
 // the middle: another look, its surroundings, Zbourat (an eraser). Roads, railways, paths, fences and
 // trees open nothing: Erase takes them away (and ⌘Z brings them back).
@@ -88,13 +89,21 @@ function warning(def) {
   return `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${t(def.access === 'any' ? 'inspect.needs.any' : 'inspect.needs.road')}</span></div>`;
 }
 
+// The house number as the little enamel plate by the door: "č. p." and
+// the number, in a frame.
+function plate(no) {
+  const full = esc(t('inspect.no.full', { no }));
+  return `<span class="bi-no" role="img" title="${full}" aria-label="${full}"><small>${esc(t('inspect.no'))}</small>${no}</span>`;
+}
+
 function structureMenu({ world }, s) {
   const def = STRUCTURE_TYPES[s.type];
 
-  // under its name, how many live there and a warning if nothing reaches
-  // it; then a row of drawings
+  // under its name its house number, how many live there and a warning if
+  // nothing reaches it; then a row of drawings
   const people = residents(def);
   const items = [];
+  if (s.no != null) items.push({ block: plate(s.no) });
   if (people) items.push({ block: people });
   if (!world.isServed(s)) items.push({ block: warning(def) });
 

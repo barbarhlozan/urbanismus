@@ -83,6 +83,7 @@ export const busStop = {
   blurb: 'Beside a road',
   category: 'transport',
   code: 'BS',
+  numbered: false,
   busStop: true,
   facesRoad: true, // can't be turned away from its road
   sim: { destinations: [] },

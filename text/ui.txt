@@ -528,6 +528,16 @@ north.up
 
 # ---------- Clicking something on the map ----------
 
+# the house number on its card, as on the plate by the door (č. p.,
+# číslo popisné): the short word before the number, then the whole name
+inspect.no
+  cs: č. p.
+  en: No.
+
+inspect.no.full
+  cs: Číslo popisné {no}
+  en: House number {no}
+
 inspect.needs.any
   cs: Potřebuje silnici nebo pěšinu
   en: Needs a road or footpath

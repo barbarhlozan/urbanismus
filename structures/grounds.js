@@ -24,6 +24,7 @@ export const cemetery = {
   category: 'amenities',
   tags: ['cemetery'],
   code: 'C',
+  numbered: false,
   access: 'any',
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   sim: { destinations: [] },
