@@ -199,6 +199,14 @@ color.detail
   cs: Detail
   en: Detail
 
+color.shade
+  cs: Stín
+  en: Shade
+
+color.green
+  cs: Zeleň
+  en: Greenery
+
 scheme.blue-pen
   cs: Modré pero
   en: Blue pen
@@ -210,6 +218,18 @@ scheme.black-pen
 scheme.night
   cs: Noc
   en: Night
+
+scheme.watercolour
+  cs: Akvarel
+  en: Watercolour
+
+scheme.pencil
+  cs: Tužka
+  en: Pencil
+
+scheme.pencil-hatched
+  cs: Tužka, šrafy
+  en: Pencil, hatched
 
 scheme.countryside
   cs: Venkov

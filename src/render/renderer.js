@@ -996,12 +996,12 @@ export class Renderer {
     return this.washWater(shore) + path(open(shore), 'shore') + path(open(bank), 'bank') + path(wave, 'wave');
   }
 
-  // The watercolour scheme (html.wc): the water painted in under its
-  // lines – a lake filled turquoise inside its shore on a ring of green
+  // The watercolour scheme (html.wc) and the tone schemes (html.tone): the
+  // water painted in under its lines – a lake filled turquoise inside its shore on a ring of green
   // bank, a river a turquoise wash along its course on green as wide as
   // its banks are apart where it is narrowest (styles.css .pond, .river-wash).
   washWater(shore) {
-    if (!document.documentElement.classList.contains('wc')) return '';
+    if (!/\b(wc|tone)\b/.test(document.documentElement.className)) return '';
     let out = '';
     if (shore.length) {
       const d = this.pathData(shore, false);
@@ -2847,6 +2847,8 @@ export class Renderer {
       iso: [(ux - uy) * COS30 * T, (ux + uy) * 0.5 * T, (vx - vy) * COS30 * T, (vx + vy) * 0.5 * T],
     };
     this.glShadows.draw({ ...look, hold: (this.shadesOff && !this.shadesComing) || this.turning, shown: this.shadesShown ?? 1, sun: casting });
+    // (the tone schemes hatch the faces in shade along the same angle: gl/objects.js)
+    this.glObjects?.setShade(THEME.palette.hatch && SUN.hatch ? SUN.hatch.angle : null);
   }
 
   hideShadows() {

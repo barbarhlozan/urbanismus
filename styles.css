@@ -2030,3 +2030,35 @@ html.wc .layer-objects .wtrim { stroke: #8a4532; stroke-width: calc(var(--pen-3)
 /* the outhouse's door and heart, the shrine's cross (structures/kit.js) */
 html.wc .layer-objects .door-line { stroke: color-mix(in srgb, #3a2a20 55%, transparent); }
 html.wc .layer-objects :is(.heart, .cross) { stroke: #3a2a20; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+
+/* ---------- Tone (the schemes with `tone` in src/theme.js) ----------
+   The pen drawing as it is, filled in with two more colours, as in pencil
+   sketches: walls left as paper, the side turned from the light (wd) and
+   the roofs in --shade – the slope towards the light a lighter wash of it
+   –, the shadows on the ground in it too (gl/shadows.js); trees, shrubs
+   and the grass at their feet in --green. Painter._wash tags the faces (as
+   for the watercolour above). html.tone-hatch: the shade in pencil strokes
+   instead of flat (--fill-hatch, gl/objects.js), the strokes the shadows
+   on the ground are hatched with. */
+html.tone .layer-objects .filled:is(.ww.wd, .wp.wd) { fill: var(--shade); }
+html.tone .layer-objects .filled.wp:not(.wd) { fill: color-mix(in srgb, var(--shade) 55%, var(--bg)); }
+html.tone-hatch .layer-objects .filled:is(.ww.wd, .wp) { --fill-hatch: 1; }
+html.tone-hatch .layer-objects .filled.wp:not(.wd) { fill: color-mix(in srgb, var(--shade) 70%, var(--bg)); }
+/* (the fills stand in for the sketch's hatching on walls and roofs) */
+html.tone .layer-objects :is(.wall-shade, .roof-hatch) { display: none; }
+/* what walls are built of: logs and a plinth in a light wash of the shade */
+html.tone .layer-objects .filled.wlog { fill: color-mix(in srgb, var(--shade) 40%, var(--bg)); stroke: none; }
+html.tone .layer-objects .filled.wplinth { fill: color-mix(in srgb, var(--shade) 25%, var(--bg)); stroke: none; }
+html.tone .layer-objects .filled.wd:is(.wlog, .wplinth) { fill: color-mix(in srgb, var(--shade) 80%, var(--main)); }
+/* the greenery */
+html.tone .filled.tree.crown { fill: var(--green); }
+html.tone .layer-objects .filled.pool { fill: color-mix(in srgb, var(--green) 45%, var(--bg)); fill-opacity: 0.85; stroke: none; }
+html.tone .layer-forest .filled { fill: var(--green); }
+html.tone .layer-forest .forest { fill: color-mix(in srgb, var(--green) 50%, var(--bg)); }
+html.tone .layer-forest .forest-band { display: none; }
+html.tone .layer-meadow path { stroke: var(--green); }
+/* water: paper inside the shore, on a ring of green bank */
+html.tone .pond-bank { fill: color-mix(in srgb, var(--green) 50%, var(--bg)); stroke: color-mix(in srgb, var(--green) 50%, var(--bg)); stroke-width: 30px; stroke-linejoin: round; }
+html.tone .pond { fill: var(--bg); stroke: none; }
+html.tone .river-bank-wash { fill: none; stroke: color-mix(in srgb, var(--green) 50%, var(--bg)); stroke-linecap: round; stroke-linejoin: round; }
+html.tone .river-wash { fill: none; stroke: var(--bg); stroke-linecap: round; stroke-linejoin: round; }

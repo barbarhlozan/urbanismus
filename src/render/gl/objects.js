@@ -24,6 +24,7 @@
 import { flattenPath, triangulate } from './geometry.js';
 import { penWatch, penLength } from '../draw.js';
 import { hatchTileLines } from '../hatch.js';
+import { THEME } from '../../theme.js';
 
 // Curves flattened to within this of the true line (scene px).
 const TOLERANCE = 0.08;
@@ -57,6 +58,7 @@ flat out vec4 colourF;
 out float alongF;                     // how far along its line (a stroke)
 flat out float penVis;                // the pen has got this far along it
 out vec2 scene;                       // where it is (scene px: a hatched fill's strokes)
+flat out float shadeF;                // a fill drawn in pencil strokes (--fill-hatch, tone schemes)
 // (an end before its start: taken back, from all there to none)
 float span(float a, float b) { float d = b - a; return abs(d) < 1e-3 ? 1e-3 : d; }
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
@@ -74,6 +76,7 @@ void main() {
   int sid = int(style.x) * 3;
   vec4 look = texelFetch(styles, ivec2(sid + 2, 0), 0);
   colourF = texelFetch(styles, ivec2(sid + int(style.y), 0), 0) * alpha;
+  shadeF = look.w;
   float det = sqrt(abs(m[0][0] * m[1][1] - m[0][1] * m[1][0]));
   kindF = vec4(kind.x < 0.5 ? -look.z : kind.x, kind.y * look.x * 0.5 * base.x * det, kind.zw);
   if (look.y < 0.5 || colourF.a <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
@@ -134,6 +137,10 @@ in vec2 scene;
 uniform sampler2D tile;               // the mist's strokes (setTile)
 uniform vec3 tileAt;                  // cos, sin of their angle, the tile's size (scene px)
 uniform int wash;                     // the watercolour scheme: paint laid unevenly (washTone)
+flat in float shadeF;
+uniform vec2 shadeAt;                 // the direction the shadows are hatched in (setShade)
+uniform int shadeOn;
+uniform vec4 paper;                   // the paper under the strokes
 out vec4 outColour;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -144,6 +151,21 @@ float noise(vec2 p) {
 // how much pigment a wash left here (1 as laid): blooms where it pooled
 // and dried darker, paler where it ran thin, and the paper's tooth – all
 // fixed to the map (scene px), so the paint stays put as the view moves
+// Pencil strokes across a face in shade (0 paper … 1 graphite): rows
+// gap scene px apart along d, each stroke its own weight and broken
+// where the pencil lifted; far out, where the rows run finer than a pixel,
+// the even tone they add up to.
+float pencil(vec2 s, vec2 d, float gap, float seed) {
+  float along = dot(s, d), across = dot(s, vec2(-d.y, d.x));
+  float row = floor(across / gap);
+  float h = fract(sin(row * 91.7 + seed) * 43758.5453);
+  float on = step(0.1 + 0.1 * h, fract(along / (gap * (7.0 + 6.0 * h)) + h * 5.0));
+  float w = gap * (0.2 + 0.14 * h);
+  float f = abs(fract(across / gap) - 0.5) * gap;
+  float aa = fwidth(across);
+  float line = on * (1.0 - smoothstep(w - aa, w + aa, f));
+  return mix(line, 2.0 * w / gap * 0.9, clamp(aa / gap * 2.0 - 0.5, 0.0, 1.0));
+}
 float washTone(vec2 s) {
   float bloom = noise(s * 0.06) * 0.5 + noise(s * 0.16 + 7.3) * 0.32 + noise(s * 0.45 + 3.1) * 0.18;
   float tooth = noise(s * 1.9) - 0.5;
@@ -156,6 +178,16 @@ void main() {
     return;
   }
   if (kindF.x < 0.5) {
+    // (a face in shade hatched on paper, as a pencil hatches it, in the
+    // strokes the shadows on the ground have there)
+    if (shadeF > 0.5 && shadeOn == 1) {
+      // (gone over twice, the second time a little aslant, as a pencil
+      // darkens a side: denser than the shadows on the ground)
+      vec2 d2 = vec2(shadeAt.x * 0.966 - shadeAt.y * 0.259, shadeAt.x * 0.259 + shadeAt.y * 0.966);
+      float k = max(pencil(scene, shadeAt, 1.5, 0.0), pencil(scene, d2, 1.8, 17.0));
+      outColour = mix(paper * colourF.a, colourF, k);
+      return;
+    }
     outColour = colourF;
     if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene), vec3(outColour.a));
     return;
@@ -256,7 +288,7 @@ export class GLObjects {
     gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'wash'].map((n) => [n, gl.getUniformLocation(p, n)]));
+    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'wash', 'shadeAt', 'shadeOn', 'paper'].map((n) => [n, gl.getUniformLocation(p, n)]));
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -364,10 +396,26 @@ export class GLObjects {
   }
 
   // …drawn for `q` device px to a scene px (a quarter of a doubling at a time).
+  // The angle the shadows are hatched at (hatch.js, degrees; set each
+  // frame the shadows are drawn, Renderer.renderShadeCanvas), for faces
+  // whose fill is hatched (--fill-hatch in styles.css, the tone schemes);
+  // null: those are flat.
+  setShade(angle) {
+    if (angle === this.shadeAngle) return;
+    this.shadeAngle = angle;
+    this.changed = true;
+  }
+
   tileFor(q) {
     if (!this.tileArgs || q === this.tileQ) return;
     this.tileQ = q;
-    const { hatch, px, width } = this.tileArgs;
+    this.tileTex ??= this.gl.createTexture();
+    this.tileSize = this.paintTile(this.tileArgs, q, this.tileTex, gl => gl.TEXTURE2);
+  }
+
+  // A tile of hatch.js strokes (all tiers) drawn at q device px per scene
+  // px into `tex` (on the texture unit `unit` names); its size, scene px.
+  paintTile({ hatch, px, width }, q, tex, unit) {
     const { d, size } = hatchTileLines(3, hatch, px);
     const n = Math.max(1, Math.min(4096, Math.round(size * q)));
     const off = new OffscreenCanvas(n, n), c = off.getContext('2d');
@@ -377,9 +425,8 @@ export class GLObjects {
     c.lineCap = c.lineJoin = 'round';
     c.stroke(new Path2D(d));
     const { gl } = this;
-    this.tileTex ??= gl.createTexture();
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.tileTex);
+    gl.activeTexture(unit(gl));
+    gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -387,7 +434,7 @@ export class GLObjects {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     gl.activeTexture(gl.TEXTURE0);
-    this.tileSize = size;
+    return size;
   }
 
   allocTex() {
@@ -500,7 +547,8 @@ export class GLObjects {
     s.cap = CAPS[cs.strokeLinecap] ?? 2;
     s.evenodd = cs.fillRule === 'evenodd';
     if (!(s.width > 0)) s.stroke = null;
-    this.styleData.set([...(s.fill ?? [0, 0, 0, 0]), ...(s.stroke ?? [0, 0, 0, 0]), s.width, s.shown ? 1 : 0, s.hatched ? 1 : 0, 0], s.id * 12);
+    s.shade = parseFloat(cs.getPropertyValue('--fill-hatch')) || 0;
+    this.styleData.set([...(s.fill ?? [0, 0, 0, 0]), ...(s.stroke ?? [0, 0, 0, 0]), s.width, s.shown ? 1 : 0, s.hatched ? 1 : 0, s.shade], s.id * 12);
     this.stylesDirty = true;
   }
 
@@ -818,6 +866,13 @@ export class GLObjects {
     gl.uniform3f(this.u.base, dpr * view.zoom, dpr * (view.panX + view.ox), dpr * (view.panY + view.oy));
     gl.uniform2f(this.u.size, w, h);
     gl.uniform1i(this.u.wash, document.documentElement.classList.contains('wc') ? 1 : 0);
+    gl.uniform1i(this.u.shadeOn, this.shadeAngle != null ? 1 : 0);
+    if (this.shadeAngle != null) {
+      const a = (this.shadeAngle * Math.PI) / 180;
+      gl.uniform2f(this.u.shadeAt, Math.cos(a), Math.sin(a));
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(THEME.palette.bg.slice(i, i + 2), 16) / 255);
+      gl.uniform4f(this.u.paper, r, g, b, 1);
+    }
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.styleTex);
     gl.uniform1i(this.u.styles, 1);

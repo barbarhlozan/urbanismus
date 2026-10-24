@@ -1,14 +1,14 @@
 // The Colors menu: a small panel under the Menu (opened with its Colours
 // drawing, an ink pot – hud.js) listing the color schemes, plus the
 // player's own custom scheme with a picker and a hex field for each of its
-// three colors (see theme.js).
+// five colors (see theme.js).
 // Editing a custom color switches to the custom scheme.
 
-import { SCHEMES, CUSTOM, COLOR_NAMES, applyTheme, setCustomColor, normalizeHex, schemeChoice } from '../theme.js';
+import { SCHEMES, CUSTOM, COLOR_NAMES, withAll, applyTheme, setCustomColor, normalizeHex, schemeChoice } from '../theme.js';
 import { reveal, isShown } from './motion.js';
 import { t, hasText } from '../core/text.js';
 
-// the three colours' names (color.bg, color.main, color.detail)
+// the colours' names (color.bg, color.main, color.detail, color.shade, color.green)
 const label = (n) => t(`color.${n}`);
 // a scheme's name on screen, scheme.<name-in-dashes> (its own name stays
 // what story/unlocks.txt calls it: scheme Night)
@@ -17,8 +17,11 @@ const schemeName = (s) => {
   return hasText(key) ? t(key) : s.name;
 };
 
-// three dots in a scheme's colors
-const swatches = (s) => `<span class="swatches">${COLOR_NAMES.map((n) => `<i data-c="${n}" style="background:${s[n]}"></i>`).join('')}</span>`;
+// a dot in each of a scheme's colors
+const swatches = (s) => {
+  const all = withAll(s);
+  return `<span class="swatches">${COLOR_NAMES.map((n) => `<i data-c="${n}" style="background:${all[n]}"></i>`).join('')}</span>`;
+};
 
 export class ColorMenu {
   constructor(root, button) {

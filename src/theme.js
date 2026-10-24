@@ -1,5 +1,6 @@
-// Visual theme. Colors come from the current color scheme – three colors,
-// applied as CSS variables (--bg, --main, --detail) and used by styles.css:
+// Visual theme. Colors come from the current color scheme – five colors,
+// applied as CSS variables (--bg, --main, --detail, --shade, --green) and
+// used by styles.css:
 //
 //   bg      background, and the fill that lets buildings and spruces hide
 //           what stands behind them
@@ -9,6 +10,15 @@
 //           ground drawing (lots, paving, parking), trees and shrubs, grid
 //           dots, water hatching; secondary UI text. Terrain contours are
 //           mixed from detail and bg.
+//   shade   the side of a building turned from the light, its roof, and
+//           the shadows on the ground (tone schemes, html.tone)
+//   green   trees, shrubs and the grass at their feet (tone schemes)
+//
+// A scheme may leave out shade and green (schemes from before there were
+// five): they are then mixed from detail and bg (withAll), so it looks as
+// it did. A scheme with `tone` fills faces by what they are (Painter._wash
+// tags them) with shade and green, flat – or with `hatch`, in pencil
+// strokes; one with `wash` is the watercolour experiment.
 //
 // The Colors menu (ui/colorMenu.js) picks one of SCHEMES or the custom
 // scheme, whose three colors the player sets; both the choice and the custom
@@ -24,9 +34,30 @@ export const SCHEMES = [
   // painted in watercolour on cream paper: the faces washed in colour by
   // what they are (html.wc in styles.css, Painter._wash), no pen round them
   { name: 'Watercolour', bg: '#f6f0e3', main: '#4b3324', detail: '#8d8a5e', wash: true },
+  // graphite on paper, as the pencil sketches: walls left white, the side
+  // away from the light and the roofs in one dark tone, the trees another
+  { name: 'Pencil', bg: '#f3f0e8', main: '#2c2b29', detail: '#8f8b83', shade: '#64615b', green: '#9ba68c', tone: true },
+  { name: 'Pencil hatched', bg: '#f3f0e8', main: '#2c2b29', detail: '#8f8b83', shade: '#3f3d39', green: '#7f8c6c', tone: true, hatch: true },
 ];
 
-export const COLOR_NAMES = ['bg', 'main', 'detail'];
+export const COLOR_NAMES = ['bg', 'main', 'detail', 'shade', 'green'];
+
+// A scheme with all five colours: shade and green, where it has none,
+// mixed from its own (a mid tone of detail on bg; the trees in detail).
+export function withAll(scheme) {
+  return {
+    ...scheme,
+    shade: scheme.shade ?? mixHex(scheme.detail, scheme.bg, 0.45),
+    green: scheme.green ?? scheme.detail,
+  };
+}
+
+// Two colours (#rrggbb) mixed, `t` of the second, as #rrggbb.
+function mixHex(a, b, t) {
+  const p = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('')}`;
+}
 
 const SCHEME_KEY = 'urbanismus.scheme';
 const CUSTOM_KEY = 'urbanismus.customScheme';
@@ -35,11 +66,12 @@ const PALETTE_KEY = 'urbanismus.palette';
 // The player's own scheme; until first edited, a copy of the scheme in use.
 const savedCustom = load(CUSTOM_KEY, JSON.parse);
 export const CUSTOM = { name: 'Custom' };
-for (const n of COLOR_NAMES) CUSTOM[n] = normalizeHex(savedCustom?.[n]) ?? SCHEMES[0][n];
+const customBase = withAll({ ...SCHEMES[0], ...savedCustom });
+for (const n of COLOR_NAMES) CUSTOM[n] = normalizeHex(savedCustom?.[n]) ?? normalizeHex(customBase[n]) ?? withAll(SCHEMES[0])[n];
 let customSaved = savedCustom != null;
 
 export const THEME = {
-  palette: { ...SCHEMES[0] },
+  palette: withAll(SCHEMES[0]),
   gridDotRadius: 0.8,  // scene px
   fineDotRadius: 0.45, // footpath grid
   agentRadius: 1.1,    // scene px, cars (moving and parked): half the square's side
@@ -58,10 +90,12 @@ export function applyTheme(choice = load(SCHEME_KEY) ?? 0, root = document.docum
     choice = ((n % SCHEMES.length) + SCHEMES.length) % SCHEMES.length;
   }
   schemeChoice = choice;
-  const scheme = choice === 'custom' ? CUSTOM : SCHEMES[choice];
+  const scheme = withAll(choice === 'custom' ? CUSTOM : SCHEMES[choice]);
   Object.assign(THEME.palette, scheme);
-  THEME.palette.wash = !!scheme.wash;
+  for (const flag of ['wash', 'tone', 'hatch']) THEME.palette[flag] = !!scheme[flag];
   root.classList.toggle('wc', THEME.palette.wash);
+  root.classList.toggle('tone', THEME.palette.tone);
+  root.classList.toggle('tone-hatch', THEME.palette.tone && THEME.palette.hatch);
   for (const name of COLOR_NAMES) root.style.setProperty(`--${name}`, scheme[name]);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', scheme.bg);
   save(SCHEME_KEY, String(choice));
@@ -82,7 +116,7 @@ export function setCustomColor(name, value) {
   }
   CUSTOM[name] = hex;
   customSaved = true;
-  save(CUSTOM_KEY, JSON.stringify({ bg: CUSTOM.bg, main: CUSTOM.main, detail: CUSTOM.detail }));
+  save(CUSTOM_KEY, JSON.stringify(Object.fromEntries(COLOR_NAMES.map((n) => [n, CUSTOM[n]]))));
   applyTheme('custom');
   return hex;
 }
