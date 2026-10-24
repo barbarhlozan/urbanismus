@@ -80,3 +80,34 @@ test('the save keeps the numbers; an older save is numbered in build order', () 
   assert.equal(upgraded.structureByNo(1)?.id, b.id);
   assert.equal(upgraded.nextNo, 2);
 });
+
+test('people sent from houses go there, stay a while and come home', async () => {
+  const { AgentSystem } = await import('../src/sim/agents.js');
+  const { CONFIG } = await import('../src/config.js');
+  const { UNLOCKS } = await import('../src/story/unlocks.js');
+  const w = flatWorld(30, 30);
+  UNLOCKS.setWorld(w);
+  road(w, [1, 5], [28, 5]);
+  const homes = [3, 6, 9].map((x) => w.placeStructure('house', at(w, x, 6)));
+  const pub = w.placeStructure('hospoda', at(w, 20, 6));
+  const agents = new AgentSystem(w, CONFIG);
+  const theirs = [...agents.agents.values()].filter((a) => homes.some((h) => h.id === a.home));
+  for (const a of theirs) a.timer = 1e9; // (nobody goes anywhere of their own accord)
+
+  const { sent, missed } = agents.send([...homes, pub], pub);
+  assert.equal(sent, theirs.length);
+  assert.deepEqual(missed.map((m) => m.why), ['already there']);
+
+  const seen = new Set();
+  for (let t = 0; t < 400 && theirs.some((a) => !seen.has(a.id) || a.state !== 'home'); t += 0.25) {
+    agents.update(0.25);
+    for (const a of theirs) {
+      if (a.state === 'away') {
+        assert.equal(a.trip.dest, pub.id);
+        seen.add(a.id);
+      }
+    }
+  }
+  assert.equal(seen.size, theirs.length); // all got there…
+  assert.ok(theirs.every((a) => a.state === 'home')); // …and are home again
+});

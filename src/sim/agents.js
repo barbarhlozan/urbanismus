@@ -4,6 +4,9 @@
 // longer, potter about in front of the house, a loop walk, a park, an errand,
 // work, a trip off the map; workers take lunch walks and delivery drives.
 //
+// People can also be sent: send() has those of given houses go to one
+// place, stay and come back (cmd.send, by house number; the story next).
+//
 // Trips to a place pick a mode (planCommute):
 //   walk   – within comfortable walking distance over footpaths and street
 //            sidewalks (or reachable on foot only)
@@ -216,7 +219,7 @@ export class AgentSystem {
     if (trip.outside || trip.transit) return between(this.config.sim.outsideMin, this.config.sim.outsideMax);
     if (trip.visitor) return between(this.config.visitors.dwellMin, this.config.visitors.dwellMax);
     const d = this.config.dwell;
-    return between(...(trip.purpose === 'work' ? d.work : trip.purpose === 'stroll' ? d.turn : d.errand));
+    return between(...(trip.purpose === 'work' ? d.work : trip.purpose === 'stroll' ? d.turn : trip.purpose === 'visit' ? d.visit : d.errand));
   }
 
   // Seconds at home (for workers: at work) before setting off again.
@@ -913,6 +916,12 @@ export class AgentSystem {
     const home = this.world.structures.get(a.home);
     if (!home) return false;
     if (a.truck) return this.startTruckTrip(a, home);
+    if (a.sentTo != null) { // sent somewhere (send): there, if there's still a way
+      const dest = this.world.structures.get(a.sentTo);
+      a.sentTo = null;
+      const plan = dest && this.planCommute(home, dest);
+      if (plan) return this.begin(a, { ...plan, purpose: 'visit' }, dest.id);
+    }
     if (a.retry) { // gave up waiting for a bus / train: drive instead
       const { commute } = a.retry;
       a.retry = null;
@@ -989,6 +998,32 @@ export class AgentSystem {
       }
     }
     return null;
+  }
+
+  // Sends the people of `homes` (structures) who are in to `dest`: each
+  // leaves the house a moment apart (config.dwell.setOff), goes as to any
+  // errand – walking, cycling or driving – stays a while (dwell.visit) and
+  // comes home. Whoever is out already carries on. { sent, missed }:
+  // how many set off, and the homes none did from, with why.
+  send(homes, dest) {
+    let sent = 0;
+    const missed = [];
+    for (const home of homes) {
+      if (home.id === dest.id) { missed.push({ home, why: 'already there' }); continue; }
+      if (!this.planCommute(home, dest)) { missed.push({ home, why: 'no way there' }); continue; }
+      let n = 0;
+      for (const a of this.agents.values()) {
+        if (a.home !== home.id || a.truck || a.state !== 'home') continue;
+        a.sentTo = dest.id;
+        a.retry = null;
+        a.timer = between(...this.config.dwell.setOff);
+        n++;
+      }
+      if (n) this.log(`č. p. ${home.no ?? codeOf(home)} sent to č. p. ${dest.no ?? codeOf(dest)} · ${n}`, this.world.grid.xy(home.node));
+      else missed.push({ home, why: 'nobody in' });
+      sent += n;
+    }
+    return { sent, missed };
   }
 
   // To a random structure matching `names`, walking, cycling or driving.
@@ -1514,7 +1549,7 @@ function newAgent(fields) {
     visitor: false, commuter: false, truck: false, bus: false,
     followK: 1, room: Infinity, held: 0, creep: 0, stall: 0, fx: 0, fy: 0, bx: 0, by: 0, hx: 1, hy: 0, half: 0, next: -1,
     box: null, toBox: Infinity, claim: false, yieldTo: null, nose: 0, len: 0, px: 0, py: 0, v: 0, aside: false, leader: null, blocker: null, ahead: Infinity, across: Infinity,
-    waitKey: null, slot: 0, wander: null, retry: null,
+    waitKey: null, slot: 0, wander: null, retry: null, sentTo: null,
     legs: null, leg: 0, call: 0, pause: 0, left: 0,
   }, fields);
 }

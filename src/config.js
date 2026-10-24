@@ -361,6 +361,8 @@ export const CONFIG = {
     work: [60, 140],    // at work (also workers between their outings)
     errand: [12, 30],   // at a shop, a service, a delivery
     turn: [1, 4],       // a pause at a stroll's far end
+    visit: [40, 80],    // where they were sent (AgentSystem.send: cmd.send, the story)
+    setOff: [0.5, 4],   // seconds before each one sent leaves the house
   },
 
   // Lingering: people standing about in view, stepping between spots.

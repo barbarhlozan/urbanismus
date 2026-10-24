@@ -141,9 +141,26 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
     return fail(`No building č. p. ${no}`, no > 0 && no < world.nextNo ? 'it stood once, and is gone' : `numbers run 1 … ${world.nextNo - 1}`);
   }
 
+  // The people of houses `from` (a number or a list of them) who are in go
+  // to house `to`, stay a while and come home: how many set off.
+  function send(from, to) {
+    const dest = world.structureByNo(to);
+    if (!dest) return house(to); // (says why)
+    const homes = [];
+    for (const no of [from].flat()) {
+      const s = world.structureByNo(no);
+      if (s) homes.push(s);
+      else house(no);
+    }
+    const { sent, missed } = agents.send(homes, dest);
+    for (const { home, why } of missed) console.warn(`č. p. ${home.no}: ${why}`);
+    return sent;
+  }
+
   const cmd = {
     spawn,
     house,
+    send,
     build,
     road,
     tree,
@@ -221,6 +238,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         "cmd.road('road' | 'lane' | 'path' | 'rail' | 'fence', [x, y], [x, y])",
         'cmd.tree(x, y)',
         'cmd.house(4)              the building č. p. 4; cmd.house() every one',
+        'cmd.send([1, 2, 3], 7)    the people of č. p. 1, 2, 3 go to č. p. 7, stay and come home',
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',
