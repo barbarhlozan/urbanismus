@@ -41,6 +41,8 @@ export const PHOTO = {
   range: 28,     // how far anything is drawn, in grid steps
   clear: 0.3,    // solids closer than this to the photographer are left out,
   trees: 1.4,    // trees and shrubs closer than this (they would be a blob filling the frame)
+  lamps: 0.8,    // street lamps closer than this (only a piece of the head
+                 // would be in the picture, a dark bar along its top edge)
   lots: 1,       // lot drawing on the ground (beds, paving, benches' feet) closer than this
   tuft: 2,       // meadow tufts nearer than this are drawn as big as they would be here,
                  // and the tufts lots draw (kit.js tufts) left out
@@ -160,7 +162,9 @@ export function takePhoto(renderer, shot) {
   }
   for (const key of world.sidewalks.keys()) {
     const [a] = key.split('-').map(Number);
-    if (seen(...world.grid.xy(a), 2)) take(renderer.paintStreet(key, cam));
+    if (!seen(...world.grid.xy(a), 2)) continue;
+    const out = renderer.paintStreet(key, cam);
+    if (out && Math.hypot(out.x - x, out.y - y) >= PHOTO.lamps) take(out);
   }
 
   // ----- roads, footpaths and railways -----
