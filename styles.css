@@ -2090,3 +2090,18 @@ html.tone.painted .layer-objects .pane { fill: var(--main); stroke: none; }
 html.tone.painted .layer-objects .pane.bar { display: none; }
 /* trees: their outline a darker green, no line round the crown's fill */
 html.tone.painted .glyph.crown-line { stroke: color-mix(in srgb, var(--green) 55%, var(--main)); }
+/* the brush (gl/objects.js, --fill-hatch 10–15: its direction in sixths
+   of a half turn on screen): down the walls, down each roof's slope
+   (sa0–5, Painter._slopeOnScreen), across a flat top */
+html.tone.painted .layer-objects .filled.ww { --fill-hatch: 13; }
+html.tone.painted .layer-objects .filled.wt { --fill-hatch: 10; }
+html.tone.painted .layer-objects .filled.wp.sa0 { --fill-hatch: 10; }
+html.tone.painted .layer-objects .filled.wp.sa1 { --fill-hatch: 11; }
+html.tone.painted .layer-objects .filled.wp.sa2 { --fill-hatch: 12; }
+html.tone.painted .layer-objects .filled.wp.sa3 { --fill-hatch: 13; }
+html.tone.painted .layer-objects .filled.wp.sa4 { --fill-hatch: 14; }
+html.tone.painted .layer-objects .filled.wp.sa5 { --fill-hatch: 15; }
+/* windows as small dark arches (Painter._arch) */
+html.tone.painted .layer-objects .filled.arch { fill: var(--main); stroke: none; }
+/* shadows soft at the edge, as if laid with a wet brush */
+html.painted .shade-canvas { filter: blur(2.5px); }

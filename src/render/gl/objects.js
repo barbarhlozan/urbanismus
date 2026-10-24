@@ -58,7 +58,8 @@ flat out vec4 colourF;
 out float alongF;                     // how far along its line (a stroke)
 flat out float penVis;                // the pen has got this far along it
 out vec2 scene;                       // where it is (scene px: a hatched fill's strokes)
-flat out float shadeF;                // a fill drawn in pencil strokes (--fill-hatch, tone schemes)
+flat out float shadeF;                // a fill drawn in pencil strokes (--fill-hatch 1, tone schemes)
+                                      // or in brush strokes at (n - 10) sixths of a half turn (10–15, Painted)
 // (an end before its start: taken back, from all there to none)
 float span(float a, float b) { float d = b - a; return abs(d) < 1e-3 ? 1e-3 : d; }
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
@@ -180,7 +181,20 @@ void main() {
   if (kindF.x < 0.5) {
     // (a face in shade hatched on paper, as a pencil hatches it, in the
     // strokes the shadows on the ground have there)
-    if (shadeF > 0.5 && shadeOn == 1) {
+    if (shadeF > 9.5) {
+      // (laid on with a flat brush: streaks along the face – down a wall,
+      // down a roof's slope –, the paint thinner and thicker across them,
+      // the paper's tooth catching it)
+      float ang = (shadeF - 10.0) * 0.5236;
+      vec2 d = vec2(cos(ang), sin(ang));
+      float along = dot(scene, d), across = dot(scene, vec2(-d.y, d.x));
+      float n = noise(vec2(along * 0.05, across * 0.7)) * 0.6 + noise(vec2(along * 0.13 + 3.0, across * 1.9)) * 0.4;
+      float dry = noise(vec2(along * 0.35, across * 3.5)) - 0.5;
+      outColour = colourF;
+      outColour.rgb = min(outColour.rgb * (0.86 + 0.24 * n + 0.07 * dry), vec3(outColour.a));
+      return;
+    }
+    if (shadeF > 0.5 && shadeF < 1.5 && shadeOn == 1) {
       // (gone over twice, the second time a little aslant, as a pencil
       // darkens a side: denser than the shadows on the ground)
       vec2 d2 = vec2(shadeAt.x * 0.966 - shadeAt.y * 0.259, shadeAt.x * 0.259 + shadeAt.y * 0.966);

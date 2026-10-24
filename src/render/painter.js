@@ -97,6 +97,8 @@ const wcOn = () => typeof document !== 'undefined' && document.documentElement.c
 // a fifth of the wobble, houses all but square to the grid.
 const cleanOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('clean');
 const CLEAN = { wobble: 0.2, tilt: 0.15 };
+// …and a Painted one (`painted`): windows as small dark arches (Painter.line)
+const paintedOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('painted');
 // Photos (a perspective camera): roof hatching at most this many px apart
 // on the picture; windows are drawn open, as frames (Painter._window), with
 // their glazing bars from this many px wide
@@ -710,9 +712,20 @@ export class Painter {
     const o = this._world(...points[0]);
     const a = this._project(o[0], o[1], o[2]), b = this._project(o[0] + tx * 0.2, o[1] + ty * 0.2, o[2]);
     const dark = b[0] > a[0] + 1e-6 ? ' wd' : '';
-    if (!wall) return `wp${dark} r${roof}`;
+    if (!wall) return `wp${dark} r${roof} sa${this._slopeOnScreen(n, o, len)}`;
     const mat = this._wallMat(points);
     return `ww${dark} v${this.paint % 3}${mat ? ` ${mat}` : ''}`;
+  }
+
+  // Which way a roof runs down on screen, in sixths of a half turn (0–5):
+  // the Painted schemes' brush follows it (styles.css .sa0–5, gl/objects.js).
+  _slopeOnScreen([nx, ny, nz], o, len) {
+    const k = nz / len;
+    const [dx, dy] = this._turn((nx / len) * k, (ny / len) * k);
+    const dz = k * k - 1;
+    const a = this._project(o[0], o[1], o[2]), b = this._project(o[0] + dx * 0.2, o[1] + dy * 0.2, o[2] + dz * 0.2);
+    const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    return ((Math.round(ang / (Math.PI / 6)) % 6) + 6) % 6;
   }
 
   // What a wall standing on the ground is built of, in the watercolour
@@ -1392,9 +1405,33 @@ export class Painter {
     if (opts.facing && !this._facing(opts.facing, points[0])) return this;
     const lod = opts.lod ?? (opts.facing ? Math.max(2, this.lod) : this.lod);
     if (lod > this.keep) return this;
+    if (opts.cls === 'ink' && paintedOn() && this._arch(points, lod)) return this;
     if (opts.cls === 'ink' && (this.camera.perspective || LOOK.open) && this._window(points, opts, lod)) return this;
     this.current.parts.push(this._outline(points, false, opts, lod));
     return this;
+  }
+
+  // A window in a Painted scheme: a small dark opening with a round top, as
+  // in a gouache of a village – narrower and lower than the window it
+  // stands for, in its middle. `points`: its outline on the wall, closed
+  // (bottom left, bottom right, top right, top left, back to the start).
+  // False if it isn't one.
+  _arch(points, lod) {
+    if (points.length !== 5) return false;
+    const [p0, p1, , p3] = points;
+    const u = [0, 1, 2].map((i) => p1[i] - p0[i]), v = [0, 1, 2].map((i) => p3[i] - p0[i]);
+    const w = Math.hypot(...u), h = Math.hypot(...v);
+    if (w < 1e-6 || h < 1e-6) return false;
+    const W = 0.6, H = 0.8, r = (W * w) / 2;
+    const at = (x, y) => [0, 1, 2].map((i) => p0[i] + (u[i] / w) * x + (v[i] / h) * y);
+    const x0 = (w - W * w) / 2, cx = w / 2, y0 = (h - H * h) / 2, spring = Math.max(y0, y0 + H * h - r);
+    const pts = [at(x0, y0), at(x0 + W * w, y0)];
+    for (let k = 0; k <= 6; k++) {
+      const a = (k / 6) * Math.PI;
+      pts.push(at(cx + Math.cos(a) * r, spring + Math.sin(a) * r));
+    }
+    this.current.parts.push(this._outline(pts, true, { cls: 'arch', wobble: 0.1 }, lod));
+    return true;
   }
 
   // An ink window (a closed outline of four corners: bottom left, bottom
