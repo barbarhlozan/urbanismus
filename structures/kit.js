@@ -149,6 +149,43 @@ export function shed(g, x, y) {
   g.detailed(2, () => g.gable(x - 0.07, y - 0.05, 0, 0.14, 0.1, 0.07, 0.05));
 }
 
+// Drawn of wood in the watercolour scheme (Painter.wood): boards and a
+// shingled roof, whatever the building around it is.
+export function wooden(g, fn) {
+  const was = g.wood;
+  g.wood = true;
+  try { fn(); } finally { g.wood = was; }
+}
+
+// The outhouse at the bottom of a village garden (kadibudka): a boarded
+// box under a little gable roof, a heart cut in its door.
+export function outhouse(g, x, y) {
+  if (!g.isFree(x, y, 0.06)) return;
+  g.detailed(2, () => wooden(g, () => {
+    g.gable(x - 0.026, y - 0.026, 0, 0.052, 0.052, 0.1, 0.028);
+    const f = y - 0.026;
+    g.line([[x - 0.016, f, 0], [x - 0.016, f, 0.085], [x + 0.016, f, 0.085], [x + 0.016, f, 0]], { facing: [0, -1, 0], cls: 'door-line' });
+    g.line([[x - 0.005, f, 0.072], [x, f, 0.064], [x + 0.005, f, 0.072]], { facing: [0, -1, 0], cls: 'heart' });
+  }));
+}
+
+// A wayside shrine (boží muka): a whitewashed pillar, a niche at the top
+// under a small roof, an iron cross on its ridge.
+export function shrine(g, x, y) {
+  if (!g.isFree(x, y, 0.05)) return;
+  g.detailed(1, () => {
+    const was = g.stone;
+    g.stone = true;
+    g.box(x - 0.016, y - 0.016, 0, 0.032, 0.032, 0.1);
+    g.gable(x - 0.024, y - 0.024, 0.1, 0.048, 0.048, 0.045, 0.03);
+    const f = y - 0.024;
+    g.line([[x - 0.01, f, 0.11], [x + 0.01, f, 0.11], [x + 0.01, f, 0.135], [x - 0.01, f, 0.135], [x - 0.01, f, 0.11]], { facing: [0, -1, 0], cls: 'ink' });
+    g.line([[x, y, 0.175], [x, y, 0.215]], { cls: 'cross' });
+    g.line([[x - 0.011, y, 0.203], [x + 0.011, y, 0.203]], { cls: 'cross' });
+    g.stone = was;
+  });
+}
+
 // A pair of bins.
 export function bins(g, x, y) {
   if (!g.isFree(x, y, 0.05)) return;

@@ -2016,3 +2016,17 @@ html.wc .layer-forest .forest-edge { stroke: color-mix(in srgb, #3e4a26 40%, tra
 /* grass and flowers: green tufts, ochre dabs */
 html.wc .layer-meadow path { stroke: #93a35a; }
 html.wc .layer-meadow .ink { fill: #d6a043; stroke: #d6a043; }
+/* water (Renderer.washWater): a turquoise wash on a ring of green bank;
+   the shore drawn in a deeper teal, the ripples lifted out pale */
+html.wc .pond-bank { fill: #a3b86a; stroke: #a3b86a; stroke-width: 36px; stroke-linejoin: round; opacity: 0.75; }
+html.wc .pond { fill: #8ccbc6; stroke: color-mix(in srgb, #4f9a96 45%, transparent); stroke-width: 5px; stroke-linejoin: round; }
+html.wc .river-bank-wash { fill: none; stroke: #a3b86a; stroke-linecap: round; stroke-linejoin: round; opacity: 0.7; }
+html.wc .river-wash { fill: none; stroke: #8ccbc6; stroke-linecap: round; stroke-linejoin: round; }
+html.wc .shore { stroke: color-mix(in srgb, #3f7f7c 75%, transparent); }
+html.wc .bank { stroke: color-mix(in srgb, #5f8a52 70%, transparent); }
+html.wc .wave { stroke: #eef6f1; }
+/* gables (Painter._washGable): a board at the eaves and a painted trim */
+html.wc .layer-objects .wtrim { stroke: #8a4532; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+/* the outhouse's door and heart, the shrine's cross (structures/kit.js) */
+html.wc .layer-objects .door-line { stroke: color-mix(in srgb, #3a2a20 55%, transparent); }
+html.wc .layer-objects :is(.heart, .cross) { stroke: #3a2a20; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }

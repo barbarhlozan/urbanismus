@@ -993,7 +993,29 @@ export class Renderer {
     const open = (lines) => (hidden ? lines.flatMap((pts) => keepRuns(pts, (q) => !hidden(...q), 0.04)) : lines);
     // a path per chunk of the map (as the contours): a river runs right across it
     const path = (lines, cls) => chunked(cut(lines, CONTOUR_CHUNK), CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
-    return path(open(shore), 'shore') + path(open(bank), 'bank') + path(wave, 'wave');
+    return this.washWater(shore) + path(open(shore), 'shore') + path(open(bank), 'bank') + path(wave, 'wave');
+  }
+
+  // The watercolour scheme (html.wc): the water painted in under its
+  // lines – a lake filled turquoise inside its shore on a ring of green
+  // bank, a river a turquoise wash along its course on green as wide as
+  // its banks are apart where it is narrowest (styles.css .pond, .river-wash).
+  washWater(shore) {
+    if (!document.documentElement.classList.contains('wc')) return '';
+    let out = '';
+    if (shore.length) {
+      const d = this.pathData(shore, false);
+      out += `<path class="pond-bank" d="${d}"/><path class="pond" d="${d}"/>`;
+    }
+    const [ax, ay] = this.camera.project(0, 0, 0), [bx, by] = this.camera.project(1, 0, 0);
+    const unit = Math.hypot(bx - ax, by - ay);
+    for (const r of this.world.terrain.rivers) {
+      const d = this.pathData([r.points], true);
+      const across = 2 * ((r.width ?? 0.35) + (r.vary ?? 0.8) * 0.3) * unit;
+      out += `<path class="river-bank-wash" d="${d}" style="stroke-width:${r2(across * 1.7)}px"/>`
+        + `<path class="river-wash" d="${d}" style="stroke-width:${r2(across)}px"/>`;
+    }
+    return out;
   }
 
   // The water's lines in world units, { shore, bank, wave }, traced once

@@ -294,6 +294,8 @@ export class Painter {
     this.panes = [];      // its windows drawn: { pts: 4 scene points, n: 0–99, spill }, for the night (Renderer.renderLights)
     this.casts = [];      // other shapes that cast a shadow (trees), world, see Painter.cast
     this.casting = true;  // false: draw no shadows (icons)
+    this.wood = false;    // watercolour: what is drawn now is of wood (boards, a shingle roof; _wash)
+    this.stone = false;   // …or whitewashed masonry under slate, whatever its building (_wash)
   }
 
   // The watercolour scheme is on (drawings that paint differently in it)
@@ -694,13 +696,14 @@ export class Painter {
     const len = Math.hypot(n[0], n[1], n[2]);
     if (len < 1e-9) return '';
     const wall = this._wallNormal(n);
-    if (!wall && n[2] > 0.985 * len) return `wt r${this.paint % 4}`;
+    const roof = this.wood ? 3 : this.stone ? 2 : this.paint % 4;
+    if (!wall && n[2] > 0.985 * len) return `wt r${roof}`;
     if (!wall && n[2] <= 0) return '';
     const [tx, ty] = wall ?? this._turn(n[0], n[1]);
     const o = this._world(...points[0]);
     const a = this._project(o[0], o[1], o[2]), b = this._project(o[0] + tx * 0.2, o[1] + ty * 0.2, o[2]);
     const dark = b[0] > a[0] + 1e-6 ? ' wd' : '';
-    if (!wall) return `wp${dark} r${this.paint % 4}`;
+    if (!wall) return `wp${dark} r${roof}`;
     const mat = this._wallMat(points);
     return `ww${dark} v${this.paint % 3}${mat ? ` ${mat}` : ''}`;
   }
@@ -710,8 +713,10 @@ export class Painter {
   // one-storey cottages under tiles (roubenky, their gables plastered), else plaster
   // ('').
   _wallMat(points) {
-    if (!points.some((p) => p[2] <= ON_GROUND)) return '';
-    if (this.paint % 4 === 3) return 'wtimber';
+    if (this.stone) return '';
+    const wood = this.wood || this.paint % 4 === 3;
+    if (!points.some((p) => p[2] <= ON_GROUND)) return wood ? 'wtimber' : '';
+    if (wood) return 'wtimber';
     const level = Math.min(...points.filter((p) => p[2] > ON_GROUND).map((p) => p[2]));
     // (not under slate: that is the 70s cube house's roof, never a log one's)
     return level <= 0.22 && this.paint % 5 < 2 && this.paint % 4 !== 2 ? 'wlogs' : '';
@@ -723,12 +728,20 @@ export class Painter {
   _washDetail(points, n, paint) {
     const L = points.length;
     const i = points.findIndex((p, k) => p[2] <= ON_GROUND && points[(k + 1) % L][2] <= ON_GROUND);
-    if (i < 0) return;
+    const dark = /\bwd\b/.test(paint) ? ' wd' : '';
+    if (i < 0) {
+      // (a gable drawn apart from its walls: a triangle above the eaves)
+      const q = [...points].sort((p, r) => p[2] - r[2]);
+      if (L === 3 && Math.max(1, this.lod) <= this.keep && Math.abs(q[0][2] - q[1][2]) < 0.01 && q[2][2] > q[0][2] + 0.04) {
+        this._washGable(q[0], q[1], q[2], n, !this.stone && (this.wood || this.paint % 4 === 3), dark);
+      }
+      return;
+    }
     const a = points[i], b = points[(i + 1) % L];
     const level = Math.min(...points.filter((p) => p[2] > ON_GROUND).map((p) => p[2]));
     const lod = Math.max(1, this.lod);
-    if (lod > this.keep) return;
-    const dark = /\bwd\b/.test(paint) ? ' wd' : '';
+    // (no detail on what is barely a wall: a kerb, a fence's foot)
+    if (lod > this.keep || !(level < Infinity) || level < 0.04) return;
     const band = (z0, z1, cls) => this.current.parts.push(this._outline(
       [[a[0], a[1], z0], [b[0], b[1], z0], [b[0], b[1], z1], [a[0], a[1], z1]], true, { cls: cls + dark, wobble: 0.08 }, lod));
     const PLINTH = 0.022;
@@ -743,6 +756,34 @@ export class Painter {
       }
     }
     band(0, PLINTH, 'wplinth');
+    const top = points.reduce((m, p) => (p[2] > m[2] ? p : m));
+    if (top[2] >= level + 0.04) this._washGable([a[0], a[1], level], [b[0], b[1], level], top, n, /\bwtimber\b/.test(paint), dark);
+  }
+
+  // A gable above the eaves (A, B its foot, `top` its peak): a board across
+  // its foot, and on a barn (`wood`) the gable boarded upright (lomenice),
+  // on a house a trim painted in round its edge, as on the whitewashed
+  // gables of Bohemian villages.
+  _washGable(A, B, top, n, wood, dark) {
+    const ab = [B[0] - A[0], B[1] - A[1]], l2 = ab[0] * ab[0] + ab[1] * ab[1];
+    if (l2 < 1e-6) return;
+    const level = A[2];
+    const tt = Math.min(0.95, Math.max(0.05, ((top[0] - A[0]) * ab[0] + (top[1] - A[1]) * ab[1]) / l2));
+    const lineOn = (pts, cls) => this.line(pts, { facing: n, cls: cls + dark, wobble: 0.3, lod: 2 });
+    lineOn([A, B], 'wtrim');
+    if (wood) {
+      const k = Math.max(3, Math.round(Math.sqrt(l2) / 0.028));
+      for (let j = 1; j < k; j++) {
+        const t = j / k, h = (top[2] - level) * (t < tt ? t / tt : (1 - t) / (1 - tt));
+        if (h < 0.01) continue;
+        const x = A[0] + ab[0] * t, y = A[1] + ab[1] * t;
+        lineOn([[x, y, level], [x, y, level + h - 0.006]], 'wboard');
+      }
+    } else {
+      const c = [0, 1, 2].map((i) => (A[i] + B[i] + top[i]) / 3);
+      const inset = (p, k) => p.map((v, i) => v + (c[i] - v) * k);
+      lineOn([inset(A, 0.28), inset(top, 0.28), inset(B, 0.28)], 'wtrim');
+    }
   }
 
   // A wall turned away from the sun gets hatched (SUN.strokes,
