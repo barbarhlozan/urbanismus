@@ -24,7 +24,7 @@
 //                                              its name in the Build menu
 //   house_wide, fire_house, office_tower…      one size, by its id
 //   residential, business, heritage, park…     a tag (every type that has it)
-//   road, lane, footpath, railway             the network tools
+//   street, road, lane, footpath, railway     the network tools
 //   chronicle, photo, terrain, colors, assets, debug, export, import,
 //   new_map, fullscreen                        the buttons at the top (not in
 //                                              `all`; `controls`: all of them)
@@ -44,7 +44,7 @@
 //
 //   UNLOCKS.allows(type)              may this type be built?
 //   UNLOCKS.allowsTool(tool)          may this tool be picked up?
-//   UNLOCKS.allowsNetwork(kind)       'road' | 'lane' | 'path' | 'rail' | 'fence'
+//   UNLOCKS.allowsNetwork(kind)       'street' | 'road' | 'lane' | 'path' | 'rail' | 'fence'
 //   UNLOCKS.allowsControl(id)         a button at the top, by its data-act ('debug'…)
 //   UNLOCKS.allowsVehicle(kind)       'cars' | 'trucks' | 'buses'
 //   UNLOCKS.scheme                    the file's `scheme` line: { value, line } or null
@@ -56,6 +56,7 @@ import { SCHEMES, COLOR_NAMES, normalizeHex, applyTheme, setCustomColor } from '
 
 // Names of the network tools (tool id -> names that mean it).
 const NETWORKS = {
+  street: ['street', 'streets'],
   road: ['road', 'roads'],
   lane: ['lane', 'lanes'],
   path: ['footpath', 'footpaths', 'path', 'paths'],

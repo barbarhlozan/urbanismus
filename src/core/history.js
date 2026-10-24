@@ -1,7 +1,7 @@
 // Undo and redo of the player's own changes to the town (world.history).
 //
 // A step is whatever one click did: a house placed, a road drawn (with the
-// trees it cleared and the footpaths it turned into sidewalks), a station
+// trees it cleared), a station
 // with the track it laid, a building pulled down, a new look or yard. World
 // calls touch() before it changes anything; the first touch takes a
 // snapshot of the town, and when the click's handler is done (the end of
@@ -9,7 +9,7 @@
 // structures and trees came, went or changed, which segments of each
 // network and which sidewalks and lanes, and the chronicle lines the change
 // wrote. Snapshots rather than an inverse per World method, so whatever a
-// method sets off by itself (pruned bridges, absorbed sidewalks, a
+// method sets off by itself (pruned bridges, a
 // station's track) comes back with it without each of those knowing about
 // undo.
 //

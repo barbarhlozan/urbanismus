@@ -207,6 +207,7 @@ tools.allowed = (tool) => UNLOCKS.allowsTool(tool);
 const contours = contoursSetting({ renderer, fallback: STYLE.contours, changed: (on) => hud.buildMenu.showTerrain(on) });
 const ctx = { world, camera, tools, popup, growth, renderer, config: CONFIG };
 tools.register(createInspectTool(ctx));
+tools.register(createNetworkTool(ctx, { kind: 'road', id: 'street', street: true, group: 'transport' }));
 tools.register(createNetworkTool(ctx, { kind: 'road', group: 'transport' }));
 tools.register(createNetworkTool(ctx, { kind: 'road', id: 'lane', lane: true, group: 'transport' }));
 tools.register(createNetworkTool(ctx, { kind: 'path', fineGrid: true, group: 'transport' }));
@@ -473,11 +474,11 @@ contours.start();
 let dots = null;
 tools.onChange((tool) => {
   dots = tool.id === 'inspect' || tool.id === 'photo' ? null
-    : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: tool.id === 'road' || tool.id === 'lane' };
+    : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: ['road', 'lane', 'street'].includes(tool.id) };
   contours.lend(!!dots && tool.id !== 'bulldoze' && UNLOCKS.allowsControl('terrain'));
   // the road marks (render/roadMarks.js): firmer while the player can mend
   // them, gone while composing a photo
-  renderer.setNotes(tool.id === 'photo' ? 'off' : tool.id.startsWith('build:') || ['road', 'lane', 'path'].includes(tool.id) ? 'strong' : 'quiet');
+  renderer.setNotes(tool.id === 'photo' ? 'off' : tool.id.startsWith('build:') || ['road', 'lane', 'street', 'path'].includes(tool.id) ? 'strong' : 'quiet');
 });
 tools.use('inspect');
 
@@ -497,7 +498,7 @@ function pickUp() {
   else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
   else if (world.rails.hasNode(world.networks.rail.nodeAt(...p))) tool = tools.registry.get('rail');
   else if (world.fences.hasNode(world.networks.fence.nodeAt(...p))) tool = tools.registry.get('fence');
-  else if (world.hasRoad(node)) tool = tools.registry.get(world.laneOnly(node) ? 'lane' : 'road');
+  else if (world.hasRoad(node)) tool = tools.registry.get(world.laneOnly(node) ? 'lane' : [...world.roads.neighbors(node)].some((m) => world.hasSidewalk(node, m)) ? 'street' : 'road');
   if (!tool) return;
   tools.use(tool.id, params);
 }

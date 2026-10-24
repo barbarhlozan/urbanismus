@@ -31,9 +31,10 @@
 #   public                            obcanska_vybavenost + prostranstvi
 #
 # Network tools
+#   street               (a road with sidewalks and lamps)
 #   road
 #   lane
-#   footpath             (no footpath: no new streets with sidewalks either)
+#   footpath
 #   railway
 #
 # Shared names (tags) – each covers several things at once

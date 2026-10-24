@@ -2,17 +2,18 @@
 // click an end dot. The route goes diagonal then straight (or the reverse –
 // toggle with Tab). If anything blocks it, nothing is built. After a
 // successful build the next segment starts from the end point, so lines can
-// be chained. Roads come as two tools: roads and single-track lanes
-// (`lane`); drawing one over the other converts it.
+// be chained. Roads come as three tools: streets with sidewalks and lamps
+// (`street`), roads and single-track lanes (`lane`); drawing one over
+// another converts it.
 
 import { planRoute, validateRoute, BEND } from '../roads/routing.js';
 import { t } from '../core/text.js';
 
-// options: { kind, id (default: kind), lane (roads: build lanes), group (Build menu group), fineGrid, curve (config key), hoverRadius }
+// options: { kind, id (default: kind), lane / street (roads: build lanes / streets), group (Build menu group), fineGrid, curve (config key), hoverRadius }
 // Its words are tool.<id>, tool.<id>.blurb and network.*.<id> (text/ui.txt).
 export function createNetworkTool(ctx, options) {
   const { world, config } = ctx;
-  const { kind, lane = false, fineGrid = false, hoverRadius = 0.32 } = options;
+  const { kind, lane = false, street = false, fineGrid = false, hoverRadius = 0.32 } = options;
   const id = options.id ?? kind;
   const layer = world.networks[kind];
   const curve = config[options.curve ?? kind];
@@ -67,7 +68,7 @@ export function createNetworkTool(ctx, options) {
         start = -1;
         return;
       }
-      const result = world.buildNetwork(kind, planRoute(layer.grid, start, node, bend), { lane });
+      const result = world.buildNetwork(kind, planRoute(layer.grid, start, node, bend), { lane, street });
       if (result.ok) start = node;
     },
 
@@ -100,7 +101,7 @@ export function createNetworkTool(ctx, options) {
       const plan = currentPlan();
       if (!plan) return out;
       const points = plan.nodes.map((n) => layer.pos(n));
-      out += kit.path(points, `preview ${kind}${lane ? ' lane' : ''}${plan.check.ok ? '' : ' invalid'}`, curve);
+      out += kit.path(points, `preview ${kind}${lane ? ' lane' : street ? ' street' : ''}${plan.check.ok ? '' : ' invalid'}`, curve);
       // a steep-hill sign where it climbs too steeply, the no-entry sign
       // where something's built, a cross for anything else
       const steep = new Set(plan.check.steep ?? []);

@@ -3,7 +3,7 @@
 // the chronicle's lines and the save.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { flatWorld, road, path, run } from './helpers.js';
+import { flatWorld, road, path, street, run } from './helpers.js';
 import { World } from '../src/core/world.js';
 import { Chronicle } from '../src/sim/chronicle.js';
 import { CONFIG } from '../src/config.js';
@@ -102,13 +102,12 @@ test('trees cleared by a road come back with its undo', () => {
   assert.equal(w.featureAt(at(w, 5, 5)), tree);
 });
 
-test('a footpath turned into sidewalks: the road is a road again', () => {
+test('a road drawn over as a street: the road is a road again', () => {
   const w = flatWorld();
   steps(w, () => road(w, [2, 5], [10, 5]));
   const before = save(w);
-  steps(w, () => path(w, [2, 5.5], [10, 5.5]));
+  steps(w, () => street(w, [2, 5], [10, 5]));
   assert.ok(w.sidewalks.size > 0);
-  assert.equal(w.paths.edgeCount, 0);
   w.history.undo();
   assert.equal(save(w), before);
   w.history.redo();
