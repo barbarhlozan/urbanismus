@@ -19,7 +19,12 @@
 
 // Line styles: the classes the ink layers draw (styles.css), their pen
 // (css px before --stroke), colour, ends and dashes (css px before --stroke).
+// `wash`: a road's or a path's whole width laid in one soft band of colour
+// along its centre line, only in the painted schemes (look.wash: its width
+// in world units and its colour), which leave out the pen lines in WASHED.
 const STYLES = {
+  'road-wash': { colour: 'wash', width: 0, cap: 'round', wash: 'road' },
+  'path-wash': { colour: 'wash', width: 0, cap: 'round', wash: 'path' },
   driveway: { colour: 'detail', width: 1, cap: 'butt' },
   road: { colour: 'fg', width: 1.4, cap: 'round' },
   kerb: { colour: 'fg', width: 1, cap: 'round' },
@@ -42,6 +47,8 @@ const STYLES = {
 };
 // the far-out level of detail leaves these out (styles.css #world.lod-2)
 const FAR_HIDDEN = new Set(['driveway', 'zebra']);
+// the painted schemes leave these out: the washes stand for them
+const WASHED = new Set(['road', 'kerb', 'zebra', 'road-exit', 'footpath', 'driveway']);
 const CAPS = { butt: 1, round: 0, square: 2 };
 const STRIDE = 18; // floats per segment
 // A join turning more than this (radians) gets a round one.
@@ -63,7 +70,7 @@ uniform vec3 iso;                      // tile·cos30, tile·sin30, tile·zScale
 uniform vec3 place;                    // zoom, pan x, pan y (wrapper px, the overscan in)
 uniform vec2 size;                     // the canvas in device px
 uniform float dpr;
-uniform vec4 width[32];                // per style: half width in device px
+uniform vec4 width[32];                // per style: half width in device px, a wash (1)?
 out vec2 local;                        // px from a: along, across
 out vec2 joins;                        // px inside the joins' lines at a and at b (< 0: the neighbour's)
 out float len;                         // the segment's length in px
@@ -121,10 +128,12 @@ uniform vec4 width[32];
 uniform vec4 colour[32];               // premultiplied
 uniform vec4 dashes[32];               // on, off (scene px), dashed?, shown?
 uniform sampler2D items;               // per item: shown up to (world units), from the end?, its length, shown at all
+uniform int washPass;                  // drawing the washes (1, under the lines) or the lines (0)
 out vec4 outColour;
 void main() {
   vec4 ds = dashes[styleId];
   if (ds.w < 0.5) discard;
+  if ((width[styleId].y > 0.5) != (washPass == 1)) discard;
   vec4 it = texelFetch(items, ivec2(itemId % 1024, itemId / 1024), 0);
   if (it.w < 0.5) discard;
   float at = it.y > 0.5 ? it.z - along : along;
@@ -146,6 +155,9 @@ void main() {
   // pen's width covers: exact across a straight edge, at any width – a
   // pen thinner than a pixel spreads faintly over one or two
   float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
+  // (a wash: soft at its sides, a little darker just inside them, where
+  // the paint dried at its edge)
+  if (w.y > 0.5) cover = (1.0 - smoothstep(hw * 0.6, hw, d)) * (0.8 + 0.35 * smoothstep(hw * 0.45, hw * 0.8, d));
   if (ds.z > 0.5 && mod(dashAt, ds.x + ds.y) > ds.x) discard;
   if (cover <= 0.0) discard;
   outColour = colour[styleId] * cover;
@@ -185,7 +197,7 @@ export class GLLines {
     gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = Object.fromEntries(['rot', 'centre', 'iso', 'place', 'size', 'dpr', 'width', 'colour', 'dashes', 'items'].map((n) => [n, gl.getUniformLocation(p, n)]));
+    this.u = Object.fromEntries(['rot', 'centre', 'iso', 'place', 'size', 'dpr', 'width', 'colour', 'dashes', 'items', 'washPass'].map((n) => [n, gl.getUniformLocation(p, n)]));
     this.vao = gl.createVertexArray();
     gl.bindVertexArray(this.vao);
     const quad = gl.createBuffer();
@@ -372,7 +384,8 @@ export class GLLines {
   // One frame. `view`: { zoom, panX, panY (wrapper px, the overscan in),
   // cos, sin, angle, cx, cy, iso: [tile·cos30, tile·sin30, tile·zScale],
   // W, H (wrapper css px) }; `look`: { stroke, lineWeight, palette, near,
-  // far, fg } – the map's --stroke and the colours.
+  // far, fg, wash } – the map's --stroke and the colours; wash (painted
+  // schemes): { road, path (widths, world units), colour, alpha } or null.
   draw(view, look, now = performance.now()) {
     const { gl, canvas } = this;
     // (lines being erased come and go with the pen: built again with them)
@@ -380,7 +393,7 @@ export class GLLines {
     const dpr = devicePixelRatio || 1;
     const w = Math.round(view.W * dpr), h = Math.round(view.H * dpr);
     const animating = [...this.layers.values()].some((l) => l.ink?.busy);
-    const key = `${w}|${h}|${view.zoom}|${view.panX}|${view.panY}|${view.angle}|${look.stroke}|${look.near}|${look.far}|${look.fg}|${look.palette.detail}|${look.palette.bg}|${this.count}`;
+    const key = `${w}|${h}|${view.zoom}|${view.panX}|${view.panY}|${view.angle}|${look.stroke}|${look.near}|${look.far}|${look.fg}|${look.palette.detail}|${look.palette.bg}|${JSON.stringify(look.wash ?? null)}|${this.count}`;
     if (!animating && !this.wasAnimating && key === this.drawnKey) return;
     this.drawnKey = key;
     this.wasAnimating = animating;
@@ -407,14 +420,19 @@ export class GLLines {
     // the pens: a width in scene px (pen · --stroke, the line weight in it),
     // on the screen times the zoom, in device px times the pixel ratio
     const widths = new Float32Array(32 * 4), colours = new Float32Array(32 * 4), dashes = new Float32Array(32 * 4);
-    const colourOf = { fg: rgb(look.fg), main: rgb(look.fg), detail: rgb(look.palette.detail), bg: rgb(look.palette.bg) };
+    const { wash } = look;
+    const colourOf = { fg: rgb(look.fg), main: rgb(look.fg), detail: rgb(look.palette.detail), bg: rgb(look.palette.bg), wash: rgb(wash?.colour ?? '#000') };
+    const tile = view.iso[1] * 2;
     this.names.forEach((n, i) => {
       const s = STYLES[n];
-      const px = s.width * look.stroke * view.zoom * dpr;
+      const px = s.wash ? (wash?.[s.wash] ?? 0) * 2 * tile * view.zoom * dpr : s.width * look.stroke * view.zoom * dpr;
       widths[i * 4] = px / 2;
+      widths[i * 4 + 1] = s.wash ? 1 : 0;
       const [r, g, b] = colourOf[s.colour];
-      colours.set([r, g, b, 1], i * 4);
-      const shown = (s.far && look.near) || (s.near && !look.near) || (look.far && FAR_HIDDEN.has(n)) ? 0 : 1;
+      const a = s.wash ? wash?.alpha ?? 1 : 1;
+      colours.set([r * a, g * a, b * a, a], i * 4);
+      const shown = (s.far && look.near) || (s.near && !look.near) || (look.far && FAR_HIDDEN.has(n))
+        || (s.wash && !wash) || (wash && WASHED.has(n)) ? 0 : 1;
       if (s.dash) dashes.set([s.dash[0] * look.stroke, s.dash[1] * look.stroke, 1, shown], i * 4);
       else dashes.set([0, 0, 0, shown], i * 4);
     });
@@ -425,6 +443,15 @@ export class GLLines {
     gl.bindTexture(gl.TEXTURE_2D, this.itemTex);
     gl.uniform1i(u.items, 0);
     gl.bindVertexArray(this.vao);
+    // the washes first, blending to the most of them, so where two
+    // overlap (at a bend, a junction) the paint is no thicker
+    if (wash) {
+      gl.blendEquation(gl.MAX);
+      gl.uniform1i(u.washPass, 1);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.count);
+      gl.blendEquation(gl.FUNC_ADD);
+    }
+    gl.uniform1i(u.washPass, 0);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.count);
     gl.bindVertexArray(null);
   }

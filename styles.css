@@ -1950,13 +1950,14 @@ html:is(.wc, .tone) #ui::before {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0045' numOctaves='4' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.55 0 0 0 0 0.45 0 0 0 0 0.3 0 0 0 0.22 -0.06'/%3E%3C/filter%3E%3Crect width='640' height='640' filter='url(%23m)'/%3E%3C/svg%3E");
 }
 html.wc .layer-objects :is(polygon, circle, .filled) {
-  stroke: color-mix(in srgb, var(--main) 40%, transparent);
-  stroke-width: calc(var(--pen-2) * var(--stroke, 1));
+  stroke: color-mix(in srgb, var(--main) 22%, transparent);
+  stroke-width: calc(var(--pen-3) * var(--stroke, 1));
 }
+/* (the edge no pen line: a wider, faint darkening where the wash dried) */
 html.wc .layer-objects .filled:is(.ww, .wp, .wt) {
   fill: var(--paint, #ece4d4);
-  stroke: color-mix(in srgb, color-mix(in srgb, var(--paint, #ece4d4) 62%, #3a2a24) 55%, transparent);
-  stroke-width: calc(var(--pen-3) * var(--stroke, 1));
+  stroke: color-mix(in srgb, color-mix(in srgb, var(--paint, #ece4d4) 62%, #3a2a24) 30%, transparent);
+  stroke-width: calc(var(--pen-5) * var(--stroke, 1));
 }
 html.wc .ww.v0 { --paint: #f1ebdf; }
 html.wc .ww.v1 { --paint: #f0e0c0; }
@@ -2005,14 +2006,15 @@ html.wc .crown.t4 { --paint: #b4b64c; }
 html.wc .crown.spruce.t0, html.wc .crown.spruce.t2 { --paint: #4f6d3d; }
 html.wc .crown.spruce.t1, html.wc .crown.spruce.t4 { --paint: #627d47; }
 html.wc .crown.spruce.t3 { --paint: #a0582f; }
-html.wc .glyph.crown-line { stroke: color-mix(in srgb, #3e4a26 45%, transparent); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+/* (no outline round a crown in the painted schemes: its colour is its edge) */
+html:is(.wc, .painted) .glyph.crown-line { display: none; }
 html.wc .glyph.leaf { stroke: color-mix(in srgb, #fff6dc 55%, transparent); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 html.wc .glyph:is(.trunk, .limb) { stroke: #7b5636; }
 html.wc .glyph.twig, html.wc .glyph.tree-foot { stroke: color-mix(in srgb, #7a8a45 70%, transparent); }
 html.wc .layer-forest .filled { fill: #6f8b3d; }
 html.wc .layer-forest .forest { fill: color-mix(in srgb, #6f8b3d 75%, var(--bg)); }
 html.wc .layer-forest .forest-band { display: none; }
-html.wc .layer-forest .forest-edge { stroke: color-mix(in srgb, #3e4a26 40%, transparent); }
+html:is(.wc, .painted) .layer-forest .forest-edge { display: none; }
 /* grass and flowers: green tufts, ochre dabs */
 html.wc .layer-meadow path { stroke: #93a35a; }
 html.wc .layer-meadow .ink { fill: #d6a043; stroke: #d6a043; }
@@ -2085,8 +2087,6 @@ html.tone.painted .layer-objects .ln { stroke: color-mix(in srgb, var(--main) 65
 /* windows: dark openings without frames */
 html.tone.painted .layer-objects .pane { fill: var(--main); stroke: none; }
 html.tone.painted .layer-objects .pane.bar { display: none; }
-/* trees: their outline a darker green, no line round the crown's fill */
-html.tone.painted .glyph.crown-line { stroke: color-mix(in srgb, var(--green) 55%, var(--main)); }
 /* the brush, in the tone schemes – Pencil and the Painted ones –
    (gl/objects.js, --fill-hatch 10–15: its direction in sixths of a half
    turn on screen): down the walls, down each roof's slope (sa0–5,
