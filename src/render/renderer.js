@@ -998,8 +998,8 @@ export class Renderer {
 
   // The watercolour scheme (html.wc) and the tone schemes (html.tone): the
   // water painted in under its lines – a lake filled turquoise inside its shore on a ring of green
-  // bank, a river a turquoise wash along its course on green as wide as
-  // its banks are apart where it is narrowest (styles.css .pond, .river-wash).
+  // bank, a river a turquoise wash along its course as wide as its banks
+  // are apart where it is narrowest (styles.css .pond, .river-wash).
   washWater(shore) {
     if (!/\b(wc|tone)\b/.test(document.documentElement.className)) return '';
     let out = '';
@@ -1009,16 +1009,12 @@ export class Renderer {
     }
     const [ax, ay] = this.camera.project(0, 0, 0), [bx, by] = this.camera.project(1, 0, 0);
     const unit = Math.hypot(bx - ax, by - ay);
-    // every river's bank before any river's water, so a tributary's bank
-    // stops at the river it runs into instead of lying across its water
-    let banks = '', water = '';
     for (const r of this.world.terrain.rivers) {
       const d = this.pathData([r.points], true);
       const across = 2 * ((r.width ?? 0.35) + (r.vary ?? 0.8) * 0.3) * unit;
-      banks += `<path class="river-bank-wash" d="${d}" style="stroke-width:${r2(across * 1.7)}px"/>`;
-      water += `<path class="river-wash" d="${d}" style="stroke-width:${r2(across)}px"/>`;
+      out += `<path class="river-wash" d="${d}" style="stroke-width:${r2(across)}px"/>`;
     }
-    return out + banks + water;
+    return out;
   }
 
   // The water's lines in world units, { shore, bank, wave }, traced once
