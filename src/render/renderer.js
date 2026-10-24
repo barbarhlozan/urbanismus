@@ -69,6 +69,7 @@ import { ParticleCanvas } from './particles.js';
 import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
 import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
+import { drawRuin } from '../../structures/ruin.js';
 import { YARDS } from '../../structures/yards.js';
 import { drawPlot, boundaryChance, wander, SPREAD, SPREAD_DENSITY } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
@@ -2318,7 +2319,7 @@ export class Renderer {
         orderChanged = true;
       }
       const s = key[0] === 's' && world.structures.get(id);
-      const sig = s && `${s.type}|${s.seed}`;
+      const sig = s && `${s.type}|${s.seed}|${s.ruin ? 'ruin' : ''}`; // (burning down: the house rubbed out, the ruin drawn)
       if (sig !== entry.sig && entry.sig && animate && swaps < DRAW.cap && !this.born.has(key) && entry.shown !== false) {
         // the old drawing is erased as a ghost, the new one drawn after it
         swaps++;
@@ -3010,7 +3011,8 @@ export class Renderer {
     painter.join = joinSides(world, s);
     painter.setTilt(tiltOf(def, s, painter.join, world));
     painter.roadGap = world.nodesOf(s).length === 1 ? roadFront(world, s).gap : 1; // see busStop.js
-    def.draw(painter, s);
+    if (s.ruin) drawRuin(painter, def); // burnt down (World.burnStructure)
+    else def.draw(painter, s);
     const core = painter.bounds;
 
     // Front yard between the building and its road.

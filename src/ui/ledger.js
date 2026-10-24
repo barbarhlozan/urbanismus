@@ -13,7 +13,7 @@
 // To do without that, make settlementOf return null: the heading is then
 // the town's name alone.
 
-import { STRUCTURE_TYPES, matches, categoryOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES, matches, categoryOf, statsOf } from '../../structures/index.js';
 import { sketchLine } from '../render/sketch.js';
 import { t } from '../core/text.js';
 
@@ -90,10 +90,10 @@ export function tally(world) {
   const has = new Map();
   for (const s of world.structures.values()) {
     const def = STRUCTURE_TYPES[s.type];
-    if (!def) continue;
+    if (!def || s.ruin) continue; // (a burnt house is no home)
     if (world.isServed(s)) {
-      residents += def.stats?.residents ?? 0;
-      jobs += def.stats?.jobs ?? 0;
+      residents += statsOf(s).residents ?? 0;
+      jobs += statsOf(s).jobs ?? 0;
     }
     homes += HOMES[s.type] ?? 0;
     const kind = kindOf.get(s.type);

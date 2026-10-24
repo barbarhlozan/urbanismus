@@ -68,7 +68,7 @@
 //
 // The renderer only reads visible() and x / y / trip.mode.
 
-import { STRUCTURE_TYPES, matches, codeOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES, matches, codeOf, statsOf } from '../../structures/index.js';
 import { compass } from '../ui/annotations.js';
 import { findPath } from '../roads/pathfinding.js';
 import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, roadway } from '../roads/geometry.js';
@@ -120,9 +120,9 @@ export class AgentSystem {
   // Match the number of agents (and trucks) to the structure's type.
   sync(s) {
     const def = STRUCTURE_TYPES[s.type];
-    const count = def ? def.agents ?? 1 : 0;
+    const count = def && !s.ruin ? def.agents ?? 1 : 0; // (nobody in a ruin)
     const trucks = this.config.trucks;
-    const fleet = def && can('trucks') && trucks.homes.some((n) => matches(def, n)) ? def.trucks ?? 1 : 0;
+    const fleet = def && !s.ruin && can('trucks') && trucks.homes.some((n) => matches(def, n)) ? def.trucks ?? 1 : 0;
     this.syncCount(s, '', count, () => this.homeDwell(s) * Math.random());
     this.syncCount(s, 't', fleet, () => trucks.firstTrip * Math.random(), { truck: true });
   }
@@ -190,7 +190,7 @@ export class AgentSystem {
     const workplaces = [];
     for (const s of this.world.structures.values()) {
       if (!this.world.isServed(s)) continue;
-      const stats = STRUCTURE_TYPES[s.type].stats ?? {};
+      const stats = statsOf(s);
       residents += stats.residents ?? 0;
       jobs += stats.jobs ?? 0;
       if (stats.jobs) workplaces.push(s);
@@ -886,7 +886,7 @@ export class AgentSystem {
     return false;
   }
 
-  // Structures matching any of `names` (ids or tags), excluding home.
+  // Structures matching any of `names` (ids or tags), excluding home (and ruins).
   // A fresh list (callers take from it) of the other structures matching
   // `names`. Every trip out asks, so the matches are kept per set of names
   // until a structure is built, removed or converted (world.structureVersion).
@@ -903,7 +903,7 @@ export class AgentSystem {
       all = [];
       for (const s of this.world.structures.values()) {
         const def = STRUCTURE_TYPES[s.type];
-        if (names.some((n) => matches(def, n))) all.push(s);
+        if (!s.ruin && names.some((n) => matches(def, n))) all.push(s);
       }
       this.matched.set(key, all);
     }
@@ -975,7 +975,7 @@ export class AgentSystem {
       case 'errand':
         return this.goTo(a, home, this.config.activities.errands, 'errand');
       case 'work': {
-        const lives = STRUCTURE_TYPES[home.type].stats?.residents;
+        const lives = statsOf(home).residents;
         if (lives && Math.random() < this.outboundShare()) { // not enough jobs in town
           const leave = this.planLeave(home, 'goes to work outside', true);
           if (leave) return this.begin(a, leave.plan, leave.dest);
@@ -1009,6 +1009,7 @@ export class AgentSystem {
     let sent = 0;
     const missed = [];
     for (const home of homes) {
+      if (dest.ruin) { missed.push({ home, why: 'burnt down' }); continue; }
       if (home.id === dest.id) { missed.push({ home, why: 'already there' }); continue; }
       if (!this.planCommute(home, dest)) { missed.push({ home, why: 'no way there' }); continue; }
       let n = 0;

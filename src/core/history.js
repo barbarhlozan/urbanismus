@@ -261,11 +261,13 @@ export class History {
           if (s) { w.structures.delete(c.id); removed.push(s); }
         } else if (s) {
           // changed in place, so whoever holds it sees the change (the cars
-          // parked there stay)
-          const parked = s.data.parked;
+          // parked there stay; and a building the story burnt since stays
+          // a ruin)
+          const parked = s.data.parked, ruin = s.ruin;
           for (const k of Object.keys(s)) delete s[k];
           Object.assign(s, to);
           if (parked !== undefined) s.data.parked = parked;
+          if (ruin) s.ruin = true;
           w._insertStructure(s);
           changed.push(s);
         } else {

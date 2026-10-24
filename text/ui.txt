@@ -538,6 +538,11 @@ inspect.no.full
   cs: Číslo popisné {no}
   en: House number {no}
 
+# on the card of a building that burnt down (World.burnStructure)
+inspect.ruin
+  cs: Spáleniště
+  en: Burnt ruin
+
 inspect.needs.any
   cs: Potřebuje silnici nebo pěšinu
   en: Needs a road or footpath

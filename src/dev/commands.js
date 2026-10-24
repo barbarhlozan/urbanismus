@@ -157,10 +157,20 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
     return sent;
   }
 
+  // House `no` burns down, as the story's `burn` does: the town's doing,
+  // not a step ⌘Z takes back (demolish the ruin to clear it).
+  function burn(no) {
+    const s = world.structureByNo(no);
+    if (!s) return house(no); // (says why)
+    if (s.ruin) return fail(`č. p. ${no}`, 'burnt down already');
+    return world.history.aside(() => world.burnStructure(s.id));
+  }
+
   const cmd = {
     spawn,
     house,
     send,
+    burn,
     build,
     road,
     tree,
@@ -239,6 +249,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         'cmd.tree(x, y)',
         'cmd.house(4)              the building č. p. 4; cmd.house() every one',
         'cmd.send([1, 2, 3], 7)    the people of č. p. 1, 2, 3 go to č. p. 7, stay and come home',
+        'cmd.burn(4)               č. p. 4 burns down (a ruin until demolished)',
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',

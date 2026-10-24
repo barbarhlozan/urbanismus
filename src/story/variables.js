@@ -6,7 +6,8 @@
 //                              residential (every home), business, park,
 //                              church, heritage…
 //   residents, jobs            people living and working in town (as in the panel)
-//   buildings                  everything built
+//   buildings                  everything built (ruins too)
+//   ruins                      buildings burnt down and not cleared away
 //   roads, lanes, streets, footpaths, railways   how many dots long
 //   bridges                    crossings over water (any network)
 //   trees                      trees and other nature on the map
@@ -14,7 +15,7 @@
 //   minutes                    how long the town has been running (game time)
 //   photos                     photographs taken
 
-import { STRUCTURE_TYPES } from '../../structures/index.js';
+import { STRUCTURE_TYPES, statsOf } from '../../structures/index.js';
 import { normalName } from './script.js';
 
 export function townVariables(world, { agents = null, trains = null, photos = 0 } = {}) {
@@ -29,10 +30,12 @@ export function townVariables(world, { agents = null, trains = null, photos = 0 
   }
   for (const name of ['residents', 'jobs', 'walking', 'cycling', 'driving', 'trains', 'buses']) add(name, 0);
 
+  add('ruins', 0);
   for (const s of world.structures.values()) {
     const def = STRUCTURE_TYPES[s.type];
+    if (s.ruin) { add('ruins'); continue; } // (a burnt house is no house)
     for (const name of [def.id, ...(def.tags ?? [])]) add(name);
-    if (world.isServed(s)) for (const [k, n] of Object.entries(def.stats ?? {})) add(k, n);
+    if (world.isServed(s)) for (const [k, n] of Object.entries(statsOf(s))) add(k, n);
   }
   v.set('buildings', world.structures.size);
 

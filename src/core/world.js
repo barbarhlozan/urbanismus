@@ -50,7 +50,7 @@ export class World {
     this.nextNo = 1; // the next house number (numberStructure); a number gone with its building isn't given again
     this.time = 0; // simulated seconds the town has been running (the clock, kept in the save)
     this.weather = { kind: 'fair', from: 'fair', since: 0, until: 0, n: 0 }; // the weather now, the one before, since and until when (world.time), and how many changes so far (src/sim/weather.js)
-    this.story = { seen: [], vars: {}, unlocks: [] }; // what the story has told and unlocked (src/story/)
+    this.story = { seen: [], vars: {}, unlocks: [], places: {} }; // what the story has told, set, unlocked and picked (src/story/)
     this.chronicle = { entries: [], marks: [] }; // the town's chronicle (src/sim/chronicle.js)
     this.history = new History(this); // undo and redo of the player's changes; every change below calls history.touch() first
 
@@ -880,6 +880,21 @@ export class World {
     return null;
   }
 
+  // A building burns down: it stands as a ruin (s.ruin) on its ground,
+  // its house number with it, until it's demolished. Nobody lives or
+  // works there and it counts for nothing (statsOf), nobody goes there,
+  // and it's drawn as burnt-out walls (structures/ruin.js). The story
+  // burns things (`burn`, src/story/).
+  burnStructure(id) {
+    const s = this.structures.get(id);
+    if (!s || s.ruin || !isNumbered(STRUCTURE_TYPES[s.type])) return false;
+    this.history.touch();
+    s.ruin = true;
+    this.structureVersion = (this.structureVersion ?? 0) + 1;
+    this.events.emit('structure:changed', s);
+    return true;
+  }
+
   removeStructure(id) {
     const s = this.structures.get(id);
     if (!s) return false;
@@ -1263,7 +1278,7 @@ export class World {
     for (const s of [...world.structures.values()].sort((a, b) => a.id - b.id)) world.numberStructure(s);
     world.time = data.time ?? 0;
     if (data.weather) world.weather = { kind: data.weather.kind, from: data.weather.from, since: data.weather.since, until: data.weather.until, n: data.weather.n ?? 0 }; // (older saves start fair; without `from` or `since`, WeatherSystem works them out)
-    world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [] };
+    world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [], places: data.story?.places ?? {} };
     const marks = data.chronicle?.marks ?? [];
     world.chronicle = { entries: data.chronicle?.entries ?? [], marks: (data.version ?? 1) < 4 ? upgradeMarks(marks) : marks };
     // how many of the entries have been read, and the book's tab last open

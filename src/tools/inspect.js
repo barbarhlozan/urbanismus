@@ -101,9 +101,15 @@ function structureMenu({ world }, s) {
 
   // under its name its house number, how many live there and a warning if
   // nothing reaches it; then a row of drawings
-  const people = residents(def);
+  const people = s.ruin ? '' : residents(def);
   const items = [];
   if (s.no != null) items.push({ block: plate(s.no) });
+  // burnt down: what it is now, and only taking it down
+  if (s.ruin) {
+    items.push({ block: `<span class="bi-kind">${esc(t('inspect.ruin'))}</span>` });
+    items.push(demolish(world, s));
+    return { title: nameOf(def), items };
+  }
   if (people) items.push({ block: people });
   if (!world.isServed(s)) items.push({ block: warning(def) });
 
@@ -139,11 +145,15 @@ function structureMenu({ world }, s) {
   }
 
   // …and taking it down (⌘Z puts it back)
-  items.push({
+  items.push(demolish(world, s));
+
+  return { title: nameOf(def), items };
+}
+
+function demolish(world, s) {
+  return {
     icon: iconSvg('erase', 'class="icon" aria-hidden="true"', ERASE, '0 0 32 32'),
     label: t('inspect.demolish'),
     action: () => world.removeStructure(s.id),
-  });
-
-  return { title: nameOf(def), items };
+  };
 }

@@ -134,6 +134,12 @@ export function isNumbered(def) {
   return !!def && !def.site && def.numbered !== false;
 }
 
+// The numbers a structure counts for (residents, jobs…, def.stats): none
+// for a ruin (World.burnStructure).
+export function statsOf(s) {
+  return s.ruin ? {} : STRUCTURE_TYPES[s.type]?.stats ?? {};
+}
+
 // Short technical code for annotations, e.g. "R-012".
 export function codeOf(s) {
   const def = STRUCTURE_TYPES[s.type];
