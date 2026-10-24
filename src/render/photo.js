@@ -182,8 +182,9 @@ export function takePhoto(renderer, shot) {
     renderer.camera = base;
   }
   // railways as the track itself, as on the map close up (not its symbol);
-  // items of several lines (sleepers) one by one
-  const SYMBOL = new Set(['rail', 'rail-dash', 'rail-exit']);
+  // items of several lines (sleepers) one by one; not the painted schemes'
+  // washes along the roads' and paths' middles (the map's only)
+  const SYMBOL = new Set(['rail', 'rail-dash', 'rail-exit', 'road-wash', 'path-wash']);
   items = items.filter((it) => !SYMBOL.has(it.cls)).flatMap((it) => (it.runs ? it.runs.map((pts) => ({ ...it, pts })) : [it]));
   // up on a bridge: each piece sorted on its own with the decks (below),
   // so the deck hides what is under it and not what is on it

@@ -1210,8 +1210,9 @@ export class Renderer {
   // for each piece, a / b the dots it runs between, for the pen's order.
   inkItems(sway) {
     const items = [];
-    // (on the ground in world space: renderGlLines)
-    const lines = (ls) => ls.map((l) => this.worldLine(l, sway, true));
+    // (on the ground in world space: renderGlLines – but through a photo's
+    // camera, a perspective one, projected into the picture: photo.js)
+    const lines = this.camera.ahead ? (ls) => this.screenLines(ls, true, sway, true) : (ls) => ls.map((l) => this.worldLine(l, sway, true));
     const add = (key, cls, line, a, b) => {
       for (const pts of lines([line])) if (pts.length > 1) items.push({ key, cls, pts, a, b });
     };
