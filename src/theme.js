@@ -18,7 +18,9 @@
 // five): they are then mixed from detail and bg (withAll), so it looks as
 // it did. A scheme with `tone` fills faces by what they are (Painter._wash
 // tags them) with shade and green, flat – or with `hatch`, in pencil
-// strokes; one with `wash` is the watercolour experiment.
+// strokes; with `painted` as well, without outlines, each face a tone of
+// shade by what it is; `clean`: drawn without the sketch's overshoots,
+// wobble and tilt (Painter); one with `wash` is the watercolour experiment.
 //
 // The Colors menu (ui/colorMenu.js) picks one of SCHEMES or the custom
 // scheme, whose three colors the player sets; both the choice and the custom
@@ -38,6 +40,11 @@ export const SCHEMES = [
   // away from the light and the roofs in one dark tone, the trees another
   { name: 'Pencil', bg: '#f3f0e8', main: '#2c2b29', detail: '#8f8b83', shade: '#64615b', green: '#9ba68c', tone: true },
   { name: 'Pencil hatched', bg: '#f3f0e8', main: '#2c2b29', detail: '#8f8b83', shade: '#3f3d39', green: '#7f8c6c', tone: true, hatch: true },
+  // painted in gouache, no outlines: every house in three tones of the one
+  // shade (styles.css html.painted), drawn clean – olive and khaki on white,
+  // or slate blue on pink paper
+  { name: 'Painted olive', bg: '#efebdd', main: '#2b2a22', detail: '#8d8a74', shade: '#3c4232', green: '#7b8255', tone: true, painted: true, clean: true },
+  { name: 'Painted blue', bg: '#e8d5c7', main: '#1e2530', detail: '#9b8c85', shade: '#2b3341', green: '#6c7a75', tone: true, painted: true, clean: true },
 ];
 
 export const COLOR_NAMES = ['bg', 'main', 'detail', 'shade', 'green'];
@@ -92,10 +99,12 @@ export function applyTheme(choice = load(SCHEME_KEY) ?? 0, root = document.docum
   schemeChoice = choice;
   const scheme = withAll(choice === 'custom' ? CUSTOM : SCHEMES[choice]);
   Object.assign(THEME.palette, scheme);
-  for (const flag of ['wash', 'tone', 'hatch']) THEME.palette[flag] = !!scheme[flag];
+  for (const flag of ['wash', 'tone', 'hatch', 'painted', 'clean']) THEME.palette[flag] = !!scheme[flag];
   root.classList.toggle('wc', THEME.palette.wash);
   root.classList.toggle('tone', THEME.palette.tone);
   root.classList.toggle('tone-hatch', THEME.palette.tone && THEME.palette.hatch);
+  root.classList.toggle('painted', THEME.palette.painted);
+  root.classList.toggle('clean', THEME.palette.clean);
   for (const name of COLOR_NAMES) root.style.setProperty(`--${name}`, scheme[name]);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', scheme.bg);
   save(SCHEME_KEY, String(choice));

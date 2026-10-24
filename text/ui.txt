@@ -231,6 +231,14 @@ scheme.pencil-hatched
   cs: Tužka, šrafy
   en: Pencil, hatched
 
+scheme.painted-olive
+  cs: Malba, olivová
+  en: Painted olive
+
+scheme.painted-blue
+  cs: Malba, modrá
+  en: Painted blue
+
 scheme.countryside
   cs: Venkov
   en: Countryside

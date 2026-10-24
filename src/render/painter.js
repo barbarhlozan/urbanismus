@@ -93,6 +93,10 @@ const r2 = (n) => Math.round(n * 100) / 100;
 const washOn = () => typeof document !== 'undefined' && /\b(wc|tone)\b/.test(document.documentElement.className);
 // …and the watercolour one: no overshoots at corners (a wash has no pen line to run on)
 const wcOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('wc');
+// A scheme drawn clean (theme.js `clean`, the Painted ones): no overshoots,
+// a fifth of the wobble, houses all but square to the grid.
+const cleanOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('clean');
+const CLEAN = { wobble: 0.2, tilt: 0.15 };
 // Photos (a perspective camera): roof hatching at most this many px apart
 // on the picture; windows are drawn open, as frames (Painter._window), with
 // their glazing bars from this many px wide
@@ -309,6 +313,7 @@ export class Painter {
   // seen from above) on top of its quarter-turn rotation – houses standing a
   // little askew (tiltOf in structures/index.js). Call before drawing.
   setTilt(angle) {
+    if (cleanOn()) angle *= CLEAN.tilt;
     this.tilt = angle;
     this._tc = Math.cos(angle);
     this._ts = Math.sin(angle);
@@ -368,7 +373,7 @@ export class Painter {
     // the overshoots go in the same path: open strokes have no area, so the
     // fill ignores them, and it saves an element per face
     let ticks = '';
-    const os = wcOn() ? 0 : LOOK.overshoot * this.camera.tile / 32;
+    const os = wcOn() || cleanOn() ? 0 : LOOK.overshoot * this.camera.tile / 32;
     if (closed && os && size > os * 5) {
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1], b = pts[i];
@@ -408,7 +413,7 @@ export class Painter {
   }
 
   _sketchScreen(scr, closed, wobble) {
-    const amp = LOOK.sketch * this.camera.tile / 32 * wobble;
+    const amp = LOOK.sketch * this.camera.tile / 32 * wobble * (cleanOn() ? CLEAN.wobble : 1);
     // small shapes (windows) wobble less than walls and roofs
     let size = 0;
     for (let i = 1; i < scr.length; i++) size = Math.max(size, Math.hypot(scr[i][0] - scr[i - 1][0], scr[i][1] - scr[i - 1][1]));

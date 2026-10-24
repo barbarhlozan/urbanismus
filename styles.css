@@ -1939,7 +1939,7 @@ svg.photo .photo-shore { fill: none; stroke: var(--main); stroke-width: calc(var
 /* the paper over everything on the map (under the UI: #ui's own panels
    stack above it): its tooth, and the larger mottling of a sheet that took
    the water unevenly – multiplied, so the paint shows through */
-html.wc #ui::before {
+html:is(.wc, .painted) #ui::before {
   content: '';
   position: fixed;
   inset: 0;
@@ -2058,3 +2058,35 @@ html.tone .layer-meadow path { stroke: var(--green); }
 /* water: paper inside the shore, on a ring of green bank */
 html.tone .pond { fill: var(--bg); stroke: none; }
 html.tone .river-wash { fill: none; stroke: var(--bg); stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Painted (the tone schemes with `painted`, src/theme.js) ----------
+   As a gouache of a village: no outlines – two tones meeting are the edge
+   –, every house in the same three tones of the one --shade, in the same
+   order: the lit wall palest, the wall from the light mid, the roof
+   darkest (its slope from the light darker still). The paint varies a
+   house to the next only a little (v0–2, r0–3), and what walls are built
+   of (logs, boards, plinths, trims) is left out: the houses differ by
+   their shape. Drawn clean (html.clean, Painter): no overshoots, little
+   wobble, square to the grid. (html.tone.painted: over the tone rules.) */
+html.tone.painted {
+  --lit: color-mix(in srgb, var(--shade) 16%, white);
+  --side: color-mix(in srgb, var(--shade) 55%, var(--bg));
+  --roof: color-mix(in srgb, var(--shade) 84%, var(--bg));
+}
+html.tone.painted .layer-objects .filled:is(.ww, .wp, .wt, .pool) { stroke: none; }
+html.tone.painted .layer-objects .filled.ww { fill: var(--lit); }
+html.tone.painted .layer-objects .filled.ww.v1 { fill: color-mix(in srgb, var(--lit) 92%, var(--bg)); }
+html.tone.painted .layer-objects .filled.ww.v2 { fill: color-mix(in srgb, var(--lit) 94%, var(--shade)); }
+html.tone.painted .layer-objects .filled:is(.ww.wd, .ww.wd.v1, .ww.wd.v2) { fill: var(--side); }
+html.tone.painted .layer-objects .filled.wp { fill: var(--roof); }
+html.tone.painted .layer-objects .filled.wp:is(.r1, .r3) { fill: color-mix(in srgb, var(--roof) 92%, var(--bg)); }
+html.tone.painted .layer-objects .filled:is(.wp.wd, .wp.wd.r1, .wp.wd.r3) { fill: var(--shade); }
+html.tone.painted .layer-objects .filled.wt { fill: color-mix(in srgb, var(--shade) 66%, var(--bg)); }
+html.tone.painted .layer-objects :is(.foot, .wlog, .wplinth, .wboard, .wtrim) { display: none; }
+/* what is still drawn in line, softer: windows' and doors' edges, fences */
+html.tone.painted .layer-objects .ln { stroke: color-mix(in srgb, var(--main) 65%, transparent); }
+/* windows: dark openings without frames */
+html.tone.painted .layer-objects .pane { fill: var(--main); stroke: none; }
+html.tone.painted .layer-objects .pane.bar { display: none; }
+/* trees: their outline a darker green, no line round the crown's fill */
+html.tone.painted .glyph.crown-line { stroke: color-mix(in srgb, var(--green) 55%, var(--main)); }
