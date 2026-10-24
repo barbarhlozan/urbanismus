@@ -2846,8 +2846,6 @@ export class Renderer {
       iso: [(ux - uy) * COS30 * T, (ux + uy) * 0.5 * T, (vx - vy) * COS30 * T, (vx + vy) * 0.5 * T],
     };
     this.glShadows.draw({ ...look, hold: (this.shadesOff && !this.shadesComing) || this.turning, shown: this.shadesShown ?? 1, sun: casting });
-    // (the tone schemes hatch the faces in shade along the same angle: gl/objects.js)
-    this.glObjects?.setShade(THEME.palette.hatch && SUN.hatch ? SUN.hatch.angle : null);
   }
 
   hideShadows() {

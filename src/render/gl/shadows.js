@@ -196,9 +196,9 @@ export class GLShadows {
     const pen = (this.pen ??= parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pen-2')) || 0.7);
     const q = 2 ** (Math.round(Math.log2(dpr * view.zoom) * 4) / 4);
     // (watercolour: a cool grey wash, see Hatching.pieces; the tone schemes
-    // their shade, flat as a wash or hatched)
+    // a wash of their shade)
     const { palette } = THEME;
-    const wash = palette.wash || (palette.tone && !palette.hatch);
+    const wash = palette.wash || palette.tone;
     const colour = palette.wash ? '#6f6a8c' : palette.tone ? palette.shade : palette.detail;
     const key = `${view.zoom}|${view.panX}|${view.panY}|${view.ox}|${view.oy}|${w}|${hgt}|${tier}|${JSON.stringify(hatch)}|${px}|${stroke}|${q}|${colour}|${shown}|${sun?.cast}|${sun?.iso}`;
     if (!changed && key === this.drawnKey) return;

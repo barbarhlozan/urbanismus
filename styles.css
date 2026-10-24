@@ -1939,7 +1939,7 @@ svg.photo .photo-shore { fill: none; stroke: var(--main); stroke-width: calc(var
 /* the paper over everything on the map (under the UI: #ui's own panels
    stack above it): its tooth, and the larger mottling of a sheet that took
    the water unevenly – multiplied, so the paint shows through */
-html:is(.wc, .painted) #ui::before {
+html:is(.wc, .tone) #ui::before {
   content: '';
   position: fixed;
   inset: 0;
@@ -2035,13 +2035,10 @@ html.wc .layer-objects :is(.heart, .cross) { stroke: #3a2a20; stroke-width: calc
    the roofs in --shade – the slope towards the light a lighter wash of it
    –, the shadows on the ground in it too (gl/shadows.js); trees, shrubs
    and the grass at their feet in --green. Painter._wash tags the faces (as
-   for the watercolour above). html.tone-hatch: the shade in pencil strokes
-   instead of flat (--fill-hatch, gl/objects.js), the strokes the shadows
-   on the ground are hatched with. */
+   for the watercolour above), and laid on in brush strokes along each
+   face (--fill-hatch 10–15 below, gl/objects.js). */
 html.tone .layer-objects .filled:is(.ww.wd, .wp.wd) { fill: var(--shade); }
 html.tone .layer-objects .filled.wp:not(.wd) { fill: color-mix(in srgb, var(--shade) 55%, var(--bg)); }
-html.tone-hatch .layer-objects .filled:is(.ww.wd, .wp) { --fill-hatch: 1; }
-html.tone-hatch .layer-objects .filled.wp:not(.wd) { fill: color-mix(in srgb, var(--shade) 70%, var(--bg)); }
 /* (the fills stand in for the sketch's hatching on walls and roofs) */
 html.tone .layer-objects :is(.wall-shade, .roof-hatch) { display: none; }
 /* what walls are built of: logs and a plinth in a light wash of the shade */
@@ -2090,18 +2087,17 @@ html.tone.painted .layer-objects .pane { fill: var(--main); stroke: none; }
 html.tone.painted .layer-objects .pane.bar { display: none; }
 /* trees: their outline a darker green, no line round the crown's fill */
 html.tone.painted .glyph.crown-line { stroke: color-mix(in srgb, var(--green) 55%, var(--main)); }
-/* the brush (gl/objects.js, --fill-hatch 10–15: its direction in sixths
-   of a half turn on screen): down the walls, down each roof's slope
-   (sa0–5, Painter._slopeOnScreen), across a flat top */
-html.tone.painted .layer-objects .filled.ww { --fill-hatch: 13; }
-html.tone.painted .layer-objects .filled.wt { --fill-hatch: 10; }
-html.tone.painted .layer-objects .filled.wp.sa0 { --fill-hatch: 10; }
-html.tone.painted .layer-objects .filled.wp.sa1 { --fill-hatch: 11; }
-html.tone.painted .layer-objects .filled.wp.sa2 { --fill-hatch: 12; }
-html.tone.painted .layer-objects .filled.wp.sa3 { --fill-hatch: 13; }
-html.tone.painted .layer-objects .filled.wp.sa4 { --fill-hatch: 14; }
-html.tone.painted .layer-objects .filled.wp.sa5 { --fill-hatch: 15; }
+/* the brush, in the tone schemes – Pencil and the Painted ones –
+   (gl/objects.js, --fill-hatch 10–15: its direction in sixths of a half
+   turn on screen): down the walls, down each roof's slope (sa0–5,
+   Painter._slopeOnScreen), across a flat top */
+html.tone .layer-objects .filled.ww { --fill-hatch: 13; }
+html.tone .layer-objects .filled.wt { --fill-hatch: 10; }
+html.tone .layer-objects .filled.wp.sa0 { --fill-hatch: 10; }
+html.tone .layer-objects .filled.wp.sa1 { --fill-hatch: 11; }
+html.tone .layer-objects .filled.wp.sa2 { --fill-hatch: 12; }
+html.tone .layer-objects .filled.wp.sa3 { --fill-hatch: 13; }
+html.tone .layer-objects .filled.wp.sa4 { --fill-hatch: 14; }
+html.tone .layer-objects .filled.wp.sa5 { --fill-hatch: 15; }
 /* windows as small dark arches (Painter._arch) */
 html.tone.painted .layer-objects .filled.arch { fill: var(--main); stroke: none; }
-/* shadows soft at the edge, as if laid with a wet brush */
-html.painted .shade-canvas { filter: blur(2.5px); }

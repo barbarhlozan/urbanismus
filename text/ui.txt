@@ -227,10 +227,6 @@ scheme.pencil
   cs: Tužka
   en: Pencil
 
-scheme.pencil-hatched
-  cs: Tužka, šrafy
-  en: Pencil, hatched
-
 scheme.painted-olive
   cs: Malba, olivová
   en: Painted olive
