@@ -2018,7 +2018,6 @@ html.wc .layer-meadow path { stroke: #93a35a; }
 html.wc .layer-meadow .ink { fill: #d6a043; stroke: #d6a043; }
 /* water (Renderer.washWater): a turquoise wash on a ring of green bank;
    the shore drawn in a deeper teal, the ripples lifted out pale */
-html.wc .pond-bank { fill: #a3b86a; stroke: #a3b86a; stroke-width: 36px; stroke-linejoin: round; opacity: 0.75; }
 html.wc .pond { fill: #8ccbc6; stroke: color-mix(in srgb, #4f9a96 45%, transparent); stroke-width: 5px; stroke-linejoin: round; }
 html.wc .river-wash { fill: none; stroke: #8ccbc6; stroke-linecap: round; stroke-linejoin: round; }
 html.wc .shore { stroke: color-mix(in srgb, #3f7f7c 75%, transparent); }
@@ -2057,6 +2056,5 @@ html.tone .layer-forest .forest { fill: color-mix(in srgb, var(--green) 50%, var
 html.tone .layer-forest .forest-band { display: none; }
 html.tone .layer-meadow path { stroke: var(--green); }
 /* water: paper inside the shore, on a ring of green bank */
-html.tone .pond-bank { fill: color-mix(in srgb, var(--green) 50%, var(--bg)); stroke: color-mix(in srgb, var(--green) 50%, var(--bg)); stroke-width: 30px; stroke-linejoin: round; }
 html.tone .pond { fill: var(--bg); stroke: none; }
 html.tone .river-wash { fill: none; stroke: var(--bg); stroke-linecap: round; stroke-linejoin: round; }

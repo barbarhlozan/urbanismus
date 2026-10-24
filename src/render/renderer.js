@@ -997,15 +997,15 @@ export class Renderer {
   }
 
   // The watercolour scheme (html.wc) and the tone schemes (html.tone): the
-  // water painted in under its lines – a lake filled turquoise inside its shore on a ring of green
-  // bank, a river a turquoise wash along its course as wide as its banks
+  // water painted in under its lines – a lake filled turquoise inside its
+  // shore, a river a turquoise wash along its course as wide as its banks
   // are apart where it is narrowest (styles.css .pond, .river-wash).
   washWater(shore) {
     if (!/\b(wc|tone)\b/.test(document.documentElement.className)) return '';
     let out = '';
     if (shore.length) {
       const d = this.pathData(shore, false);
-      out += `<path class="pond-bank" d="${d}"/><path class="pond" d="${d}"/>`;
+      out += `<path class="pond" d="${d}"/>`;
     }
     const [ax, ay] = this.camera.project(0, 0, 0), [bx, by] = this.camera.project(1, 0, 0);
     const unit = Math.hypot(bx - ax, by - ay);
