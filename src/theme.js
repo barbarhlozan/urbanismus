@@ -20,7 +20,7 @@
 // tags them) with shade and green, in brush strokes along each face; with
 // `painted` as well, without outlines, each face a tone of shade by what
 // it is; `clean`: drawn without the sketch's overshoots, most of its
-// wobble and tilt (Painter) – the loose hand suits the pen schemes only;
+// wobble and tilt (Painter) – the loose hand suits only the Blue pen;
 // one with `wash` is the watercolour experiment.
 //
 // The Colors menu (ui/colorMenu.js) picks one of SCHEMES or the custom
@@ -31,9 +31,9 @@
 
 export const SCHEMES = [
   { name: 'Blue pen', bg: '#ebe7dd', main: '#3e12b6', detail: '#9b9486' },
-  { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486' },
-  { name: 'Night', bg: '#000000', main: '#64645b', detail: '#363f46' },
-  { name: 'Countryside', bg: '#d3d0c9', main: '#ce4919', detail: '#44499a' },
+  { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486', clean: true },
+  { name: 'Night', bg: '#000000', main: '#64645b', detail: '#363f46', clean: true },
+  { name: 'Countryside', bg: '#d3d0c9', main: '#ce4919', detail: '#44499a', clean: true },
   // painted in watercolour on cream paper: the faces washed in colour by
   // what they are (html.wc in styles.css, Painter._wash), no pen round them
   { name: 'Watercolour', bg: '#f6f0e3', main: '#4b3324', detail: '#8d8a5e', wash: true, clean: true },
