@@ -19,9 +19,10 @@
 
 // Line styles: the classes the ink layers draw (styles.css), their pen
 // (css px before --stroke), colour, ends and dashes (css px before --stroke).
-// `wash`: a road's or a path's whole width laid in one soft band of colour
-// along its centre line, only in the painted schemes (look.wash: its width
-// in world units and its colour), which leave out the pen lines in WASHED.
+// `wash`: a road's or a path's whole width laid in one flat band of colour
+// along its centre line, its edge as crisp as the painted houses' and
+// shadows', only in the painted schemes (look.wash: its width in world
+// units and its colour), which leave out the pen lines in WASHED.
 const STYLES = {
   'road-wash': { colour: 'wash', width: 0, cap: 'round', wash: 'road' },
   'path-wash': { colour: 'wash', width: 0, cap: 'round', wash: 'path' },
@@ -155,9 +156,6 @@ void main() {
   // pen's width covers: exact across a straight edge, at any width – a
   // pen thinner than a pixel spreads faintly over one or two
   float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
-  // (a wash: soft at its sides, a little darker just inside them, where
-  // the paint dried at its edge)
-  if (w.y > 0.5) cover = (1.0 - smoothstep(hw * 0.6, hw, d)) * (0.8 + 0.35 * smoothstep(hw * 0.45, hw * 0.8, d));
   if (ds.z > 0.5 && mod(dashAt, ds.x + ds.y) > ds.x) discard;
   if (cover <= 0.0) discard;
   outColour = colour[styleId] * cover;
