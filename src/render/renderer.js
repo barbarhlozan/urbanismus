@@ -376,7 +376,7 @@ export class Renderer {
     // their pen's timing in ink layers (ink.js)
     this.glLines = GLLines.make(document.getElementById('map-gl'));
     this.ink = {
-      roads: new InkLayer(['road-wash', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
+      roads: new InkLayer(['road-wash', 'road-wash-exit', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
       paths: new InkLayer(['path-wash', 'footpath', 'bridge', 'bridge-post']),
       rails: new InkLayer(['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'bridge', 'bridge-post']),
       fences: new InkLayer(['fence-post', 'fence-pillar', 'fence']),
@@ -1640,6 +1640,11 @@ export class Renderer {
       for (const [n, { line }] of joins) line.forEach((pts, i) => add(`rj${n}:${i}`, 'road', pts, n, n));
       // its centre lines, for the painted schemes' wash (gl/lines.js)
       networkPolylines(layer, curve).forEach((pts, i) => add(`rw${i}`, 'road-wash', pts));
+      // …carried on off the map at its exits, fading out (as the edges' 'road-exit')
+      for (const { node, dir } of world.roadExits()) {
+        const [x, y] = layer.pos(node);
+        add(`rwx${node}`, 'road-wash-exit', [[x, y], [x + dir[0] * 1.9, y + dir[1] * 1.9]], node, node);
+      }
 
       // kerbs, rounding the corners, open where a footpath comes in
       const paths = pathIndex(world, this.config);

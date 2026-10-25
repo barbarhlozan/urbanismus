@@ -25,6 +25,8 @@
 // units and its colour), which leave out the pen lines in WASHED.
 const STYLES = {
   'road-wash': { colour: 'wash', width: 0, cap: 'round', wash: 'road' },
+  // (at a map exit carried on off the map, fading out as the pen's road does)
+  'road-wash-exit': { colour: 'wash', width: 0, cap: 'butt', wash: 'road', fade: [0.8, 1.9] },
   'path-wash': { colour: 'wash', width: 0, cap: 'round', wash: 'path' },
   driveway: { colour: 'detail', width: 1, cap: 'butt' },
   road: { colour: 'fg', width: 1.4, cap: 'round' },
@@ -71,7 +73,7 @@ uniform vec3 iso;                      // tile·cos30, tile·sin30, tile·zScale
 uniform vec3 place;                    // zoom, pan x, pan y (wrapper px, the overscan in)
 uniform vec2 size;                     // the canvas in device px
 uniform float dpr;
-uniform vec4 width[32];                // per style: half width in device px, a wash (1)?
+uniform vec4 width[32];                // per style: half width in device px, a wash (1)?, fading from, to (world units along)
 out vec2 local;                        // px from a: along, across
 out vec2 joins;                        // px inside the joins' lines at a and at b (< 0: the neighbour's)
 out float len;                         // the segment's length in px
@@ -156,6 +158,7 @@ void main() {
   // pen's width covers: exact across a straight edge, at any width – a
   // pen thinner than a pixel spreads faintly over one or two
   float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
+  if (w.w > 0.0) cover *= 1.0 - smoothstep(w.z, w.w, along);
   if (ds.z > 0.5 && mod(dashAt, ds.x + ds.y) > ds.x) discard;
   if (cover <= 0.0) discard;
   outColour = colour[styleId] * cover;
@@ -426,6 +429,7 @@ export class GLLines {
       const px = s.wash ? (wash?.[s.wash] ?? 0) * 2 * tile * view.zoom * dpr : s.width * look.stroke * view.zoom * dpr;
       widths[i * 4] = px / 2;
       widths[i * 4 + 1] = s.wash ? 1 : 0;
+      if (s.fade) widths.set(s.fade, i * 4 + 2);
       const [r, g, b] = colourOf[s.colour];
       const a = s.wash ? wash?.alpha ?? 1 : 1;
       colours.set([r * a, g * a, b * a, a], i * 4);
