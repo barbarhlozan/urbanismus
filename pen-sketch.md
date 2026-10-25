@@ -11,14 +11,15 @@ settings" gives what differs from the code.
 
 ## The hand
 
-A precise hand, not a loose one:
+A steady hand, between loose and ruled:
 
-- Wobble barely there: `LOOK.sketch` 0.5 (was 5).
-- Short overshoots at the corners: `LOOK.overshoot` 0.3 (was 1.5).
-- Houses stand square to the grid: `LOOK.tilt` 0 (was 10°). Houses on a
-  bend still turn to their road.
+- A little wobble: `LOOK.sketch` 2.25 (was 5).
+- Short overshoots at the corners: `LOOK.overshoot` 0.6 (was 1.5).
+- Houses all but square to the grid: `LOOK.tilt` 1.5° either way (was
+  10°). Houses on a bend still turn to their road.
 - No foot stroke under the walls: `LOOK.ground` 0.
-- Clean schemes (Black pen, Watercolour) keep 0.15 of the wobble,
+- All three pen schemes (Blue pen, Black pen, Countryside) draw with this
+  hand. Only Watercolour is `clean`: it keeps 0.15 of the wobble,
   overshoot and tilt (`CLEAN` in painter.js).
 
 ## The pen's line (`BRUSH` in src/render/gl/objects.js)
@@ -31,6 +32,7 @@ A stroke is not even from end to end, as with a pencil:
 - It swells and thins along its length: `swell` 0.7, about every 15.5
   scene px (31 screen px at zoom 2 in the lab).
 - Each stroke is up to 20% heavier or lighter than the next (`weight`).
+- Strokes are 1.2× the pen's width overall (`width`).
 
 The game's WebGL lines do this. The SVG fallback and photos keep even
 lines. The lab also tried pencil grain and ragged edges: left off for now.
@@ -39,7 +41,7 @@ lines. The lab also tried pencil grain and ragged edges: left off for now.
 
 - Roof hatching 0.025 apart (`LOOK.hatch`), thinned further out so the
   strokes stay at least 1.5 px apart on screen (`config.render.roofGap`).
-- The walls turned from the sun are hatched (`SUN.strokes`), 0.025 apart.
+- The walls turned from the sun are hatched (`SUN.strokes`), 0.04 apart.
 - Windows: ink blocks, not upright, 1.2× fewer than the bays
   (`LOOK.ink`, `tall: false`, `thin`). Close up they open into frames, with
   glazing bars from 0.6 px wide (`LOOK.open`, `LOOK.pane`).
@@ -58,5 +60,10 @@ The colour is carried by the lines; the faces stay paper.
 - A roof's outline takes 59% of its paint, its hatching 54%. A wall's
   outline takes 36% of its paint. The rest of each is ink.
 - A wall's dark side is only a little darker: 14% of #7d7488.
+
+How common each roof is (`ROOF_OF` in painter.js, by a drawing's paint
+number, 0–11): clay tiles 5 in 12, eternit 4, weathered tiles 2, tar paper 1.
+Tar paper goes with timber walls, so wooden houses are rare. This applies to
+Watercolour too.
 
 No yellow or blue roofs. The watercolour scheme keeps its own colours.

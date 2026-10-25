@@ -52,7 +52,7 @@
     // The knobs are kept in the address (#…), so a look can be passed on.
     import { applyTheme, SCHEMES } from './src/theme.js';
     import { Camera } from './src/render/camera.js';
-    import { Painter, LOOK, CLEAN } from './src/render/painter.js';
+    import { Painter, LOOK, CLEAN, ROOF_OF } from './src/render/painter.js';
     import { SUN, WALL_STROKES, sunFor, shadowSVG } from './src/render/shadows.js';
     import { STRUCTURE_TYPES, drawSeed, tiltOf } from './structures/index.js';
     import { CONFIG } from './src/config.js';
@@ -70,7 +70,7 @@
       // or lighter at random, a closed outline taken as an edge per stroke
       // (`corners`); and pencil grain: `grain` of it worn away in specks
       // `grainSize` screen px, its edges `rough` px ragged
-      brush: { on: true, width: 1, taper: 0.5, swell: 0.7, wave: 31, weight: 0.2, corners: true, grain: 0, grainSize: 1.2, rough: 0 },
+      brush: { on: true, width: 1.2, taper: 0.5, swell: 0.7, wave: 31, weight: 0.2, corners: true, grain: 0, grainSize: 1.2, rough: 0 },
       kind: 'street', seed: 16, zooms: [1, 2, 4], seeds: 0, paints: true, roofGap: CONFIG.render.roofGap,
       // Countryside's colours, as styles.css has them (html:is(.wc, .tint)
       // and html.tint): paper, ink, the roofs' paints (r0 tiles, r1 ochre
@@ -295,10 +295,10 @@
           parts.push('</div>');
         }
         if (st.paints) {
-          // every paint a house can get (Painter.paint, 0–11: roof paint % 4,
-          // wall paint % 3), on the same house
-          parts.push('<h4>every paint: roof r0–3 × wall v0–2, front, 2×</h4><div class="row">');
-          for (let k = 0; k < 12; k++) parts.push(fig(st, st.seed, 2, 2, `r${k % 4} v${k % 3}`, 0, k));
+          // every paint a house can get (Painter.paint, 0–11: roof ROOF_OF,
+          // wall paint % 3), on the same house – as many as in a village
+          parts.push('<h4>every paint (as common as in a village): roof r0–3, wall v0–2, front, 2×</h4><div class="row">');
+          for (let k = 0; k < 12; k++) parts.push(fig(st, st.seed, 2, 2, `r${ROOF_OF[k]} v${k % 3}`, 0, k));
           parts.push('</div>');
         }
         root.innerHTML = parts.join('');

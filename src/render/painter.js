@@ -110,6 +110,11 @@ const PHOTO_PANE = 7;
 // sill is at most `below` up the wall (grid units), `reach` out from the
 // wall, widening by `widen` of the window's width to each side.
 const SPILL = { below: 0.2, reach: 0.22, widen: 0.6 };
+// A drawing's roof paint (r0–3, styles.css) by its paint number (0–11),
+// so some roofs are commoner than others: in Countryside, as in a Czech
+// village of the 60s–80s, clay tiles (r0) on 5 in 12, grey eternit (r2)
+// on 4, weathered tiles (r1) on 2, tar paper (r3, a wooden building) on 1
+export const ROOF_OF = [0, 2, 0, 1, 2, 0, 3, 0, 2, 1, 0, 2];
 
 // how near the ground (local z) a wall's foot is taken to stand on it
 const ON_GROUND = 0.03;
@@ -136,9 +141,9 @@ const ON_GROUND = 0.03;
 //           with `tilt: true`, see tiltOf in structures/index.js; 0 = square)
 // (set with the user in house-lab.html, 2026-10-25: see pen-sketch.md)
 export const LOOK = {
-  eave: 0.03, fascia: 0.008, sill: false, tall: false, sketch: 0.5,
-  overshoot: 0.3, ink: true, thin: 1.2, hatch: 0.025, ground: 0, floors: false, roads: 0.035,
-  tilt: 0, open: true, pane: 0.6,
+  eave: 0.03, fascia: 0.008, sill: false, tall: false, sketch: 2.25,
+  overshoot: 0.6, ink: true, thin: 1.2, hatch: 0.025, ground: 0, floors: false, roads: 0.035,
+  tilt: 1.5, open: true, pane: 0.6,
 };
 
 // The hand-drawn sway of roads: a smooth shift [dx, dy] of the map at
@@ -708,7 +713,7 @@ export class Painter {
     const len = Math.hypot(n[0], n[1], n[2]);
     if (len < 1e-9) return '';
     const wall = this._wallNormal(n);
-    const roof = this.wood ? 3 : this.stone ? 2 : this.paint % 4;
+    const roof = this.wood ? 3 : this.stone ? 2 : ROOF_OF[this.paint];
     if (!wall && n[2] > 0.985 * len) return `wt r${roof}`;
     if (!wall && n[2] <= 0) return '';
     const [tx, ty] = wall ?? this._turn(n[0], n[1]);
@@ -737,12 +742,12 @@ export class Painter {
   // ('').
   _wallMat(points) {
     if (this.stone) return '';
-    const wood = this.wood || this.paint % 4 === 3;
+    const wood = this.wood || ROOF_OF[this.paint] === 3;
     if (!points.some((p) => p[2] <= ON_GROUND)) return wood ? 'wtimber' : '';
     if (wood) return 'wtimber';
     const level = Math.min(...points.filter((p) => p[2] > ON_GROUND).map((p) => p[2]));
     // (not under slate: that is the 70s cube house's roof, never a log one's)
-    return level <= 0.22 && this.paint % 5 < 2 && this.paint % 4 !== 2 ? 'wlogs' : '';
+    return level <= 0.22 && this.paint % 5 < 2 && ROOF_OF[this.paint] !== 2 ? 'wlogs' : '';
   }
 
   // The painted detail on a wall in the watercolour scheme (`paint` its
@@ -756,7 +761,7 @@ export class Painter {
       // (a gable drawn apart from its walls: a triangle above the eaves)
       const q = [...points].sort((p, r) => p[2] - r[2]);
       if (L === 3 && Math.max(1, this.lod) <= this.keep && Math.abs(q[0][2] - q[1][2]) < 0.01 && q[2][2] > q[0][2] + 0.04) {
-        this._washGable(q[0], q[1], q[2], n, !this.stone && (this.wood || this.paint % 4 === 3), dark);
+        this._washGable(q[0], q[1], q[2], n, !this.stone && (this.wood || ROOF_OF[this.paint] === 3), dark);
       }
       return;
     }

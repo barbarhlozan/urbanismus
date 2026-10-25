@@ -37,9 +37,10 @@ const ROW = 2048;
 // stroke runs from corner to corner (a turn sharper than `corner` radians
 // starts the next), thinner by `taper` over `fade` scene px at its ends,
 // swelling and thinning by `swell` along it every `wave` scene px or so,
-// each stroke `weight` heavier or lighter than the next. (The lab measures
+// each stroke `weight` heavier or lighter than the next, all `width` times
+// the pen's. (The lab measures
 // fade and wave on screen; these are its values at zoom 2.)
-export const BRUSH = { on: true, taper: 0.5, fade: 3, swell: 0.7, wave: 15.5, weight: 0.2, corner: 0.7 };
+export const BRUSH = { on: true, width: 1.2, taper: 0.5, fade: 3, swell: 0.7, wave: 15.5, weight: 0.2, corner: 0.7 };
 
 const VS = `#version 300 es
 precision highp float;
@@ -222,7 +223,7 @@ function brushWidths(pts, count) {
     let total = 0;
     for (let k = i; k < j; k++) total += len[k];
     const p = at(i - 1), seed = p[0] * 12.9898 + p[1] * 78.233;
-    const weight = 1 + BRUSH.weight * (2 * rnd(seed) - 1), fade = Math.min(total / 2, BRUSH.fade) || 1e-6;
+    const weight = BRUSH.width * (1 + BRUSH.weight * (2 * rnd(seed) - 1)), fade = Math.min(total / 2, BRUSH.fade) || 1e-6;
     const width = (s) => {
       const e = Math.min(1, Math.min(s, total - s) / fade);
       return weight * (1 - BRUSH.taper * (1 - e * e * (3 - 2 * e))) * (1 + BRUSH.swell * noise1(seed, s / BRUSH.wave));

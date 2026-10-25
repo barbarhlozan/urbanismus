@@ -19,8 +19,8 @@
 // it did. A scheme with `tone` fills faces by what they are (Painter._wash
 // tags them) with shade and green, in brush strokes along each face; with
 // `painted` as well, without outlines, each face a tone of shade by what
-// it is; `clean`: drawn without the sketch's overshoots, most of its
-// wobble and tilt (Painter) – the loose hand suits only the Blue pen;
+// it is; `clean`: drawn with only a share of the hand's wobble,
+// overshoots and tilt (Painter, CLEAN) – the pen schemes all keep it;
 // one with `wash` is the watercolour experiment; `tint`: the pen sketch
 // coloured in with the watercolour's colours. (No scheme has `tone` or
 // `painted` for now: Pencil and the Painted ones were set aside.)
@@ -33,7 +33,7 @@
 
 export const SCHEMES = [
   { name: 'Blue pen', bg: '#ebe7dd', main: '#3e12b6', detail: '#9b9486' },
-  { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486', clean: true },
+  { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486' },
   // the pen sketch coloured in: drawn as the Blue pen is, over the
   // watercolour's colours (html.tint in styles.css)
   { name: 'Countryside', bg: '#f3eee2', main: '#3a2c24', detail: '#8f8a6e', tint: true },
