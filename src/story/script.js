@@ -28,7 +28,9 @@
 //                       `name`: a number, or [oldest | newest | random]
 //                       <type or tag>, or nearest <type or tag> to <place>
 //   send <places> -> <place>   their people go there, stay, come home
-//   burn <place>        it burns down
+//   ignite <place>      it catches fire (and burns down in time)
+//   put out <place>     the fire there is put out: it stays
+//   burn <place>        it burns down (now, burning or not)
 // A <place> is a house number or a name picked; exists(place) in a
 // condition is whether it stands (and isn't burnt).
 // '#' starts a comment (a whole line). {name} in a text is replaced by the
@@ -197,6 +199,8 @@ const SAY = /^([^:]{1,40}?)\s*:\s+(.+)$/;
 const PICK = /^pick\s+([A-Za-z_][\w.\-]*)\s*=\s*(.+)$/i;
 const SEND = /^send\s+(.+?)\s*(?:->|\s+to\s+)\s*([^\s,]+)\s*$/i;
 const BURN = /^burn\s+([^\s,]+)\s*$/i;
+const IGNITE = /^ignite\s+([^\s,]+)\s*$/i;
+const PUT_OUT = /^put\s+out\s+([^\s,]+)\s*$/i;
 
 // A building named in the story: { no } (a house number) or { name } (one
 // picked, normalName).
@@ -275,6 +279,10 @@ export function parseStory(text) {
       branch.steps.push({ kind: 'send', from: from.map(placeRef), fromText: from, to: placeRef(m[2]), toText: m[2], line });
     } else if ((m = BURN.exec(t))) {
       branch.steps.push({ kind: 'burn', place: placeRef(m[1]), text: m[1], line });
+    } else if ((m = IGNITE.exec(t))) {
+      branch.steps.push({ kind: 'ignite', place: placeRef(m[1]), text: m[1], line });
+    } else if ((m = PUT_OUT.exec(t))) {
+      branch.steps.push({ kind: 'putOut', place: placeRef(m[1]), text: m[1], line });
     } else if ((m = JUMP_IF.exec(t))) {
       const expr = cond(m[1], line);
       if (expr) branch.steps.push({ kind: 'jump', expr, to: normalName(m[2]), target: m[2], line });
@@ -326,7 +334,7 @@ export function parseStory(text) {
     for (const s of b.steps) {
       if (s.kind === 'jump') check(s.to, s.target, s.line);
       if (s.kind === 'send') { s.from.forEach((r, k) => placeOk(r, s.fromText[k], s.line)); placeOk(s.to, s.toText, s.line); }
-      if (s.kind === 'burn') placeOk(s.place, s.text, s.line);
+      if (s.kind === 'burn' || s.kind === 'ignite' || s.kind === 'putOut') placeOk(s.place, s.text, s.line);
       if (s.kind === 'pick' && s.which.to) placeOk(s.which.to, s.which.toText, s.line);
       if (s.kind === 'choice') for (const o of s.options) check(o.to, o.target, o.line);
     }

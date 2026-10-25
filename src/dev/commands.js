@@ -158,15 +158,32 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     return sent;
   }
 
-  // House `no` catches fire and burns down, as the story's `burn` does
-  // (src/sim/fire.js: the neighbours and the brigade turn out): the town's
-  // doing, not a step ⌘Z takes back (demolish the ruin to clear it).
-  function burn(no) {
+  // Fires, as the story's `ignite`, `put out` and `burn` (src/sim/fire.js):
+  // the town's doing, not steps ⌘Z takes back (demolish a ruin to clear it).
+  // House `no` catches fire; the neighbours and the brigade turn out.
+  function ignite(no) {
     const s = world.structureByNo(no);
     if (!s) return house(no); // (says why)
     if (s.ruin) return fail(`č. p. ${no}`, 'burnt down already');
     if (s.burning) return fail(`č. p. ${no}`, 'burning already');
     return world.history.aside(() => fires.ignite(s));
+  }
+
+  // The fire at house `no` is put out: the house stays.
+  function putOut(no) {
+    const s = world.structureByNo(no);
+    if (!s) return house(no);
+    if (!s.burning) return fail(`č. p. ${no}`, 'not burning');
+    return world.history.aside(() => fires.putOut(s));
+  }
+
+  // House `no` burns down: the fire there ends in a ruin, or it burns
+  // down at once if it wasn't burning.
+  function burn(no) {
+    const s = world.structureByNo(no);
+    if (!s) return house(no);
+    if (s.ruin) return fail(`č. p. ${no}`, 'burnt down already');
+    return world.history.aside(() => fires.burnDown(s));
   }
 
   // What's burning, and who's there doing what (src/sim/fire.js).
@@ -200,6 +217,8 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     look,
     fire,
     send,
+    ignite,
+    putOut,
     burn,
     build,
     road,
@@ -281,7 +300,9 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         'cmd.send([1, 2, 3], 7)    the people of č. p. 1, 2, 3 go to č. p. 7, stay and come home',
         'cmd.fire()                what burns, and who is there doing what',
         'cmd.look(4, 3)            the view on č. p. 4, zoomed in 3×',
-        'cmd.burn(4)               č. p. 4 catches fire, the town turns out, it burns down (a ruin until demolished)',
+        'cmd.ignite(4)             č. p. 4 catches fire, the town turns out (it burns down in time)',
+        'cmd.putOut(4)             the fire at č. p. 4 is put out, the house stays',
+        'cmd.burn(4)               č. p. 4 burns down now (a ruin until demolished)',
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',

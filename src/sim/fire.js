@@ -1,7 +1,10 @@
 // How the town turns out for a fire. A building set alight
 // (World.igniteStructure: the story's `burn`, cmd.burn) burns for a while
-// (s.burning, counted down here) and then burns down whatever is done
-// (World.burnStructure). Meanwhile:
+// (s.burning, counted down here) and then burns down whatever the
+// townspeople do (World.burnStructure) – unless the story puts it out
+// first (putOut: the house stays) or burns it down sooner (burnDown).
+// Burnt down, the ruin smoulders a while (s.embers, counted down here).
+// Meanwhile:
 //
 //   watchers – people in within config.fire.reach (fewer the further) walk
 //              over and stand in a loose crowd out from the building's
@@ -20,8 +23,9 @@
 //              on the hose; with no road (or no trucks yet) the crew run
 //              over on foot
 //
-// When it has burnt down everyone stays a little (after, brigadeAfter),
-// then goes home – those who lived there to the neighbours, and are gone.
+// When it has burnt down or is out everyone stays a little (after,
+// brigadeAfter), then goes home – those who lived there, when it has
+// burnt down, to the neighbours, and are gone.
 //
 // The people are the town's own agents (AgentSystem), taken over: state
 // 'fire' while in view, 'fireWait' while out of it (still at home, in the
@@ -44,15 +48,20 @@ export class FireSystem {
     this.agents = agents;
     this.config = config;
     this.fires = new Map(); // burning structure id -> fire
+    this.embers = new Set(); // ids of ruins still smouldering
     agents.fires = this;
     world.events.on('structure:changed', (s) => {
       if (s.burning && !this.fires.has(s.id)) this.start(s);
+      if (s.embers) this.embers.add(s.id);
     });
     world.events.on('structure:removed', (s) => {
       const f = this.fires.get(s.id);
       if (f) this.burntOut(f, true);
     });
-    for (const s of world.structures.values()) if (s.burning) this.start(s);
+    for (const s of world.structures.values()) {
+      if (s.burning) this.start(s);
+      if (s.embers) this.embers.add(s.id);
+    }
   }
 
   // A way on foot from building a to b, cost at most `most`: footpaths and
@@ -65,6 +74,24 @@ export class FireSystem {
   // Sets building `s` alight for config.fire.burn seconds.
   ignite(s) {
     return this.world.igniteStructure(s.id, between(this.config.fire.burn));
+  }
+
+  // The fire at `s` is put out: the flames die down and the house stays;
+  // everyone goes home a little after.
+  putOut(s) {
+    if (!this.world.extinguishStructure(s.id)) return false;
+    const f = this.fires.get(s.id);
+    if (f && !f.out) this.burntOut(f);
+    return true;
+  }
+
+  // `s` burns down now: the fire ends in a ruin (one that wasn't burning
+  // burns down at once), smouldering a while.
+  burnDown(s) {
+    if (!this.world.burnStructure(s.id, between(this.config.fire.embers))) return false;
+    const f = this.fires.get(s.id);
+    if (f && !f.out) this.burntOut(f);
+    return true;
   }
 
   // ----- turning out -----
@@ -261,18 +288,24 @@ export class FireSystem {
 
   update(dt) {
     for (const f of this.fires.values()) this.step(f, dt);
+    for (const id of this.embers) {
+      const s = this.world.structures.get(id);
+      if (!s?.embers) this.embers.delete(id);
+      else if ((s.embers.left -= dt) <= 0) {
+        delete s.embers;
+        this.embers.delete(id);
+        this.world.events.emit('structure:changed', s);
+      }
+    }
   }
 
   step(f, dt) {
     const { world } = this;
     const s = world.structures.get(f.id);
     if (!f.out) {
-      if (!s?.burning) { // put back (⌘Z), or gone
-        this.burntOut(f, true);
-      } else if ((s.burning.left -= dt) <= 0) {
-        world.history.aside(() => world.burnStructure(s.id));
-        this.burntOut(f);
-      }
+      if (!s) this.burntOut(f, true); // (gone)
+      else if (!s.burning) this.burntOut(f); // (put out, or put back with ⌘Z)
+      else if ((s.burning.left -= dt) <= 0) world.history.aside(() => this.burnDown(s));
     }
     if (f.alarm !== null && (f.alarm -= dt) <= 0) {
       f.alarm = null;

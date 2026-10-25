@@ -5,9 +5,10 @@
 // What has been told, the numbers the story `set` and the buildings it
 // picked (house numbers by name) are kept with the town (world.story), so
 // a reload carries on where it was. A picked name reads as its number in
-// conditions and in {name}; send and burn act on it (agents.send,
-// fires.ignite: it burns a while, the town turns out, then it's a ruin –
-// the town's own doing, not the player's: ⌘Z leaves it).
+// conditions and in {name}; send, ignite, put out and burn act on it
+// (agents.send; fires: it burns a while as the town turns out, then it's a
+// ruin unless put out – the town's own doing, not the player's: ⌘Z
+// leaves it).
 //
 // Mistakes in the file are listed in the dialogue window when it loads (and
 // in the console), with their line.
@@ -229,7 +230,17 @@ export class Storyteller {
         }
         case 'burn': {
           const s = this.standing(step.place);
-          if (s && !s.burning) this.world.history.aside(() => (this.fires ? this.fires.ignite(s) : this.world.burnStructure(s.id)));
+          if (s) this.world.history.aside(() => (this.fires ? this.fires.burnDown(s) : this.world.burnStructure(s.id)));
+          break;
+        }
+        case 'ignite': {
+          const s = this.standing(step.place);
+          if (s && !s.burning) this.world.history.aside(() => this.fires?.ignite(s));
+          break;
+        }
+        case 'putOut': {
+          const s = this.standing(step.place);
+          if (s?.burning) this.world.history.aside(() => (this.fires ? this.fires.putOut(s) : this.world.extinguishStructure(s.id)));
           break;
         }
         case 'set':

@@ -102,3 +102,39 @@ test('the burning state is saved, and a loaded town turns out again', () => {
   assert.ok(again.fires.has(s.id));
   assert.equal(back.igniteStructure(s.id, 10), false); // (burning already)
 });
+
+test('a fire put out leaves the house standing, and everyone goes home', () => {
+  const { w, homes, agents, fires } = town();
+  const s = homes[4];
+  fires.ignite(s);
+  run(agents, fires, 40);
+  assert.ok(fires.putOut(s));
+  assert.ok(!s.burning && !s.ruin);
+  assert.equal(fires.putOut(s), false); // (out already)
+  run(agents, fires, 400);
+  assert.equal(fires.fires.size, 0);
+  assert.ok(![...agents.agents.values()].some((a) => a.fire || a.state === 'fire' || a.state === 'fireWait'));
+  assert.ok([...agents.agents.values()].some((a) => a.home === s.id)); // (they still live there)
+  void w;
+});
+
+test('burn ends a fire as a ruin, or burns a house down at once; the ruin smoulders a while', () => {
+  const { homes, agents, fires } = town();
+  const [a, b] = [homes[2], homes[7]];
+  fires.ignite(a);
+  run(agents, fires, 10);
+  assert.ok(fires.burnDown(a));
+  assert.ok(a.ruin && !a.burning && a.embers);
+  assert.ok(fires.burnDown(b)); // (wasn't burning)
+  assert.ok(b.ruin && b.embers);
+  assert.equal(fires.burnDown(b), false);
+  run(agents, fires, CONFIG.fire.embers[1] + 1);
+  assert.ok(!a.embers && !b.embers);
+});
+
+test('the story ignites, puts out and burns', async () => {
+  const { parseStory } = await import('../src/story/script.js');
+  const { branches, errors } = parseStory('::A::\nignite 4\nput out 4\nburn 5\nput out barn\n');
+  assert.deepEqual(branches.get('a').steps.map((s) => s.kind), ['ignite', 'putOut', 'burn', 'putOut']);
+  assert.equal(errors.length, 1); // (barn was never picked)
+});

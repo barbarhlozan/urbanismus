@@ -83,7 +83,9 @@ The wind blows over the meadow.
 | `scheme name` | switch the colour scheme (`scheme Night`) |
 | `pick name = …` | choose a building and remember it as `name` (see below) |
 | `send places -> place` | the people of those buildings go there, stay a while and come home |
-| `burn place` | the building catches fire and burns down |
+| `ignite place` | the building catches fire |
+| `put out place` | the fire there is put out, the building stays |
+| `burn place` | the building burns down |
 | `# …` | a comment |
 
 `{name}` in any line is replaced by that number, and `{town}` by the town's
@@ -145,20 +147,25 @@ Wherever a place goes you can write a name picked or a house number:
 - `send`: whoever is at home in those buildings sets off, a moment apart,
   walking, cycling or driving as they would anyway, stays a while and
   comes home. Whoever is out already carries on.
-- `burn`: the building catches fire. It burns for two minutes or so while
-  the neighbours come to watch and to help with buckets and the nearest
-  fire brigade drives over, then it burns down whatever they do. It stays
-  where it stood as a ruin, its
+- `ignite`: the building catches fire. The neighbours come to watch and
+  to help with buckets, and the nearest fire brigade drives over. Their
+  water doesn't save it: unless the story says otherwise it burns down
+  after two minutes or so.
+- `put out`: the fire there is put out. The flames die down, the house
+  stays, and everyone goes home.
+- `burn`: the building burns down, now: a fire there ends, and one that
+  wasn't burning burns down at once. It smoulders a little while, then
+  stays where it stood as a ruin, its
   number with it: nobody lives or works there, nobody goes there, and it
   counts for nothing until the player clears it away. Undo doesn't
   bring it back; that was the town's doing, not the player's.
 
-A line that starts with `send`, `burn` or `pick` is read as one of these,
+A line that starts with `send`, `ignite`, `put out`, `burn` or `pick` is read as one of these,
 so narration like "Send them to bed." is listed as a mistake (`them` was
 never picked). Say it another way.
 
 To try it from the browser console: `cmd.house(4)`, `cmd.send([1, 2], 4)`,
-`cmd.burn(4)`.
+`cmd.ignite(4)`, `cmd.putOut(4)`, `cmd.burn(4)`.
 
 ## What can be built
 
