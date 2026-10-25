@@ -17,6 +17,8 @@
 //   gl.setLayer(name, items, classes)     items: [{ key, cls, pts|runs: [[x, y, z]…] }] in world space
 //   gl.draw(view, look)                   each frame; draws only when something changed
 
+import { brushWidths, BRUSH_GLSL } from '../brush.js';
+
 // Line styles: the classes the ink layers draw (styles.css), their pen
 // (css px before --stroke), colour, ends and dashes (css px before --stroke).
 // `wash`: a road's or a path's whole width laid in one flat band of colour
@@ -53,7 +55,9 @@ const FAR_HIDDEN = new Set(['driveway', 'zebra']);
 // the painted schemes leave these out: the washes stand for them
 const WASHED = new Set(['road', 'kerb', 'zebra', 'road-exit', 'footpath', 'driveway']);
 const CAPS = { butt: 1, round: 0, square: 2 };
-const STRIDE = 18; // floats per segment
+const STRIDE = 19; // floats per segment
+// scene px to a world unit (the map's tile), for the brush's lengths
+const TILE_PX = 32;
 // A join turning more than this (radians) gets a round one.
 const SHARP = 0.35;
 
@@ -67,6 +71,7 @@ layout(location = 4) in vec2 ends;     // at a, at b: 0 a join, 1 round, 2 butt,
 layout(location = 5) in vec2 dash;     // along at a, at b, on the screen (scene px), for dashes
 layout(location = 6) in vec3 prev;     // the point before a (a join at a)
 layout(location = 7) in vec3 next;     // the point after b (a join at b)
+layout(location = 8) in float brush;   // its widths at a and b (brush.js)
 uniform vec2 rot;                      // cos, sin of the view's turn
 uniform vec2 centre;                   // the map's middle (Camera.cx, cy)
 uniform vec3 iso;                      // tile·cos30, tile·sin30, tile·zScale
@@ -80,8 +85,10 @@ out float len;                         // the segment's length in px
 flat out int styleId;
 flat out int itemId;
 flat out vec2 endsF;
+flat out vec2 brushW;                  // its width at a and at b, shares of its pen's
 out float along;                       // world units along the item
 out float dashAt;                      // scene px along it on the screen
+${BRUSH_GLSL}
 vec2 project(vec3 p) {
   vec2 d = p.xy - centre;
   vec2 r = vec2(d.x * rot.x - d.y * rot.y, d.x * rot.y + d.y * rot.x);
@@ -93,7 +100,8 @@ void main() {
   styleId = int(meta.x);
   itemId = int(meta.y);
   endsF = ends;
-  float hw = width[styleId].x, r = hw + 1.0;
+  brushW = brushUnpack(brush);
+  float hw = width[styleId].x, r = hw * max(brushW.x, brushW.y) + 1.0;
   vec2 pa = project(a), pb = project(b);
   len = length(pb - pa);
   vec2 dir = unit(pb - pa, vec2(1.0, 0.0)), nrm = vec2(-dir.y, dir.x);
@@ -125,6 +133,7 @@ in float len;
 flat in int styleId;
 flat in int itemId;
 flat in vec2 endsF;
+flat in vec2 brushW;
 in float along;
 in float dashAt;
 uniform vec4 width[32];
@@ -144,8 +153,8 @@ void main() {
   // (past a join the next segment draws it)
   if (joins.x < 0.0 || joins.y < 0.0) discard;
   vec4 w = width[styleId];
-  float hw = w.x, d, edge = 1.0;
   float u = local.x, v = local.y;
+  float hw = w.x * mix(brushW.x, brushW.y, clamp(u / max(len, 1e-4), 0.0, 1.0)), d, edge = 1.0;
   float e = u < 0.0 ? -u : u - len;
   float kind = u < 0.0 ? endsF.x : endsF.y;
   if (e > 0.0 && kind > 0.5) {
@@ -206,11 +215,11 @@ export class GLLines {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    this.segs = gl.createBuffer();   // a, b, meta, ends, prev, next: 3 + 3 + 4 + 2 + 3 + 3 floats
+    this.segs = gl.createBuffer();   // a, b, meta, ends, prev, next, brush: 3 + 3 + 4 + 2 + 3 + 3 + 1 floats
     this.dashBuf = gl.createBuffer(); // dash along at a, b
     gl.bindBuffer(gl.ARRAY_BUFFER, this.segs);
     const stride = STRIDE * 4;
-    for (const [loc, n, off] of [[1, 3, 0], [2, 3, 3], [3, 4, 6], [4, 2, 10], [6, 3, 12], [7, 3, 15]]) {
+    for (const [loc, n, off] of [[1, 3, 0], [2, 3, 3], [3, 4, 6], [4, 2, 10], [6, 3, 12], [7, 3, 15], [8, 1, 18]]) {
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, n, gl.FLOAT, false, stride, off * 4);
       gl.vertexAttribDivisor(loc, 1);
@@ -259,6 +268,8 @@ export class GLLines {
           const runs = item.runs ?? [item.pts];
           let along = 0;
           for (const pts of runs) {
+            // (a road's wash is laid even)
+            const brushed = STYLES[cls].wash ? null : brushWidths(pts, pts.length, TILE_PX);
             for (let i = 1; i < pts.length; i++) {
               const [ax, ay, az] = pts[i - 1], [bx, by, bz] = pts[i];
               const l = Math.hypot(bx - ax, by - ay, bz - az);
@@ -280,7 +291,7 @@ export class GLLines {
               // the ends: 0 a join, 1 round, 2 butt, 3 square, 4 cut square
               const own = CAPS[STYLES[cls].cap] + 1;
               const [px, py, pz] = first ? pts[i - 1] : pts[i - 2], [qx, qy, qz] = last ? pts[i] : pts[i + 1];
-              segs.push(ax, ay, az, bx, by, bz, style, index, along, along + l, first ? own : sharpA ? 1 : 0, last ? own : sharpB ? 4 : 0, px, py, pz, qx, qy, qz);
+              segs.push(ax, ay, az, bx, by, bz, style, index, along, along + l, first ? own : sharpA ? 1 : 0, last ? own : sharpB ? 4 : 0, px, py, pz, qx, qy, qz, brushed ? brushed[i] : 0);
               if (STYLES[cls].dash) this.dashed.push([segs.length / STRIDE - 1, pts, i, style]);
               along += l;
             }

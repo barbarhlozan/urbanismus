@@ -56,6 +56,7 @@
     import { SUN, WALL_STROKES, sunFor, shadowSVG } from './src/render/shadows.js';
     import { STRUCTURE_TYPES, drawSeed, tiltOf } from './structures/index.js';
     import { CONFIG } from './src/config.js';
+    import { BRUSH } from './src/render/brush.js';
 
     const q = new URLSearchParams(location.search);
     const BASE = {
@@ -70,7 +71,8 @@
       // or lighter at random, a closed outline taken as an edge per stroke
       // (`corners`); and pencil grain: `grain` of it worn away in specks
       // `grainSize` screen px, its edges `rough` px ragged
-      brush: { on: true, width: 1.2, taper: 0.5, swell: 0.7, wave: 31, weight: 0.2, corners: true, grain: 0, grainSize: 1.2, rough: 0 },
+      // (as the game's, src/render/brush.js: its fade and wave in scene px, here on screen at zoom 2)
+      brush: { on: BRUSH.on, width: BRUSH.width, taper: BRUSH.taper, swell: BRUSH.swell, wave: BRUSH.wave * 2, weight: BRUSH.weight, corners: true, grain: 0, grainSize: 1.2, rough: 0 },
       kind: 'street', seed: 16, zooms: [1, 2, 4], seeds: 0, paints: true, roofGap: CONFIG.render.roofGap,
       // Countryside's colours, as styles.css has them (html:is(.wc, .tint)
       // and html.tint): paper, ink, the roofs' paints (r0 tiles, r1 ochre

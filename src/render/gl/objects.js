@@ -24,6 +24,7 @@
 import { flattenPath, triangulate } from './geometry.js';
 import { penWatch, penLength } from '../draw.js';
 import { hatchTileLines } from '../hatch.js';
+import { brushWidths, brushPath2D, BRUSH_GLSL } from '../brush.js';
 
 // Curves flattened to within this of the true line (scene px).
 const TOLERANCE = 0.08;
@@ -33,14 +34,6 @@ const STRIDE = 20;
 const BUILD_BUDGET = 6;
 // matrices in the texture: two texels each, a row of this many texels
 const ROW = 2048;
-// The pen's line (set with the user in house-lab.html, 2026-10-25): a
-// stroke runs from corner to corner (a turn sharper than `corner` radians
-// starts the next), thinner by `taper` over `fade` scene px at its ends,
-// swelling and thinning by `swell` along it every `wave` scene px or so,
-// each stroke `weight` heavier or lighter than the next, all `width` times
-// the pen's. (The lab measures
-// fade and wave on screen; these are its values at zoom 2.)
-export const BRUSH = { on: true, width: 1.2, taper: 0.5, fade: 3, swell: 0.7, wave: 15.5, weight: 0.2, corner: 0.7 };
 
 const VS = `#version 300 es
 precision highp float;
@@ -48,7 +41,7 @@ layout(location = 0) in vec2 corner;
 layout(location = 1) in vec4 ab;      // a fill: its first two points; a stroke: a, b (the object's px)
 layout(location = 2) in vec4 cp;      // a fill: its third point; a stroke: the point before a, after b
 layout(location = 3) in vec4 kind;    // fill (0) or stroke (1), half width (px), ends at a and b (0 a join, 1 round, 2 butt)
-layout(location = 4) in vec4 style;   // its kind of element (the style table), and stroke (1) or fill (0); its pen element; a stroke's width at a and b (BRUSH, brushWidths)
+layout(location = 4) in vec4 style;   // its kind of element (the style table), and stroke (1) or fill (0); its pen element; a stroke's widths (brush.js)
 layout(location = 5) in vec4 slots;   // the object's matrix, its child's (-1 none); a stroke: how far along its line a and b are
 uniform vec3 base;                    // scene px -> device px
 uniform vec2 size;
@@ -70,6 +63,7 @@ flat out vec2 brushW;                 // a stroke's width at a and at b, as shar
 // (an end before its start: taken back, from all there to none)
 float span(float a, float b) { float d = b - a; return abs(d) < 1e-3 ? 1e-3 : d; }
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
+${BRUSH_GLSL}
 mat3 matAt(float s) {
   if (s < 0.0) return mat3(1.0);
   int i = int(s) * 2;
@@ -113,7 +107,7 @@ void main() {
     local = vec2(0.0); joins = vec2(1e6); len = 0.0; alongF = 0.0;
   } else {
     vec2 pa = A, pb = B, pp = (M * vec3(cp.xy, 1.0)).xy, pn = (M * vec3(cp.zw, 1.0)).xy;
-    brushW = style.w < 0.5 ? vec2(1.0) : vec2(floor((style.w - 1.0) / 256.0), mod(style.w - 1.0, 256.0)) / 255.0 * 2.5;
+    brushW = brushUnpack(style.w);
     float r = kindF.y * max(brushW.x, brushW.y) + 1.0;
     len = length(pb - pa);
     vec2 dir = unit(pb - pa, vec2(1.0, 0.0)), nrm = vec2(-dir.y, dir.x);
@@ -202,47 +196,6 @@ void main() {
   outColour = colourF * cover;
   if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene + 40.0), vec3(outColour.a));
 }`;
-
-// A subpath's strokes by BRUSH (segment i from point i - 1 to point i, for
-// i = 1 … count - 1, the points taken round again where it closes): each
-// segment's width at its two ends, as shares of the pen's (0 … 2.5 in 255
-// steps), packed as 1 + 256 · a + b for the shader.
-function brushWidths(pts, count) {
-  const L = pts.length, at = (i) => pts[i % L];
-  const len = new Float32Array(count), out = new Float32Array(count);
-  for (let i = 1; i < count; i++) len[i] = Math.hypot(at(i)[0] - at(i - 1)[0], at(i)[1] - at(i - 1)[1]);
-  const step = (v) => Math.round(Math.min(1, Math.max(0.02, v) / 2.5) * 255);
-  for (let i = 1; i < count;) {
-    // a stroke: segments i … j - 1, up to a sharp turn
-    let j = i + 1;
-    for (; j < count; j++) {
-      const a = at(j - 2), b = at(j - 1), c = at(j);
-      const ux = b[0] - a[0], uy = b[1] - a[1], vx = c[0] - b[0], vy = c[1] - b[1];
-      if (Math.abs(Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)) > BRUSH.corner) break;
-    }
-    let total = 0;
-    for (let k = i; k < j; k++) total += len[k];
-    const p = at(i - 1), seed = p[0] * 12.9898 + p[1] * 78.233;
-    const weight = BRUSH.width * (1 + BRUSH.weight * (2 * rnd(seed) - 1)), fade = Math.min(total / 2, BRUSH.fade) || 1e-6;
-    const width = (s) => {
-      const e = Math.min(1, Math.min(s, total - s) / fade);
-      return weight * (1 - BRUSH.taper * (1 - e * e * (3 - 2 * e))) * (1 + BRUSH.swell * noise1(seed, s / BRUSH.wave));
-    };
-    for (let k = i, s = 0; k < j; s += len[k], k++) out[k] = 1 + step(width(s)) * 256 + step(width(s + len[k]));
-    i = j;
-  }
-  return out;
-}
-function rnd(x) {
-  const s = Math.sin(x) * 43758.5453;
-  return s - Math.floor(s);
-}
-// smooth noise in −1 … 1 along a stroke
-function noise1(seed, t) {
-  const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f);
-  const a = rnd(seed + i * 17.17), c = rnd(seed + (i + 1) * 17.17);
-  return 2 * (a + (c - a) * u) - 1;
-}
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);
@@ -447,10 +400,13 @@ export class GLObjects {
     const n = Math.max(1, Math.min(4096, Math.round(size * q)));
     const off = new OffscreenCanvas(n, n), c = off.getContext('2d');
     c.scale(n / size, n / size);
-    c.strokeStyle = '#fff';
+    // (the pen's strokes by the brush, brush.js, else even)
+    const brushed = brushPath2D(d, width);
+    c.fillStyle = c.strokeStyle = '#fff';
     c.lineWidth = width;
     c.lineCap = c.lineJoin = 'round';
-    c.stroke(new Path2D(d));
+    if (brushed) c.fill(brushed);
+    else c.stroke(new Path2D(d));
     const { gl } = this;
     gl.activeTexture(unit(gl));
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -690,7 +646,7 @@ export class GLObjects {
           const ring = closed && count > 3;
           const L = pts.length;
           const [ma, mb, mc, md, me, mf] = m ?? [1, 0, 0, 1, 0, 0];
-          const widths = BRUSH.on ? brushWidths(pts, count) : null;
+          const widths = brushWidths(pts, count);
           for (let i = 1; i < count; i++) {
             const ip = i > 1 ? i - 2 : ring ? count - 2 : i - 1;
             const iq = i < count - 1 ? i + 1 : ring ? 1 : i;
@@ -708,7 +664,7 @@ export class GLObjects {
             D[o + 10] = i === 1 && !ring ? st.cap : ip !== i - 1 && turn > 0.35 ? 1 : 0;
             D[o + 11] = i === count - 1 && !ring ? st.cap : 0;
             const l = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]);
-            D[o + 12] = st.id; D[o + 13] = 1; D[o + 14] = ei; D[o + 15] = widths ? widths[i] : 0;
+            D[o + 12] = st.id; D[o + 13] = 1; D[o + 14] = ei; D[o + 15] = widths[i];
             D[o + 16] = rec.slot; D[o + 17] = slot; D[o + 18] = along; D[o + 19] = along + l;
             along += l;
           }

@@ -22,7 +22,13 @@ A steady hand, between loose and ruled:
   hand. Only Watercolour is `clean`: it keeps 0.15 of the wobble,
   overshoot and tilt (`CLEAN` in painter.js).
 
-## The pen's line (`BRUSH` in src/render/gl/objects.js)
+## The pen's line (`BRUSH` in src/render/brush.js)
+
+Every line on the map is drawn with one brush, set in one place. That
+covers buildings, trees and lamps; roads, paths, railways and fences;
+people, vehicles and animals; and the pencil hatching of shadows, night
+and cloud shadows. Change `BRUSH` and all of them follow; `on: false`
+draws even lines everywhere.
 
 A stroke is not even from end to end, as with a pencil:
 
@@ -34,8 +40,11 @@ A stroke is not even from end to end, as with a pencil:
 - Each stroke is up to 20% heavier or lighter than the next (`weight`).
 - Strokes are 1.2× the pen's width overall (`width`).
 
-The game's WebGL lines do this. The SVG fallback and photos keep even
-lines. The lab also tried pencil grain and ragged edges: left off for now.
+Not yet brushed: the lines the browser still draws as SVG (contours, hill
+brows, rocks, meadow tufts, lot and forest edges, water, road marks, the
+build overlay), photos, the flames and the UI's frames. Those need to move
+to WebGL first (webgl-plan.md). The lab also tried pencil grain and ragged
+edges: left off for now.
 
 ## Detail
 

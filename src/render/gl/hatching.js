@@ -28,6 +28,7 @@
 
 import { flattenPath, triangulate } from './geometry.js';
 import { hatchTileLines, TILE } from '../hatch.js';
+import { brushPath2D } from '../brush.js';
 
 // The ragged edge of a shadow or a light, as the masks have it (styles.css
 // .shade-mask .shade): a dashed line round it (its own units); the width of
@@ -478,10 +479,13 @@ export class Hatching {
     const n = Math.max(1, Math.min(4096, Math.round(size * q)));
     const off = new OffscreenCanvas(n, n), c = off.getContext('2d');
     c.scale(n / size, n / size);
-    c.strokeStyle = '#fff';
+    // (the pen's strokes by the brush, brush.js, else even)
+    const brushed = brushPath2D(d, width);
+    c.fillStyle = c.strokeStyle = '#fff';
     c.lineWidth = width;
     c.lineCap = c.lineJoin = 'round';
-    c.stroke(new Path2D(d));
+    if (brushed) c.fill(brushed);
+    else c.stroke(new Path2D(d));
     const { gl } = this;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
