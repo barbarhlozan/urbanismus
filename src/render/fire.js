@@ -12,7 +12,8 @@
 //   ablaze     how far it has burnt (1 - left / total) sets how much is
 //              alight and how tall
 //   burning out  when it has burnt down (s.ruin), low flames along the
-//              ruin's stumps for OUT seconds, sinking, and smoke after
+//              ruin's stumps while it smoulders (s.embers), sinking as
+//              they go out, and smoke a while after
 //   put out    when it is put out (s.burning gone, no ruin), the flames
 //              sink back in DOUSE seconds and the smoke thins out
 //
@@ -32,7 +33,6 @@ import { PEN } from './agentCanvas.js';
 import { PARTICLES, eachParticle, drawn, hash } from './particles.js';
 
 const FPS = 10;     // drawn on tens
-const OUT = 70;     // seconds a ruin burns out
 const DOUSE = 25;   // seconds a fire put out takes to die down (the smoke longer)
 const STORM_WIND = 0.14;
 
@@ -360,38 +360,29 @@ export class FireCanvas {
     this.canvas = canvas;
     this.ctx = canvas?.getContext('2d') ?? null;
     this.world = world;
-    this.out = new Map();    // id -> world time it burnt down (burning out)
-    this.doused = new Map(); // id -> { at, p } put out at world time `at`, at progress p
     this.was = new Map();    // id -> its last progress, while it burns
+    this.smoulder = new Set(); // ids of ruins burning out (s.embers)
+    this.after = new Map();  // id -> world time its embers went out (the smoke goes on a while)
+    this.doused = new Map(); // id -> { at, p } put out at world time `at`, at progress p
     this.shapes = new WeakMap(); // an entry's night -> its skyline and windows in order
     this.drawn = false;
-    this.ruins = new Set(); // the ruins there were: a new one burns out (burnt down at once too)
     world.events.on('structure:changed', (s) => {
       if (s.burning) {
         this.was.set(s.id, this.progress(s));
         this.doused.delete(s.id);
         return;
       }
-      if (s.ruin && !this.ruins.has(s.id)) {
-        this.ruins.add(s.id);
-        this.was.delete(s.id);
-        this.out.set(s.id, world.time);
-        return;
-      }
-      if (!s.ruin) this.ruins.delete(s.id);
-      if (!this.was.has(s.id)) return;
-      this.doused.set(s.id, { at: world.time, p: this.was.get(s.id) });
+      if (this.was.has(s.id) && !s.ruin) this.doused.set(s.id, { at: world.time, p: this.was.get(s.id) });
       this.was.delete(s.id);
+      if (s.embers) this.smoulder.add(s.id);
+      else if (this.smoulder.delete(s.id)) this.after.set(s.id, world.time);
     });
     world.events.on('structure:removed', (s) => {
-      this.was.delete(s.id);
-      this.out.delete(s.id);
-      this.doused.delete(s.id);
-      this.ruins.delete(s.id);
+      for (const m of [this.was, this.smoulder, this.after, this.doused]) m.delete(s.id);
     });
     for (const s of world.structures.values()) {
       if (s.burning) this.was.set(s.id, this.progress(s));
-      if (s.ruin) this.ruins.add(s.id);
+      if (s.embers) this.smoulder.add(s.id);
     }
   }
 
@@ -400,7 +391,9 @@ export class FireCanvas {
     return clamp(1 - left / Math.max(1e-6, total));
   }
 
-  // What's on fire now, each with its stage: [{ s, p, stage, fade }].
+  // What's on fire now: [{ s, p, fade, ruin, end }] – p how far it has
+  // burnt, fade how much of its flames are left (0: smoke only, given off
+  // until world time `end`).
   fires(time) {
     const out = [];
     for (const id of this.was.keys()) {
@@ -410,15 +403,20 @@ export class FireCanvas {
       this.was.set(id, p);
       out.push({ s, p, fade: 1, ruin: false });
     }
-    for (const [id, at] of this.out) {
-      const s = this.world.structures.get(id), a = time - at;
-      if (!s || a > OUT + ROOF_SMOKE.life) { this.out.delete(id); continue; }
-      out.push({ s, p: 1, fade: 1 - a / OUT, ruin: true, since: at });
+    for (const id of this.smoulder) {
+      const s = this.world.structures.get(id);
+      if (!s?.embers) { this.smoulder.delete(id); continue; }
+      out.push({ s, p: 1, fade: clamp(s.embers.left / Math.max(1e-6, s.embers.total)), ruin: true });
+    }
+    for (const [id, at] of this.after) {
+      const s = this.world.structures.get(id);
+      if (!s || time - at > ROOF_SMOKE.life) { this.after.delete(id); continue; }
+      out.push({ s, p: 1, fade: 0, ruin: true, end: at });
     }
     for (const [id, d] of this.doused) {
       const s = this.world.structures.get(id), a = time - d.at;
       if (!s || a > DOUSE + ROOF_SMOKE.life) { this.doused.delete(id); continue; }
-      out.push({ s, p: d.p, fade: 1 - a / DOUSE, ruin: false, since: d.at });
+      out.push({ s, p: d.p, fade: 1 - a / DOUSE, ruin: false, end: d.at + DOUSE });
     }
     return out;
   }
@@ -483,7 +481,7 @@ export class FireCanvas {
     const firstX = shape.panes[0] ? (shape.panes[0][0][0] + shape.panes[0][1][0]) / 2 : null;
     const seats = roofSeats(shape.sky, st.share, firstX, seed, T);
     // (the smoke goes on a while after the flames: given off until the fire died)
-    const until = fade > 0 ? null : f.since + (f.ruin ? OUT : DOUSE);
+    const until = fade > 0 ? null : f.end;
     const keep = 0.35 + 0.65 * clamp(fade);
     const roofSmoke = seats.filter((_, j) => j % 3 === 1).map((s, j) => ({ x: s.x, y: s.y - T * 0.2 * st.roof, k: st.smoke, seed: seed * 31 + 900 + j, until, keep }));
     const many = panes.length >= 4;
