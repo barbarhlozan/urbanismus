@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1820" height="1170" viewBox="0 0 1820 1170">
+<g id="template" fill="none" stroke="#b9b2a6" stroke-width="2" font-family="Georgia, serif" font-size="26">
+<style>#template text { fill: #9a9184; stroke: none; } #template .dash { stroke-dasharray: 10 10; }</style>
+<polygon points="80,1050 520,1050 520,880 80,880"/>
+<text x="80" y="1084">left side</text>
+<polygon points="580,1050 880,1050 880,880 730,640 580,880"/>
+<text x="580" y="1084">front (to the street)</text>
+<polygon points="940,1050 1380,1050 1380,880 940,880"/>
+<text x="940" y="1084">right side</text>
+<polygon points="1440,1050 1740,1050 1740,880 1590,640 1440,880"/>
+<text x="1440" y="1084">back</text>
+<polygon points="550,580 910,580 910,80 550,80"/>
+<text x="550" y="64">roof, seen from above</text>
+<line class="dash" x1="730" y1="580" x2="730" y2="80"/>
+<polygon class="dash" points="580,550 880,550 880,110 580,110"/>
+<text x="80" y="1150">0.3 × 0.44 grid steps, walls 0.17, roof 0.24; 1 grid step = 1000 px. Windows in blue.</text>
+</g>
+<g id="drawing" fill="none" stroke="#222" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+</g>
+</svg>

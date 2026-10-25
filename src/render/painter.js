@@ -1024,6 +1024,9 @@ export class Painter {
   //            A number sets both. Default 0.
   //   mansard  { h, inset }: a steep lower roof first, the roof above it.
   //            Gable ends (hip 0) stay vertical there.
+  //   hatch    false = no pencil hatching on the roof planes
+  //   on       () => …: drawing on the roof, done with the roof's solid
+  //            current (lab/lines.js: a hand-drawn roof)
   // }
   // g.roofed(x, y, 0, w, d, h, { h: 0.15 }) is g.gable(...);
   // { h: 0.1, hip: w / 2, ridge: 'x' } on a square is a pyramid roof.
@@ -1045,7 +1048,7 @@ export class Painter {
     const plane = (pts) => {
       face(pts);
       const q = pts.map(([u, v, zz]) => P(u, v, zz));
-      this._hatch(q, newellNormal(alongY ? [...q].reverse() : q));
+      if (roof.hatch !== false) this._hatch(q, newellNormal(alongY ? [...q].reverse() : q));
     };
     const hip = Array.isArray(roof.hip) ? roof.hip : [roof.hip ?? 0, roof.hip ?? 0];
     const rh = roof.h ?? 0, zt = z + h;
@@ -1077,6 +1080,7 @@ export class Painter {
 
     if (rh <= 0) {
       face([[u0, v0, zb], [u1, v0, zb], [u1, v1, zb], [u0, v1, zb]]);
+      roof.on?.();
       this.current = walls;
       return this;
     }
@@ -1115,6 +1119,7 @@ export class Painter {
     plane([[U1, V1, zb], [U0, V1, zb], [RA, vm, zr], [RB, vm, zr]]);
     if (ra > u0) plane([[U0, V1, zb], [U0, V0, zb], [RA, vm, zr]]);
     if (rb < u1) plane([[U1, V0, zb], [U1, V1, zb], [RB, vm, zr]]);
+    roof.on?.();
     this.current = walls;
     return this;
   }
