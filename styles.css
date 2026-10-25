@@ -1939,7 +1939,7 @@ svg.photo .photo-shore { fill: none; stroke: var(--main); stroke-width: calc(var
 /* the paper over everything on the map (under the UI: #ui's own panels
    stack above it): its tooth, and the larger mottling of a sheet that took
    the water unevenly – multiplied, so the paint shows through */
-html:is(.wc, .tone) #ui::before {
+html:is(.wc, .tone, .tint) #ui::before {
   content: '';
   position: fixed;
   inset: 0;
@@ -1959,35 +1959,35 @@ html.wc .layer-objects .filled:is(.ww, .wp, .wt) {
   stroke: color-mix(in srgb, color-mix(in srgb, var(--paint, #ece4d4) 62%, #3a2a24) 30%, transparent);
   stroke-width: calc(var(--pen-5) * var(--stroke, 1));
 }
-html.wc .ww.v0 { --paint: #f1ebdf; }
-html.wc .ww.v1 { --paint: #f0e0c0; }
-html.wc .ww.v2 { --paint: #e6e1d8; }
-html.wc .wp.r0 { --paint: #d98238; }
-html.wc .wp.r1 { --paint: #cf9c47; }
-html.wc .wp.r2 { --paint: #9396b0; }
-html.wc .wp.r3 { --paint: #8c6e56; }
-html.wc .wt { --paint: #d9d3c6; }
-html.wc .wt:is(.r0, .r1) { --paint: #e0c9a3; }
+html:is(.wc, .tint) .ww.v0 { --paint: #f1ebdf; }
+html:is(.wc, .tint) .ww.v1 { --paint: #f0e0c0; }
+html:is(.wc, .tint) .ww.v2 { --paint: #e6e1d8; }
+html:is(.wc, .tint) .wp.r0 { --paint: #d98238; }
+html:is(.wc, .tint) .wp.r1 { --paint: #cf9c47; }
+html:is(.wc, .tint) .wp.r2 { --paint: #9396b0; }
+html:is(.wc, .tint) .wp.r3 { --paint: #8c6e56; }
+html:is(.wc, .tint) .wt { --paint: #d9d3c6; }
+html:is(.wc, .tint) .wt:is(.r0, .r1) { --paint: #e0c9a3; }
 /* the side turned from the light: the same paint, a second wash over it */
-html.wc .ww.wd { --paint: color-mix(in srgb, var(--wall) 76%, #7d7488); }
-html.wc .ww.v0 { --wall: #f1ebdf; }
-html.wc .ww.v1 { --wall: #f0e0c0; }
-html.wc .ww.v2 { --wall: #e6e1d8; }
-html.wc .wp.wd.r0 { --paint: #b9632b; }
-html.wc .wp.wd.r1 { --paint: #ad7f35; }
-html.wc .wp.wd.r2 { --paint: #767a96; }
-html.wc .wp.wd.r3 { --paint: #6f5442; }
+html:is(.wc, .tint) .ww.wd { --paint: color-mix(in srgb, var(--wall) 76%, #7d7488); }
+html:is(.wc, .tint) .ww.v0 { --wall: #f1ebdf; }
+html:is(.wc, .tint) .ww.v1 { --wall: #f0e0c0; }
+html:is(.wc, .tint) .ww.v2 { --wall: #e6e1d8; }
+html:is(.wc, .tint) .wp.wd.r0 { --paint: #b9632b; }
+html:is(.wc, .tint) .wp.wd.r1 { --paint: #ad7f35; }
+html:is(.wc, .tint) .wp.wd.r2 { --paint: #767a96; }
+html:is(.wc, .tint) .wp.wd.r3 { --paint: #6f5442; }
 /* what a wall is built of (Painter._wallMat): logs on a cottage, chinked
    pale between them; boards on a barn; a stone plinth under every wall */
-html.wc .ww.wlogs { --wall: #efe4cf; --paint: #efe4cf; }
-html.wc .ww.wtimber { --wall: #a39280; --paint: #a39280; }
-html.wc .ww.wd:is(.wlogs, .wtimber) { --paint: color-mix(in srgb, var(--wall) 78%, #5d5468); }
-html.wc .layer-objects .filled:is(.wlog, .wplinth) { stroke: none; }
-html.wc .layer-objects .filled.wlog { fill: #93533a; }
-html.wc .layer-objects .filled.wlog.wd { fill: #75402d; }
-html.wc .layer-objects .filled.wplinth { fill: #b8b2a7; }
-html.wc .layer-objects .filled.wplinth.wd { fill: #98928a; }
-html.wc .layer-objects .wboard { stroke: color-mix(in srgb, #4a3a2e 50%, transparent); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+html:is(.wc, .tint) .ww.wlogs { --wall: #efe4cf; --paint: #efe4cf; }
+html:is(.wc, .tint) .ww.wtimber { --wall: #a39280; --paint: #a39280; }
+html:is(.wc, .tint) .ww.wd:is(.wlogs, .wtimber) { --paint: color-mix(in srgb, var(--wall) 78%, #5d5468); }
+html:is(.wc, .tint) .layer-objects .filled:is(.wlog, .wplinth) { stroke: none; }
+html:is(.wc, .tint) .layer-objects .filled.wlog { fill: #93533a; }
+html:is(.wc, .tint) .layer-objects .filled.wlog.wd { fill: #75402d; }
+html:is(.wc, .tint) .layer-objects .filled.wplinth { fill: #b8b2a7; }
+html:is(.wc, .tint) .layer-objects .filled.wplinth.wd { fill: #98928a; }
+html:is(.wc, .tint) .layer-objects .wboard { stroke: color-mix(in srgb, #4a3a2e 50%, transparent); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 /* no pen work of the sketch: roof strokes, hatched shade, the foot line */
 html.wc .layer-objects :is(.roof-hatch, .wall-shade, .foot) { display: none; }
 html.wc .layer-objects .ln { stroke: color-mix(in srgb, var(--main) 55%, transparent); }
@@ -1995,41 +1995,41 @@ html.wc .layer-objects .ink { fill: #5a3a2a; stroke: #5a3a2a; }
 html.wc .layer-objects .pane { fill: #6a4a36; stroke: #4a3020; }
 html.wc .layer-objects .pane.bar { fill: none; stroke: #e9dcc0; }
 /* trees: a crown of colour, its outline a little darker, veins of paper */
-html.wc .filled.tree.crown { fill: var(--paint, #7f9a4a); }
+html:is(.wc, .tint) .filled.tree.crown { fill: var(--paint, #7f9a4a); }
 /* a pool of the crown's colour on the ground under a tree */
-html.wc .layer-objects .filled.pool { fill: color-mix(in srgb, var(--paint, #93ad5c) 62%, var(--bg)); fill-opacity: 0.8; stroke: none; }
-html.wc .crown.t0 { --paint: #93ad5c; }
-html.wc .crown.t1 { --paint: #6f8b3d; }
-html.wc .crown.t2 { --paint: #d9a03c; }
-html.wc .crown.t3 { --paint: #c8693a; }
-html.wc .crown.t4 { --paint: #b4b64c; }
-html.wc .crown.spruce.t0, html.wc .crown.spruce.t2 { --paint: #4f6d3d; }
-html.wc .crown.spruce.t1, html.wc .crown.spruce.t4 { --paint: #627d47; }
-html.wc .crown.spruce.t3 { --paint: #a0582f; }
+html:is(.wc, .tint) .layer-objects .filled.pool { fill: color-mix(in srgb, var(--paint, #93ad5c) 62%, var(--bg)); fill-opacity: 0.8; stroke: none; }
+html:is(.wc, .tint) .crown.t0 { --paint: #93ad5c; }
+html:is(.wc, .tint) .crown.t1 { --paint: #6f8b3d; }
+html:is(.wc, .tint) .crown.t2 { --paint: #d9a03c; }
+html:is(.wc, .tint) .crown.t3 { --paint: #c8693a; }
+html:is(.wc, .tint) .crown.t4 { --paint: #b4b64c; }
+html:is(.wc, .tint) .crown.spruce.t0, html:is(.wc, .tint) .crown.spruce.t2 { --paint: #4f6d3d; }
+html:is(.wc, .tint) .crown.spruce.t1, html:is(.wc, .tint) .crown.spruce.t4 { --paint: #627d47; }
+html:is(.wc, .tint) .crown.spruce.t3 { --paint: #a0582f; }
 /* (no outline round a crown in the painted schemes: its colour is its edge) */
 html:is(.wc, .painted) .glyph.crown-line { display: none; }
 html.wc .glyph.leaf { stroke: color-mix(in srgb, #fff6dc 55%, transparent); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
-html.wc .glyph:is(.trunk, .limb) { stroke: #7b5636; }
-html.wc .glyph.twig, html.wc .glyph.tree-foot { stroke: color-mix(in srgb, #7a8a45 70%, transparent); }
-html.wc .layer-forest .filled { fill: #6f8b3d; }
+html:is(.wc, .tint) .glyph:is(.trunk, .limb) { stroke: #7b5636; }
+html:is(.wc, .tint) .glyph.twig, html:is(.wc, .tint) .glyph.tree-foot { stroke: color-mix(in srgb, #7a8a45 70%, transparent); }
+html:is(.wc, .tint) .layer-forest .filled { fill: #6f8b3d; }
 html.wc .layer-forest .forest { fill: color-mix(in srgb, #6f8b3d 75%, var(--bg)); }
 html.wc .layer-forest .forest-band { display: none; }
 html:is(.wc, .painted) .layer-forest .forest-edge { display: none; }
 /* grass and flowers: green tufts, ochre dabs */
-html.wc .layer-meadow path { stroke: #93a35a; }
-html.wc .layer-meadow .ink { fill: #d6a043; stroke: #d6a043; }
+html:is(.wc, .tint) .layer-meadow path { stroke: #93a35a; }
+html:is(.wc, .tint) .layer-meadow .ink { fill: #d6a043; stroke: #d6a043; }
 /* water (Renderer.washWater): a turquoise wash on a ring of green bank;
    the shore drawn in a deeper teal, the ripples lifted out pale */
-html.wc .pond { fill: #8ccbc6; stroke: none; }
-html.wc .river-wash { fill: none; stroke: #8ccbc6; stroke-linecap: round; stroke-linejoin: round; }
+html:is(.wc, .tint) .pond { fill: #8ccbc6; stroke: none; }
+html:is(.wc, .tint) .river-wash { fill: none; stroke: #8ccbc6; stroke-linecap: round; stroke-linejoin: round; }
 /* (no line round the water in the painted schemes: its colour is its edge) */
 html:is(.wc, .painted) :is(.shore, .bank) { display: none; }
-html.wc .wave { stroke: #eef6f1; }
+html:is(.wc, .tint) .wave { stroke: #eef6f1; }
 /* gables (Painter._washGable): a board at the eaves and a painted trim */
-html.wc .layer-objects .wtrim { stroke: #8a4532; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+html:is(.wc, .tint) .layer-objects .wtrim { stroke: #8a4532; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* the outhouse's door and heart, the shrine's cross (structures/kit.js) */
-html.wc .layer-objects .door-line { stroke: color-mix(in srgb, #3a2a20 55%, transparent); }
-html.wc .layer-objects :is(.heart, .cross) { stroke: #3a2a20; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+html:is(.wc, .tint) .layer-objects .door-line { stroke: color-mix(in srgb, #3a2a20 55%, transparent); }
+html:is(.wc, .tint) .layer-objects :is(.heart, .cross) { stroke: #3a2a20; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 
 /* ---------- Tone (the schemes with `tone` in src/theme.js) ----------
    The pen drawing as it is, filled in with two more colours, as in pencil
@@ -2105,3 +2105,10 @@ html.tone .layer-objects .filled.wp.sa4 { --fill-hatch: 14; }
 html.tone .layer-objects .filled.wp.sa5 { --fill-hatch: 15; }
 /* windows as small dark arches (Painter._arch) */
 html.tone.painted .layer-objects .filled.arch { fill: var(--main); stroke: none; }
+
+/* ---------- Countryside (the scheme with `tint`, src/theme.js) ----------
+   The pen sketch coloured in: everything drawn as in the pen schemes –
+   outlines, hatching, the loose hand – over the watercolour's colours,
+   shared with it above (html:is(.wc, .tint)): roofs and walls by house,
+   logs, boards and plinths, the trees and the grass, the water. */
+html.tint .layer-objects .filled:is(.ww, .wp, .wt) { fill: var(--paint, #ece4d4); }

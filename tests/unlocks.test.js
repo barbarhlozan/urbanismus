@@ -110,13 +110,13 @@ test('the buttons at the top: by name or all together, not with `all`', () => {
 });
 
 test('the colour scheme line', () => {
-  assert.deepEqual(resolveScheme('Night'), { choice: 2 });
+  assert.deepEqual(resolveScheme('Countryside'), { choice: 2 });
   assert.deepEqual(resolveScheme('black-pen'), { choice: 1 });
   assert.deepEqual(resolveScheme('1'), { choice: 0 });
   assert.deepEqual(resolveScheme('custom'), { choice: 'custom' });
   assert.deepEqual(resolveScheme('#000 #fff #888'), { bg: '#000000', main: '#ffffff', detail: '#888888' });
   assert.equal(resolveScheme('Sepia'), null);
-  const { scheme, errors } = parseUnlocks('scheme Night\nlock debug\nscheme Countryside');
+  const { scheme, errors } = parseUnlocks('scheme Watercolour\nlock debug\nscheme Countryside');
   assert.deepEqual(errors, []);
   assert.equal(scheme.value, 'Countryside');
   assert.equal(parseUnlocks('scheme Sepia').errors.length, 1);

@@ -1001,7 +1001,7 @@ export class Renderer {
   // shore, a river a turquoise wash along its course as wide as its banks
   // are apart where it is narrowest (styles.css .pond, .river-wash).
   washWater(shore) {
-    if (!/\b(wc|tone)\b/.test(document.documentElement.className)) return '';
+    if (!/\b(wc|tone|tint)\b/.test(document.documentElement.className)) return '';
     let out = '';
     if (shore.length) {
       const d = this.pathData(shore, false);

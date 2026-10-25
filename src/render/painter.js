@@ -88,9 +88,9 @@ import { SUN, sunFor, tierOf, tierClass, penClass, awayFrom, strokeShare, wallSt
 import { SUN_FREE, wallDir, strokeLevel } from './sunFree.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
-// The watercolour scheme or a tone scheme (theme.js, `wash` / `tone`) is
-// on: faces get classes for their paint (Painter._wash).
-const washOn = () => typeof document !== 'undefined' && /\b(wc|tone)\b/.test(document.documentElement.className);
+// The watercolour scheme, a tone scheme or the coloured sketch (theme.js,
+// `wash` / `tone` / `tint`) is on: faces get classes for their paint (Painter._wash).
+const washOn = () => typeof document !== 'undefined' && /\b(wc|tone|tint)\b/.test(document.documentElement.className);
 // …and the watercolour one: no overshoots at corners (a wash has no pen line to run on)
 const wcOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('wc');
 // A scheme drawn clean (theme.js `clean`, the Painted ones): no overshoots,

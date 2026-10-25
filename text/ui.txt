@@ -215,25 +215,9 @@ scheme.black-pen
   cs: Černé pero
   en: Black pen
 
-scheme.night
-  cs: Noc
-  en: Night
-
 scheme.watercolour
   cs: Akvarel
   en: Watercolour
-
-scheme.pencil
-  cs: Tužka
-  en: Pencil
-
-scheme.painted-olive
-  cs: Malba, olivová
-  en: Painted olive
-
-scheme.painted-blue
-  cs: Malba, modrá
-  en: Painted blue
 
 scheme.countryside
   cs: Venkov

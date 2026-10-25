@@ -79,7 +79,7 @@ The wind blows over the meadow.
 | `set name = value` | remember a number (`set asked = asked + 1`) for later conditions |
 | `chronicle: text` | write a line in the town's chronicle (the book by the town's name) |
 | `unlock name` / `lock name` | what may be built, and which buttons show (see below) |
-| `scheme name` | switch the colour scheme (`scheme Night`) |
+| `scheme name` | switch the colour scheme (`scheme Black pen`) |
 | `# …` | a comment |
 
 `{name}` in any line is replaced by that number, and `{town}` by the town's
@@ -134,7 +134,7 @@ The file can also set the **colour scheme** the game starts in:
 scheme Countryside
 ```
 
-Use a name (`Blue pen`, `Black pen`, `Night`, `Countryside`), a number from 1,
+Use a name (`Blue pen`, `Black pen`, `Countryside`, `Watercolour`), a number from 1,
 `custom`, or three colours for background, main and detail
 (`scheme #ebe7dd #3e12b6 #9b9486`). It's put on whenever the line changes. While
 `colors` is locked it's put on every time. Otherwise a scheme the player picks

@@ -21,7 +21,9 @@
 // `painted` as well, without outlines, each face a tone of shade by what
 // it is; `clean`: drawn without the sketch's overshoots, most of its
 // wobble and tilt (Painter) – the loose hand suits only the Blue pen;
-// one with `wash` is the watercolour experiment.
+// one with `wash` is the watercolour experiment; `tint`: the pen sketch
+// coloured in with the watercolour's colours. (No scheme has `tone` or
+// `painted` for now: Pencil and the Painted ones were set aside.)
 //
 // The Colors menu (ui/colorMenu.js) picks one of SCHEMES or the custom
 // scheme, whose three colors the player sets; both the choice and the custom
@@ -32,19 +34,12 @@
 export const SCHEMES = [
   { name: 'Blue pen', bg: '#ebe7dd', main: '#3e12b6', detail: '#9b9486' },
   { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486', clean: true },
-  { name: 'Night', bg: '#000000', main: '#64645b', detail: '#363f46', clean: true },
-  { name: 'Countryside', bg: '#d3d0c9', main: '#ce4919', detail: '#44499a', clean: true },
+  // the pen sketch coloured in: drawn as the Blue pen is, over the
+  // watercolour's colours (html.tint in styles.css)
+  { name: 'Countryside', bg: '#f3eee2', main: '#3a2c24', detail: '#8f8a6e', tint: true },
   // painted in watercolour on cream paper: the faces washed in colour by
   // what they are (html.wc in styles.css, Painter._wash), no pen round them
   { name: 'Watercolour', bg: '#f6f0e3', main: '#4b3324', detail: '#8d8a5e', wash: true, clean: true },
-  // graphite on paper, as the pencil sketches: walls left white, the side
-  // away from the light and the roofs in one dark tone, the trees another
-  { name: 'Pencil', bg: '#f3f0e8', main: '#2c2b29', detail: '#8f8b83', shade: '#64615b', green: '#9ba68c', tone: true, clean: true },
-  // painted in gouache, no outlines: every house in three tones of the one
-  // shade (styles.css html.painted), drawn clean – olive and khaki on white,
-  // or slate blue on pink paper
-  { name: 'Painted olive', bg: '#efebdd', main: '#2b2a22', detail: '#8d8a74', shade: '#3c4232', green: '#7b8255', tone: true, painted: true, clean: true },
-  { name: 'Painted blue', bg: '#e8d5c7', main: '#1e2530', detail: '#9b8c85', shade: '#2b3341', green: '#6c7a75', tone: true, painted: true, clean: true },
 ];
 
 export const COLOR_NAMES = ['bg', 'main', 'detail', 'shade', 'green'];
@@ -99,11 +94,12 @@ export function applyTheme(choice = load(SCHEME_KEY) ?? 0, root = document.docum
   schemeChoice = choice;
   const scheme = withAll(choice === 'custom' ? CUSTOM : SCHEMES[choice]);
   Object.assign(THEME.palette, scheme);
-  for (const flag of ['wash', 'tone', 'painted', 'clean']) THEME.palette[flag] = !!scheme[flag];
+  for (const flag of ['wash', 'tone', 'painted', 'clean', 'tint']) THEME.palette[flag] = !!scheme[flag];
   root.classList.toggle('wc', THEME.palette.wash);
   root.classList.toggle('tone', THEME.palette.tone);
   root.classList.toggle('painted', THEME.palette.painted);
   root.classList.toggle('clean', THEME.palette.clean);
+  root.classList.toggle('tint', THEME.palette.tint);
   for (const name of COLOR_NAMES) root.style.setProperty(`--${name}`, scheme[name]);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', scheme.bg);
   save(SCHEME_KEY, String(choice));
