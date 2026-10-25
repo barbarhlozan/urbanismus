@@ -197,7 +197,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         const k = `${a.fire.role} ${a.fire.phase}`;
         doing[k] = (doing[k] ?? 0) + 1;
       }
-      return { no: s?.no, left: !s?.burning ? 'out' : s.burning.left === null ? 'until told' : Math.round(s.burning.left), chain: f.chain?.places ?? 0, engine: f.engine?.state ?? null, doing };
+      return { no: s?.no, left: !s?.burning ? 'out' : s.burning.left === null ? 'until told' : Math.round(s.burning.left), chain: f.chain ? `${f.chain.members.length} + ${f.chain.runners.length} running` : 0, engine: f.engine?.state ?? null, doing };
     });
   }
 

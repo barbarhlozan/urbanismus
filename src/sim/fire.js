@@ -10,12 +10,16 @@
 //              over and stand in a loose crowd out from the building's
 //              edge on the side they came from, facing it, shifting about
 //              a little; whoever lives there comes out and joins them
-//   helpers  – a share of them bring water: when there are enough of them
-//              to reach from the nearest house (chainSource, chainGap,
-//              chainMin) they stand in a bucket chain along the way from
-//              its door to the fire, passing buckets down it; the rest
-//              (all of them without a chain) run home, fill a bucket, run
-//              back, throw it and go again
+//   helpers  – a share of them bring water. The first run home, fill a
+//              bucket, run back, throw it and go again. Once chainStart of
+//              them have got there (and there's a house near enough,
+//              chainSource), whoever comes back with a bucket joins a
+//              chain from the fire back along the way to that house's
+//              door, passing buckets down it. It grows as they come, spread
+//              as far apart as a bucket can be handed on (chainGap); while
+//              it doesn't reach the house, one in gapRunners runs buckets
+//              from the house to its end instead; when it does, they close
+//              up (down to chainClose), and any more go on running
 //   brigade  – the nearest fire house or station is alarmed (alarm) and its
 //              engine drives over – a village brigade's Avia DVS, a
 //              station's Tatra 148 CAS (render/vehicles.js) – pulls up on
@@ -105,7 +109,7 @@ export class FireSystem {
     const centre = world.centerOf(s);
     const pts = world.nodesOf(s).map((n) => world.grid.xy(n));
     const edge = Math.max(...pts.map(([x, y]) => Math.hypot(x - centre[0], y - centre[1]))) + this.config.sim.doorPad;
-    const f = { id: s.id, seq: ++this.seq, centre, edge, out: false, people: new Set(), chain: null, engine: null, crew: [], alarm: null, station: null };
+    const f = { id: s.id, seq: ++this.seq, centre, edge, out: false, people: new Set(), arrived: new Set(), chain: null, engine: null, crew: [], alarm: null, station: null };
     this.fires.set(s.id, f);
     agents.log(`č. p. ${s.no} on fire`, centre);
 
@@ -123,7 +127,6 @@ export class FireSystem {
       if (h.id === s.id || d <= cfg.reach) near.push({ h, d });
     }
     near.sort((p, q) => p.d - q.d);
-    const helpers = [];
     let count = 0;
     for (const { h, d } of near) {
       const them = inside.get(h.id);
@@ -149,18 +152,17 @@ export class FireSystem {
           a.trip = agents.buildTrip({ mode: 'walk', ...route, purpose: 'fire' }, s.id);
           const help = Math.random() < cfg.helpers;
           this.take(f, a, { role: help ? 'run' : 'watch', phase: 'notice', timer: between(cfg.notice) + d * 0.5 });
-          if (help) helpers.push(a);
           count++;
         }
       }
     }
-    this.planChain(f, s, helpers);
+    this.planChain(f, s);
     this.alarm(f, s);
   }
 
   take(f, a, job) {
     a.state = 'fireWait';
-    a.fire = { fire: f, s: 0, leg: null, target: null, release: null, slot: 0, ...job };
+    a.fire = { fire: f, s: 0, leg: null, target: null, release: null, ...job };
     a.wander = null;
     a.carry = null;
     a.watch = null;
@@ -179,12 +181,11 @@ export class FireSystem {
     a.fire.door = [x + dx * pad, y + dy * pad];
   }
 
-  // A bucket chain from the nearest house, when there are helpers enough
-  // to stand along it: the nearest of them take its places, the rest run.
-  planChain(f, s, helpers) {
+  // Where a bucket chain would run: the way from the nearest house's door
+  // to the fire's. People join it as they come (joinChain).
+  planChain(f, s) {
     const { world, agents } = this;
     const cfg = this.config.fire;
-    if (helpers.length < cfg.chainMin) return;
     let best = null;
     for (const h of world.structures.values()) {
       if (h.id === s.id || h.ruin || h.burning) continue;
@@ -195,14 +196,49 @@ export class FireSystem {
     }
     if (!best) return;
     const leg = agents.buildTrip({ mode: 'walk', ...best.route }, s.id).out;
-    const places = Math.max(cfg.chainMin, Math.ceil(leg.total / cfg.chainGap) + 1);
-    if (helpers.length < places) return;
-    f.chain = { leg, places, t: 0, from: best.h.id };
-    helpers.slice(0, places).forEach((a, i) => {
-      a.fire.role = 'chain';
-      a.fire.slot = i;
-    });
-    agents.log(`bucket chain from č. p. ${best.h.no} · ${places}`, world.centerOf(best.h));
+    // members[0] stands at the fire; runners carry to the chain's end
+    f.chain = { leg, t: 0, from: best.h.id, members: [], runners: [], logged: false };
+  }
+
+  // A helper back at the fire with a bucket, once enough have come: into
+  // the chain, or running its gap. False: they go on running on their own
+  // (no chain, or it's full).
+  joinChain(f, a) {
+    const c = f.chain, cfg = this.config.fire, j = a.fire;
+    if (!c || f.out || f.arrived.size < cfg.chainStart) return false;
+    const L = c.leg.total, k = c.members.length;
+    if (k >= Math.floor(L / cfg.chainClose) + 1) return false;
+    const short = L > k * cfg.chainGap; // (with one more, it still wouldn't reach)
+    j.leg = c.leg;
+    j.s = L;
+    a.watch = null;
+    if (k >= 1 && short && c.runners.length < Math.max(1, Math.floor((k + 1) / cfg.gapRunners))) {
+      j.role = 'gap';
+      j.phase = 'gapBack';
+      a.carry = 'bucket';
+      c.runners.push(a);
+    } else {
+      j.role = 'chain';
+      j.phase = 'chain';
+      a.carry = null;
+      c.members.push(a);
+    }
+    if (!c.logged && (c.logged = true)) this.agents.log(`bucket chain from č. p. ${this.world.structures.get(c.from)?.no}`, pointAt(c.leg, 0));
+    return true;
+  }
+
+  // Where chain member i stands along its way (0: the fire's door end):
+  // spread as far as a bucket can be handed on, or closed up to reach.
+  slotAt(f, i) {
+    const c = f.chain, cfg = this.config.fire, L = c.leg.total, k = c.members.length;
+    const gap = k > 1 && L <= (k - 1) * cfg.chainGap ? L / (k - 1) : cfg.chainGap;
+    return Math.max(0, L - i * gap);
+  }
+
+  // Whether the chain reaches the house the water comes from.
+  chainReaches(f) {
+    const c = f.chain;
+    return c.members.length > 1 && c.leg.total <= (c.members.length - 1) * this.config.fire.chainGap;
   }
 
   // The nearest brigade gets the call.
@@ -319,7 +355,12 @@ export class FireSystem {
       f.alarm = null;
       if (!f.out && s) this.turnOut(f, s);
     }
-    if (f.chain) f.chain.t += dt * this.config.fire.pass;
+    if (f.chain) {
+      const c = f.chain;
+      c.t += dt * this.config.fire.pass;
+      c.members = c.members.filter((a) => f.people.has(a) && a.fire.role === 'chain');
+      c.runners = c.runners.filter((a) => f.people.has(a) && a.fire.role === 'gap');
+    }
     for (const a of f.people) {
       if (this.agents.agents.get(a.id) !== a || (a.state !== 'fire' && a.state !== 'fireWait')) {
         f.people.delete(a); // (taken back: a road gone, a lock…)
@@ -380,17 +421,14 @@ export class FireSystem {
       case 'go': // along their way to the fire
         if (!along(a, j, walk)) break;
         if (j.role === 'watch') this.toCrowd(f, a, [a.x, a.y]);
-        else if (j.role === 'chain') {
-          j.phase = 'toSlot';
-          j.leg = f.chain.leg;
-          j.s = j.leg.total;
-          a.carry = null;
-        } else if (j.role === 'crew') {
+        else if (j.role === 'crew') {
           j.phase = 'post';
           j.timer = 0;
           j.target = this.post(f, j.post, [a.x, a.y]);
         } else if (f.out) {
           this.homeward(a);
+        } else if (f.arrived.add(a) && this.joinChain(f, a)) {
+          break;
         } else { // a runner: a step to the side, and throw
           const [x, y] = [a.x, a.y], [cx, cy] = f.centre;
           const l = Math.hypot(x - cx, y - cy) || 1, u = (Math.random() * 2 - 1) * 0.12;
@@ -451,26 +489,21 @@ export class FireSystem {
         j.phase = 'return';
         j.target = j.door ?? a.trip.back.points[0];
         break;
-      case 'toSlot': // back along the chain to their place in it
-        if (j.s > this.slotAt(f, j.slot)) {
-          j.s = Math.max(this.slotAt(f, j.slot), j.s - walk);
-          [a.x, a.y] = pointAt(j.leg, j.s);
-          break;
-        }
-        j.phase = 'chain';
-        break;
-      case 'chain': {
-        const c = f.chain, i = j.slot;
-        if (done) {
+      case 'chain': { // in the chain: to their place in it, passing buckets on
+        const c = f.chain, i = c.members.indexOf(a);
+        if (done || i < 0) {
           a.carry = null;
           a.watch = null;
           j.phase = 'leaveChain';
           break;
         }
+        const goal = this.slotAt(f, i);
+        j.s = j.s > goal ? Math.max(goal, j.s - walk) : Math.min(goal, j.s + walk);
+        const there = j.s === goal;
         // a bucket every other place, moving down the chain to the fire
-        const k = (((c.t - i) % 2) + 2) % 2, holds = k < 1;
-        a.carry = holds ? (i === c.places - 1 ? 'throw' : 'bucket') : null;
-        a.watch = i === c.places - 1 ? f.centre : pointAt(c.leg, Math.min(c.leg.total, j.s + 0.1));
+        const k = (((i + c.t) % 2) + 2) % 2, holds = there && k < 1;
+        a.carry = holds ? (i === 0 ? 'throw' : 'bucket') : null;
+        a.watch = i === 0 ? f.centre : pointAt(c.leg, Math.min(c.leg.total, j.s + 0.1));
         // standing in a zigzag either side of the way, leaning to pass it on
         const [x, y] = pointAt(c.leg, j.s), [x1, y1] = pointAt(c.leg, Math.min(c.leg.total, j.s + 0.02));
         const l = Math.hypot(x1 - x, y1 - y) || 1, ux = (x1 - x) / l, uy = (y1 - y) / l;
@@ -479,6 +512,59 @@ export class FireSystem {
         a.y = y + ux * zig + uy * lean;
         break;
       }
+      case 'gapBack': // running the gap: back along the way to the house for water…
+        if (done) {
+          j.phase = 'leaveChain';
+          a.carry = null;
+          break;
+        }
+        j.s = Math.max(0, j.s - walk);
+        [a.x, a.y] = pointAt(j.leg, j.s);
+        if (j.s > 0) break;
+        a.state = 'fireWait';
+        a.carry = null;
+        j.phase = 'gapFill';
+        j.timer = between(cfg.refill);
+        break;
+      case 'gapFill': // …in it, filling the bucket…
+        if ((j.timer -= dt) > 0 && !done) break;
+        a.state = 'fire';
+        if (done) {
+          j.phase = 'leaveChain';
+          break;
+        }
+        a.carry = 'bucket';
+        j.phase = 'gapGo';
+        break;
+      case 'gapGo': { // …and out to the chain's end with it, to hand it on
+        const c = f.chain, end = this.slotAt(f, Math.max(0, c.members.length - 1)) - 0.05;
+        if (done) {
+          j.phase = 'leaveChain';
+          a.carry = null;
+          break;
+        }
+        j.s = Math.min(Math.max(0, end), j.s + walk);
+        [a.x, a.y] = pointAt(j.leg, j.s);
+        if (j.s < end) break;
+        a.carry = null;
+        a.watch = pointAt(j.leg, Math.min(j.leg.total, j.s + 0.1));
+        j.phase = 'gapHand';
+        j.timer = 0.6;
+        break;
+      }
+      case 'gapHand':
+        if ((j.timer -= dt) > 0) break;
+        a.watch = null;
+        if (this.chainReaches(f) && !done) { // (no gap left: into the chain)
+          j.role = 'chain';
+          j.phase = 'chain';
+          f.chain.runners.splice(f.chain.runners.indexOf(a), 1);
+          f.chain.members.push(a);
+          break;
+        }
+        j.phase = 'gapBack';
+        a.carry = 'bucket';
+        break;
       case 'leaveChain': // on along the chain to the fire's door, and home from there
         if (j.s < j.leg.total) {
           j.s = Math.min(j.leg.total, j.s + walk);
@@ -518,12 +604,6 @@ export class FireSystem {
       case 'boarded':
         break;
     }
-  }
-
-  // Arc length of chain place i along its way (0: at the house the water comes from).
-  slotAt(f, i) {
-    const c = f.chain;
-    return (c.leg.total * i) / Math.max(1, c.places - 1);
   }
 
   // A watcher's place in the crowd: out from the building's edge, on the

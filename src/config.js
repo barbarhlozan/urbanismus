@@ -426,23 +426,25 @@ export const CONFIG = {
   // A fire (src/sim/fire.js): the house burns until the story puts it out
   // or burns it down (or for as long as the story said), whatever the
   // town does. Neighbours in reach come – some to watch, some to
-  // help with buckets (a chain from the nearest house when there are
-  // enough of them for it, otherwise each running to and from home) – and
+  // help with buckets (the first each running to and from home, then a
+  // chain growing from the fire towards the nearest house) – and
   // the nearest brigade drives over.
   fire: {
     embers: [40, 70],     // seconds a ruin smoulders after
-    reach: 6,             // grid steps (straight) people come from
+    reach: 12,            // grid steps (straight) people come from
     turnOut: 0.75,        // of those at home this near, the share that come (fewer further)
     household: [0, 2],    // more of each household that comes, with them
-    most: 36,             // people at one fire at most
+    most: 48,             // people at one fire at most
     helpers: 0.45,        // share of them who help, the rest watch
     notice: [3, 14],      // seconds before each sets off
     hurry: 1.5,           // everyone's pace to a fire, a share of walking speed
     crowd: [0.35, 0.75],  // watchers stand this far out from the building's edge…
     spread: 1.1,          // …within this angle (radians) either side of the way they came
     chainSource: 3,       // a bucket chain runs from a house this near (straight)…
-    chainGap: 0.2,        // …with someone every this many grid steps along it, at most
-    chainMin: 4,          // …and needs at least this many helpers
+    chainStart: 3,        // …once this many helpers have got to the fire, growing as more come…
+    chainGap: 0.12,       // …someone every this many grid steps along it (as far apart as a bucket can be handed on)…
+    chainClose: 0.07,     // …or closer, down to this, when there are more of them than it needs
+    gapRunners: 4,        // while it doesn't reach the house: one helper in this many runs buckets to its end
     pass: 1.6,            // buckets passed along a chain per second
     splash: [1, 1.8],     // seconds a runner stands throwing water
     refill: [3, 6],       // seconds a runner is in the house filling the bucket

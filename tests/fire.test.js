@@ -74,23 +74,48 @@ test('a house set to burn two minutes: the town turns out, then it is a ruin and
   CONFIG.fire.turnOut = 0.75;
 });
 
-test('with enough helpers near another house, they form a bucket chain', () => {
-  const { w, homes, agents, fires } = town();
+test('two helpers run buckets on their own: no chain', () => {
+  const { homes, agents, fires } = town();
+  const old = { ...CONFIG.fire };
+  Object.assign(CONFIG.fire, { helpers: 1, turnOut: 1, most: 2, household: [0, 0] });
+  try {
+    fires.ignite(homes[4]);
+    const f = fires.fires.get(homes[4].id);
+    let threw = false;
+    run(agents, fires, 200, () => { threw ||= [...f.people].some((a) => a.carry === 'throw'); });
+    assert.ok(threw);
+    assert.equal(f.chain.members.length + f.chain.runners.length, 0);
+  } finally {
+    Object.assign(CONFIG.fire, old);
+  }
+});
+
+test('from three helpers on, a chain grows from the fire as they come back with buckets', () => {
+  const { homes, agents, fires } = town();
   const old = { ...CONFIG.fire };
   Object.assign(CONFIG.fire, { helpers: 1, turnOut: 1 });
   try {
     fires.ignite(homes[4]);
     const f = fires.fires.get(homes[4].id);
-    assert.ok(f.chain, 'a chain');
-    const chain = [...f.people].filter((a) => a.fire.role === 'chain');
-    assert.equal(chain.length, f.chain.places);
-    run(agents, fires, 60);
-    assert.ok(chain.some((a) => a.fire.phase === 'chain'));
-    assert.ok(chain.some((a) => a.carry === 'bucket') || chain.some((a) => a.carry === 'throw'));
+    const c = f.chain;
+    assert.ok(c, 'a way for a chain');
+    assert.equal(c.members.length, 0); // (nobody there yet)
+    let most = 0, passed = false, ran = false;
+    run(agents, fires, 240, () => {
+      most = Math.max(most, c.members.length);
+      passed ||= c.members.some((a) => a.carry === 'bucket') && c.members[0]?.carry === 'throw';
+      ran ||= c.runners.length > 0;
+      // never more than a bucket's handing apart, the first at the fire
+      for (let i = 1; i < c.members.length; i++) assert.ok(fires.slotAt(f, i - 1) - fires.slotAt(f, i) <= CONFIG.fire.chainGap + 1e-9);
+      if (c.members.length) assert.equal(fires.slotAt(f, 0), c.leg.total);
+      if (fires.chainReaches(f)) assert.ok(fires.slotAt(f, c.members.length - 1) < 1e-9);
+      else if (c.members.length > 1) assert.ok(ran);
+    });
+    assert.ok(most >= 3, `${most} in the chain`);
+    assert.ok(passed, 'buckets passed down it, thrown at the fire');
   } finally {
     Object.assign(CONFIG.fire, old);
   }
-  void w;
 });
 
 test('the burning state is saved, and a loaded town turns out again', () => {
