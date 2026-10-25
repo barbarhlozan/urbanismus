@@ -28,7 +28,8 @@
 //                       `name`: a number, or [oldest | newest | random]
 //                       <type or tag>, or nearest <type or tag> to <place>
 //   send <places> -> <place>   their people go there, stay, come home
-//   ignite <place>      it catches fire (and burns down in time)
+//   ignite <place>      it catches fire, and burns until put out or burnt
+//   ignite <place> for <n> minutes   …or burns down when they're up
 //   put out <place>     the fire there is put out: it stays
 //   burn <place>        it burns down (now, burning or not)
 // A <place> is a house number or a name picked; exists(place) in a
@@ -199,7 +200,7 @@ const SAY = /^([^:]{1,40}?)\s*:\s+(.+)$/;
 const PICK = /^pick\s+([A-Za-z_][\w.\-]*)\s*=\s*(.+)$/i;
 const SEND = /^send\s+(.+?)\s*(?:->|\s+to\s+)\s*([^\s,]+)\s*$/i;
 const BURN = /^burn\s+([^\s,]+)\s*$/i;
-const IGNITE = /^ignite\s+([^\s,]+)\s*$/i;
+const IGNITE = /^ignite\s+([^\s,]+)(?:\s+for\s+(\d+(?:[.,]\d+)?)\s*(?:minutes?|min))?\s*$/i;
 const PUT_OUT = /^put\s+out\s+([^\s,]+)\s*$/i;
 
 // A building named in the story: { no } (a house number) or { name } (one
@@ -280,7 +281,8 @@ export function parseStory(text) {
     } else if ((m = BURN.exec(t))) {
       branch.steps.push({ kind: 'burn', place: placeRef(m[1]), text: m[1], line });
     } else if ((m = IGNITE.exec(t))) {
-      branch.steps.push({ kind: 'ignite', place: placeRef(m[1]), text: m[1], line });
+      const minutes = m[2] ? Number(m[2].replace(',', '.')) : null;
+      branch.steps.push({ kind: 'ignite', place: placeRef(m[1]), text: m[1], minutes, line });
     } else if ((m = PUT_OUT.exec(t))) {
       branch.steps.push({ kind: 'putOut', place: placeRef(m[1]), text: m[1], line });
     } else if ((m = JUMP_IF.exec(t))) {

@@ -880,17 +880,19 @@ export class World {
     return null;
   }
 
-  // A building catches fire: it burns for `seconds` of game time
-  // (s.burning = { left, total }, saved with it) while the neighbours come
-  // to watch and help and the brigade comes (src/sim/fire.js, which counts
-  // it down), then burns down (burnStructure) – unless it's put out first
-  // (extinguishStructure). The story's `ignite`, `put out` and `burn` and
-  // the same console commands do these.
-  igniteStructure(id, seconds) {
+  // A building catches fire, and burns while the neighbours come to watch
+  // and help and the brigade comes (src/sim/fire.js): until it's put out
+  // (extinguishStructure) or burns down (burnStructure) – or, given
+  // `seconds` of game time, burns down by itself when they're up.
+  // s.burning = { age, left, total } (saved with it): seconds it has
+  // burnt, and those left of `seconds` (null without), counted by
+  // src/sim/fire.js. The story's `ignite`, `put out` and `burn` and the
+  // same console commands do these.
+  igniteStructure(id, seconds = null) {
     const s = this.structures.get(id);
     if (!s || s.ruin || s.burning || !isNumbered(STRUCTURE_TYPES[s.type])) return false;
     this.history.touch();
-    s.burning = { left: seconds, total: seconds };
+    s.burning = { age: 0, left: seconds, total: seconds };
     this.events.emit('structure:changed', s);
     return true;
   }

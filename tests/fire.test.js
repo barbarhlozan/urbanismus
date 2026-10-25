@@ -33,18 +33,18 @@ const run = (agents, fires, seconds, each = () => {}) => {
   }
 };
 
-test('a house burns a while, the town turns out, then it is a ruin and they go home', () => {
+test('a house set to burn two minutes: the town turns out, then it is a ruin and they go home', () => {
   const { w, homes, station, agents, fires } = town();
   const s = homes[4];
   CONFIG.fire.turnOut = 1;
-  assert.ok(w.history.aside(() => fires.ignite(s)));
+  assert.ok(w.history.aside(() => fires.ignite(s, 120)));
   assert.ok(s.burning && !s.ruin);
-  assert.ok(s.burning.left >= CONFIG.fire.burn[0] && s.burning.left <= CONFIG.fire.burn[1]);
+  assert.deepEqual(s.burning, { age: 0, left: 120, total: 120 });
   const coming = [...agents.agents.values()].filter((a) => a.fire);
   assert.ok(coming.length > 3, `${coming.length} turned out`);
 
   let watching = 0, carrying = 0, engine = null, hose = 0;
-  run(agents, fires, CONFIG.fire.burn[0] - 1, () => {
+  run(agents, fires, 119, () => {
     for (const a of agents.agents.values()) {
       if (a.fire?.phase === 'watch') watching++;
       if (a.carry === 'bucket' || a.carry === 'throw') carrying++;
@@ -60,7 +60,8 @@ test('a house burns a while, the town turns out, then it is a ruin and they go h
   assert.ok(hose > 0, 'the crew got the hose on it');
   assert.ok(!s.ruin); // still burning
 
-  run(agents, fires, CONFIG.fire.burn[1] - CONFIG.fire.burn[0] + 2);
+  assert.ok(s.burning.age > 118);
+  run(agents, fires, 2);
   assert.ok(s.ruin && !s.burning);
   run(agents, fires, 400);
   // everyone went home: nobody at the fire, the engine and crew put away
@@ -132,9 +133,20 @@ test('burn ends a fire as a ruin, or burns a house down at once; the ruin smould
   assert.ok(!a.embers && !b.embers);
 });
 
-test('the story ignites, puts out and burns', async () => {
+test('a fire without a time burns until the story ends it', () => {
+  const { homes, agents, fires } = town();
+  fires.ignite(homes[3]);
+  run(agents, fires, 600);
+  assert.ok(homes[3].burning && !homes[3].ruin);
+  assert.equal(homes[3].burning.left, null);
+  assert.ok(homes[3].burning.age > 599);
+});
+
+test('the story ignites (for a time or not), puts out and burns', async () => {
   const { parseStory } = await import('../src/story/script.js');
-  const { branches, errors } = parseStory('::A::\nignite 4\nput out 4\nburn 5\nput out barn\n');
-  assert.deepEqual(branches.get('a').steps.map((s) => s.kind), ['ignite', 'putOut', 'burn', 'putOut']);
+  const { branches, errors } = parseStory('::A::\nignite 4\nignite 6 for 2 minutes\nignite 7 for 1,5 min\nput out 4\nburn 5\nput out barn\n');
+  const steps = branches.get('a').steps;
+  assert.deepEqual(steps.map((s) => s.kind), ['ignite', 'ignite', 'ignite', 'putOut', 'burn', 'putOut']);
+  assert.deepEqual(steps.slice(0, 3).map((s) => s.minutes), [null, 2, 1.5]);
   assert.equal(errors.length, 1); // (barn was never picked)
 });

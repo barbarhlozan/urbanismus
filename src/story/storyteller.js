@@ -235,7 +235,7 @@ export class Storyteller {
         }
         case 'ignite': {
           const s = this.standing(step.place);
-          if (s && !s.burning) this.world.history.aside(() => this.fires?.ignite(s));
+          if (s && !s.burning) this.world.history.aside(() => this.fires?.ignite(s, step.minutes === null ? null : step.minutes * 60));
           break;
         }
         case 'putOut': {

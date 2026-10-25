@@ -1,8 +1,8 @@
 // How the town turns out for a fire. A building set alight
-// (World.igniteStructure: the story's `burn`, cmd.burn) burns for a while
-// (s.burning, counted down here) and then burns down whatever the
-// townspeople do (World.burnStructure) – unless the story puts it out
-// first (putOut: the house stays) or burns it down sooner (burnDown).
+// (World.igniteStructure: the story's `ignite`, cmd.ignite) burns until the
+// story puts it out (putOut: the house stays) or burns it down (burnDown)
+// – whatever the townspeople do. Given a time, it burns down by itself
+// when that's up (s.burning, counted here).
 // Burnt down, the ruin smoulders a while (s.embers, counted down here).
 // Meanwhile:
 //
@@ -71,9 +71,10 @@ export class FireSystem {
     return this.agents.walk.route(a, b, most) ?? this.agents.ride.route(a, b, most);
   }
 
-  // Sets building `s` alight for config.fire.burn seconds.
-  ignite(s) {
-    return this.world.igniteStructure(s.id, between(this.config.fire.burn));
+  // Sets building `s` alight: until put out or burnt down, or for
+  // `seconds`, then it burns down.
+  ignite(s, seconds = null) {
+    return this.world.igniteStructure(s.id, seconds);
   }
 
   // The fire at `s` is put out: the flames die down and the house stays;
@@ -305,7 +306,10 @@ export class FireSystem {
     if (!f.out) {
       if (!s) this.burntOut(f, true); // (gone)
       else if (!s.burning) this.burntOut(f); // (put out, or put back with ⌘Z)
-      else if ((s.burning.left -= dt) <= 0) world.history.aside(() => this.burnDown(s));
+      else {
+        s.burning.age = (s.burning.age ?? 0) + dt;
+        if (s.burning.left !== null && (s.burning.left -= dt) <= 0) world.history.aside(() => this.burnDown(s));
+      }
     }
     if (f.alarm !== null && (f.alarm -= dt) <= 0) {
       f.alarm = null;

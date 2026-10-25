@@ -423,13 +423,13 @@ export const CONFIG = {
     trailer: 0.2,                   // grid steps from the truck's front to its back
   },
 
-  // A fire (src/sim/fire.js): the house burns a while, then it's a ruin
-  // whatever is done. Neighbours in reach come – some to watch, some to
+  // A fire (src/sim/fire.js): the house burns until the story puts it out
+  // or burns it down (or for as long as the story said), whatever the
+  // town does. Neighbours in reach come – some to watch, some to
   // help with buckets (a chain from the nearest house when there are
   // enough of them for it, otherwise each running to and from home) – and
   // the nearest brigade drives over.
   fire: {
-    burn: [110, 150],     // seconds a building burns, unless put out or burnt down sooner
     embers: [40, 70],     // seconds a ruin smoulders after
     reach: 6,             // grid steps (straight) people come from
     turnOut: 0.75,        // of those at home this near, the share that come (fewer further)

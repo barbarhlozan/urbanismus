@@ -83,7 +83,7 @@ The wind blows over the meadow.
 | `scheme name` | switch the colour scheme (`scheme Night`) |
 | `pick name = …` | choose a building and remember it as `name` (see below) |
 | `send places -> place` | the people of those buildings go there, stay a while and come home |
-| `ignite place` | the building catches fire |
+| `ignite place` | the building catches fire (`ignite place for 2 minutes`: and burns down then) |
 | `put out place` | the fire there is put out, the building stays |
 | `burn place` | the building burns down |
 | `# …` | a comment |
@@ -149,8 +149,9 @@ Wherever a place goes you can write a name picked or a house number:
   comes home. Whoever is out already carries on.
 - `ignite`: the building catches fire. The neighbours come to watch and
   to help with buckets, and the nearest fire brigade drives over. Their
-  water doesn't save it: unless the story says otherwise it burns down
-  after two minutes or so.
+  water doesn't save it: it burns until the story says `put out` or
+  `burn`. Or give it a time – `ignite farm for 2 minutes` – and it burns
+  down by itself when that's up (unless put out before).
 - `put out`: the fire there is put out. The flames die down, the house
   stays, and everyone goes home.
 - `burn`: the building burns down, now: a fire there ends, and one that

@@ -160,13 +160,15 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
 
   // Fires, as the story's `ignite`, `put out` and `burn` (src/sim/fire.js):
   // the town's doing, not steps ⌘Z takes back (demolish a ruin to clear it).
-  // House `no` catches fire; the neighbours and the brigade turn out.
-  function ignite(no) {
+  // House `no` catches fire; the neighbours and the brigade turn out. It
+  // burns until put out or burnt down – or, given `minutes`, burns down
+  // when they're up.
+  function ignite(no, minutes = null) {
     const s = world.structureByNo(no);
     if (!s) return house(no); // (says why)
     if (s.ruin) return fail(`č. p. ${no}`, 'burnt down already');
     if (s.burning) return fail(`č. p. ${no}`, 'burning already');
-    return world.history.aside(() => fires.ignite(s));
+    return world.history.aside(() => fires.ignite(s, minutes === null ? null : minutes * 60));
   }
 
   // The fire at house `no` is put out: the house stays.
@@ -195,7 +197,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         const k = `${a.fire.role} ${a.fire.phase}`;
         doing[k] = (doing[k] ?? 0) + 1;
       }
-      return { no: s?.no, left: s?.burning ? Math.round(s.burning.left) : 'burnt', chain: f.chain?.places ?? 0, engine: f.engine?.state ?? null, doing };
+      return { no: s?.no, left: !s?.burning ? 'out' : s.burning.left === null ? 'until told' : Math.round(s.burning.left), chain: f.chain?.places ?? 0, engine: f.engine?.state ?? null, doing };
     });
   }
 
@@ -300,7 +302,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         'cmd.send([1, 2, 3], 7)    the people of č. p. 1, 2, 3 go to č. p. 7, stay and come home',
         'cmd.fire()                what burns, and who is there doing what',
         'cmd.look(4, 3)            the view on č. p. 4, zoomed in 3×',
-        'cmd.ignite(4)             č. p. 4 catches fire, the town turns out (it burns down in time)',
+        'cmd.ignite(4)             č. p. 4 catches fire, the town turns out; cmd.ignite(4, 2): burns down in 2 minutes',
         'cmd.putOut(4)             the fire at č. p. 4 is put out, the house stays',
         'cmd.burn(4)               č. p. 4 burns down now (a ruin until demolished)',
         'cmd.erase(x, y)           what the eraser would take there',
