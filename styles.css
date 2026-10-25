@@ -2020,10 +2020,10 @@ html.wc .layer-meadow path { stroke: #93a35a; }
 html.wc .layer-meadow .ink { fill: #d6a043; stroke: #d6a043; }
 /* water (Renderer.washWater): a turquoise wash on a ring of green bank;
    the shore drawn in a deeper teal, the ripples lifted out pale */
-html.wc .pond { fill: #8ccbc6; stroke: color-mix(in srgb, #4f9a96 45%, transparent); stroke-width: 5px; stroke-linejoin: round; }
+html.wc .pond { fill: #8ccbc6; stroke: none; }
 html.wc .river-wash { fill: none; stroke: #8ccbc6; stroke-linecap: round; stroke-linejoin: round; }
-html.wc .shore { stroke: color-mix(in srgb, #3f7f7c 75%, transparent); }
-html.wc .bank { stroke: color-mix(in srgb, #5f8a52 70%, transparent); }
+/* (no line round the water in the painted schemes: its colour is its edge) */
+html:is(.wc, .painted) :is(.shore, .bank) { display: none; }
 html.wc .wave { stroke: #eef6f1; }
 /* gables (Painter._washGable): a board at the eaves and a painted trim */
 html.wc .layer-objects .wtrim { stroke: #8a4532; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
@@ -2057,6 +2057,10 @@ html.tone .layer-meadow path { stroke: var(--green); }
 /* water: paper inside the shore, on a ring of green bank */
 html.tone .pond { fill: var(--bg); stroke: none; }
 html.tone .river-wash { fill: none; stroke: var(--bg); stroke-linecap: round; stroke-linejoin: round; }
+/* (the Painted schemes' water, drawn without its shore line: paler than
+   the paper, a tint of the shade in white – not to be taken for a shadow) */
+html.tone.painted .pond { fill: color-mix(in srgb, var(--shade) 20%, white); }
+html.tone.painted .river-wash { stroke: color-mix(in srgb, var(--shade) 20%, white); }
 
 /* ---------- Painted (the tone schemes with `painted`, src/theme.js) ----------
    As a gouache of a village: no outlines – two tones meeting are the edge
