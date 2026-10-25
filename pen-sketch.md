@@ -1,0 +1,62 @@
+# The pen sketch of buildings
+
+Decided with the user on 2026-10-25 in `house-lab.html`, on one test piece:
+the village house with its gable to the street (`house`, kind `street`,
+seed 16). Every other building follows the same rules, and new drawings
+should be drawn to them.
+
+The lab draws that house from all four sides at the map's zooms (1×, 2×,
+4×), with every roof and wall paint, and has the knobs live. Its "Copy
+settings" gives what differs from the code.
+
+## The hand
+
+A precise hand, not a loose one:
+
+- Wobble barely there: `LOOK.sketch` 0.5 (was 5).
+- Short overshoots at the corners: `LOOK.overshoot` 0.3 (was 1.5).
+- Houses stand square to the grid: `LOOK.tilt` 0 (was 10°). Houses on a
+  bend still turn to their road.
+- No foot stroke under the walls: `LOOK.ground` 0.
+- Clean schemes (Black pen, Watercolour) keep 0.15 of the wobble,
+  overshoot and tilt (`CLEAN` in painter.js).
+
+## The pen's line (`BRUSH` in src/render/gl/objects.js)
+
+A stroke is not even from end to end, as with a pencil:
+
+- Each stroke runs from corner to corner. A turn sharper than 0.7 rad
+  (about 40°) ends it and starts the next.
+- Thinner at its ends: `taper` 0.5 over `fade` 3 scene px.
+- It swells and thins along its length: `swell` 0.7, about every 15.5
+  scene px (31 screen px at zoom 2 in the lab).
+- Each stroke is up to 20% heavier or lighter than the next (`weight`).
+
+The game's WebGL lines do this. The SVG fallback and photos keep even
+lines. The lab also tried pencil grain and ragged edges: left off for now.
+
+## Detail
+
+- Roof hatching 0.025 apart (`LOOK.hatch`), thinned further out so the
+  strokes stay at least 1.5 px apart on screen (`config.render.roofGap`).
+- The walls turned from the sun are hatched (`SUN.strokes`), 0.025 apart.
+- Windows: ink blocks, not upright, 1.2× fewer than the bays
+  (`LOOK.ink`, `tall: false`, `thin`). Close up they open into frames, with
+  glazing bars from 0.6 px wide (`LOOK.open`, `LOOK.pane`).
+- A thin eave board (`LOOK.fascia` 0.008). No storey lines, no sills.
+
+## Countryside's colours (styles.css, html.tint)
+
+The colour is carried by the lines; the faces stay paper.
+
+- Roofs as in a Czech village of the 60s–80s, pastel. Each is listed as
+  lit / dark side:
+  - r0 clay tiles (bobrovky, drážkové tašky): #c97a5c / #a95f46
+  - r1 the same tiles weathered: #a87262 / #8a5a4c
+  - r2 grey eternit: #9d9d9f / #7f8084
+  - r3 tar paper (lepenka) on wooden buildings: #7f7770 / #655e58
+- A roof's outline takes 59% of its paint, its hatching 54%. A wall's
+  outline takes 36% of its paint. The rest of each is ink.
+- A wall's dark side is only a little darker: 14% of #7d7488.
+
+No yellow or blue roofs. The watercolour scheme keeps its own colours.

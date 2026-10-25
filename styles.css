@@ -2117,9 +2117,22 @@ html.tint .layer-objects .filled:is(.ww, .wp, .wt) { fill: var(--paint, #ece4d4)
    tree's outline and leaves in its crown's, the logs and the plinth drawn
    in line, the water only its shore and ripples in turquoise */
 html.tint .layer-objects .filled:is(.ww, .wp, .wt) { fill: var(--bg); }
-html.tint .layer-objects .filled.ww { stroke: color-mix(in srgb, var(--paint, #8a7c6c) 30%, var(--main)); }
-html.tint .layer-objects .filled:is(.wp, .wt) { stroke: color-mix(in srgb, var(--paint, #8a7c6c) 82%, var(--main)); }
-html.tint .layer-objects .roof-hatch.wp { stroke: color-mix(in srgb, var(--paint) 82%, var(--main)); }
+html.tint .layer-objects .filled.ww { stroke: color-mix(in srgb, var(--paint, #8a7c6c) 36%, var(--main)); }
+html.tint .layer-objects .filled:is(.wp, .wt) { stroke: color-mix(in srgb, var(--paint, #8a7c6c) 59%, var(--main)); }
+html.tint .layer-objects .roof-hatch.wp { stroke: color-mix(in srgb, var(--paint) 54%, var(--main)); }
+/* the roofs of a Czech village in the 60s–80s, pastel (set in
+   house-lab.html): clay tiles (bobrovky, drážkové tašky), the same
+   weathered, grey eternit, tar paper (lepenka) on the wooden ones; lit and
+   on the dark side. A wall's dark side only a little darker. */
+html.tint .wp.r0 { --paint: #c97a5c; }
+html.tint .wp.r1 { --paint: #a87262; }
+html.tint .wp.r2 { --paint: #9d9d9f; }
+html.tint .wp.r3 { --paint: #7f7770; }
+html.tint .wp.wd.r0 { --paint: #a95f46; }
+html.tint .wp.wd.r1 { --paint: #8a5a4c; }
+html.tint .wp.wd.r2 { --paint: #7f8084; }
+html.tint .wp.wd.r3 { --paint: #655e58; }
+html.tint .ww.wd { --paint: color-mix(in srgb, var(--wall) 86%, #7d7488); }
 html.tint .layer-objects .filled.wlog { fill: none; stroke: #93533a; stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 html.tint .layer-objects .filled.wplinth { fill: none; stroke: #9a948a; stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 html.tint .filled.tree.crown { fill: var(--bg); }

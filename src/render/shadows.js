@@ -70,8 +70,10 @@ export const SUN = {
   length: 1,
   low: 0.08,
   hatch: { angle: 120, gap: 0.04, stroke: [0.9, 1.8], join: [-0.08, 0.06], bow: 0.01, drift: 0.016, wave: 0.008, ragged: 0.02, pen: 2 },
-  strokes: { from: 0.05, full: 0.45, most: 1, gap: 0.045, lean: 70, ragged: 0.12, fade: 0, pen: 2 },
+  strokes: { from: 0.05, full: 0.45, most: 1, gap: 0.025, lean: 70, ragged: 0.12, fade: 0, pen: 2 },
 };
+// (the walls' strokes as they are, for house-lab.html to put back)
+export const WALL_STROKES = { ...SUN.strokes };
 
 // The class of a pen (1…5) in styles.css.
 export const penClass = (pen) => ` p${Math.min(5, Math.max(1, Math.round(pen ?? 2)))}`;

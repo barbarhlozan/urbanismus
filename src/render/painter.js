@@ -93,10 +93,11 @@ const r2 = (n) => Math.round(n * 100) / 100;
 const washOn = () => typeof document !== 'undefined' && /\b(wc|tone|tint)\b/.test(document.documentElement.className);
 // …and the watercolour one: no overshoots at corners (a wash has no pen line to run on)
 const wcOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('wc');
-// A scheme drawn clean (theme.js `clean`, the Painted ones): no overshoots,
-// a fifth of the wobble, houses all but square to the grid.
+// A scheme drawn clean (theme.js `clean`): the hand's wobble, overshoots
+// and tilt cut to these shares.
 const cleanOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('clean');
-const CLEAN = { wobble: 0.2, tilt: 0.15 };
+// (house-lab.html sets these live)
+export const CLEAN = { wobble: 0.15, tilt: 0.15, overshoot: 0.15 };
 // …and a Painted one (`painted`): windows as small dark arches (Painter.line)
 const paintedOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('painted');
 // Photos (a perspective camera): roof hatching at most this many px apart
@@ -110,9 +111,6 @@ const PHOTO_PANE = 7;
 // wall, widening by `widen` of the window's width to each side.
 const SPILL = { below: 0.2, reach: 0.22, widen: 0.6 };
 
-// The map (LOOK.open): glazing bars in windows from this many scene px wide
-// (at zoom 1; they show only close up, see Painter._window)
-const MAP_PANE = 1.2;
 // how near the ground (local z) a wall's foot is taken to stand on it
 const ON_GROUND = 0.03;
 
@@ -127,6 +125,8 @@ const ON_GROUND = 0.03;
 //   open    with ink, the map draws windows open too, as in photos: a
 //           frame, and close up its glazing bars (Painter._window)
 //   thin    with ink: this many times fewer windows along a wall (1 = every bay)
+//   pane    with open: glazing bars in windows from this many scene px wide
+//           (at zoom 1; they show only close up, see Painter._window)
 //   hatch   pencil strokes down pitched roofs, this far apart (0 = none)
 //   ground  a stroke along the foot of each building, running past its corners by about this much
 //   floors  draw g.floors() lines (storey bands); off for the sparer sketch look
@@ -134,10 +134,11 @@ const ON_GROUND = 0.03;
 //           line, in grid units (0 = straight; see wobble())
 //   tilt    houses stand askew by up to this many degrees either way (types
 //           with `tilt: true`, see tiltOf in structures/index.js; 0 = square)
+// (set with the user in house-lab.html, 2026-10-25: see pen-sketch.md)
 export const LOOK = {
-  eave: 0.03, fascia: 0, sill: false, tall: true, sketch: 5,
-  overshoot: 1.5, ink: true, thin: 1.4, hatch: 0.03, ground: 0.04, floors: false, roads: 0.035,
-  tilt: 10, open: true,
+  eave: 0.03, fascia: 0.008, sill: false, tall: false, sketch: 0.5,
+  overshoot: 0.3, ink: true, thin: 1.2, hatch: 0.025, ground: 0, floors: false, roads: 0.035,
+  tilt: 0, open: true, pane: 0.6,
 };
 
 // The hand-drawn sway of roads: a smooth shift [dx, dy] of the map at
@@ -375,7 +376,7 @@ export class Painter {
     // the overshoots go in the same path: open strokes have no area, so the
     // fill ignores them, and it saves an element per face
     let ticks = '';
-    const os = wcOn() || cleanOn() ? 0 : LOOK.overshoot * this.camera.tile / 32;
+    const os = wcOn() ? 0 : LOOK.overshoot * (cleanOn() ? CLEAN.overshoot : 1) * this.camera.tile / 32;
     if (closed && os && size > os * 5) {
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1], b = pts[i];
@@ -1454,7 +1455,7 @@ export class Painter {
   // on the map with LOOK.open. Its glazing bars – a casement's cross, a
   // ribbon's mullions every opts.bay – only close up: in a photo once the
   // window is PHOTO_PANE px wide, on the map when the building is drawn
-  // `near` (Renderer.paintStructure, lod.near) and the window is MAP_PANE
+  // `near` (Renderer.paintStructure, lod.near) and the window is LOOK.pane
   // wide. On the map they go after the solid's other parts, so the frames
   // of a wall make one run (mergeRuns) and the bars another, rather than
   // an element each.
@@ -1493,7 +1494,7 @@ export class Painter {
     const out = this.current.parts;
     out.push(this._outline(points, false, { ...opts, cls: 'pane' }, lod));
     // the map's windows are 1–3 px at zoom 1: bars only where there's room
-    if (photo ? wide < PHOTO_PANE : !this.near || (wide * 32) / this.camera.tile < MAP_PANE) return true;
+    if (photo ? wide < PHOTO_PANE : !this.near || (wide * 32) / this.camera.tile < LOOK.pane) return true;
     const late = photo ? out : (this.current.late ??= []);
     const mix = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t);
     const bar = (p, q) => late.push(this._outline([p, q], false, { ...opts, cls: 'pane bar' }, lod));

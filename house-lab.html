@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dědina – house lab</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { overflow: visible; } /* (the page scrolls, so the knobs can stick) */
+    body { background: var(--bg); color: var(--main); font: 13px/1.4 system-ui, sans-serif; margin: 0; }
+    /* the knobs page */
+    .lab { display: grid; grid-template-columns: 270px 1fr; min-height: 100vh; }
+    .knobs { position: sticky; top: 0; height: 100vh; overflow: auto; padding: 12px 14px 40px; border-right: 1px solid #ccc; background: #fafaf7; color: #222; box-sizing: border-box; }
+    .knobs h1 { font: 500 16px system-ui; margin: 0 0 8px; }
+    .knobs h3 { font: 600 11px system-ui; text-transform: uppercase; letter-spacing: .05em; color: #888; margin: 14px 0 4px; }
+    .knobs label { display: grid; grid-template-columns: 82px 1fr 40px; gap: 6px; align-items: center; margin: 2px 0; }
+    .knobs label.check { grid-template-columns: 18px 1fr; }
+    .knobs label span:last-child { text-align: right; font-variant-numeric: tabular-nums; color: #555; }
+    .knobs input[type=range] { width: 100%; }
+    .knobs select { width: 100%; }
+    .knobs button { margin: 4px 4px 0 0; }
+    .knobs textarea { width: 100%; height: 90px; font: 11px ui-monospace, monospace; margin-top: 6px; }
+    .knobs .changed { color: #b3261e; }
+    .frames { padding: 8px 12px; }
+    .frames iframe { display: block; width: 100%; border: 0; border-bottom: 1px solid #ddd; }
+    /* a scheme's frame */
+    body.frame { padding: 6px 4px 10px; }
+    body.frame h2 { font: 500 15px system-ui; margin: 0 0 4px; }
+    body.frame h4 { font: 400 11px system-ui; color: var(--detail); margin: 6px 0 2px; }
+    .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-end; }
+    .row figure { margin: 0; outline: 1px solid color-mix(in srgb, var(--detail) 35%, transparent); }
+    .row figcaption { font-size: 10px; color: var(--detail); padding: 0 3px; }
+    .row svg { display: block; }
+  </style>
+</head>
+<body>
+  <!-- the map's fill patterns (src/render/renderer.js), for ponds and pools -->
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <pattern id="hatch-water" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(-40)">
+      <line class="hatch" x1="0" y1="2.5" x2="5" y2="2.5"/>
+    </pattern>
+  </defs></svg>
+  <div id="root"></div>
+  <script type="module">
+    // Dev page, apart from the game: one house drawn large, from all four
+    // sides, at the map's zooms, in every colour scheme side by side (a frame
+    // each, as the scheme is set on <html>), with the pen's knobs live
+    // (LOOK and CLEAN in src/render/painter.js, SUN.strokes in
+    // src/render/shadows.js, `clean` per scheme in src/theme.js).
+    // The knobs are kept in the address (#…), so a look can be passed on.
+    import { applyTheme, SCHEMES } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter, LOOK, CLEAN } from './src/render/painter.js';
+    import { SUN, WALL_STROKES, sunFor, shadowSVG } from './src/render/shadows.js';
+    import { STRUCTURE_TYPES, drawSeed, tiltOf } from './structures/index.js';
+    import { CONFIG } from './src/config.js';
+
+    const q = new URLSearchParams(location.search);
+    const BASE = {
+      look: { ...LOOK }, clean: { ...CLEAN },
+      strokes: SUN.strokes && { ...SUN.strokes }, sun: SUN.on,
+      schemes: SCHEMES.map((s) => !!s.clean),
+      // Countryside alone (its colours are what is tuned now)
+      show: SCHEMES.map((s) => !!s.tint),
+      // the pen's line (lab only, not in the game yet): each stroke shaped –
+      // `width` times as wide, thinner by `taper` at its ends, swelling by
+      // `swell` along it every `wave` screen px, each stroke `weight` heavier
+      // or lighter at random, a closed outline taken as an edge per stroke
+      // (`corners`); and pencil grain: `grain` of it worn away in specks
+      // `grainSize` screen px, its edges `rough` px ragged
+      brush: { on: true, width: 1, taper: 0.5, swell: 0.7, wave: 31, weight: 0.2, corners: true, grain: 0, grainSize: 1.2, rough: 0 },
+      kind: 'street', seed: 16, zooms: [1, 2, 4], seeds: 0, paints: true, roofGap: CONFIG.render.roofGap,
+      // Countryside's colours, as styles.css has them (html:is(.wc, .tint)
+      // and html.tint): paper, ink, the roofs' paints (r0 tiles, r1 ochre
+      // tiles, r2 slate, r3 timber) lit and on the dark side, the walls'
+      // (v0–2), what the dark side of a wall is mixed with and how much; how
+      // much of its paint a line takes (the rest ink) and a face's fill (the
+      // rest paper); logs, plinth, gable trim; windows (ink if unset)
+      colours: {
+        bg: SCHEMES.find((s) => s.tint).bg, main: SCHEMES.find((s) => s.tint).main, detail: SCHEMES.find((s) => s.tint).detail,
+        r0: '#c97a5c', r0d: '#a95f46', r1: '#a87262', r1d: '#8a5a4c', r2: '#9d9d9f', r2d: '#7f8084', r3: '#7f7770', r3d: '#655e58',
+        v0: '#f1ebdf', v1: '#f0e0c0', v2: '#e6e1d8', shadow: '#7d7488', dark: 14,
+        roofLine: 59, hatchLine: 54, wallLine: 36, roofFill: 0, wallFill: 0,
+        log: '#93533a', plinth: '#9a948a', trim: '#8a4532', window: SCHEMES.find((s) => s.tint).main,
+      },
+    };
+    // Roof palettes to try (the four roof paints, lit and dark side)
+    const ROOFS = {
+      'as in the code': {},
+      // what Countryside had before
+      'the watercolour\'s': {
+        r0: '#d98238', r0d: '#b9632b', r1: '#cf9c47', r1d: '#ad7f35', r2: '#9396b0', r2d: '#767a96', r3: '#8c6e56', r3d: '#6f5442',
+      },
+      // what a Czech village was roofed with in the 60s–80s, kept pastel:
+      // red clay tiles (bobrovky, drážkové tašky), the same weathered
+      // darker and browner, grey eternit (asbestos-cement slates) on the
+      // newer and re-roofed houses, black-grey tar paper (lepenka) on the
+      // wooden ones, sheds and barns
+      'Czech roofs 60s–80s': {
+        r0: '#c97a5c', r0d: '#a95f46', r1: '#a87262', r1d: '#8a5a4c',
+        r2: '#9d9d9f', r2d: '#7f8084', r3: '#7f7770', r3d: '#655e58',
+      },
+    };
+    const KINDS = ['street', 'farmstead', 'cube', 'farm', 'villa', 'mansard'];
+
+    if (q.has('frame')) frame(+q.get('frame'));
+    else lab();
+
+    // ——— the knobs page ———
+    function lab() {
+      let state = structuredClone(BASE);
+      try { if (location.hash.length > 1) state = merge(state, JSON.parse(decodeURIComponent(location.hash.slice(1)))); } catch {}
+      const root = document.getElementById('root');
+      root.className = 'lab';
+      root.innerHTML = `<div class="knobs" id="knobs"></div><div class="frames" id="frames"></div>`;
+      const knobs = root.querySelector('#knobs'), framesEl = root.querySelector('#frames');
+      const frames = SCHEMES.map((s, i) => {
+        const f = document.createElement('iframe');
+        f.src = `house-lab.html?frame=${i}`;
+        framesEl.appendChild(f);
+        return f;
+      });
+      addEventListener('message', (e) => {
+        const f = frames.find((fr) => fr.contentWindow === e.source);
+        if (f && e.data?.height) f.style.height = `${e.data.height}px`;
+        if (f && e.data?.ready) send(f);
+      });
+      const send = (f) => f.contentWindow.postMessage({ state }, '*');
+      let timer = 0;
+      const changed = () => {
+        history.replaceState(null, '', `#${encodeURIComponent(JSON.stringify(diff(state, BASE)))}`);
+        frames.forEach((f, i) => { f.style.display = state.show[i] ? '' : 'none'; });
+        clearTimeout(timer);
+        timer = setTimeout(() => frames.forEach((f, i) => state.show[i] && send(f)), 60);
+        out.value = JSON.stringify(diff(state, BASE), null, 1);
+        knobs.querySelectorAll('label[data-path]').forEach((l) => l.classList.toggle('changed', JSON.stringify(get(state, l.dataset.path)) !== JSON.stringify(get(BASE, l.dataset.path))));
+      };
+
+      const html = [];
+      const range = (path, label, min, max, step) => html.push(`<label data-path="${path}"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" data-k="${path}"><span></span></label>`);
+      const color = (path, label) => html.push(`<label data-path="${path}"><span>${label}</span><input type="color" data-k="${path}"><span></span></label>`);
+      const check = (path, label) => html.push(`<label class="check" data-path="${path}"><input type="checkbox" data-k="${path}"><span>${label}</span></label>`);
+      html.push('<h1>House lab</h1>');
+      html.push(`<label><span>house</span><select data-k="kind">${KINDS.map((k) => `<option>${k}</option>`).join('')}</select><span></span></label>`);
+      range('seed', 'seed', 1, 40, 1);
+      html.push('<h3>Hand</h3>');
+      range('look.sketch', 'wobble', 0, 8, 0.25);
+      range('look.overshoot', 'overshoot', 0, 4, 0.1);
+      range('look.tilt', 'tilt °', 0, 15, 0.5);
+      range('look.ground', 'foot stroke', 0, 0.12, 0.005);
+      html.push('<h3>Clean schemes</h3>');
+      SCHEMES.forEach((s, i) => check(`schemes.${i}`, `${s.name} clean`));
+      range('clean.wobble', '× wobble', 0, 1, 0.05);
+      range('clean.overshoot', '× overshoot', 0, 1, 0.05);
+      range('clean.tilt', '× tilt', 0, 1, 0.05);
+      html.push('<h3>Roof</h3>');
+      range('look.hatch', 'hatch gap', 0, 0.08, 0.0025);
+      range('roofGap', 'min px apart', 0.5, 6, 0.1);
+      range('look.eave', 'eave', 0, 0.08, 0.005);
+      range('look.fascia', 'fascia', 0, 0.03, 0.002);
+      html.push('<h3>Walls</h3>');
+      check('sun', 'sun and shadows');
+      check('strokes.on', 'shade strokes on the dark walls');
+      range('strokes.gap', 'stroke gap', 0.02, 0.12, 0.005);
+      range('strokes.from', 'from turn', 0, 0.6, 0.01);
+      range('strokes.full', 'full at', 0.1, 1, 0.01);
+      range('strokes.lean', 'lean °', 0, 90, 1);
+      range('strokes.ragged', 'ragged', 0, 0.4, 0.01);
+      range('strokes.pen', 'pen', 1, 5, 1);
+      check('look.floors', 'storey lines');
+      html.push('<h3>Windows</h3>');
+      check('look.ink', 'ink (filled / fewer)');
+      check('look.open', 'open frames on the map');
+      range('look.pane', 'bars from px', 0, 4, 0.1);
+      range('look.thin', 'fewer ×', 1, 2.5, 0.05);
+      check('look.tall', 'upright 2:3');
+      check('look.sill', 'sills (no ink)');
+      html.push('<h3>Pen line (lab only)</h3>');
+      check('brush.on', 'shaped strokes');
+      range('brush.width', 'width ×', 0.3, 3, 0.05);
+      range('brush.taper', 'taper ends', 0, 1, 0.05);
+      range('brush.swell', 'swell', 0, 1, 0.05);
+      range('brush.wave', 'swell every px', 2, 40, 1);
+      range('brush.weight', 'stroke to stroke', 0, 0.8, 0.05);
+      check('brush.corners', 'each edge its own stroke');
+      range('brush.grain', 'pencil grain', 0, 1, 0.05);
+      range('brush.grainSize', 'grain px', 0.4, 4, 0.1);
+      range('brush.rough', 'ragged edge px', 0, 2, 0.05);
+      html.push('<h3>Countryside colours</h3>');
+      html.push(`<label><span>roofs</span><select id="roofs">${Object.keys(ROOFS).map((k) => `<option>${k}</option>`).join('')}</select><span></span></label>`);
+      color('colours.bg', 'paper');
+      color('colours.main', 'ink');
+      color('colours.detail', 'detail');
+      color('colours.window', 'windows');
+      for (const [k, name] of [['r0', 'roof 0 tiles'], ['r1', 'roof 1 old tiles'], ['r2', 'roof 2 slate'], ['r3', 'roof 3 wooden']]) {
+        color(`colours.${k}`, name);
+        color(`colours.${k}d`, '  dark side');
+      }
+      color('colours.v0', 'wall 0');
+      color('colours.v1', 'wall 1');
+      color('colours.v2', 'wall 2');
+      color('colours.shadow', 'wall shadow');
+      range('colours.dark', 'shadow %', 0, 80, 1);
+      range('colours.roofLine', 'roof line %', 0, 100, 1);
+      range('colours.hatchLine', 'hatch %', 0, 100, 1);
+      range('colours.wallLine', 'wall line %', 0, 100, 1);
+      range('colours.roofFill', 'roof fill %', 0, 100, 1);
+      range('colours.wallFill', 'wall fill %', 0, 100, 1);
+      color('colours.log', 'logs');
+      color('colours.plinth', 'plinth');
+      color('colours.trim', 'gable trim');
+      html.push('<h3>Show</h3>');
+      SCHEMES.forEach((s, i) => check(`show.${i}`, s.name));
+      html.push(`<label><span>zooms</span><input type="text" data-k="zooms" style="grid-column: span 2"></label>`);
+      range('seeds', 'seed row', 0, 12, 1);
+      check('paints', 'every paint (front, 2×)');
+      html.push('<button id="reset">Code defaults</button><button id="copy">Copy settings</button>');
+      html.push('<textarea id="out" readonly placeholder="(as in the code)"></textarea>');
+      knobs.innerHTML = html.join('');
+      const out = knobs.querySelector('#out');
+
+      for (const el of knobs.querySelectorAll('[data-k]')) {
+        const path = el.dataset.k;
+        const isStrokes = path === 'strokes.on';
+        const read = () => (isStrokes ? state.strokes !== null : get(state, path));
+        const show = () => {
+          const v = read();
+          if (el.type === 'checkbox') el.checked = !!v;
+          else if (path === 'zooms') el.value = v.join(' ');
+          else el.value = v;
+          const tag = el.parentElement.lastElementChild;
+          if (el.type === 'range') tag.textContent = v === undefined ? '' : String(+(+v).toFixed(4));
+          if (el.type === 'color') tag.textContent = v;
+          if (path.startsWith('strokes.') && !isStrokes) el.disabled = state.strokes === null;
+        };
+        el.show = show;
+        el.addEventListener('input', () => {
+          if (isStrokes) state.strokes = el.checked ? { ...(BASE.strokes ?? WALL_STROKES) } : null;
+          else if (el.type === 'checkbox') set(state, path, el.checked);
+          else if (path === 'zooms') set(state, path, el.value.split(/[\s,]+/).map(Number).filter((z) => z > 0));
+          else if (path === 'kind' || el.type === 'color') set(state, path, el.value);
+          else set(state, path, +el.value);
+          knobs.querySelectorAll('[data-k]').forEach((x) => x.show());
+          changed();
+        });
+        show();
+      }
+      const roofs = knobs.querySelector('#roofs');
+      const roofsNow = () => Object.keys(ROOFS).find((k) => Object.entries({ ...Object.fromEntries(Object.keys(ROOFS['Czech roofs 60s–80s']).map((r) => [r, BASE.colours[r]])), ...ROOFS[k] }).every(([r, v]) => state.colours[r] === v)) ?? '';
+      roofs.value = roofsNow();
+      roofs.addEventListener('change', () => {
+        for (const r of Object.keys(ROOFS['Czech roofs 60s–80s'])) state.colours[r] = ROOFS[roofs.value][r] ?? BASE.colours[r];
+        knobs.querySelectorAll('[data-k]').forEach((x) => x.show());
+        changed();
+      });
+      knobs.querySelector('#reset').onclick = () => {
+        state = structuredClone(BASE);
+        knobs.querySelectorAll('[data-k]').forEach((x) => x.show());
+        changed();
+      };
+      knobs.querySelector('#copy').onclick = () => { out.select(); navigator.clipboard?.writeText(out.value); };
+      changed();
+    }
+
+    // ——— one scheme's frame ———
+    function frame(i) {
+      document.body.className = 'frame';
+      const root = document.getElementById('root');
+      applyTheme(i);
+      const def = STRUCTURE_TYPES.house;
+      addEventListener('message', (e) => { if (e.data?.state) draw(e.data.state); });
+      parent.postMessage({ ready: true }, '*');
+
+      function draw(st) {
+        document.documentElement.classList.toggle('clean', !!st.schemes[i]);
+        Object.assign(LOOK, st.look);
+        Object.assign(CLEAN, st.clean);
+        SUN.on = st.sun;
+        SUN.strokes = st.strokes && { ...st.strokes };
+        if (SCHEMES[i].tint) paintCSS(st.colours);
+        const parts = [`<h2>${SCHEMES[i].name}${st.schemes[i] ? ' · clean' : ''}</h2>`];
+        const SIDES = ['front', 'right', 'back', 'left'];
+        for (const z of st.zooms) {
+          parts.push(`<h4>zoom ${z}×</h4><div class="row">`);
+          // the front (-y) toward the viewer first, then round
+          for (let k = 0; k < 4; k++) parts.push(fig(st, st.seed, (k + 2) % 4, z, SIDES[k], 0));
+          parts.push('</div>');
+        }
+        if (st.seeds) {
+          const z = st.zooms.includes(2) ? 2 : st.zooms[0] ?? 2;
+          parts.push(`<h4>seeds ${st.seed}–${st.seed + st.seeds - 1}, front, ${z}× (each on its own dot: the wobble is keyed to the place)</h4><div class="row">`);
+          for (let k = 0; k < st.seeds; k++) parts.push(fig(st, st.seed + k, 2, z, `#${st.seed + k}`, k * 3 + 1));
+          parts.push('</div>');
+        }
+        if (st.paints) {
+          // every paint a house can get (Painter.paint, 0–11: roof paint % 4,
+          // wall paint % 3), on the same house
+          parts.push('<h4>every paint: roof r0–3 × wall v0–2, front, 2×</h4><div class="row">');
+          for (let k = 0; k < 12; k++) parts.push(fig(st, st.seed, 2, 2, `r${k % 4} v${k % 3}`, 0, k));
+          parts.push('</div>');
+        }
+        root.innerHTML = parts.join('');
+        if (st.brush.on || st.brush.grain > 0 || st.brush.rough > 0) root.querySelectorAll('figure svg').forEach((svg, n) => brushUp(svg, +svg.dataset.z, st.brush, n));
+        parent.postMessage({ height: document.documentElement.scrollHeight + 4 }, '*');
+      }
+
+      // the house seen with the camera turned `rot`, at zoom z, as the map
+      // draws it there: the detail its band keeps (Renderer.bandOf, atDetail)
+      function fig(st, seed, rot, z, label, at, paint) {
+        const cam = new Camera({ width: 1, height: 1 }, { tile: 32 });
+        cam.rotation = rot;
+        const s = { type: 'house', seed: Math.imul(seed, 2654435761) >>> 0, id: seed, node: 0, rotation: 0, data: { kind: st.kind } };
+        const g = new Painter(cam, { x: at, y: at * 0.7, z: 0 }, 0, drawSeed(s));
+        const { lod } = CONFIG.render;
+        const level = (z < lod.medium) + (z < lod.far);
+        let roof = 3;
+        while (roof > 0 && LOOK.hatch * 2 ** (3 - roof) * 32 * z < st.roofGap) roof--;
+        g.keep = 2 - level;
+        g.keepTier = roof;
+        g.near = LOOK.open && z >= lod.near;
+        g.setTilt(tiltOf(def, s));
+        if (paint !== undefined) g.paint = paint;
+        let svg = '';
+        try {
+          def.draw(g, s);
+          const shade = SUN.on ? shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sunFor(cam)) : '';
+          svg = g.toGroundSVG() + shade + g.toSVG();
+        } catch (e) { console.warn(e); }
+        if (level) svg = svg.replace(level >= 2 ? /<(?:path|polygon|polyline|circle|ellipse|rect|line)\b[^>]*\bclass="[^"]*\bd[12]\b[^"]*"[^>]*\/>/g : /<(?:path|polygon|polyline|circle|ellipse|rect|line)\b[^>]*\bclass="[^"]*\bd2\b[^"]*"[^>]*\/>/g, '');
+        if (roof < 3) svg = svg.replace(new RegExp(`<(?:path|polyline)\\b[^>]*\\bclass="[^"]*\\brh[${roof + 1}-3]\\b[^"]*"[^>]*\\/>`, 'g'), '');
+        // framed the same at every turn: about one dot round its middle
+        const [cx, cy] = cam.project ? project(cam, at, at * 0.7) : [0, 0];
+        const W = 44, H = 44, px = Math.round(W * z);
+        return `<figure><svg data-z="${z}" width="${px}" height="${Math.round(H * z)}" viewBox="${cx - W / 2} ${cy - H * 0.6} ${W} ${H}" style="--stroke:${1 / z}"><g class="scene layer-objects">${svg}</g></svg><figcaption>${label}</figcaption></figure>`;
+      }
+      // Countryside's colours as set in the knobs, over styles.css's (the
+      // same rules, html.lab making them win)
+      function paintCSS(c) {
+        document.documentElement.classList.add('lab');
+        const root = document.documentElement.style;
+        for (const k of ['bg', 'main', 'detail']) root.setProperty(`--${k}`, c[k]);
+        const T = 'html.tint.lab', css = [];
+        for (const r of [0, 1, 2, 3]) css.push(`${T} .wp.r${r} { --paint: ${c[`r${r}`]}; }`, `${T} .wp.wd.r${r} { --paint: ${c[`r${r}d`]}; }`);
+        for (const v of [0, 1, 2]) css.push(`${T} .ww.v${v} { --wall: ${c[`v${v}`]}; --paint: ${c[`v${v}`]}; }`);
+        css.push(
+          `${T} .ww.wd.v0, ${T} .ww.wd.v1, ${T} .ww.wd.v2 { --paint: color-mix(in srgb, var(--wall) ${100 - c.dark}%, ${c.shadow}); }`,
+          `${T} .layer-objects .filled.ww { fill: color-mix(in srgb, var(--paint) ${c.wallFill}%, var(--bg)); stroke: color-mix(in srgb, var(--paint) ${c.wallLine}%, var(--main)); }`,
+          `${T} .layer-objects .filled:is(.wp, .wt) { fill: color-mix(in srgb, var(--paint) ${c.roofFill}%, var(--bg)); stroke: color-mix(in srgb, var(--paint) ${c.roofLine}%, var(--main)); }`,
+          `${T} .layer-objects .roof-hatch.wp { stroke: color-mix(in srgb, var(--paint) ${c.hatchLine}%, var(--main)); }`,
+          `${T} .layer-objects .filled.wlog { stroke: ${c.log}; }`,
+          `${T} .layer-objects .filled.wplinth { stroke: ${c.plinth}; }`,
+          `${T} .layer-objects .wtrim { stroke: ${c.trim}; }`,
+        );
+        if (c.window !== c.main) css.push(`${T} .layer-objects .ink { fill: ${c.window}; stroke: ${c.window}; }`, `${T} .layer-objects .pane { stroke: ${c.window}; }`);
+        let el = document.getElementById('lab-css');
+        if (!el) document.head.appendChild(el = Object.assign(document.createElement('style'), { id: 'lab-css' }));
+        el.textContent = css.join('\n');
+      }
+      function project(cam, x, y) {
+        const p = new Painter(cam, { x, y, z: 0 }, 0, 1);
+        return p._project(...p._world(0, 0, 0.12));
+      }
+    }
+
+    // ——— the pen's line, tried out here before the game's WebGL does it ———
+    // Every stroked element of a drawing (svg, shown z times its size)
+    // redrawn as filled ribbons of varying width (brush.on), and the lines
+    // grained like pencil (brush.grain, rough): a filter over the ribbons.
+    function brushUp(svg, z, b, n) {
+      const NS = 'http://www.w3.org/2000/svg';
+      let filter = '';
+      if (b.grain > 0 || b.rough > 0) {
+        // (in user units: the svg is z screen px per unit)
+        const id = `grain${n}`, f = z / b.grainSize, k = 3 * b.grain;
+        const defs = document.createElementNS(NS, 'defs');
+        defs.innerHTML = `<filter id="${id}" filterUnits="userSpaceOnUse" x="-500" y="-500" width="1000" height="1000">
+          <feTurbulence type="fractalNoise" baseFrequency="${f}" numOctaves="2" seed="${n + 3}" result="n"/>
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="${(2 * b.rough) / z}" xChannelSelector="R" yChannelSelector="G" result="d"/>
+          <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  ${k} 0 0 0 ${1 - b.grain - 0.5 * k}" result="m"/>
+          <feComposite in="d" in2="m" operator="in"/>
+        </filter>`;
+        svg.prepend(defs);
+        filter = `url(#${id})`;
+      }
+      for (const el of [...svg.querySelectorAll('path, polygon, polyline')]) {
+        const cs = getComputedStyle(el);
+        const w = parseFloat(cs.strokeWidth);
+        if (cs.display === 'none' || cs.stroke === 'none' || !(w > 0) || (cs.strokeDasharray && cs.strokeDasharray !== 'none')) continue;
+        if (!b.on) { if (filter) el.style.filter = filter; continue; }
+        const subs = el.tagName === 'path' ? subpaths(el.getAttribute('d') || '') : [polyPoints(el)];
+        if (!subs) continue;
+        let d = '';
+        for (const sub of subs) for (const run of (b.corners ? atCorners(sub) : [sub.pts])) d += ribbon(run, (w / 2) * b.width, b, z);
+        if (!d) continue;
+        const r = document.createElementNS(NS, 'path');
+        r.setAttribute('d', d);
+        r.style.fill = cs.stroke;
+        r.setAttribute('fill-opacity', String((parseFloat(cs.strokeOpacity) || 1) * (parseFloat(cs.opacity) || 1)));
+        if (filter) r.setAttribute('filter', filter);
+        el.style.stroke = 'none';
+        el.after(r);
+      }
+    }
+    // path data (M, L, l, Q, Z: what the painter writes) as lists of points,
+    // curves flattened; null for anything else
+    function subpaths(d) {
+      const tok = d.match(/[A-Za-z]|-?\d*\.?\d+(?:e-?\d+)?/g) || [];
+      const out = [];
+      let cur = null, cmd = '', i = 0, x = 0, y = 0;
+      const num = () => +tok[i++];
+      while (i < tok.length) {
+        if (/[A-Za-z]/.test(tok[i])) cmd = tok[i++];
+        if (cmd === 'M') { x = num(); y = num(); out.push(cur = { pts: [[x, y]], closed: false }); cmd = 'L'; }
+        else if (cmd === 'L' && cur) { x = num(); y = num(); cur.pts.push([x, y]); }
+        else if (cmd === 'l' && cur) { x += num(); y += num(); cur.pts.push([x, y]); }
+        else if (cmd === 'Q' && cur) {
+          const cx = num(), cy = num(), ex = num(), ey = num();
+          for (let k = 1; k <= 6; k++) {
+            const t = k / 6, u = 1 - t;
+            cur.pts.push([u * u * x + 2 * u * t * cx + t * t * ex, u * u * y + 2 * u * t * cy + t * t * ey]);
+          }
+          x = ex; y = ey;
+        } else if (/[Zz]/.test(cmd) && cur) { cur.pts.push([...cur.pts[0]]); cur.closed = true; [x, y] = cur.pts[0]; cmd = ''; }
+        else return null;
+      }
+      return out;
+    }
+    function polyPoints(el) {
+      const v = (el.getAttribute('points') || '').trim().split(/[\s,]+/).map(Number);
+      const pts = [];
+      for (let k = 0; k + 1 < v.length; k += 2) pts.push([v[k], v[k + 1]]);
+      if (el.tagName === 'polygon' && pts.length) pts.push([...pts[0]]);
+      return { pts, closed: el.tagName === 'polygon' };
+    }
+    // a line split where it turns sharply: an edge per stroke
+    function atCorners({ pts }) {
+      const runs = [];
+      let run = [pts[0]];
+      for (let k = 1; k < pts.length; k++) {
+        run.push(pts[k]);
+        const a = pts[k - 1], c = pts[k], e = pts[k + 1];
+        if (!e) break;
+        const t1 = Math.atan2(c[1] - a[1], c[0] - a[0]), t2 = Math.atan2(e[1] - c[1], e[0] - c[0]);
+        let turn = Math.abs(t2 - t1);
+        if (turn > Math.PI) turn = 2 * Math.PI - turn;
+        if (turn > 0.7) { runs.push(run); run = [pts[k]]; }
+      }
+      runs.push(run);
+      return runs;
+    }
+    // one stroke as a filled outline: half width h, by the brush
+    function ribbon(raw, h, b, z) {
+      const pts = raw.filter((p, k) => !k || Math.hypot(p[0] - raw[k - 1][0], p[1] - raw[k - 1][1]) > 1e-4);
+      if (pts.length < 2) return '';
+      const cum = [0];
+      for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
+      const L = cum[cum.length - 1];
+      // long edges sampled more finely, so the swell can show along them
+      if (pts.length === 2 && L * z > 6) {
+        const m = Math.min(40, Math.ceil((L * z) / 3));
+        const [a, c] = pts;
+        pts.length = 0; cum.length = 0;
+        for (let k = 0; k <= m; k++) { pts.push([a[0] + ((c[0] - a[0]) * k) / m, a[1] + ((c[1] - a[1]) * k) / m]); cum.push((L * k) / m); }
+      }
+      const seed = pts[0][0] * 12.9898 + pts[0][1] * 78.233;
+      const weight = 1 + b.weight * (2 * rnd(seed) - 1);
+      const fade = Math.min(L / 2, 6 / z) || 1e-6;
+      const left = [], right = [];
+      for (let k = 0; k < pts.length; k++) {
+        const p = pts[k], a = pts[Math.max(0, k - 1)], c = pts[Math.min(pts.length - 1, k + 1)];
+        const dx = c[0] - a[0], dy = c[1] - a[1], l = Math.hypot(dx, dy) || 1;
+        const end = Math.min(1, Math.min(cum[k], L - cum[k]) / fade);
+        const taper = 1 - b.taper * (1 - end * end * (3 - 2 * end));
+        const swell = 1 + b.swell * noise1(seed, (cum[k] * z) / b.wave);
+        const w = Math.max(0.02 / z, h * weight * taper * swell);
+        left.push([p[0] - (dy / l) * w, p[1] + (dx / l) * w]);
+        right.push([p[0] + (dy / l) * w, p[1] - (dx / l) * w]);
+      }
+      const f = (q) => `${q[0].toFixed(2)} ${q[1].toFixed(2)}`;
+      return `M${left.map(f).join('L')}L${right.reverse().map(f).join('L')}Z`;
+    }
+    function rnd(x) { const s = Math.sin(x) * 43758.5453; return s - Math.floor(s); }
+    // smooth noise in −1…1 along a stroke
+    function noise1(seed, t) {
+      const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f);
+      const a = rnd(seed + i * 17.17), c = rnd(seed + (i + 1) * 17.17);
+      return 2 * (a + (c - a) * u) - 1;
+    }
+
+    function get(o, path) { return path.split('.').reduce((a, k) => a?.[k], o); }
+    function set(o, path, v) {
+      const ks = path.split('.'), last = ks.pop();
+      ks.reduce((a, k) => a[k], o)[last] = v;
+    }
+    function merge(a, b) {
+      for (const k of Object.keys(b)) a[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] ? merge(a[k], b[k]) : b[k];
+      return a;
+    }
+    // what differs from the code: the settings worth passing on
+    function diff(a, b) {
+      const out = {};
+      for (const k of Object.keys(a)) {
+        if (JSON.stringify(a[k]) === JSON.stringify(b[k])) continue;
+        out[k] = a[k] && b[k] && typeof a[k] === 'object' && !Array.isArray(a[k]) ? diff(a[k], b[k]) : a[k];
+      }
+      return out;
+    }
+  </script>
+</body>
+</html>
