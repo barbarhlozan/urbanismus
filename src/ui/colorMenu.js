@@ -1,10 +1,10 @@
 // The Colors menu: a small panel under the Menu (opened with its Colours
 // drawing, an ink pot – hud.js) listing the color schemes, plus the
 // player's own custom scheme with a picker and a hex field for each of its
-// five colors (see theme.js).
+// colors (theme.js MENU_COLORS: shade and green only while a scheme uses them).
 // Editing a custom color switches to the custom scheme.
 
-import { SCHEMES, CUSTOM, COLOR_NAMES, withAll, applyTheme, setCustomColor, normalizeHex, schemeChoice } from '../theme.js';
+import { SCHEMES, CUSTOM, MENU_COLORS, withAll, applyTheme, setCustomColor, normalizeHex, schemeChoice } from '../theme.js';
 import { reveal, isShown } from './motion.js';
 import { t, hasText } from '../core/text.js';
 
@@ -20,7 +20,7 @@ const schemeName = (s) => {
 // a dot in each of a scheme's colors
 const swatches = (s) => {
   const all = withAll(s);
-  return `<span class="swatches">${COLOR_NAMES.map((n) => `<i data-c="${n}" style="background:${all[n]}"></i>`).join('')}</span>`;
+  return `<span class="swatches">${MENU_COLORS.map((n) => `<i data-c="${n}" style="background:${all[n]}"></i>`).join('')}</span>`;
 };
 
 export class ColorMenu {
@@ -34,7 +34,7 @@ export class ColorMenu {
       ${SCHEMES.map((s, i) => `<button class="scheme" data-choice="${i}">${swatches(s)}${schemeName(s)}</button>`).join('')}
       <button class="scheme" data-choice="custom">${swatches(CUSTOM)}${schemeName(CUSTOM)}</button>
       <div class="custom-fields">
-        ${COLOR_NAMES.map((n) => `
+        ${MENU_COLORS.map((n) => `
           <label data-c="${n}">
             <input type="color" data-c="${n}" value="${CUSTOM[n]}" aria-label="${label(n)}">
             <span class="field-name">${label(n)}</span>

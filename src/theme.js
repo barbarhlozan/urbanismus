@@ -43,6 +43,9 @@ export const SCHEMES = [
 ];
 
 export const COLOR_NAMES = ['bg', 'main', 'detail', 'shade', 'green'];
+// The colours the Colors menu shows and lets the player set: shade and
+// green only while a scheme uses them (a `tone` one; none for now).
+export const MENU_COLORS = SCHEMES.some((s) => s.tone) ? COLOR_NAMES : COLOR_NAMES.slice(0, 3);
 
 // A scheme with all five colours: shade and green, where it has none,
 // mixed from its own (a mid tone of detail on bg; the trees in detail).
