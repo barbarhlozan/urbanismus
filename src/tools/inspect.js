@@ -38,6 +38,7 @@ export function createInspectTool(ctx) {
     click(node, event) {
       const s = node < 0 ? null : ctx.world.structureAt(node);
       if (!s) return ctx.popup.hide();
+      ctx.onPick?.(s); // (the dev buttons act on it, ui/devStrip.js)
       const { title, items } = structureMenu(ctx, s);
       // beside the building's own drawing as it's shown (its tower or
       // chimney too), or failing that its footprint and some height
