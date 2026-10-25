@@ -18,6 +18,7 @@ import { Renderer } from './render/renderer.js';
 import { SUN, sunAt, DAY, hourAt } from './render/shadows.js';
 import { OverlayKit } from './render/overlay.js';
 import { AgentSystem } from './sim/agents.js';
+import { FireSystem } from './sim/fire.js';
 import { GrowthSystem } from './sim/growth.js';
 import { Families } from './sim/families.js';
 import { SimClock } from './sim/clock.js';
@@ -148,6 +149,7 @@ const clock = new SimClock(CONFIG);
 clock.elapsed = world.time; // (the town's own time carries on from the save)
 const parking = new ParkingSystem(world);
 const agents = new AgentSystem(world, CONFIG, parking);
+const fires = new FireSystem(world, agents, CONFIG);
 const growth = new GrowthSystem(world, CONFIG);
 new Families(world); // who lives where and runs what (kept on the buildings)
 const trains = new TrainSystem(world, CONFIG);
@@ -199,7 +201,7 @@ agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos)
 UNLOCKS.setWorld(world); // (what may be built: story/unlocks.txt, read with the story)
 const chronicle = new Chronicle(world, CONFIG);
 const dialogue = new Dialogue(uiRoot, { typing: CONFIG.story.typing, avoid: '.build-menu' });
-const story = new Storyteller({ world, agents, trains, dialogue, chronicle, config: CONFIG });
+const story = new Storyteller({ world, agents, fires, trains, dialogue, chronicle, config: CONFIG });
 // (read with the opening, below: openIntro)
 
 const tools = new ToolManager(world.grid, 'inspect');
@@ -694,6 +696,7 @@ function loop(now) {
     world.time = clock.elapsed;
     weather.update();
     agents.update(simDt);
+    fires.update(simDt);
     trains.update(simDt);
     boats.update(simDt);
     deer.update(simDt);
@@ -732,4 +735,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // Handy for debugging from the console: cmd.help() (src/dev/commands.js).
-window.cmd = createCommands({ world, config: CONFIG, clock, weather, agents, trains, boats, deer, livestock, growth, story, annotations, renderer, unlocks: UNLOCKS });
+window.cmd = createCommands({ world, config: CONFIG, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, annotations, renderer, unlocks: UNLOCKS });

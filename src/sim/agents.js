@@ -6,6 +6,9 @@
 //
 // People can also be sent: send() has those of given houses go to one
 // place, stay and come back (cmd.send, by house number; the story next).
+// At a fire (src/sim/fire.js) neighbours and the brigade are taken over by
+// the FireSystem (state 'fire', or 'fireWait' while out of sight): it moves
+// them itself and hands them back on a leg home.
 //
 // Trips to a place pick a mode (planCommute):
 //   walk   – within comfortable walking distance over footpaths and street
@@ -105,6 +108,7 @@ export class AgentSystem {
     this._balance = null; // cached { residents, jobs, workplaces }
     this.log = () => {}; // (text, [x, y]) – set by main to feed annotations
     this.trains = null;  // TrainSystem, set by main: closed level crossings
+    this.fires = null;   // FireSystem, set by main: fire engines pulling up
     this.queues = new Map(); // closed crossing + heading + kind -> people queued there
 
     const rebalance = () => (this._balance = null);
@@ -135,7 +139,11 @@ export class AgentSystem {
           this.agents.set(id, newAgent({ id, home: s.id, state: 'home', timer: timer(), ...extra }));
         }
       } else if (this.agents.has(id)) {
-        this.agents.delete(id);
+        // (out at the fire that took their home: they go to the neighbours
+        // when it's over, src/sim/fire.js)
+        const a = this.agents.get(id);
+        if (a.state === 'fire' || a.state === 'fireWait') a.drop = true;
+        else this.agents.delete(id);
       } else {
         break;
       }
@@ -149,7 +157,7 @@ export class AgentSystem {
     for (const [id, a] of this.agents) {
       const kind = a.bus ? 'buses' : a.truck ? 'trucks' : a.trip?.mode === 'drive' ? 'cars' : null;
       if (!kind || can(kind)) continue;
-      if (a.visitor) {
+      if (a.visitor || a.engine) {
         this.agents.delete(id);
         continue;
       }
@@ -164,6 +172,13 @@ export class AgentSystem {
 
   despawnFor(s) {
     for (const [id, a] of this.agents) if (a.home === s.id && !a.visitor) this.agents.delete(id);
+  }
+
+  // A new agent of someone else's (a fire engine and its crew, src/sim/fire.js).
+  spawn(fields) {
+    const a = newAgent(fields);
+    this.agents.set(a.id, a);
+    return a;
   }
 
   visitorCount() {
@@ -301,7 +316,7 @@ export class AgentSystem {
         // falls through
         case 'back': {
           const leg = a.state === 'out' ? a.trip.out : a.trip.back;
-          const step = this.speedOf(a.trip.mode) * paceAt(leg, a.s) * a.followK * this.doorEase(a, leg) * (a.truck ? this.config.trucks.speed : 1) * dt;
+          const step = this.speedOf(a.trip.mode) * paceAt(leg, a.s) * a.followK * this.doorEase(a, leg) * (a.engine ? this.config.fire.engineSpeed : a.truck ? this.config.trucks.speed : 1) * dt;
           a.s = Math.min(a.s + Math.min(step, a.room), Math.max(a.s, this.crossingStop(a, leg)));
           [a.x, a.y] = pointAt(leg, a.s);
           if (a.truck) [a.tx, a.ty] = backPoint(leg, a.s, this.config.trucks.trailer);
@@ -322,6 +337,8 @@ export class AgentSystem {
   // At the end of the way out.
   arrive(a) {
     const { trip } = a;
+    if (trip.purpose === 'fire') return this.fires?.arrived(a); // a fire engine pulling up
+    if (trip.purpose === 'refuge') return this.agents.delete(a.id); // taken in by the neighbours
     if (trip.transit) {
       a.state = 'wait';
       a.timer = this.config.transit.maxWait;
@@ -337,6 +354,7 @@ export class AgentSystem {
   }
 
   arriveHome(a) {
+    if (a.engine || a.drop) return this.agents.delete(a.id); // (a fire engine back, a brigade on foot, or homeless: gone)
     a.state = 'home';
     a.trip = null;
     a.wander = null;
@@ -1509,7 +1527,7 @@ export class AgentSystem {
 }
 
 // States in which an agent is out and about (drawn).
-const VISIBLE = new Set(['out', 'back', 'linger', 'wait']);
+const VISIBLE = new Set(['out', 'back', 'linger', 'wait', 'fire']);
 
 const NONE = [];
 
@@ -1551,6 +1569,7 @@ function newAgent(fields) {
     followK: 1, room: Infinity, held: 0, creep: 0, stall: 0, fx: 0, fy: 0, bx: 0, by: 0, hx: 1, hy: 0, half: 0, next: -1,
     box: null, toBox: Infinity, claim: false, yieldTo: null, nose: 0, len: 0, px: 0, py: 0, v: 0, aside: false, leader: null, blocker: null, ahead: Infinity, across: Infinity,
     waitKey: null, slot: 0, wander: null, retry: null, sentTo: null,
+    fire: null, carry: null, watch: null, engine: null, drop: false,
     legs: null, leg: 0, call: 0, pause: 0, left: 0,
   }, fields);
 }

@@ -6,8 +6,8 @@
 // picked (house numbers by name) are kept with the town (world.story), so
 // a reload carries on where it was. A picked name reads as its number in
 // conditions and in {name}; send and burn act on it (agents.send,
-// World.burnStructure – the town's own doing, not the player's: ⌘Z
-// leaves it).
+// fires.ignite: it burns a while, the town turns out, then it's a ruin –
+// the town's own doing, not the player's: ⌘Z leaves it).
 //
 // Mistakes in the file are listed in the dialogue window when it loads (and
 // in the console), with their line.
@@ -27,9 +27,10 @@ const PICKABLE = (what) => what === 'building' || what === 'buildings'
   || Object.values(STRUCTURE_TYPES).some((def) => [def.id, ...(def.tags ?? [])].some((n) => normalName(n) === what));
 
 export class Storyteller {
-  constructor({ world, agents, trains, dialogue, chronicle, config }) {
+  constructor({ world, agents, fires, trains, dialogue, chronicle, config }) {
     this.world = world;
     this.agents = agents;
+    this.fires = fires;
     this.trains = trains;
     this.dialogue = dialogue;
     this.chronicle = chronicle;
@@ -228,7 +229,7 @@ export class Storyteller {
         }
         case 'burn': {
           const s = this.standing(step.place);
-          if (s) this.world.history.aside(() => this.world.burnStructure(s.id));
+          if (s && !s.burning) this.world.history.aside(() => (this.fires ? this.fires.ignite(s) : this.world.burnStructure(s.id)));
           break;
         }
         case 'set':

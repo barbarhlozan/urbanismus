@@ -3887,7 +3887,7 @@ export class Renderer {
       el.seen = now; // (gone: not seen this frame)
       const k = growScale(now - el.born);
       if (kind === 'truck' || kind === 'bus') {
-        this.placeVehicle(el, a, kind === 'bus' ? 'bus' : truckFor(a.id));
+        this.placeVehicle(el, a, kind === 'bus' ? 'bus' : a.engine ?? truckFor(a.id));
         this.drawAgent(el, k);
         continue;
       }
@@ -4093,12 +4093,15 @@ export class Renderer {
     // put up an umbrella; who does is fixed per walker, so worked out once
     const share = this.umbrellas;
     const brolly = kind === 'walker' && share > 0 && ((el.brolly ??= bodyFor(`${a.id}u`)) + 0.5) / PEOPLE.bodies <= share;
-    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.angle}` : `w${body}${brolly ? 'u' : ''}`;
+    const carry = kind === 'walker' ? a.carry : null; // (at a fire: a bucket, the hose)
+    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.angle}` : `w${body}${brolly ? 'u' : ''}${carry ?? ''}`;
     if (el.key !== key) {
       el.key = key;
       el.shapes = !close ? [shape(kind, personMark(kind, a.id))]
-        : shapesOf(kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body, brolly));
+        : shapesOf(kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body, brolly, carry));
     }
+    // at a fire, facing it (or whoever they pass the bucket to)
+    if (a.watch) el.left = this.projectDeck(a.watch[0], a.watch[1], 0.04)[0] < sx;
     // cyclists' wheels already follow the way they ride
     return close && kind === 'walker' && !!el.left;
   }

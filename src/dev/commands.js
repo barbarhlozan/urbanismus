@@ -11,7 +11,7 @@ import { SUN, DAY, sunAt, stepAt, holdDay, goOnDay, dayLength } from '../render/
 
 const STEP = 0.5; // simulated seconds per step while jumping
 
-export function createCommands({ world, config, clock, weather, agents, trains, boats, deer, livestock, growth, story, annotations, unlocks, renderer = null, save = exportCity }) {
+export function createCommands({ world, config, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, annotations, unlocks, renderer = null, save = exportCity }) {
   // What `cmd.spawn(name)` can make; each returns something truthy if it did.
   const SPAWN = {
     deer: () => deer.launch(),
@@ -67,6 +67,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
       world.time = clock.elapsed;
       weather.update();
       agents.update(STEP);
+      fires?.update(STEP);
       trains.update(STEP);
       boats.update(STEP);
       deer.update(STEP);
@@ -157,18 +158,47 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
     return sent;
   }
 
-  // House `no` burns down, as the story's `burn` does: the town's doing,
-  // not a step ⌘Z takes back (demolish the ruin to clear it).
+  // House `no` catches fire and burns down, as the story's `burn` does
+  // (src/sim/fire.js: the neighbours and the brigade turn out): the town's
+  // doing, not a step ⌘Z takes back (demolish the ruin to clear it).
   function burn(no) {
     const s = world.structureByNo(no);
     if (!s) return house(no); // (says why)
     if (s.ruin) return fail(`č. p. ${no}`, 'burnt down already');
-    return world.history.aside(() => world.burnStructure(s.id));
+    if (s.burning) return fail(`č. p. ${no}`, 'burning already');
+    return world.history.aside(() => fires.ignite(s));
+  }
+
+  // What's burning, and who's there doing what (src/sim/fire.js).
+  function fire() {
+    return [...(fires?.fires.values() ?? [])].map((f) => {
+      const s = world.structures.get(f.id);
+      const doing = {};
+      for (const a of f.people) {
+        const k = `${a.fire.role} ${a.fire.phase}`;
+        doing[k] = (doing[k] ?? 0) + 1;
+      }
+      return { no: s?.no, left: s?.burning ? Math.round(s.burning.left) : 'burnt', chain: f.chain?.places ?? 0, engine: f.engine?.state ?? null, doing };
+    });
+  }
+
+  // The view centred on house `no`, `zoom` close (to watch it, say, burn).
+  function look(no, zoom = 3) {
+    const s = world.structureByNo(no);
+    if (!s) return house(no); // (says why)
+    const cam = renderer?.camera;
+    if (!cam) return fail('No view', 'no renderer');
+    cam.zoom = Math.min(cam.maxZoom, Math.max(cam.minZoom, zoom));
+    cam.centerOn(...world.centerOf(s), innerWidth, innerHeight);
+    renderer.invalidate();
+    return true;
   }
 
   const cmd = {
     spawn,
     house,
+    look,
+    fire,
     send,
     burn,
     build,
@@ -249,7 +279,9 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         'cmd.tree(x, y)',
         'cmd.house(4)              the building č. p. 4; cmd.house() every one',
         'cmd.send([1, 2, 3], 7)    the people of č. p. 1, 2, 3 go to č. p. 7, stay and come home',
-        'cmd.burn(4)               č. p. 4 burns down (a ruin until demolished)',
+        'cmd.fire()                what burns, and who is there doing what',
+        'cmd.look(4, 3)            the view on č. p. 4, zoomed in 3×',
+        'cmd.burn(4)               č. p. 4 catches fire, the town turns out, it burns down (a ruin until demolished)',
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',

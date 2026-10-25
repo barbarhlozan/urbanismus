@@ -423,6 +423,35 @@ export const CONFIG = {
     trailer: 0.2,                   // grid steps from the truck's front to its back
   },
 
+  // A fire (src/sim/fire.js): the house burns a while, then it's a ruin
+  // whatever is done. Neighbours in reach come – some to watch, some to
+  // help with buckets (a chain from the nearest house when there are
+  // enough of them for it, otherwise each running to and from home) – and
+  // the nearest brigade drives over.
+  fire: {
+    burn: [110, 150],     // seconds a building burns
+    reach: 6,             // grid steps (straight) people come from
+    turnOut: 0.75,        // of those at home this near, the share that come (fewer further)
+    household: [0, 2],    // more of each household that comes, with them
+    most: 36,             // people at one fire at most
+    helpers: 0.45,        // share of them who help, the rest watch
+    notice: [3, 14],      // seconds before each sets off
+    hurry: 1.5,           // everyone's pace to a fire, a share of walking speed
+    crowd: [0.35, 0.75],  // watchers stand this far out from the building's edge…
+    spread: 1.1,          // …within this angle (radians) either side of the way they came
+    chainSource: 3,       // a bucket chain runs from a house this near (straight)…
+    chainGap: 0.2,        // …with someone every this many grid steps along it, at most
+    chainMin: 4,          // …and needs at least this many helpers
+    pass: 1.6,            // buckets passed along a chain per second
+    splash: [1, 1.8],     // seconds a runner stands throwing water
+    refill: [3, 6],       // seconds a runner is in the house filling the bucket
+    alarm: { 'fire-house': [16, 30], station: [6, 12] }, // seconds before the brigade sets off
+    crew: { 'fire-house': 3, station: 5 },
+    engineSpeed: 1,       // the engine's pace, a share of a car's
+    after: [6, 24],       // seconds people stay after it has burnt down
+    brigadeAfter: [18, 30], // …and the brigade, damping it down
+  },
+
   // Buses: come in through a road exit, call at a few bus stops (nearest
   // next) and leave through an exit. No road to the map edge, no buses.
   buses: {
