@@ -48,6 +48,8 @@ export class FireSystem {
     this.agents = agents;
     this.config = config;
     this.fires = new Map(); // burning structure id -> fire
+    this.waning = new Set(); // fires over, their people still going home
+    this.seq = 0;            // (each fire's engine and crew their own ids)
     this.embers = new Set(); // ids of ruins still smouldering
     agents.fires = this;
     world.events.on('structure:changed', (s) => {
@@ -103,7 +105,7 @@ export class FireSystem {
     const centre = world.centerOf(s);
     const pts = world.nodesOf(s).map((n) => world.grid.xy(n));
     const edge = Math.max(...pts.map(([x, y]) => Math.hypot(x - centre[0], y - centre[1]))) + this.config.sim.doorPad;
-    const f = { id: s.id, centre, edge, out: false, people: new Set(), chain: null, engine: null, crew: [], alarm: null, station: null };
+    const f = { id: s.id, seq: ++this.seq, centre, edge, out: false, people: new Set(), chain: null, engine: null, crew: [], alarm: null, station: null };
     this.fires.set(s.id, f);
     agents.log(`č. p. ${s.no} on fire`, centre);
 
@@ -158,7 +160,7 @@ export class FireSystem {
 
   take(f, a, job) {
     a.state = 'fireWait';
-    a.fire = { fire: f.id, s: 0, leg: null, target: null, release: null, slot: 0, ...job };
+    a.fire = { fire: f, s: 0, leg: null, target: null, release: null, slot: 0, ...job };
     a.wander = null;
     a.carry = null;
     a.watch = null;
@@ -229,7 +231,7 @@ export class FireSystem {
     const drive = UNLOCKS.allowsVehicle('trucks') && agents.driveRoute(st, s);
     const crew = [];
     for (let k = 0; k < n; k++) {
-      const a = agents.spawn({ id: `fire:${s.id}:${st.id}:c${k}`, home: st.id, state: 'fireWait', drop: true });
+      const a = agents.spawn({ id: `fire:${s.id}:${f.seq}:c${k}`, home: st.id, state: 'fireWait', drop: true });
       [a.x, a.y] = world.centerOf(st);
       a.trip = { mode: 'walk', nodes: [], dest: s.id, purpose: 'fire', out: null, back: null };
       this.take(f, a, { role: 'crew', phase: drive ? 'aboard' : 'notice', timer: k * 0.6, post: k });
@@ -237,14 +239,14 @@ export class FireSystem {
     }
     f.crew = crew;
     if (drive) {
-      const e = agents.spawn({ id: `fire:${s.id}:${st.id}:e`, home: st.id, state: 'out', truck: true, engine: f.station.kind === 'fire-house' ? 'dvs' : 'cas' });
+      const e = agents.spawn({ id: `fire:${s.id}:${f.seq}:e`, home: st.id, state: 'out', truck: true, engine: f.station.kind === 'fire-house' ? 'dvs' : 'cas' });
       agents.begin(e, { ...drive, truck: true, purpose: 'fire' }, s.id);
       // (pulls up on the road short of the door, and turns back from there)
       const out = cut(e.trip.out, 0.3);
       e.trip.out = agents.leg(out, true, false, true);
       e.trip.back = agents.leg(out.slice().reverse(), false, true, true);
       agents.beginLeg(e, e.trip.out);
-      e.fire = { fire: f.id, role: 'engine', phase: 'drive', release: null };
+      e.fire = { fire: f, role: 'engine', phase: 'drive', release: null };
       f.engine = e;
     } else {
       const route = this.route(st, s, Infinity);
@@ -259,7 +261,7 @@ export class FireSystem {
 
   // AgentSystem: an engine has pulled up. Its crew get down.
   arrived(e) {
-    const f = this.fires.get(e.trip.dest);
+    const f = e.fire?.fire;
     e.state = 'fire';
     if (!f) return this.leave(e);
     const back = [e.tx, e.ty];
@@ -288,7 +290,9 @@ export class FireSystem {
   // ----- every frame -----
 
   update(dt) {
+    const waning = [...this.waning]; // (not those going out this frame: they've had their step)
     for (const f of this.fires.values()) this.step(f, dt);
+    for (const f of waning) this.step(f, dt);
     for (const id of this.embers) {
       const s = this.world.structures.get(id);
       if (!s?.embers) this.embers.delete(id);
@@ -324,17 +328,25 @@ export class FireSystem {
       this.move(f, a, dt);
     }
     const e = f.engine;
-    if (e && (this.agents.agents.get(e.id) !== e || e.state === 'back')) f.engine = null;
-    else if (e?.state === 'fire' && f.out && (e.fire.release -= dt) <= 0 && f.crew.every((a) => !f.people.has(a) || a.fire.phase === 'boarded')) {
+    if (e && (this.agents.agents.get(e.id) !== e || e.state === 'back')) {
+      f.engine = null;
+      for (const a of f.crew) if (f.people.has(a) && a.state === 'fireWait' && a.trip.out === null) this.drop(f, a); // (left without them)
+    } else if (e?.state === 'fire' && f.out && (e.fire.release -= dt) <= 0 && f.crew.every((a) => !f.people.has(a) || a.fire.phase === 'boarded')) {
       for (const a of f.crew) this.drop(f, a);
       this.leave(e);
     }
-    if (f.out && !f.people.size && !f.engine) this.fires.delete(f.id);
+    if (f.out && !f.people.size && !f.engine) this.waning.delete(f);
   }
 
   // It has burnt down (or the fire is over some other way: `now`, all at once).
+  // It moves to the waning fires, so the house can catch fire again
+  // while they go home.
   burntOut(f, now = false) {
     f.out = true;
+    if (this.fires.get(f.id) === f) {
+      this.fires.delete(f.id);
+      this.waning.add(f);
+    }
     f.alarm = null;
     const cfg = this.config.fire;
     for (const a of f.people) a.fire.release = now ? 0 : between(a.fire.role === 'crew' ? cfg.brigadeAfter : cfg.after);
@@ -552,7 +564,7 @@ export class FireSystem {
 
   homeward(a) {
     if (a.fire) {
-      this.fires.get(a.fire.fire)?.people.delete(a);
+      a.fire.fire.people.delete(a);
       a.fire = null;
     }
     a.carry = null;

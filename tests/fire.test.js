@@ -68,6 +68,7 @@ test('a house set to burn two minutes: the town turns out, then it is a ruin and
   assert.ok(![...agents.agents.values()].some((a) => a.fire || a.state === 'fire' || a.state === 'fireWait'));
   assert.ok(![...agents.agents.values()].some((a) => String(a.id).startsWith('fire:')));
   assert.equal(fires.fires.size, 0);
+  assert.equal(fires.waning.size, 0);
   assert.ok(![...agents.agents.values()].some((a) => a.home === s.id)); // (they went to the neighbours)
   assert.ok(![...agents.agents.values()].some((a) => a.drop)); // (and the households' others gone back in)
   CONFIG.fire.turnOut = 0.75;
@@ -149,4 +150,20 @@ test('the story ignites (for a time or not), puts out and burns', async () => {
   assert.deepEqual(steps.map((s) => s.kind), ['ignite', 'ignite', 'ignite', 'putOut', 'burn', 'putOut']);
   assert.deepEqual(steps.slice(0, 3).map((s) => s.minutes), [null, 2, 1.5]);
   assert.equal(errors.length, 1); // (barn was never picked)
+});
+
+test('a house lit again right after its fire was put out burns again', () => {
+  const { homes, agents, fires } = town();
+  const s = homes[4];
+  fires.ignite(s);
+  run(agents, fires, 40); // (the brigade on its way or there)
+  fires.putOut(s);
+  assert.ok(fires.ignite(s, 120)); // (while the first fire's people are still going home)
+  run(agents, fires, 60);
+  assert.ok(s.burning.age > 59 && s.burning.left < 61);
+  run(agents, fires, 61);
+  assert.ok(s.ruin && !s.burning);
+  run(agents, fires, 400);
+  assert.equal(fires.fires.size + fires.waning.size, 0);
+  assert.ok(![...agents.agents.values()].some((a) => a.fire || a.state === 'fire' || a.state === 'fireWait' || String(a.id).startsWith('fire:')));
 });
