@@ -2112,3 +2112,21 @@ html.tone.painted .layer-objects .filled.arch { fill: var(--main); stroke: none;
    shared with it above (html:is(.wc, .tint)): roofs and walls by house,
    logs, boards and plinths, the trees and the grass, the water. */
 html.tint .layer-objects .filled:is(.ww, .wp, .wt) { fill: var(--paint, #ece4d4); }
+/* …and the colour held by the lines, not the fills: the paper left as it
+   is, a roof's outline and hatching in its paint (Painter._roofPaint), a
+   tree's outline and leaves in its crown's, the logs and the plinth drawn
+   in line, the water only its shore and ripples in turquoise */
+html.tint .layer-objects .filled:is(.ww, .wp, .wt) { fill: var(--bg); }
+html.tint .layer-objects .filled.ww { stroke: color-mix(in srgb, var(--paint, #8a7c6c) 30%, var(--main)); }
+html.tint .layer-objects .filled:is(.wp, .wt) { stroke: color-mix(in srgb, var(--paint, #8a7c6c) 82%, var(--main)); }
+html.tint .layer-objects .roof-hatch.wp { stroke: color-mix(in srgb, var(--paint) 82%, var(--main)); }
+html.tint .layer-objects .filled.wlog { fill: none; stroke: #93533a; stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+html.tint .layer-objects .filled.wplinth { fill: none; stroke: #9a948a; stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+html.tint .filled.tree.crown { fill: var(--bg); }
+html.tint .glyph:is(.crown-line, .leaf).crown { stroke: color-mix(in srgb, var(--paint) 85%, var(--main)); }
+html.tint .layer-objects .filled.pool { display: none; }
+html.tint .layer-forest :is(.filled, .forest) { fill: var(--bg); }
+html.tint .layer-forest .forest-edge { stroke: #6f8b3d; }
+html.tint :is(.pond, .river-wash) { display: none; }
+html.tint :is(.shore, .bank) { stroke: #4f9a96; }
+html.tint .wave { stroke: #74b5b0; }

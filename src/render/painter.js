@@ -493,7 +493,7 @@ export class Painter {
       d[tierOf(k)] += LOOK.sketch ? this._sketch(line, false).d : `M${this._proj(line[0]).replace(',', ' ')}L${this._proj(line[1]).replace(',', ' ')}`;
     }
     d.forEach((path, n) => {
-      if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln roof-hatch${tierClass(n, 'rh')}`)}/>`);
+      if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln roof-hatch${tierClass(n, 'rh')}${this._roofPaint()}`)}/>`);
     });
   }
 
@@ -686,8 +686,10 @@ export class Painter {
     this._spread(points);
     const n = newellNormal(points);
     if (opts.shadow !== false && !this._footOf(points, n)) this._castFace(points);
+    this._lastPaint = '';
     if (!this._facing(n, points[0])) return this;
     const paint = this._wash(n, points);
+    this._lastPaint = paint;
     if (paint) opts = { ...opts, cls: opts.cls ? `${opts.cls} ${paint}` : paint };
     if (this._lod(opts) <= this.keep) this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
     if (paint.startsWith('ww')) this._washDetail(points, n, paint);
@@ -804,6 +806,14 @@ export class Painter {
       const inset = (p, k) => p.map((v, i) => v + (c[i] - v) * k);
       lineOn([inset(A, 0.28), inset(top, 0.28), inset(B, 0.28)], 'wtrim');
     }
+  }
+
+  // The paint of the roof plane just drawn (face, _wash), for its hatching:
+  // the coloured sketch draws the strokes in it (styles.css html.tint).
+  // Its colour classes only (wp, wd, r0–3), so few kinds of stroke.
+  _roofPaint() {
+    const tags = (this._lastPaint ?? '').split(' ').filter((c) => c === 'wp' || c === 'wd' || /^r\d$/.test(c));
+    return tags.includes('wp') ? ` ${tags.join(' ')}` : '';
   }
 
   // A wall turned away from the sun gets hatched (SUN.strokes,
@@ -1542,6 +1552,12 @@ export class Painter {
     this._ensure(groups[0].x, groups[0].y, groups[0].z);
     // one decimal is plenty for these small glyphs, and keeps the markup small
     const r1 = (n) => Math.round(n * 10) / 10;
+    // (a crown's outline and its leaves in the crown's own paint, by where
+    // the tree stands as shape() picks it: the coloured sketch, html.tint)
+    if (washOn() && /\b(crown-line|leaf)\b/.test(opts.cls ?? '')) {
+      const [wx, wy] = this._world(groups[0].x, groups[0].y, groups[0].z);
+      opts = { ...opts, cls: `${opts.cls} crown t${Math.floor((hash2(wx, wy, 11) + 1) * 2.5) % 5}` };
+    }
     let d = '';
     for (const { x, y, z, lines } of groups) {
       const a = this._anchor(x, y, z);
