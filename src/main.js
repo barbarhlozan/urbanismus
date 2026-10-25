@@ -19,6 +19,7 @@ import { SUN, sunAt, DAY, hourAt } from './render/shadows.js';
 import { OverlayKit } from './render/overlay.js';
 import { AgentSystem } from './sim/agents.js';
 import { GrowthSystem } from './sim/growth.js';
+import { Families } from './sim/families.js';
 import { SimClock } from './sim/clock.js';
 import { WeatherSystem, mistRisen } from './sim/weather.js';
 import { Ambience } from './audio/ambience.js';
@@ -148,6 +149,7 @@ clock.elapsed = world.time; // (the town's own time carries on from the save)
 const parking = new ParkingSystem(world);
 const agents = new AgentSystem(world, CONFIG, parking);
 const growth = new GrowthSystem(world, CONFIG);
+new Families(world); // who lives where and runs what (kept on the buildings)
 const trains = new TrainSystem(world, CONFIG);
 const boats = new BoatSystem(world, CONFIG);
 const deer = new DeerSystem(world, CONFIG, agents);

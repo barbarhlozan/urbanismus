@@ -538,6 +538,17 @@ inspect.no.full
   cs: Číslo popisné {no}
   en: House number {no}
 
+# between two families' names in a home's title: Novákovi a Dvořákovi
+# (the names themselves stay Czech in every language)
+families.and
+  cs: a
+  en: and
+
+# a slot at a place nobody holds yet (structures/staff.js)
+staff.vacant
+  cs: volné místo
+  en: vacant
+
 # on the card of a building that burnt down (World.burnStructure)
 inspect.ruin
   cs: Spáleniště

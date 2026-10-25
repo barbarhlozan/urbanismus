@@ -781,6 +781,16 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
    corners, the "č. p." small before the number, a touch askew */
 .bi-no { align-self: center; display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 7px 0; border: var(--line) solid var(--fg); border-radius: 3px; font-size: 14px; color: var(--fg); transform: rotate(-1.5deg); }
 .bi-no small { font-size: 9px; color: var(--detail); }
+.bi-head { justify-content: center; gap: 8px; }
+/* the families of a big house, who runs a place: a short list, a row each,
+   in the middle like the rest of the card */
+.bi-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.bi-families { display: grid; grid-template-columns: auto auto; justify-content: center; gap: 2px 18px; }
+.bi-families li:only-child { grid-column: span 2; }
+/* a person a row of two lines: the role (and where) small, the name under it */
+.bi-staff { gap: 6px; }
+.bi-staff li { display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.25; }
+.bi-role { font-size: 10px; color: var(--detail); }
 .popup-block .stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .popup-block .stat b { font-weight: 700; }
 .popup-block .warn { color: var(--detail); }
