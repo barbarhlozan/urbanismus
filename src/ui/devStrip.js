@@ -10,6 +10,9 @@
 //           (burns until put out or burnt down), Zapálit na 2 min (burns
 //           down by itself then), Uhasit, Shořet – cmd.ignite / putOut / burn
 //
+// – at the end folds it away to one small button that opens it again;
+// which it is is remembered in this browser (FOLDED).
+//
 // Remove it (and its lines in main.js, tools/inspect.js and styles.css)
 // once the fires and the time have their own controls.
 
@@ -17,6 +20,14 @@ import { DAY, hourAt } from '../render/shadows.js';
 import { t } from '../core/text.js';
 
 const TIMED = 2; // minutes the second Zapálit burns for
+const FOLDED = 'urbanismus.devStrip.folded'; // localStorage: '1' while folded away
+
+function remembered() {
+  try { return localStorage.getItem(FOLDED) === '1'; } catch { return false; }
+}
+function remember(folded) {
+  try { localStorage.setItem(FOLDED, folded ? '1' : '0'); } catch { /* (not remembered) */ }
+}
 
 export class DevStrip {
   constructor(root, { world, clock, cmd }) {
@@ -27,10 +38,12 @@ export class DevStrip {
     this.el = document.createElement('div');
     this.el.className = 'dev-strip';
     this.el.innerHTML =
+      `<button class="dev-open" data-dev="open">${t('dev.open')}</button>` +
       '<div class="dev-row">' +
         '<button data-dev="play"></button><button data-dev="speed"></button>' +
         `<button data-dev="jump">${t('dev.jump')}</button>` +
         '<button data-dev="earlier" aria-label="−1 h">‹</button><button data-dev="hour"></button><button data-dev="later" aria-label="+1 h">›</button>' +
+        `<button class="dev-fold" data-dev="fold" aria-label="${t('dev.fold')}" title="${t('dev.fold')}">–</button>` +
       '</div>' +
       '<div class="dev-row">' +
         '<span class="dev-target"></span>' +
@@ -39,9 +52,16 @@ export class DevStrip {
         `<button data-dev="putOut">${t('dev.put-out')}</button>` +
         `<button data-dev="burn">${t('dev.burn')}</button>` +
       '</div>';
+    this.el.classList.toggle('folded', remembered());
     root.appendChild(this.el);
 
+    const fold = (folded) => {
+      this.el.classList.toggle('folded', folded);
+      remember(folded);
+    };
     const act = {
+      fold: () => fold(true),
+      open: () => fold(false),
       play: () => cmd.time(clock.paused ? 'play' : 'pause'),
       speed: () => cmd.time((clock.index + 1) % clock.speeds.length),
       jump: () => cmd.jump(1),

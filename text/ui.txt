@@ -555,6 +555,14 @@ dev.jump
   cs: +1 min
   en: +1 min
 
+dev.fold
+  cs: Schovat ladění
+  en: Hide the dev buttons
+
+dev.open
+  cs: Ladění
+  en: Dev
+
 dev.pick
   cs: klepni na dům
   en: tap a house

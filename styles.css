@@ -789,6 +789,10 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 #ui .dev-strip button:disabled { color: var(--detail); opacity: 0.6; }
 #ui .dev-strip button.held { text-decoration: underline; }
 .dev-target { padding: 0 6px; color: var(--detail); white-space: nowrap; }
+/* folded away: just the small button that opens it again */
+.dev-strip .dev-open, .dev-strip.folded .dev-row { display: none; }
+.dev-strip.folded .dev-open { display: block; }
+#ui .dev-strip .dev-fold { color: var(--detail); }
 /* on a phone: at the bottom, above Stavět, out of the way of the town's name */
 @media (max-width: 640px) {
   .dev-strip { top: auto; bottom: calc(64px + var(--safe-b)); }
