@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dědina – flame sketches</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--main); font: 12px system-ui; margin: 16px; }
+    h1 { font-weight: 500; }
+    h2 { font-weight: 500; margin: 28px 0 2px; }
+    p { margin: 0 0 8px; color: var(--detail); max-width: 80ch; }
+    .bar { display: flex; gap: 16px; margin: 8px 0 4px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    figure { margin: 0; background: var(--bg); position: relative; --fg: var(--main); }
+    figcaption { padding: 2px 4px; color: var(--detail); }
+    svg { display: block; position: static; border: 1px solid #8884; }
+    canvas { position: absolute; left: 1px; top: 1px; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: a house on fire, sketched three ways, each as it catches,
+    // ablaze and burning out on its ruin – to pick one before it goes into
+    // the game. The houses and the ruin are the map's own drawings; the
+    // smoke is render/particles.js; the flames are drawn here, on a canvas
+    // over each picture, worked out from the time alone as the smoke is.
+    // Like the smoke, nothing fades or glows: every tongue is drawn in by
+    // the pen and taken back, on tens (a drawn film's frames).
+    //   flames.html?schemes=5,1,2&only=tongues&tile=64
+    import { applyTheme, SCHEMES } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter } from './src/render/painter.js';
+    import { sunFor, shadowSVG } from './src/render/shadows.js';
+    import { STRUCTURES } from './structures/index.js';
+    import { drawRuin } from './structures/ruin.js';
+    import { drawTree } from './features/trees.js';
+    import { PARTICLES, eachParticle, drawn, hash } from './src/render/particles.js';
+    import { PEN } from './src/render/agentCanvas.js';
+    import { mulberry32 } from './src/core/random.js';
+
+    const q = new URLSearchParams(location.search);
+    const schemes = (q.get('schemes') ?? '5,1,2').split(',').map(Number);
+    applyTheme(schemes[0]);
+    const N = 10;
+    const cam = new Camera({ width: N, height: N }, { tile: +(q.get('tile') ?? 96) });
+    const r2 = (n) => Math.round(n * 100) / 100;
+    const DEF = Object.fromEntries(STRUCTURES.map((d) => [d.id, d]));
+    const sun = sunFor(cam);
+
+    // ---------- the scene: the burning house between two neighbours ----------
+    // `ruin`: the burning house drawn as its ruin (burning out)
+    function sceneOf(ruin) {
+      const rnd = mulberry32(7);
+      const items = [];
+      let fire = null;
+      function building(type, x, y, rotation, burning) {
+        const seed = Math.floor(rnd() * 1e9);
+        const g = new Painter(cam, { x, y }, rotation, seed);
+        g.rigid = [x, y];
+        const def = DEF[type];
+        if (burning && ruin) drawRuin(g, def);
+        else def.draw(g, { type, seed, id: items.length, node: 0, rotation });
+        const svg = g.toGroundSVG() + shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sun) + g.toSVG();
+        items.push({ d: cam.depth(x, y) + 0.5, svg });
+        if (burning) fire = { svg: g.toSVG(), vents: g.vents, panes: g.panes };
+      }
+      function tree(x, y, h) {
+        const g = new Painter(cam, { x, y }, 0, Math.floor(rnd() * 1e9));
+        g.rigid = [x, y];
+        drawTree(g, 0, 0, 'spreading', h);
+        items.push({ d: cam.depth(x, y), svg: shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sun) + g.toSVG() });
+      }
+      building('house', 4.2, 4.0, 1);
+      building('house-wide', 5.2, 4.8, 1, true);
+      building('house', 6.3, 5.6, 1);
+      tree(4.3, 5.4, 0.5);
+      tree(6.6, 4.1, 0.45);
+      items.sort((a, b) => a.d - b.d);
+      return { svg: items.map((i) => i.svg).join(''), fire };
+    }
+    const SCENES = { house: sceneOf(false), ruin: sceneOf(true) };
+
+    // the burning house's outline (round its drawing) and the view round all
+    const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    document.body.appendChild(tmp);
+    const box = (svg) => { tmp.innerHTML = `<g class="scene layer-objects">${svg}</g>`; return tmp.firstChild.getBBox(); };
+    // the top of a drawing's outline, column by column (px across → y)
+    function skyline(svg) {
+      const b = box(svg), cols = new Map();
+      for (const el of tmp.querySelectorAll('path, polygon, polyline, line, rect')) {
+        if (!el.getTotalLength) continue;
+        const len = el.getTotalLength();
+        for (let l = 0; l <= len; l += 1) {
+          const { x, y } = el.getPointAtLength(l), c = Math.round(x);
+          if (!(cols.get(c) <= y)) cols.set(c, y);
+        }
+      }
+      return { b, top: (x) => cols.get(Math.round(x)) ?? b.y + b.height / 2 };
+    }
+    const HB = { house: skyline(SCENES.house.fire.svg), ruin: skyline(SCENES.ruin.fire.svg) };
+    const all = box(SCENES.house.svg);
+    tmp.remove();
+    const hb = HB.house.b;
+    const VX0 = Math.max(all.x, hb.x - hb.width * 0.9), VW = Math.min(all.x + all.width, hb.x + hb.width * 1.9) - VX0;
+    const VY0 = hb.y - hb.height * 1.6, VH = Math.min(all.y + all.height, hb.y + hb.height * 1.5) - VY0;
+
+    // ---------- the fire: where the flames stand ----------
+    // A fire is a row of seats along the roof (the ridge and down its slopes;
+    // on a ruin, along the stumps), each giving off tongues. `share`: how
+    // much of the row is alight, from its left end (it catches at one end
+    // and spreads); `k` how tall.
+    //   share    how much of the roof is alight, from its left end
+    //   windows  how many windows burn, from the left (all: Infinity)
+    //   k, roof  how tall the windows' flames and the roof's (roof: as k if not given)
+    const STAGES = [
+      ['catch', 'catching: a window', { scene: 'house', share: 0, windows: 1, k: 0.55, smoke: 0.45, surge: 0.15 }],
+      ['spread', 'catching: windows and the roof', { scene: 'house', share: 0.3, windows: 3, k: 0.7, roof: 0.4, smoke: 0.6, surge: 0.2 }],
+      ['blaze', 'ablaze', { scene: 'house', share: 1, windows: Infinity, k: 1.05, roof: 0.5, smoke: 1.35, surge: 0.45 }],
+      ['out', 'burning out, on the ruin', { scene: 'ruin', share: 0.75, windows: 0, k: 0.45, smoke: 0.7, surge: 0.2 }],
+    ];
+    // the burning house's windows, as the painter drew them (its panes: four
+    // corners, bottom left, bottom right, top right, top left) – those on
+    // its long front wall, from the left, the ground floor's first in each
+    // bay: the fire starts in a room downstairs
+    const BAY = cam.tile * 0.12;
+    const PANES = SCENES.house.fire.panes.map((p) => p.pts)
+      .filter(([a, b]) => (b[0] - a[0]) * (b[1] - a[1]) < 0)
+      .sort((p, q) => Math.round(Math.min(p[0][0], p[1][0]) / BAY) - Math.round(Math.min(q[0][0], q[1][0]) / BAY) || q[0][1] - p[0][1]);
+    const panesOf = (stage) => stage.scene === 'house' ? PANES.slice(0, stage.windows) : [];
+    function seatsOf(stage) {
+      const { b, top } = HB[stage.scene];
+      const seats = [], n = 11;
+      for (let j = 0; j < n; j++) {
+        const t = (j + 0.5) / n;
+        if (t > stage.share) break;
+        // along the top of its outline (the ridge and gables; the stumps),
+        // a little down into it so the flames stand on the roof
+        const x = b.x + b.width * (0.1 + 0.8 * t);
+        seats.push({ x, y: top(x) + T * 0.04, seed: 101 + j * 17 });
+      }
+      return seats;
+    }
+
+    // ---------- the tongues ----------
+    const FPS = 10;              // drawn on tens
+    const T = cam.tile;
+    // one tongue of seat s, its number i, at time t: [x, y, w, h, lean,
+    // drawn share 0–1] or null between tongues
+    // `o` how a seat gives them off (ROOF, or a window's):
+    //   every  seconds between tongues   life  [shortest, longest] seconds
+    //   tall   heights against the roof's  skip  share of turns with none
+    const ROOF = { every: 0.45, life: [0.7, 1.3], tall: 1, skip: 0, foot: 1 };
+    function tongue(s, i, t, k, wind, o = ROOF) {
+      const h0 = hash(s.seed, i), life = o.life[0] + (o.life[1] - o.life[0]) * h0;
+      if (o.skip && hash(i, s.seed ^ 0x51) < o.skip) return null;
+      const born = i * o.every + h0 * o.every * 0.66, a = t - born;
+      if (a < 0 || a > life) return null;
+      const u = a / life;
+      // it grows from nothing at the foot and sinks back into it, never
+      // popping in or out
+      const rise = Math.min(1, u / 0.3, (1 - u) / 0.35), grow = rise * rise * (3 - 2 * rise);
+      const h = T * k * o.tall * (0.22 + 0.3 * hash(i, s.seed + 3)) * grow;
+      const w = T * k * (0.07 + 0.04 * hash(s.seed, i + 9)) * (0.25 + 0.75 * grow);
+      const sway = Math.sin(t * 7 + h0 * 6.283) * 0.25 - wind;
+      const dx = (hash(i, s.seed) - 0.5) * T * 0.08 * (o === ROOF ? 1 : 0.3);
+      return [s.x + dx, s.y, w, h, sway, u];
+    }
+    function eachTongue(seats, t, k, wind, fn, o = ROOF) {
+      for (const s of seats) for (let i = Math.floor((t - o.life[1] - o.every) / o.every) - 1; i <= Math.floor(t / o.every); i++) {
+        const g = tongue(s, i, t, k, wind, o);
+        if (g) fn(...g, i, s);
+      }
+    }
+    // a tongue's outline: up the left side to the tip, which leans and
+    // flicks over, and down the right: points, from base left round to base right
+    function tongueShape(x, y, w, h, lean, v) {
+      const pts = [], n = 14;
+      for (let j = 0; j <= n; j++) {
+        const t = j / n; // 0 base left .. 0.5 tip .. 1 base right
+        const up = 1 - Math.abs(2 * t - 1);
+        const side = t < 0.5 ? -1 : 1;
+        // a round belly low down, narrowing to the tip, the sides wavering
+        const hw = w * (1 - up) ** 0.85 * (0.75 + 0.5 * Math.sin(Math.PI * Math.min(1, up * 1.8)));
+        const wave = Math.sin(up * 8 + v * 1.7 + side) * w * 0.2 * up * (1 - up) * 3;
+        pts.push([x + side * hw + wave + lean * h * up ** 2, y - h * up]);
+      }
+      return pts;
+    }
+    const path = (ctx, pts, a = 0, b = 1) => {
+      const n = pts.length - 1, j0 = Math.floor(a * n), j1 = Math.ceil(b * n);
+      ctx.moveTo(pts[j0][0], pts[j0][1]);
+      for (let j = j0 + 1; j <= j1; j++) ctx.lineTo(pts[j][0], pts[j][1]);
+    };
+    // drawn in from the base up the left side, round the tip, and down;
+    // taken back the same way
+    const drawnShare = (u) => [u > 0.75 ? (u - 0.75) / 0.25 : 0, Math.min(1, u / 0.2)];
+
+    // sparks: a few short strokes thrown up over a blaze
+    function sparks(ctx, seats, t, k, wind, ink) {
+      if (k < 0.8) return;
+      ctx.beginPath();
+      for (const s of seats) for (let i = Math.floor(t * 1.2) - 3; i <= Math.floor(t * 1.2); i++) {
+        if (hash(i, s.seed) > 0.35) continue;
+        const a = t - i / 1.2, life = 2.5;
+        if (a < 0 || a > life) continue;
+        const u = a / life;
+        const x = s.x + (hash(s.seed, i) - 0.5) * T * 0.4 - wind * T * u * 1.5 + Math.sin(a * 3 + i) * T * 0.05;
+        const y = s.y - T * k * (0.5 + 1.4 * u);
+        ctx.moveTo(x, y); ctx.lineTo(x + T * 0.012, y - T * 0.03);
+      }
+      ctx.strokeStyle = ink;
+      ctx.stroke();
+    }
+
+    // ---------- red pencil ----------
+    // The fire in coloured pencil, as a child draws it: three tongues one
+    // inside the other – a pale rim, the red body, an orange heart – each
+    // pressed in with upright strokes of a deeper shade over a lighter
+    // ground. All the fire's rims are laid first, then all its bodies, then
+    // the hearts, so the tongues run together into one fire.
+    //   w, h   the layer's tongue against the body's (width, height)
+    //   down   how far its foot reaches below the seat (× the tongue's width)
+    const PENCIL = [
+      { w: 1.35, h: 1.16, down: 0.5, ground: '#eba08f', strokes: '#d86f60' },
+      { w: 1, h: 1, down: 0.25, ground: '#e4643a', strokes: '#c43c1f' },
+      { w: 0.5, h: 0.58, down: 0, ground: '#f3b347', strokes: '#e48a2a' },
+    ];
+    // (on black paper the pencils show a shade lighter)
+    const NIGHT = [
+      { ground: '#c97a6c', strokes: '#e0907f' },
+      { ground: '#c4502c', strokes: '#e3683f' },
+      { ground: '#d99a3a', strokes: '#f3b347' },
+    ];
+    function pencilFire(ctx, seats, t, k, wind, pal, { ground = true, o = ROOF } = {}) {
+      const tongues = [];
+      eachTongue(seats, t, k, wind, (x, y, w, h, lean, u, i) => tongues.push([x, y, w, h, lean, i]), o);
+      if (!tongues.length) return;
+      const night = pal.name === 'Night';
+      PENCIL.forEach((L, n) => {
+        const ink = night ? { ...L, ...NIGHT[n] } : L;
+        ctx.save();
+        ctx.beginPath();
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        for (const [x, y, w, h, lean, i] of tongues) {
+          const down = L.down * o.foot;
+          const pts = tongueShape(x, y + w * down, w * L.w, h * L.h + w * down, lean, i + n);
+          // a round foot under it
+          const r = w * L.w;
+          ctx.moveTo(pts[0][0], pts[0][1]);
+          for (const [px, py] of pts) {
+            ctx.lineTo(px, py);
+            x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py);
+          }
+          ctx.quadraticCurveTo(x, y + w * down + r * 0.7 * o.foot, pts[0][0], pts[0][1]);
+          y1 = Math.max(y1, y + w * down + r * 0.7 * o.foot);
+        }
+        if (ground) { ctx.fillStyle = ink.ground; ctx.fill('nonzero'); }
+        ctx.clip('nonzero');
+        // upright strokes, leaning with the fire, close as a pencil hatches,
+        // each broken in two or three where the pencil lifted
+        const lean = tongues.reduce((m, g) => m + g[4], 0) / tongues.length;
+        const gap = ground ? 1.5 : 1.1, tall = y1 - y0;
+        ctx.beginPath();
+        let c = 0;
+        for (let x = x0 - tall * Math.abs(lean); x <= x1 + tall * Math.abs(lean); x += gap, c++) {
+          let y = y1;
+          for (let p = 0; y > y0 && p < 4; p++) {
+            const len = tall * (0.25 + 0.5 * hash(c * 7 + p, Math.floor(t * FPS) + n * 31));
+            const dx = lean * len + (hash(c, p + 5) - 0.5) * 1.2;
+            const x2 = x + (y1 - y) * lean;
+            ctx.moveTo(x2, y);
+            ctx.quadraticCurveTo(x2 + dx * 0.5 + 0.6, y - len * 0.5, x2 + dx, y - len);
+            y -= len + 1 + 2 * hash(p, c);
+          }
+        }
+        ctx.strokeStyle = ink.strokes;
+        ctx.lineWidth = PEN[2];
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+
+    // A burning window: the room behind it alight – the pane filled with the
+    // red pencil, the orange heart rising and sinking in its lower part –
+    // and tongues licking out over its head and up the wall.
+    const WINDOW = { every: 0.7, life: [1.3, 2.1], tall: 2.8, skip: 0.25, foot: 0.15 };
+    function windowFire(ctx, pane, j, t, wind, pal, k) {
+      const [a, b, c, e] = pane;
+      const night = pal.name === 'Night';
+      const ink = (n) => night ? { ...PENCIL[n], ...NIGHT[n] } : PENCIL[n];
+      const at = (u, v) => [a[0] + (b[0] - a[0]) * u + (e[0] - a[0]) * v, a[1] + (b[1] - a[1]) * u + (e[1] - a[1]) * v];
+      const quad = (v0, v1) => { const p = [at(0, v0), at(1, v0), at(1, v1), at(0, v1)]; ctx.beginPath(); p.forEach(([x, y], i) => ctx[i ? 'lineTo' : 'moveTo'](x, y)); ctx.closePath(); };
+      ctx.save();
+      quad(0, 1);
+      ctx.fillStyle = ink(1).ground; ctx.fill();
+      ctx.clip();
+      const rise = 0.45 + 0.25 * Math.sin(t * 5 + j * 2.1) + 0.1 * hash(j, Math.floor(t * FPS));
+      quad(0, rise);
+      ctx.fillStyle = ink(2).ground; ctx.fill();
+      // the pencil's strokes, upright
+      const wpx = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      ctx.beginPath();
+      for (let u = 0.08; u < 1; u += 1.5 / Math.max(1, wpx)) {
+        const [x0, y0] = at(u, 0), [x1, y1] = at(u, 0.6 + 0.4 * hash(Math.round(u * 50), Math.floor(t * FPS) + j));
+        ctx.moveTo(x0, y0); ctx.lineTo(x1 + 0.4, y1);
+      }
+      ctx.strokeStyle = ink(1).strokes; ctx.lineWidth = PEN[2]; ctx.stroke();
+      ctx.restore();
+      // now and then a tall tongue out of its head and up the wall, the
+      // window left showing between them
+      const [x, y] = at(0.5, 1);
+      pencilFire(ctx, [{ x, y, seed: 300 + j * 13 }], t, k * Math.max(0.45, wpx / (T * 0.1)), wind, pal, { o: WINDOW });
+    }
+
+    // ---------- the options ----------
+    const STYLES = {
+      // the tongues as they were (A), for comparison
+      tongues(ctx, seats, t, k, wind, pal) {
+        ctx.strokeStyle = pal.main;
+        ctx.lineWidth = PEN[3];
+        eachTongue(seats, t, k, wind, (x, y, w, h, lean, u, i) => {
+          const pts = tongueShape(x, y, w, h, lean, i);
+          const [a, b] = drawnShare(u);
+          if (b <= a) return;
+          if (b >= 1 && a <= 0) {
+            ctx.beginPath(); path(ctx, pts); ctx.closePath();
+            ctx.fillStyle = pal.bg; ctx.fill();
+            if (h > T * k * 0.35) {
+              ctx.beginPath(); path(ctx, tongueShape(x, y, w * 0.45, h * 0.55, lean * 0.6, i + 2));
+              ctx.stroke();
+            }
+          }
+          ctx.beginPath(); path(ctx, pts, a, b); ctx.stroke();
+        });
+        sparks(ctx, seats, t, k, wind, pal.main);
+      },
+      // D · red pencil, pressed in: a ground of colour, strokes over it
+      pressed(ctx, seats, t, k, wind, pal) {
+        pencilFire(ctx, seats, t, k, wind, pal, { ground: true });
+        sparks(ctx, seats, t, k, wind, '#c43c1f');
+      },
+      // E · red pencil, light: strokes only, the paper between them
+      light(ctx, seats, t, k, wind, pal) {
+        pencilFire(ctx, seats, t, k, wind, pal, { ground: false });
+        sparks(ctx, seats, t, k, wind, '#c43c1f');
+      },
+    };
+    const OPTIONS = [
+      ['pressed', 'Red pencil, pressed in', 'Three tongues one inside the other – a pale rim, the red body, an orange heart – each a ground of colour with upright strokes of a deeper shade over it. A fire starts inside: the first you see is a window alight, the room behind it filled with the red pencil and tall tongues licking out of its head and up the wall; then more windows. The windows are the fire; the roof only catches after them, lower.'],
+    ];
+
+    // the smoke: the game's puffs, a bigger and faster kind than a works'
+    // stack, and dark – each puff shaded in, darkest as it leaves the fire
+    // and lightening smoothly as it rises and thins
+    const FIRE_SMOKE = { ...PARTICLES.stack, rate: 1.6, life: 11, rise: 2.6, size: [0.1, 0.36], on: null };
+    const mix = (a, b, f) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * f + parseInt(b.slice(i, i + 2), 16) * (1 - f)).toString(16).padStart(2, '0')).join('');
+    function puffShape(v) {
+      const lobes = 5 + (v % 3), pts = [], n = lobes * 6;
+      for (let j = 0; j <= n; j++) {
+        const th = (j / n) * Math.PI * 2 + v * 0.7;
+        const r = 0.4 + 0.1 * Math.abs(Math.sin((th * lobes) / 2));
+        pts.push([r * Math.cos(th), r * Math.sin(th) * 0.8]);
+      }
+      return pts;
+    }
+    const PUFFS = [0, 1, 2, 3].map(puffShape);
+    const SHADE = [0.7, 0.12]; // share of the pen in a puff's shade, given off → at its end
+    // `ages`: only the puffs of that age (shares of their life)
+    function darkSmoke(ctx, shown, time, env, pal, ages = [0, 1]) {
+      ctx.lineWidth = PEN[3];
+      ctx.strokeStyle = pal.main;
+      shown.sort((a, b) => a[0].y - b[0].y);
+      for (const [e, K] of shown) {
+        eachParticle(e, K, time, env, (x, y, sz, u, h, i) => {
+          if (u < ages[0] || u >= ages[1]) return;
+          const [a, b] = drawn(K, u);
+          if (b <= a) return;
+          const pts = PUFFS[i & 3], m = h < 0.5 ? 1 : -1, n = pts.length - 1;
+          const at = (f) => pts[Math.round(f * n)];
+          ctx.beginPath();
+          if (b >= 1 && a < 0.5) {
+            for (let j = 0; j <= n; j++) ctx[j ? 'lineTo' : 'moveTo'](x + m * sz * pts[j][0], y + sz * pts[j][1]);
+            ctx.fillStyle = mix(pal.main, pal.bg, SHADE[0] + (SHADE[1] - SHADE[0]) * u ** 0.7);
+            ctx.fill();
+            ctx.beginPath();
+          }
+          for (let f = a, first = true; f <= b + 1e-6; f += 1 / n, first = false) {
+            const [px, py] = at(Math.min(1, f));
+            ctx[first ? 'moveTo' : 'lineTo'](x + m * sz * px, y + sz * py);
+          }
+          ctx.stroke();
+        }, { tile: T, zScale: cam.zScale });
+      }
+    }
+    // the roof's: as slow as a window's, though it goes higher – it lasts
+    // longer and is given off less often
+    const ROOF_SMOKE = { ...FIRE_SMOKE, rate: 1.0, life: 18 };
+    const roofSmokeOf = (stage) => [
+      ...seatsOf(stage).filter((_, j) => j % 3 === 1).map((s, j) => ({ x: s.x, y: s.y - T * 0.2 * stage.k, kind: 'fire', k: stage.smoke, seed: 900 + j })),
+    ];
+    // a burning window gives off its own, smaller, in front of the roof's
+    // flames (when the whole front burns, every third window)
+    const windowSmokeOf = (stage) => [
+      ...panesOf(stage).filter((_, j) => stage.windows < 4 || j % 3 === 0).map((p, j) => ({ x: (p[2][0] + p[3][0]) / 2, y: (p[2][1] + p[3][1]) / 2 - T * 0.12, kind: 'fire', k: Math.min(0.6, stage.smoke * 0.6), seed: 950 + j })),
+    ];
+
+    // A blaze surges: every few seconds it flares up taller for a while and
+    // sinks back (a smooth wave from the time alone).
+    function surge(t, amount) {
+      const a = t / 4, i = Math.floor(a), f = a - i, e = f * f * (3 - 2 * f);
+      const v = hash(i, 4242) * (1 - e) + hash(i + 1, 4242) * e;
+      return 1 + amount * (v * v * 1.6 - 0.35);
+    }
+
+    // ---------- the page ----------
+    const out = document.getElementById('out');
+    out.insertAdjacentHTML('beforeend', `<h1>Flame sketches</h1><p>A house on fire in red pencil, as it catches (a window first, then more and one end of the roof), ablaze (the whole roof; every few seconds it flares up and sinks back) and burning out (low flames along the ruin's stumps), in ${schemes.map((s) => SCHEMES[s].name).join(', ')}. The smoke is the game's puffs, bigger and shaded dark, darkest as it leaves the fire and lightening as it rises. Wind leans the flames over, as it does the trees and the smoke. Add <code>?schemes=0,4</code>, <code>?only=light</code>, <code>?tile=140</code>.</p>
+      <div class="bar"><label>wind <input id="wind" type="range" min="0" max="0.14" step="0.01" value="0.02"> <span id="windName"></span></label></div>`);
+    const only = q.get('only');
+    const panels = [];
+    const dpr = devicePixelRatio || 1;
+    for (const [id, title, text] of OPTIONS) {
+      if (only && only !== id) continue;
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2><p>${text}</p>`);
+      for (const s of schemes) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        out.appendChild(row);
+        for (const [, name, stage] of STAGES) {
+          const fig = document.createElement('figure');
+          applyTheme(s, fig);
+          fig.innerHTML = `<svg width="${Math.round(VW)}" height="${Math.round(VH)}" viewBox="${r2(VX0)} ${r2(VY0)} ${r2(VW)} ${r2(VH)}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0 sz-1 sw-1" style="--sun: 1">${SCENES[stage.scene].svg}</g></svg><canvas width="${Math.round(VW * dpr)}" height="${Math.round(VH * dpr)}" style="width:${Math.round(VW)}px;height:${Math.round(VH)}px"></canvas><figcaption>${name} · ${SCHEMES[s].name}</figcaption>`;
+          row.appendChild(fig);
+          panels.push({ ctx: fig.querySelector('canvas').getContext('2d'), style: id, stage, seats: seatsOf(stage), panes: panesOf(stage), roofSmoke: roofSmokeOf(stage).map((e) => [e, ROOF_SMOKE]), windowSmoke: windowSmokeOf(stage).map((e) => [e, FIRE_SMOKE]), pal: SCHEMES[s] });
+        }
+      }
+    }
+    applyTheme(schemes[0]);
+    const windBox = document.getElementById('wind'), windName = document.getElementById('windName');
+    const nameWind = (w) => w < 0.035 ? 'still air' : w < 0.09 ? 'a breeze' : 'a storm';
+
+    const t0 = performance.now() / 1000 - 20;
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const real = now / 1000 - t0;
+      const t = Math.floor(real * FPS) / FPS;
+      const w = +windBox.value;
+      windName.textContent = nameWind(w);
+      // the flames lean the way the trees do (to the left), further in a storm
+      const lean = Math.min(1, w / 0.14) * 0.7;
+      for (const p of panels) {
+        const { ctx } = p;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.setTransform(dpr, 0, 0, dpr, -VX0 * dpr, -VY0 * dpr);
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        // the roof's smoke behind everything, the windows' fire, the roof's
+        // fire, and the windows' smoke over it (it comes out in front)
+        const env = { wind: w, rain: 0, mist: 0 };
+        darkSmoke(ctx, p.roofSmoke, real, env, p.pal);
+        // wind flattens the fire a little as it leans it over
+        const k = (p.stage.roof ?? p.stage.k) * surge(real, p.stage.surge ?? 0) * (1 - 0.2 * lean);
+        p.panes.forEach((pane, j) => windowFire(ctx, pane, j, t, lean, p.pal, p.stage.k * surge(real + j * 1.7, p.stage.surge ?? 0)));
+        STYLES[p.style](ctx, p.seats, t, k, lean, p.pal);
+        darkSmoke(ctx, p.windowSmoke, real, env, p.pal);
+      }
+    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

@@ -66,6 +66,7 @@ import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
 import { AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
 import { ParticleCanvas } from './particles.js';
+import { FireCanvas } from './fire.js';
 import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
 import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
@@ -279,6 +280,8 @@ export class Renderer {
     this.penTop = GLMovers.make(document.getElementById('trains-top'));
     // over those: chimney smoke (particles.js, smokeFrame)
     this.smoke = new ParticleCanvas(document.getElementById('smoke'));
+    // and over them a building on fire (fire.js, fireFrame)
+    this.fire = new FireCanvas(document.getElementById('fire'), world);
     this.parking = parking;
     this.world = world;
     this.camera = camera;
@@ -3594,6 +3597,12 @@ export class Renderer {
       }
     }
     this.smoke.frame(this.camera, this.strokeK, vents, time, env);
+  }
+
+  // A building on fire, burning out or put out (fire.js), drawn from its
+  // windows and outline as drawn: `time` simulated seconds, `env` the weather.
+  fireFrame(time, env) {
+    this.fire.frame(this.camera, this.strokeK, (id) => this.objs.get(`s${id}`), time, env);
   }
 
   // The mist (weather 'mist', mist.js): `risen` 0 (none) to 1, in steps
