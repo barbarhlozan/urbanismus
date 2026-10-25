@@ -9,8 +9,8 @@
 // give off dark smoke, shaded darkest as it leaves the fire and lightening
 // smoothly as it rises.
 //
-//   ablaze     how far it has burnt (1 - left / total) sets how much is
-//              alight and how tall
+//   ablaze     how far it has burnt (s.burning: its age, through its
+//              time if it has one) sets how much is alight and how tall
 //   burning out  when it has burnt down (s.ruin), low flames along the
 //              ruin's stumps while it smoulders (s.embers), sinking as
 //              they go out, and smoke a while after
@@ -33,6 +33,7 @@ import { PEN } from './agentCanvas.js';
 import { PARTICLES, eachParticle, drawn, hash } from './particles.js';
 
 const FPS = 10;     // drawn on tens
+const RAMP = 110;   // seconds a fire with no time of its own takes to be ablaze
 const DOUSE = 25;   // seconds a fire put out takes to die down (the smoke longer)
 const STORM_WIND = 0.14;
 
@@ -386,9 +387,13 @@ export class FireCanvas {
     }
   }
 
+  // How far it has burnt, 0–1: through its time when it has one (the
+  // story's `ignite … for`), else through RAMP seconds, ablaze after that
+  // until it is put out or burnt down.
   progress(s) {
-    const { left, total } = s.burning;
-    return clamp(1 - left / Math.max(1e-6, total));
+    const { age, left, total } = s.burning;
+    if (total) return clamp(age != null ? age / total : 1 - left / total);
+    return clamp((age ?? 0) / RAMP);
   }
 
   // What's on fire now: [{ s, p, fade, ruin, end }] – p how far it has
