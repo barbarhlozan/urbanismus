@@ -784,16 +784,16 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 /* TEMPORARY: the dev buttons, top middle (src/ui/devStrip.js): two rows,
    the time and the fires, wrapping on a phone */
 .dev-strip { position: fixed; top: calc(8px + var(--safe-t)); left: 0; right: 0; margin: 0 auto; width: fit-content; z-index: 21; display: flex; flex-direction: column; align-items: center; gap: 2px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 2px 6px; background: var(--bg); font-size: 12px; }
-/* on a phone: at the bottom, above Stavět, out of the way of the town's name */
-@media (max-width: 640px) {
-  .dev-strip { top: auto; bottom: calc(64px + var(--safe-b)); }
-  #ui .dev-strip button { padding: 4px 5px; }
-}
 .dev-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0 2px; }
 #ui .dev-strip button { min-width: 36px; min-height: 36px; padding: 4px 7px; border: none; background: none; color: var(--fg); font: inherit; white-space: nowrap; }
 #ui .dev-strip button:disabled { color: var(--detail); opacity: 0.6; }
 #ui .dev-strip button.held { text-decoration: underline; }
 .dev-target { padding: 0 6px; color: var(--detail); white-space: nowrap; }
+/* on a phone: at the bottom, above Stavět, out of the way of the town's name */
+@media (max-width: 640px) {
+  .dev-strip { top: auto; bottom: calc(64px + var(--safe-b)); }
+  #ui .dev-strip button { padding: 4px 5px; }
+}
 .bi-head { justify-content: center; gap: 8px; }
 /* the families of a big house, who runs a place: a short list, a row each,
    in the middle like the rest of the card */
