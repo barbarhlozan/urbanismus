@@ -145,6 +145,7 @@ window.addEventListener('resize', () => {
 
 const clock = new SimClock(CONFIG);
 clock.elapsed = world.time; // (the town's own time carries on from the save)
+DAY.shift = DAY.start - hourAt(world.time, { ...DAY, shift: 0 }); // (but each visit opens in the morning)
 const parking = new ParkingSystem(world);
 const agents = new AgentSystem(world, CONFIG, parking);
 const growth = new GrowthSystem(world, CONFIG);
