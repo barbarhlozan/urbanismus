@@ -67,7 +67,7 @@ const r2 = (n) => Math.round(n * 100) / 100;
 export const SUN = {
   on: true,
   azimuth: 90,
-  length: 0.7,
+  length: 0.5,
   low: 0.08,
   hatch: { angle: 120, gap: 0.04, stroke: [0.9, 1.8], join: [-0.08, 0.06], bow: 0.01, drift: 0.016, wave: 0.008, ragged: 0.02, pen: 2 },
   strokes: { from: 0.05, full: 0.45, most: 1, gap: 0.04, lean: 46, ragged: 0.12, fade: 0, pen: 2 },
@@ -147,7 +147,7 @@ export const DAY = {
   day: 1800,
   start: 8,
   dawn: 4.25,
-  positions: [[170, 2.2], [150, 1.7], [130, 1.25], [110, 0.9], [90, 0.7], [70, 0.9], [50, 1.25], [30, 1.7], [10, 2.2]],
+  positions: [[170, 1.55], [150, 1.2], [130, 0.88], [110, 0.63], [90, 0.5], [70, 0.63], [50, 0.88], [30, 1.2], [10, 1.55]],
   steps: [
     { at: 0, night: true, lamps: true, windows: 0.2, depth: 2, ink: 0.97 },
     { at: 1, night: true, lamps: true, windows: 0.1, depth: 3, ink: 1 },
