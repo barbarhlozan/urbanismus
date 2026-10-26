@@ -60,7 +60,7 @@
 
     const q = new URLSearchParams(location.search);
     const BASE = {
-      look: { ...LOOK }, clean: { ...CLEAN },
+      look: structuredClone(LOOK), clean: { ...CLEAN },
       strokes: SUN.strokes && { ...SUN.strokes }, sun: SUN.on,
       schemes: SCHEMES.map((s) => !!s.clean),
       // Countryside alone (its colours are what is tuned now)
@@ -152,6 +152,9 @@
       range('look.overshoot', 'overshoot', 0, 4, 0.1);
       range('look.tilt', 'tilt °', 0, 15, 0.5);
       range('look.ground', 'foot stroke', 0, 0.12, 0.005);
+      range('look.round.walls', 'round walls', 0, 4, 0.1);
+      range('look.round.roofs', 'round roofs', 0, 4, 0.1);
+      range('look.round.windows', 'round windows', 0, 2, 0.05);
       html.push('<h3>Clean schemes</h3>');
       SCHEMES.forEach((s, i) => check(`schemes.${i}`, `${s.name} clean`));
       range('clean.wobble', '× wobble', 0, 1, 0.05);

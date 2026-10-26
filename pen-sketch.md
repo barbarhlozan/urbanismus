@@ -11,16 +11,19 @@ settings" gives what differs from the code.
 
 ## The hand
 
-A steady hand, between loose and ruled:
+A steady hand, between loose and ruled (rebased 2026-10-26):
 
-- A little wobble: `LOOK.sketch` 2.25 (was 5).
-- Short overshoots at the corners: `LOOK.overshoot` 0.6 (was 1.5).
-- Houses all but square to the grid: `LOOK.tilt` 1.5° either way (was
-  10°). Houses on a bend still turn to their road.
+- A little wobble: `LOOK.sketch` 2.5 (was 5).
+- No overshoots at the corners: `LOOK.overshoot` 0 (was 1.5).
+- Houses a little askew: `LOOK.tilt` up to 8° either way (was 10°).
+  Houses on a bend still turn to their road.
 - No foot stroke under the walls: `LOOK.ground` 0.
+- Corners can be rounded off, separately for walls, roofs and windows'
+  frames (`LOOK.round`, scene px at tile 32, at most a third of an edge).
+  All 0 for now, sharp; to be tried in the lab.
 - All three pen schemes (Blue pen, Black pen, Countryside) draw with this
-  hand. Only Watercolour is `clean`: it keeps 0.15 of the wobble,
-  overshoot and tilt (`CLEAN` in painter.js).
+  hand. Only Watercolour is `clean`: it keeps 0.15 of the wobble and
+  tilt and no overshoot (`CLEAN` in painter.js).
 
 ## The pen's line (`BRUSH` in src/render/brush.js)
 
@@ -34,9 +37,9 @@ A stroke is not even from end to end, as with a pencil:
 
 - Each stroke runs from corner to corner. A turn sharper than 0.7 rad
   (about 40°) ends it and starts the next.
-- Thinner at its ends: `taper` 0.5 over `fade` 3 scene px.
-- It swells and thins along its length: `swell` 0.7, about every 15.5
-  scene px (31 screen px at zoom 2 in the lab).
+- A little thinner at its ends: `taper` 0.25 over `fade` 3 scene px.
+- It swells and thins a little along its length: `swell` 0.2, about every
+  4.5 scene px (9 screen px at zoom 2 in the lab).
 - Each stroke is up to 20% heavier or lighter than the next (`weight`).
 - Strokes are 1.2× the pen's width overall (`width`).
 
@@ -50,13 +53,14 @@ edges: left off for now.
 
 ## Detail
 
-- Roof hatching 0.025 apart (`LOOK.hatch`), thinned further out so the
+- Roof hatching 0.0225 apart (`LOOK.hatch`), thinned further out so the
   strokes stay at least 1.5 px apart on screen (`config.render.roofGap`).
-- The walls turned from the sun are hatched (`SUN.strokes`), 0.04 apart.
+- The walls turned from the sun are hatched (`SUN.strokes`), 0.04 apart,
+  leaning 46°.
 - Windows: ink blocks, not upright, 1.2× fewer than the bays
   (`LOOK.ink`, `tall: false`, `thin`). Close up they open into frames, with
   glazing bars from 0.6 px wide (`LOOK.open`, `LOOK.pane`).
-- A thin eave board (`LOOK.fascia` 0.008). No storey lines, no sills.
+- A thin eave board (`LOOK.fascia` 0.006). No storey lines, no sills.
 - A gable end is one wall from the ground to the peak, with no line across
   it at the eaves. The roof doesn't overhang it, so the ridge ends exactly
   on the gable's peak and the two never drift apart (`_walls` gables in

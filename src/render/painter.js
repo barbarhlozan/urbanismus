@@ -97,7 +97,7 @@ const wcOn = () => typeof document !== 'undefined' && document.documentElement.c
 // and tilt cut to these shares.
 const cleanOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('clean');
 // (house-lab.html sets these live)
-export const CLEAN = { wobble: 0.15, tilt: 0.15, overshoot: 0.15 };
+export const CLEAN = { wobble: 0.15, tilt: 0.15, overshoot: 0 };
 // …and a Painted one (`painted`): windows as small dark arches (Painter.line)
 const paintedOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('painted');
 // Photos (a perspective camera): roof hatching at most this many px apart
@@ -139,12 +139,17 @@ const ON_GROUND = 0.03;
 //           line, in grid units (0 = straight; see wobble())
 //   tilt    houses stand askew by up to this many degrees either way (types
 //           with `tilt: true`, see tiltOf in structures/index.js; 0 = square)
+//   round   corners rounded off by up to this much (scene px at tile 32, at
+//           most a third of an edge), for walls, roofs (and other faces) and
+//           windows' frames apart (0 = sharp, as a ruler draws them)
 // (set with the user in house-lab.html, 2026-10-25: see pen-sketch.md)
 export const LOOK = {
-  eave: 0.03, fascia: 0.008, sill: false, tall: false, sketch: 2.25,
-  overshoot: 0.6, ink: true, thin: 1.2, hatch: 0.025, ground: 0, floors: false, roads: 0.035,
-  tilt: 1.5, open: true, pane: 0.6,
+  eave: 0.03, fascia: 0.006, sill: false, tall: false, sketch: 2.5,
+  overshoot: 0, ink: true, thin: 1.2, hatch: 0.0225, ground: 0, floors: false, roads: 0.035,
+  tilt: 8, open: true, pane: 0.6,
+  round: { walls: 0, roofs: 0, windows: 0 },
 };
+
 
 // The hand-drawn sway of roads: a smooth shift [dx, dy] of the map at
 // (x, y), made of a few long slow waves. Everything on the road network
@@ -376,7 +381,7 @@ export class Painter {
         .map((run) => `<${closed ? 'polygon' : 'polyline'} points="${run.map(([x, y]) => `${r2(x)},${r2(y)}`).join(' ')}"${attrs(opts, lod, base.replace('sk ', ''))}/>`)
         .join('');
     }
-    const { d, pts, size } = this._sketch(points, closed, opts.wobble ?? 1);
+    const { d, pts, size } = this._sketch(points, closed, opts.wobble ?? 1, opts.round ?? 0);
     if (!d) return '';
     // the overshoots go in the same path: open strokes have no area, so the
     // fill ignores them, and it saves an element per face
@@ -400,14 +405,14 @@ export class Painter {
   // each [x, y, x0, y0]), size (longest edge on screen) }.
   // With a perspective camera an open line may come apart into several
   // runs where it passes behind the eye; `pts` then holds the last one.
-  _sketch(points, closed, wobble = 1) {
+  _sketch(points, closed, wobble = 1, round = 0) {
     const runs = this._screenRuns(points, closed);
     if (runs.length > 1) {
-      const parts = runs.map((run) => this._sketchScreen(run, false, wobble));
+      const parts = runs.map((run) => this._sketchScreen(run, false, wobble, round));
       return { d: parts.map((p) => p.d).join(''), pts: parts[parts.length - 1].pts, size: Math.max(...parts.map((p) => p.size)) };
     }
     if (!runs.length) return { d: '', pts: [], size: 0 };
-    return this._sketchScreen(runs[0], closed, wobble);
+    return this._sketchScreen(runs[0], closed, wobble, round);
   }
 
   // World points -> lists of screen points: one list, or with a perspective
@@ -420,8 +425,15 @@ export class Painter {
     return runs.map((run) => run.map((p) => this._project(...p)));
   }
 
-  _sketchScreen(scr, closed, wobble) {
+  _sketchScreen(scr, closed, wobble, round = 0) {
     const amp = LOOK.sketch * this.camera.tile / 32 * wobble * (cleanOn() ? CLEAN.wobble : 1);
+    // rounded corners (LOOK.round): a line back where it started (a
+    // window's frame) taken as closed, so all its corners are
+    const r = (round * this.camera.tile) / 32;
+    if (r > 0 && !closed && scr.length > 3 && Math.hypot(scr[0][0] - scr[scr.length - 1][0], scr[0][1] - scr[scr.length - 1][1]) < 1e-6) {
+      scr = scr.slice(0, -1);
+      closed = true;
+    }
     // small shapes (windows) wobble less than walls and roofs
     let size = 0;
     for (let i = 1; i < scr.length; i++) size = Math.max(size, Math.hypot(scr[i][0] - scr[i - 1][0], scr[i][1] - scr[i - 1][1]));
@@ -436,18 +448,41 @@ export class Painter {
       const k = Math.min(jit, near(i) * 0.15);
       return [x + hash2(x, y, 1) * k, y + hash2(x, y, 2) * k, x, y];
     });
-    if (closed) pts.push(pts[0]);
-    let d = `M${r2(pts[0][0])} ${r2(pts[0][1])}`;
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1], b = pts[i];
+    // an edge from point a to b (each [x, y, x0, y0]), bowed a little,
+    // from `from` to `to` on it (where its corners are rounded off)
+    const edge = (a, b, from = a, to = b) => {
       // key the bow on the edge regardless of direction
       const [p, q] = a[2] < b[2] || (a[2] === b[2] && a[3] < b[3]) ? [a, b] : [b, a];
       const len = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
       const bow = hash2(p[2] + q[2], p[3] + q[3], 3) * Math.min(amp, len * 0.04);
-      const cx = (a[0] + b[0]) / 2 - ((q[1] - p[1]) / len) * bow;
-      const cy = (a[1] + b[1]) / 2 + ((q[0] - p[0]) / len) * bow;
-      d += `Q${r2(cx)} ${r2(cy)} ${r2(b[0])} ${r2(b[1])}`;
+      const cx = (from[0] + to[0]) / 2 - ((q[1] - p[1]) / len) * bow;
+      const cy = (from[1] + to[1]) / 2 + ((q[0] - p[0]) / len) * bow;
+      return `Q${r2(cx)} ${r2(cy)} ${r2(to[0])} ${r2(to[1])}`;
+    };
+    if (r > 0 && pts.length > 2) {
+      // each corner cut back by up to r along both its edges (at most a
+      // third of either) and turned in a curve through it
+      const m = pts.length, at = (i) => pts[(i + m) % m];
+      const cut = (i, j) => {
+        const p = at(i), q = at(j), l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+        const c = l > 1e-9 ? Math.min(r, l / 3) / l : 0;
+        return [p[0] + (q[0] - p[0]) * c, p[1] + (q[1] - p[1]) * c];
+      };
+      const rounded = (i) => closed || (i > 0 && i < m - 1);
+      const ins = pts.map((p, i) => (rounded(i) ? cut(i, i - 1) : p));
+      const outs = pts.map((p, i) => (rounded(i) ? cut(i, i + 1) : p));
+      let d = `M${r2(outs[0][0])} ${r2(outs[0][1])}`;
+      for (let i = 1; i < m; i++) {
+        d += edge(pts[i - 1], pts[i], outs[i - 1], ins[i]);
+        if (rounded(i)) d += `Q${r2(pts[i][0])} ${r2(pts[i][1])} ${r2(outs[i][0])} ${r2(outs[i][1])}`;
+      }
+      if (closed) d += `${edge(pts[m - 1], pts[0], outs[m - 1], ins[0])}Q${r2(pts[0][0])} ${r2(pts[0][1])} ${r2(outs[0][0])} ${r2(outs[0][1])}Z`;
+      if (closed) pts.push(pts[0]);
+      return { d, pts, size };
     }
+    if (closed) pts.push(pts[0]);
+    let d = `M${r2(pts[0][0])} ${r2(pts[0][1])}`;
+    for (let i = 1; i < pts.length; i++) d += edge(pts[i - 1], pts[i]);
     return { d: closed ? d + 'Z' : d, pts, size };
   }
 
@@ -716,6 +751,8 @@ export class Painter {
     if (!this._facing(n, points[0])) return this;
     const paint = this._wash(n, points);
     this._lastPaint = paint;
+    // its corners rounded by what it is (LOOK.round): a wall, else a roof
+    if (opts.round === undefined) opts = { ...opts, round: LOOK.round[this._wallNormal(n) ? 'walls' : 'roofs'] };
     if (paint) opts = { ...opts, cls: opts.cls ? `${opts.cls} ${paint}` : paint };
     if (this._lod(opts) <= this.keep) {
       const lod = this._lod(opts), { open, ...rest } = opts;
@@ -1533,7 +1570,7 @@ export class Painter {
     }
     const wide = Math.hypot(sb[0] - sa[0], sb[1] - sa[1]), high = Math.hypot(sc[0] - sb[0], sc[1] - sb[1]);
     const out = this.current.parts;
-    out.push(this._outline(points, false, { ...opts, cls: 'pane' }, lod));
+    out.push(this._outline(points, false, { ...opts, cls: 'pane', round: LOOK.round.windows }, lod));
     // the map's windows are 1–3 px at zoom 1: bars only where there's room
     if (photo ? wide < PHOTO_PANE : !this.near || (wide * 32) / this.camera.tile < LOOK.pane) return true;
     const late = photo ? out : (this.current.late ??= []);

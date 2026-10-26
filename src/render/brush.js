@@ -19,7 +19,7 @@
 
 import { flattenPath } from './gl/geometry.js';
 
-export const BRUSH = { on: true, width: 1.2, taper: 0.5, fade: 3, swell: 0.7, wave: 15.5, weight: 0.2, corner: 0.7 };
+export const BRUSH = { on: true, width: 1.2, taper: 0.25, fade: 3, swell: 0.2, wave: 4.5, weight: 0.2, corner: 0.7 };
 
 // A polyline's strokes (segment i from point i - 1 to point i, for
 // i = 1 … count - 1, the points taken round again where it closes, `scale`
