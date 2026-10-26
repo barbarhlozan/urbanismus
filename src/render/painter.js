@@ -369,11 +369,11 @@ export class Painter {
   // LOOK.sketch a <path> whose corners are nudged and whose edges bow a
   // little, like a line drawn by hand. Closed outlines big enough also get
   // LOOK.overshoot: their edges run on a little past the corners.
-  _outline(points, closed, opts, lod) {
+  _outline(points, closed, opts, lod, base = closed ? 'sk filled' : 'sk ln') {
     if (closed) this._cover(this._screenRuns(points, closed).flat());
     if (!LOOK.sketch) {
       return this._screenRuns(points, closed)
-        .map((run) => `<${closed ? 'polygon' : 'polyline'} points="${run.map(([x, y]) => `${r2(x)},${r2(y)}`).join(' ')}"${attrs(opts, lod)}/>`)
+        .map((run) => `<${closed ? 'polygon' : 'polyline'} points="${run.map(([x, y]) => `${r2(x)},${r2(y)}`).join(' ')}"${attrs(opts, lod, base.replace('sk ', ''))}/>`)
         .join('');
     }
     const { d, pts, size } = this._sketch(points, closed, opts.wobble ?? 1);
@@ -393,7 +393,7 @@ export class Painter {
         ticks += `M${r2(b[0])} ${r2(b[1])}l${r2(ux * kb)} ${r2(uy * kb)}M${r2(a[0])} ${r2(a[1])}l${r2(-ux * ka)} ${r2(-uy * ka)}`;
       }
     }
-    return `<path d="${d}${ticks}"${attrs(opts, lod, closed ? 'sk filled' : 'sk ln')}/>`;
+    return `<path d="${d}${ticks}"${attrs(opts, lod, base)}/>`;
   }
 
   // Sketchy path data through 3D points: { d, pts (jittered screen points,
@@ -590,11 +590,31 @@ export class Painter {
     return out;
   }
 
-  _walls(base, z0, z1, opts) {
+  // `gables`: { side index: peak height } – those walls run on up to a
+  // peak over their middle, one face from the ground to the roof (no line
+  // across at the eaves). Along the top its outline is left to the roof's
+  // verges, but on a side whose roof plane is turned away (not drawn).
+  _walls(base, z0, z1, opts, gables = null) {
     for (let i = 0; i < base.length; i++) {
       const [ax, ay] = base[i];
       const [bx, by] = base[(i + 1) % base.length];
-      this.face([[ax, ay, z0], [bx, by, z0], [bx, by, z1], [ax, ay, z1]], opts);
+      const zr = gables?.[i];
+      if (zr > z1) {
+        const mx = (ax + bx) / 2, my = (ay + by) / 2;
+        // the roof plane down from the peak to the eave at corner (cx, cy):
+        // through its top and along the ridge (across this wall)
+        const away = (cx, cy) => {
+          const r = [by - ay, ax - bx, 0], v = [mx - cx, my - cy, zr - z1];
+          let n = [r[1] * v[2] - r[2] * v[1], r[2] * v[0] - r[0] * v[2], r[0] * v[1] - r[1] * v[0]];
+          if (n[2] < 0) n = n.map((k) => -k);
+          return !this._facing(n, [cx, cy, z1]);
+        };
+        let open = [4, 0, 1, 2];
+        const awayB = away(bx, by), awayA = away(ax, ay);
+        if (awayB) open = [...open, 3];
+        if (awayA) open = awayB ? [...open, 4] : [3, ...open];
+        this.face([[ax, ay, z0], [bx, by, z0], [bx, by, z1], [mx, my, zr], [ax, ay, z1]], { ...opts, open });
+      } else this.face([[ax, ay, z0], [bx, by, z0], [bx, by, z1], [ax, ay, z1]], opts);
     }
   }
 
@@ -697,7 +717,16 @@ export class Painter {
     const paint = this._wash(n, points);
     this._lastPaint = paint;
     if (paint) opts = { ...opts, cls: opts.cls ? `${opts.cls} ${paint}` : paint };
-    if (this._lod(opts) <= this.keep) this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
+    if (this._lod(opts) <= this.keep) {
+      const lod = this._lod(opts), { open, ...rest } = opts;
+      if (!open) this.current.parts.push(this._outline(points, true, opts, lod));
+      else {
+        // (filled whole, outlined only along the points listed, in order:
+        // its other edges are drawn by what lies over them)
+        this.current.parts.push(this._outline(points, true, { ...rest, stroke: 'none' }, lod));
+        this.current.parts.push(this._outline(open.map((i) => points[i]), false, { ...rest, fill: 'none' }, lod, 'sk filled'));
+      }
+    }
     if (paint.startsWith('ww')) this._washDetail(points, n, paint);
     if (opts.shadow !== false && Math.max(1, this.lod) <= this.keep) this._shade(points, n);
     return this;
@@ -927,10 +956,8 @@ export class Painter {
     const zt = z + h, zr = zt + roofH;
     this._grow([[x0, y0], [x1, y1]]);
     this.solid(x + w / 2, ym, z + (h + roofH) / 2);
-    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts);
+    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts, { 1: zr, 3: zr });
     this._foot([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, h);
-    this.face([[x0, y1, zt], [x0, y0, zt], [x0, ym, zr]], opts);
-    this.face([[x1, y0, zt], [x1, y1, zt], [x1, ym, zr]], opts);
     this._plane([[x0, y0, zt], [x1, y0, zt], [x1, ym, zr], [x0, ym, zr]], opts);
     this._plane([[x1, y1, zt], [x0, y1, zt], [x0, ym, zr], [x1, ym, zr]], opts);
     return this;
@@ -1070,9 +1097,17 @@ export class Painter {
     const rh = roof.h ?? 0, zt = z + h;
     const m = roof.mansard;
 
+    // gable ends (a pitched roof, no hip there, no mansard): their walls
+    // run on up to the ridge (_walls), whose ends sit on their peaks – the
+    // roof doesn't overhang them, so the two meet in one point
+    const gabled = [!m && rh > 0 && !(hip[0] > 0), !m && rh > 0 && !(hip[1] > 0)];
+    const gables = {};
+    if (gabled[0]) gables[alongY ? 0 : 3] = zt + rh;
+    if (gabled[1]) gables[alongY ? 2 : 1] = zt + rh;
+
     this._grow([[x, y], [x + w, y + d]]);
     this.solid(x + w / 2, y + d / 2, z + (h + rh + (m?.h ?? 0)) / 2);
-    this._walls([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, zt, opts);
+    this._walls([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, zt, opts, gables);
     this._foot([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, h);
     // The roof is its own solid just in front of the walls, so window lines
     // drawn on the walls afterwards stay under the eaves.
@@ -1115,14 +1150,15 @@ export class Painter {
       return (this.join.left && px <= -0.5 + 1e-6) || (this.join.right && px >= 0.5 - 1e-6);
     };
     const ev0 = shared(L / 2, v0) ? 0 : e, ev1 = shared(L / 2, v1) ? 0 : e;
-    const eu0 = shared(u0, D / 2) ? 0 : e, eu1 = shared(u1, D / 2) ? 0 : e;
+    const eu0 = gabled[0] || shared(u0, D / 2) ? 0 : e, eu1 = gabled[1] || shared(u1, D / 2) ? 0 : e;
     const [U0, U1, V0, V1] = [u0 - eu0, u1 + eu1, v0 - ev0, v1 + ev1];
     const RA = ra > u0 ? ra : U0, RB = rb < u1 ? rb : U1;
 
-    // gable walls belong to the walls, so the verges overlap them
+    // gables on a mansard belong to the walls, so the verges overlap them
+    // (other gables are the walls' own, _walls)
     onWalls(() => {
-      if (ra <= u0) face([[u0, v1, zb], [u0, v0, zb], [u0, vm, zr]]);
-      if (rb >= u1) face([[u1, v0, zb], [u1, v1, zb], [u1, vm, zr]]);
+      if (ra <= u0 && !gabled[0]) face([[u0, v1, zb], [u0, v0, zb], [u0, vm, zr]]);
+      if (rb >= u1 && !gabled[1]) face([[u1, v0, zb], [u1, v1, zb], [u1, vm, zr]]);
     });
     const f = e ? LOOK.fascia : 0;
     if (f) {
