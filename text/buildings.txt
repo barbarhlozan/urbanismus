@@ -329,8 +329,8 @@ deep_mine.blurb
 # ---------- Zemědělství ----------
 
 hospodarstvi
-  cs: Hospodářství
-  en: Smallholding
+  cs: Farma
+  en: Farm
 
 hospodarstvi.blurb
   cs: Chalupa s chlévem
