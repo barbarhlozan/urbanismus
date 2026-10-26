@@ -570,8 +570,8 @@ staff.vacant
   en: vacant
 
 # the time and fire menus beside the chronicle (src/ui/devMenus.js, for
-# now): their names, what's in them, the building they act on before one
-# is picked
+# now): their names, the hour's arrows and what the hour is doing (named
+# on pointing at them), the building they act on before one is picked
 dev.time
   cs: Čas
   en: Time
@@ -580,33 +580,18 @@ dev.fire
   cs: Oheň
   en: Fire
 
-dev.play
-  cs: Spustit
-  en: Go on
 
-dev.pause
-  cs: Zastavit
-  en: Stop
 
-dev.speed
-  cs: Rychlost
-  en: Speed
 
-dev.jump
-  cs: O minutu dál
-  en: A minute on
 
-dev.hour
-  cs: Hodina
-  en: Hour
 
 dev.hour.held
-  cs: stojí – klepni, ať jde dál
-  en: held – tap to let it go on
+  cs: stojí, klepni, ať jde dál
+  en: held, tap to let it go on
 
 dev.hour.running
-  cs: jde – klepni, ať stojí
-  en: going on – tap to hold it
+  cs: jde
+  en: going on
 
 dev.earlier
   cs: O hodinu dřív

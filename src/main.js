@@ -742,5 +742,5 @@ requestAnimationFrame(loop);
 window.cmd = createCommands({ world, config: CONFIG, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, annotations, renderer, unlocks: UNLOCKS });
 // TEMPORARY: the time and the fires from two drawings beside the chronicle
 // (the fires act on the building whose card was opened last)
-const devMenus = new DevMenus(uiRoot, { world, clock, cmd: window.cmd, popup });
+const devMenus = new DevMenus(uiRoot, { world, cmd: window.cmd, popup });
 ctx.onPick = (s) => devMenus.pick(s);

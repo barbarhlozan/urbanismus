@@ -1147,6 +1147,10 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 /* the book by the town's name, with a dot while there's something new in it */
 #ui .hud .chron { position: relative; }
 .hud .chron .stat-icon, .hud .dev-menu .stat-icon { width: 15px; height: 15px; }
+/* TEMPORARY: the time menu's one row, ‹ the hour › (src/ui/devMenus.js) */
+.popup .dev-arrow { display: block; min-width: 22px; font-size: 20px; line-height: 22px; }
+.popup .dev-hour { display: block; font-size: 17px; line-height: 22px; font-variant-numeric: tabular-nums; }
+.popup .dev-hour.held { text-decoration: underline; text-underline-offset: 4px; }
 .hud .chron.new::after {
   content: '';
   position: absolute;

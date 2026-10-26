@@ -4,9 +4,8 @@
 // open while it's used, and runs the console's own commands
 // (src/dev/commands.js):
 //
-//   clock   Čas: go on / stop (cmd.time), the speed, +1 min (cmd.jump),
-//           and the hour: an hour earlier or later holds the day there,
-//           and the hour itself lets it go on again (cmd.day)
+//   clock   Čas: ‹ the hour › – an hour earlier or later holds the day
+//           there, the hour itself lets it go on again (cmd.day)
 //   flame   Oheň: on the building whose card was opened last (č. p. n),
 //           Zapálit (burns until put out or burnt down), Zapálit na 2 min
 //           (burns down by itself then), Uhasit, Shořet –
@@ -28,7 +27,7 @@ const FLAME = '<path d="M8 14 C5.1 14 3.4 11.9 3.8 9.3 C4.2 6.9 6.2 5.7 6.4 3.1 
 const clockTime = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
 
 export class DevMenus {
-  constructor(root, { world, clock, cmd, popup }) {
+  constructor(root, { world, cmd, popup }) {
     this.world = world;
     this.target = null; // the building whose card was opened last
 
@@ -41,18 +40,17 @@ export class DevMenus {
     const hourFrom = (step) => (((Math.floor(DAY.held ?? hourAt(world.time)) + step) % 24) + 24) % 24;
     const keep = (label, action, more = {}) => ({ label, action, keepOpen: true, ...more });
 
+    // one row: ‹ the hour › (the card's row of drawings, ui/popup.js); the
+    // hour underlined while it's held there
     const timeMenu = () => {
       const held = DAY.held != null;
+      const time = clockTime(DAY.held ?? hourAt(world.time));
       return {
         title: t('dev.time'),
         items: [
-          keep(t(clock.paused ? 'dev.play' : 'dev.pause'), () => cmd.time(clock.paused ? 'play' : 'pause')),
-          keep(t('dev.speed'), () => cmd.time((clock.index + 1) % clock.speeds.length), { note: `${clock.speed.scale}×` }),
-          keep(t('dev.jump'), () => cmd.jump(1)),
-          { section: t('dev.hour') },
-          keep(clockTime(DAY.held ?? hourAt(world.time)), () => (held ? cmd.day() : cmd.day(hourFrom(0))), { note: t(held ? 'dev.hour.held' : 'dev.hour.running') }),
-          keep(t('dev.earlier'), () => cmd.day(hourFrom(-1))),
-          keep(t('dev.later'), () => cmd.day(hourFrom(1))),
+          keep(t('dev.earlier'), () => cmd.day(hourFrom(-1)), { icon: '<span class="dev-arrow" aria-hidden="true">‹</span>' }),
+          keep(`${time} – ${t(held ? 'dev.hour.held' : 'dev.hour.running')}`, () => held && cmd.day(), { icon: `<span class="dev-hour${held ? ' held' : ''}">${time}</span>` }),
+          keep(t('dev.later'), () => cmd.day(hourFrom(1)), { icon: '<span class="dev-arrow" aria-hidden="true">›</span>' }),
         ],
       };
     };
