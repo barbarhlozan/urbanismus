@@ -363,6 +363,7 @@ export class Renderer {
     this.sunCss = document.head.appendChild(document.createElement('style'));
     this.sunCss.id = 'sun-free';
     this.makeGlObjects();
+    this.makeGlMirrors();
     this.glNight = ['night-ground', 'night-top'].map((id) => GLNight.make(document.getElementById(id)));
     if (this.glNight.some((n) => !n)) this.glNight = null;
     this.glGround = [];
@@ -687,6 +688,7 @@ export class Renderer {
     this.renderShadeCanvas();
     this.renderGlLines();
     this.renderGlObjects();
+    this.renderGlMirrors();
     if (overlaySVG !== this.lastOverlay) {
       this.letGo(overlaySVG);
       this.layers.overlay.innerHTML = overlaySVG;
@@ -1438,6 +1440,41 @@ export class Renderer {
     // (the mist under them, and its covers over them, drawn alike)
     this.glObjects.watch(this.layers.mist, { under: true });
     this.layers.mist.style.display = 'none';
+  }
+
+  // The ground's and the world's layers drawn with WebGL as the objects
+  // are (gl/objects.js), so their lines take the brush (brush.js): the
+  // terrain (brows, rocks, steep slopes, shores, waves, ponds), the
+  // meadow, the lots and the forest – each on a canvas just under its
+  // <svg>, which stays in the page as their source with what is drawn
+  // hidden (styles.css .gl-mirror), but for what WebGL can't draw: the
+  // forest's hatched band, with its pattern and clip, over the rest as it
+  // was (the forest the last of the world's layers).
+  makeGlMirrors() {
+    this.glMirrors = [];
+    for (const [svg, names] of [[this.ground, ['terrain']], [this.svg, ['meadow', 'lots', 'forest']]]) {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'map-canvas';
+      svg.before(canvas);
+      const layers = names.map((n) => this.layers[n]);
+      const gl = GLObjects.make(canvas, layers[0], svg, this.sunCss);
+      if (!gl) {
+        canvas.remove();
+        continue;
+      }
+      for (const l of layers.slice(1)) gl.watch(l);
+      // (water in a pool, a mine's pit: hatched as the pattern hatch-water)
+      if (SUN.hatch) gl.setTile({ ...SUN.hatch, angle: 320, gap: 5 / 32 }, 32, 0.6);
+      for (const l of layers) l.classList.add('gl-mirror');
+      this.glMirrors.push({ gl, layers });
+    }
+  }
+
+  renderGlMirrors() {
+    const d = this.drawn;
+    if (!d) return;
+    const view = { zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH };
+    for (const { gl, layers } of this.glMirrors ?? []) gl.drawLayers(view, layers);
   }
 
   // The objects' groups put back in their layer (drawn with WebGL, which

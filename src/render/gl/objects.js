@@ -359,8 +359,13 @@ export class GLObjects {
           g = g.parentNode;
         }
         const rec = g && this.records.get(g);
-        if (!rec) continue;
+        // (one not drawn yet shown again: the order made anew)
+        if (!rec) {
+          if (g === t) this.changed = true;
+          continue;
+        }
         this.changed = true;
+        if (r.type === 'attributes' && r.attributeName === 'style' && t === g && !SHAPES.has(g.tagName)) continue;
         if (r.type === 'attributes' && r.attributeName === 'transform' && (t === g || t === child && t.parentNode === g)) {
           if (t === g) this.setMat(rec.slot, own(g));
           else {
@@ -520,7 +525,8 @@ export class GLObjects {
     s.hatched = cs.fill.startsWith('url(');
     let fill = cs.fill;
     if (s.hatched) {
-      s.el.style.fill = 'var(--bg)';
+      // (the mist's paper in its own colour; water, hatch-water, in the detail's)
+      s.el.style.fill = cs.fill.includes('hatch-water') ? 'var(--detail)' : 'var(--bg)';
       fill = getComputedStyle(s.el).fill;
       s.el.style.removeProperty('fill');
     }
@@ -538,7 +544,9 @@ export class GLObjects {
   // An object's drawing read into pieces.
   build(g, rec) {
     const { gl } = this;
-    const children = [...g.children];
+    // (a shape standing in its layer itself – the terrain's –: its own only child)
+    const lone = SHAPES.has(g.tagName);
+    const children = lone ? [g] : [...g.children];
     const marks = g.querySelectorAll('path,polygon,polyline,line,rect,circle,ellipse').length;
     if (!rec || rec.n < children.length + 1 + marks) {
       if (rec) this.freeRecord(g, rec);
@@ -678,7 +686,7 @@ export class GLObjects {
       rec.children.set(c, slot);
       child = c;
       rec.boxes.set(c, [Infinity, Infinity, -Infinity, -Infinity]);
-      this.setMat(slot, own(c));
+      this.setMat(slot, c === g ? null : own(c));
       // (transforms below a child are kept in the pieces)
       const inner = (el, chain, m) => {
         const t = own(el);
@@ -691,7 +699,7 @@ export class GLObjects {
       if (c.tagName === 'g' || c.tagName === 'a') {
         const ch = `${root}>${c.tagName}.${c.getAttribute('class') ?? ''}`;
         for (const k of c.children) inner(k, ch, null);
-      } else visit(c, root, null, slot);
+      } else visit(c, lone ? '' : root, null, slot);
     });
     gl.bindBuffer(gl.ARRAY_BUFFER, rec.buf);
     gl.bufferData(gl.ARRAY_BUFFER, out.data.subarray(0, n * STRIDE), gl.STATIC_DRAW);
@@ -776,6 +784,17 @@ export class GLObjects {
       else this.matData.set([it.t0, it.t1, it.f0, it.f1, it.px * 1.05 + 4, it.stroke ? 0 : 1, 0, 0], s * 8);
       this.matsDirty.add(s);
     });
+  }
+
+  // Each frame, for a mirror of whole layers (Renderer.makeGlMirrors): their
+  // groups in the page's order, those hidden by their style (the meadow's
+  // chunks out of view) left out. The list made again only after a change.
+  drawLayers(view, layers) {
+    if (this.changed || !this.layerOrder) {
+      this.layerOrder = [];
+      for (const l of layers) for (const g of l.children) if (g.style.display !== 'none') this.layerOrder.push({ g });
+    }
+    this.draw(view, this.layerOrder);
   }
 
   // Each frame. `view`: the SVGs' drawn view and wrapper ({ zoom, panX,

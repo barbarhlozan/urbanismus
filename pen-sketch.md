@@ -40,10 +40,12 @@ A stroke is not even from end to end, as with a pencil:
 - Each stroke is up to 20% heavier or lighter than the next (`weight`).
 - Strokes are 1.2× the pen's width overall (`width`).
 
-Not yet brushed: the lines the browser still draws as SVG (contours, hill
-brows, rocks, meadow tufts, lot and forest edges, water, road marks, the
-build overlay), photos, the flames and the UI's frames. Those need to move
-to WebGL first (webgl-plan.md). The lab also tried pencil grain and ragged
+The terrain (contours, hill brows, rocks, steep slopes, shores, waves,
+ponds), the meadow, the lots and the forest are drawn with WebGL from their
+SVG too (`Renderer.makeGlMirrors`), so they take the brush as well. Not yet
+brushed: the forest's hatched edge band (a clipped pattern, left to the
+SVG), road marks and the build overlay, photos, the flames and the UI's
+frames and icons. The lab also tried pencil grain and ragged
 edges: left off for now.
 
 ## Detail

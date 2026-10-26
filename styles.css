@@ -65,7 +65,8 @@ html, body {
 /* ---------- World ---------- */
 
 /* The map, back to front – drawn with WebGL (src/render/gl/) but for the
-   terrain, the meadow, the lots and the overlay: #view (the terrain, then
+   overlay (the terrain, the meadow, the lots and the forest from their
+   SVG, on a canvas under each: Renderer.makeGlMirrors): #view (the terrain, then
    the roads and railways #map-gl, the shadows #shade-canvas, the parked
    cars, the night on the ground #night-ground), the <canvas> with the
    moving people, vehicles and trains (#agents), #view-top (the buildings,
@@ -98,6 +99,11 @@ html, body {
 #agents, #trains-top, #smoke, #cloud-shadows, #clouds-above, #rain { position: fixed; left: 0; top: 0; pointer-events: none; }
 /* canvases drawn for the map's view, in its wrappers (the night: gl/night.js) */
 .map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* the terrain, the meadow, the lots and the forest drawn with WebGL from
+   their SVG (Renderer.makeGlMirrors): its shapes not shown, but what WebGL
+   can't draw – the forest's band, a pattern clipped */
+.gl-mirror :is(path, polygon, polyline, line, rect, circle, ellipse) { visibility: hidden; }
+.gl-mirror .forest-band, .gl-mirror :is(pattern, clipPath) * { visibility: visible; }
 /* (a stacking context of its own: the clouds' z-index orders them among themselves only) */
 #clouds-above { isolation: isolate; }
 /* a cloud overhead: drawn once, slid along with the map (cloudsAbove.js) */
