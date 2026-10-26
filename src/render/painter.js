@@ -149,7 +149,7 @@ export const LOOK = {
   eave: 0.03, fascia: 0.006, sill: false, tall: false, sketch: 2.5,
   overshoot: 0, ink: true, thin: 1.2, hatch: 0.0225, ground: 0, floors: false, roads: 0.035,
   tilt: 8, open: true, pane: 0.6,
-  round: { walls: 0, roofs: 0, windows: 0 }, clear: 0.08,
+  round: { walls: 1, roofs: 1, windows: 0.4 }, clear: 0.08,
 };
 
 
@@ -627,30 +627,34 @@ export class Painter {
     return out;
   }
 
-  // `gables`: { side index: peak height } – those walls run on up to a
-  // peak over their middle, one face from the ground to the roof (no line
-  // across at the eaves). Along the top its outline is left to the roof's
-  // verges, but on a side whose roof plane is turned away (not drawn).
+  // `gables`: { side index: { peak, ea, eb } } – those walls run on up to
+  // a peak over their middle, one face from the ground to the roof (no line
+  // across at the eaves); the roof overhanging the walls beside by ea at
+  // corner a, eb at b, their top corners go up to where its verges pass
+  // over them, so the wall meets the roof (no gap under it). Along the top
+  // its outline is left to the verges, but on a side whose roof plane is
+  // turned away (not drawn).
   _walls(base, z0, z1, opts, gables = null) {
     for (let i = 0; i < base.length; i++) {
       const [ax, ay] = base[i];
       const [bx, by] = base[(i + 1) % base.length];
-      const zr = gables?.[i];
+      const { peak: zr, ea = 0, eb = 0 } = gables?.[i] ?? {};
       if (zr > z1) {
-        const mx = (ax + bx) / 2, my = (ay + by) / 2;
+        const mx = (ax + bx) / 2, my = (ay + by) / 2, half = Math.hypot(bx - ax, by - ay) / 2;
+        const za = z1 + ((zr - z1) * ea) / (half + ea), zb = z1 + ((zr - z1) * eb) / (half + eb);
         // the roof plane down from the peak to the eave at corner (cx, cy):
         // through its top and along the ridge (across this wall)
-        const away = (cx, cy) => {
-          const r = [by - ay, ax - bx, 0], v = [mx - cx, my - cy, zr - z1];
+        const away = (cx, cy, zc) => {
+          const r = [by - ay, ax - bx, 0], v = [mx - cx, my - cy, zr - zc];
           let n = [r[1] * v[2] - r[2] * v[1], r[2] * v[0] - r[0] * v[2], r[0] * v[1] - r[1] * v[0]];
           if (n[2] < 0) n = n.map((k) => -k);
-          return !this._facing(n, [cx, cy, z1]);
+          return !this._facing(n, [cx, cy, zc]);
         };
         let open = [4, 0, 1, 2];
-        const awayB = away(bx, by), awayA = away(ax, ay);
+        const awayB = away(bx, by, zb), awayA = away(ax, ay, za);
         if (awayB) open = [...open, 3];
         if (awayA) open = awayB ? [...open, 4] : [3, ...open];
-        this.face([[ax, ay, z0], [bx, by, z0], [bx, by, z1], [mx, my, zr], [ax, ay, z1]], { ...opts, open });
+        this.face([[ax, ay, z0], [bx, by, z0], [bx, by, zb], [mx, my, zr], [ax, ay, za]], { ...opts, open });
       } else this.face([[ax, ay, z0], [bx, by, z0], [bx, by, z1], [ax, ay, z1]], opts);
     }
   }
@@ -995,7 +999,7 @@ export class Painter {
     const zt = z + h, zr = zt + roofH;
     this._grow([[x0, y0], [x1, y1]]);
     this.solid(x + w / 2, ym, z + (h + roofH) / 2);
-    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts, { 1: zr, 3: zr });
+    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts, { 1: { peak: zr }, 3: { peak: zr } });
     this._foot([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, h);
     this._plane([[x0, y0, zt], [x1, y0, zt], [x1, ym, zr], [x0, ym, zr]], opts);
     this._plane([[x1, y1, zt], [x0, y1, zt], [x0, ym, zr], [x1, ym, zr]], opts);
@@ -1150,9 +1154,18 @@ export class Painter {
     // run on up to the ridge (_walls), whose ends sit on their peaks – the
     // roof doesn't overhang them, so the two meet in one point
     const gabled = [!m && rh > 0 && !(hip[0] > 0), !m && rh > 0 && !(hip[1] > 0)];
+    // (the eaves beside them: on the walls along v = 0 and v = D, none
+    // over a wall shared with a neighbour – as below)
+    const eaveAt = (v) => {
+      const [px] = P(L / 2, v, 0);
+      return (this.join.left && px <= -0.5 + 1e-6) || (this.join.right && px >= 0.5 - 1e-6) ? 0 : (roof.eave ?? LOOK.eave);
+    };
+    const [e0, e1] = [eaveAt(0), eaveAt(D)];
+    // (each gable wall's corners a, b – in _walls' order round the base –
+    // on the v = 0 or the v = D side)
     const gables = {};
-    if (gabled[0]) gables[alongY ? 0 : 3] = zt + rh;
-    if (gabled[1]) gables[alongY ? 2 : 1] = zt + rh;
+    if (gabled[0]) gables[alongY ? 0 : 3] = alongY ? { peak: zt + rh, ea: e0, eb: e1 } : { peak: zt + rh, ea: e1, eb: e0 };
+    if (gabled[1]) gables[alongY ? 2 : 1] = alongY ? { peak: zt + rh, ea: e1, eb: e0 } : { peak: zt + rh, ea: e0, eb: e1 };
 
     this._grow([[x, y], [x + w, y + d]]);
     this.solid(x + w / 2, y + d / 2, z + (h + rh + (m?.h ?? 0)) / 2);

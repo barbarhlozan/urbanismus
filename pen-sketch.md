@@ -20,7 +20,7 @@ A steady hand, between loose and ruled (rebased 2026-10-26):
 - No foot stroke under the walls: `LOOK.ground` 0.
 - Corners can be rounded off, separately for walls, roofs and windows'
   frames (`LOOK.round`, scene px at tile 32, at most a third of an edge).
-  All 0 for now, sharp; to be tried in the lab.
+  Set to walls 1, roofs 1, windows 0.4.
 - All three pen schemes (Blue pen, Black pen, Countryside) draw with this
   hand. Only Watercolour is `clean`: it keeps 0.15 of the wobble and
   tilt and no overshoot (`CLEAN` in painter.js).
@@ -66,7 +66,9 @@ edges: left off for now.
 - A gable end is one wall from the ground to the peak, with no line across
   it at the eaves. The roof doesn't overhang it, so the ridge ends exactly
   on the gable's peak and the two never drift apart (`_walls` gables in
-  painter.js).
+  painter.js). Its top corners go up to where the roof's edge passes over
+  them (the roof overhangs the long walls), so the gable meets the roof
+  with no glimpse under it.
 
 ## Countryside's colours (styles.css, html.tint)
 
