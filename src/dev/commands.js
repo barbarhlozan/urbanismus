@@ -6,7 +6,6 @@ import { exportCity } from '../ui/saveFile.js';
 import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { planRoute } from '../roads/routing.js';
 import { eraseTarget } from '../tools/erase.js';
-import { ROAD_MARK } from '../render/roadMarks.js';
 import { SUN, DAY, sunAt, stepAt, holdDay, goOnDay, dayLength } from '../render/shadows.js';
 
 const STEP = 0.5; // simulated seconds per step while jumping
@@ -276,14 +275,6 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
       }
       return { on: DAY.on, ...DAY.steps[renderer?.dayStep ?? stepAt(hour ?? 12)], day: DAY.day };
     },
-    // the hand of the road marks on buildings nothing reaches (render/roadMarks.js)
-    roadMark(style) {
-      if (style === undefined) return ROAD_MARK.style;
-      if (!ROAD_MARK.styles.includes(style)) throw new Error(`cmd.roadMark: one of ${ROAD_MARK.styles.join(', ')}`);
-      if (renderer) renderer.setRoadMark(style);
-      else ROAD_MARK.style = style;
-      return style;
-    },
     save: () => save(world), // downloads the town as a file: a backup outside the page
     help() {
       const lines = [
@@ -309,7 +300,6 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',
         'cmd.day(20.5) / cmd.day()   hold the time at 20:30 / let the day go on; cmd.day({ day: 120 }) a shorter day',
-        `cmd.roadMark(${ROAD_MARK.styles.map((k) => `'${k}'`).join(' | ')})   now: '${ROAD_MARK.style}'`,
         'cmd.seed()                the map seed',
         'cmd.save()                download the town as a file',
       ];

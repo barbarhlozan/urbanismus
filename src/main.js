@@ -482,9 +482,6 @@ tools.onChange((tool) => {
   dots = tool.id === 'inspect' || tool.id === 'photo' ? null
     : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: ['road', 'lane', 'street'].includes(tool.id) };
   contours.lend(!!dots && tool.id !== 'bulldoze' && UNLOCKS.allowsControl('terrain'));
-  // the road marks (render/roadMarks.js): firmer while the player can mend
-  // them, gone while composing a photo
-  renderer.setNotes(tool.id === 'photo' ? 'off' : tool.id.startsWith('build:') || ['road', 'lane', 'street', 'path'].includes(tool.id) ? 'strong' : 'quiet');
 });
 tools.use('inspect');
 
