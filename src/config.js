@@ -63,7 +63,8 @@ export const CONFIG = {
     // them. Half a step of the turn (Camera.STEP): one let go short of it
     // comes back to the step it left, with nothing to draw anew.
     turnBare: 1,
-    // Further out than `zoom` a wood is drawn as one shape (render/forest.js):
+    // Further out than `zoom` a wood is drawn as one shape (render/forest.js;
+    // 0: never – the trees stay trees however far out, drawn on the GPU):
     // trees within `link` of one another, at least `minTrees` of them. Its
     // outline runs about reach / 2 out from the outer trees, found in
     // samples `step` apart, and is straightened, wandering at most
@@ -75,7 +76,7 @@ export const CONFIG = {
     // is at least `signCover` (deep enough inside), one of the game's trees
     // `signSize` grid steps tall; `spruces`: the share of them spruces.
     forest: {
-      zoom: 0.9, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, straighten: 0.35, clear: 0.3, hatch: 4,
+      zoom: 0, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, straighten: 0.35, clear: 0.3, hatch: 4,
       scallop: 0.4, band: 0.5, signs: 2, signCover: 0.6, signSize: 0.6, spruces: 0.4,
     },
   },
