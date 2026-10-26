@@ -57,6 +57,10 @@ edges: left off for now.
   (`LOOK.ink`, `tall: false`, `thin`). Close up they open into frames, with
   glazing bars from 0.6 px wide (`LOOK.open`, `LOOK.pane`).
 - A thin eave board (`LOOK.fascia` 0.008). No storey lines, no sills.
+- A gable end is one wall from the ground to the peak, with no line across
+  it at the eaves. The roof doesn't overhang it, so the ridge ends exactly
+  on the gable's peak and the two never drift apart (`_walls` gables in
+  painter.js).
 
 ## Countryside's colours (styles.css, html.tint)
 
