@@ -1103,10 +1103,8 @@ export class Painter {
     const zt = z + h, zr = zt + roofH;
     this._grow([[x0, y0], [x1, y1]]);
     this.solid(xm, y + d / 2, z + (h + roofH) / 2);
-    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts);
+    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts, { 0: { peak: zr }, 2: { peak: zr } });
     this._foot([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, h);
-    this.face([[x0, y0, zt], [x1, y0, zt], [xm, y0, zr]], opts);
-    this.face([[x1, y1, zt], [x0, y1, zt], [xm, y1, zr]], opts);
     this._plane([[x0, y1, zt], [x0, y0, zt], [xm, y0, zr], [xm, y1, zr]], opts);
     this._plane([[x1, y0, zt], [x1, y1, zt], [xm, y1, zr], [xm, y0, zr]], opts);
     return this;
