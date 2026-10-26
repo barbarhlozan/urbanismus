@@ -29,7 +29,8 @@
 // way). A redo that can't be done drops what's left to redo.
 //
 // Things brought back keep their ids (ids are never reused, World.nextId
-// only grows), so the save stays as it would have been. Each change is
+// only grows), and their house numbers (World.nextNo steps back over one
+// an undone building took last), so the save stays as it would have been. Each change is
 // announced with the usual world events, so agents, the renderer and the
 // save follow; the chronicle keeps quiet meanwhile (`applying`) and gets
 // back exactly the lines the step wrote – they go on undo and return on
@@ -260,11 +261,13 @@ export class History {
           if (s) { w.structures.delete(c.id); removed.push(s); }
         } else if (s) {
           // changed in place, so whoever holds it sees the change (the cars
-          // parked there stay)
-          const parked = s.data.parked;
+          // parked there stay; and a building the story burnt since stays
+          // a ruin)
+          const parked = s.data.parked, ruin = s.ruin;
           for (const k of Object.keys(s)) delete s[k];
           Object.assign(s, to);
           if (parked !== undefined) s.data.parked = parked;
+          if (ruin) s.ruin = true;
           w._insertStructure(s);
           changed.push(s);
         } else {
@@ -272,6 +275,17 @@ export class History {
           added.push(to);
         }
       }
+      // house numbers: the step's new ones are taken back on undo if
+      // nothing has had a later one since (a house built and undone leaves
+      // no gap), and counted again on redo
+      const no = (json) => (json ? JSON.parse(json).no : undefined);
+      const back = [];
+      for (const c of step.structures) {
+        const was = no(c[undo ? 'after' : 'before']), now = no(c[side]);
+        if (now != null) w.nextNo = Math.max(w.nextNo, now + 1);
+        else if (was != null && undo) back.push(was);
+      }
+      for (const n of back.sort((a, b) => b - a)) if (n === w.nextNo - 1) w.nextNo--;
       // features (trees): only where the ground is free
       const goneF = [], newF = [];
       for (const c of step.features) {

@@ -11,7 +11,7 @@ import { SUN, DAY, sunAt, stepAt, holdDay, goOnDay, dayLength } from '../render/
 
 const STEP = 0.5; // simulated seconds per step while jumping
 
-export function createCommands({ world, config, clock, weather, agents, trains, boats, deer, livestock, growth, story, annotations, unlocks, renderer = null, save = exportCity }) {
+export function createCommands({ world, config, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, annotations, unlocks, renderer = null, save = exportCity }) {
   // What `cmd.spawn(name)` can make; each returns something truthy if it did.
   const SPAWN = {
     deer: () => deer.launch(),
@@ -67,6 +67,7 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
       world.time = clock.elapsed;
       weather.update();
       agents.update(STEP);
+      fires?.update(STEP);
       trains.update(STEP);
       boats.update(STEP);
       deer.update(STEP);
@@ -127,8 +128,100 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
     return true;
   }
 
+  // A building by its house number (č. p.): what it is, where, who lives
+  // there; with no number, every one standing, in order.
+  function house(no) {
+    const about = (s) => {
+      const def = STRUCTURE_TYPES[s.type];
+      const [x, y] = world.grid.xy(s.node);
+      return { no: s.no, type: s.type, name: def.name, x, y, residents: def.stats?.residents ?? 0, served: world.isServed(s), id: s.id };
+    };
+    if (no === undefined) return [...world.structures.values()].filter((s) => s.no != null).sort((a, b) => a.no - b.no).map(about);
+    const s = world.structureByNo(no);
+    if (s) return about(s);
+    return fail(`No building č. p. ${no}`, no > 0 && no < world.nextNo ? 'it stood once, and is gone' : `numbers run 1 … ${world.nextNo - 1}`);
+  }
+
+  // The people of houses `from` (a number or a list of them) who are in go
+  // to house `to`, stay a while and come home: how many set off.
+  function send(from, to) {
+    const dest = world.structureByNo(to);
+    if (!dest) return house(to); // (says why)
+    const homes = [];
+    for (const no of [from].flat()) {
+      const s = world.structureByNo(no);
+      if (s) homes.push(s);
+      else house(no);
+    }
+    const { sent, missed } = agents.send(homes, dest);
+    for (const { home, why } of missed) console.warn(`č. p. ${home.no}: ${why}`);
+    return sent;
+  }
+
+  // Fires, as the story's `ignite`, `put out` and `burn` (src/sim/fire.js):
+  // the town's doing, not steps ⌘Z takes back (demolish a ruin to clear it).
+  // House `no` catches fire; the neighbours and the brigade turn out. It
+  // burns until put out or burnt down – or, given `minutes`, burns down
+  // when they're up.
+  function ignite(no, minutes = null) {
+    const s = world.structureByNo(no);
+    if (!s) return house(no); // (says why)
+    if (s.ruin) return fail(`č. p. ${no}`, 'burnt down already');
+    if (s.burning) return fail(`č. p. ${no}`, 'burning already');
+    return world.history.aside(() => fires.ignite(s, minutes === null ? null : minutes * 60));
+  }
+
+  // The fire at house `no` is put out: the house stays.
+  function putOut(no) {
+    const s = world.structureByNo(no);
+    if (!s) return house(no);
+    if (!s.burning) return fail(`č. p. ${no}`, 'not burning');
+    return world.history.aside(() => fires.putOut(s));
+  }
+
+  // House `no` burns down: the fire there ends in a ruin, or it burns
+  // down at once if it wasn't burning.
+  function burn(no) {
+    const s = world.structureByNo(no);
+    if (!s) return house(no);
+    if (s.ruin) return fail(`č. p. ${no}`, 'burnt down already');
+    return world.history.aside(() => fires.burnDown(s));
+  }
+
+  // What's burning, and who's there doing what (src/sim/fire.js).
+  function fire() {
+    return [...(fires?.fires.values() ?? [])].map((f) => {
+      const s = world.structures.get(f.id);
+      const doing = {};
+      for (const a of f.people) {
+        const k = `${a.fire.role} ${a.fire.phase}`;
+        doing[k] = (doing[k] ?? 0) + 1;
+      }
+      return { no: s?.no, left: !s?.burning ? 'out' : s.burning.left === null ? 'until told' : Math.round(s.burning.left), chain: f.chain ? `${f.chain.members.length} + ${f.chain.runners.length} running` : 0, engine: f.engine?.state ?? null, doing };
+    });
+  }
+
+  // The view centred on house `no`, `zoom` close (to watch it, say, burn).
+  function look(no, zoom = 3) {
+    const s = world.structureByNo(no);
+    if (!s) return house(no); // (says why)
+    const cam = renderer?.camera;
+    if (!cam) return fail('No view', 'no renderer');
+    cam.zoom = Math.min(cam.maxZoom, Math.max(cam.minZoom, zoom));
+    cam.centerOn(...world.centerOf(s), innerWidth, innerHeight);
+    renderer.invalidate();
+    return true;
+  }
+
   const cmd = {
     spawn,
+    house,
+    look,
+    fire,
+    send,
+    ignite,
+    putOut,
+    burn,
     build,
     road,
     tree,
@@ -205,6 +298,13 @@ export function createCommands({ world, config, clock, weather, agents, trains, 
         "cmd.build('house', x, y, { rotation: 0..3 })   see cmd.types()",
         "cmd.road('street' | 'road' | 'lane' | 'path' | 'rail' | 'fence', [x, y], [x, y])",
         'cmd.tree(x, y)',
+        'cmd.house(4)              the building č. p. 4; cmd.house() every one',
+        'cmd.send([1, 2, 3], 7)    the people of č. p. 1, 2, 3 go to č. p. 7, stay and come home',
+        'cmd.fire()                what burns, and who is there doing what',
+        'cmd.look(4, 3)            the view on č. p. 4, zoomed in 3×',
+        'cmd.ignite(4)             č. p. 4 catches fire, the town turns out; cmd.ignite(4, 2): burns down in 2 minutes',
+        'cmd.putOut(4)             the fire at č. p. 4 is put out, the house stays',
+        'cmd.burn(4)               č. p. 4 burns down now (a ruin until demolished)',
         'cmd.erase(x, y)           what the eraser would take there',
         'cmd.undo() / cmd.redo()   the last change to the town, as ⌘Z / ⇧⌘Z',
         'cmd.sun({ length, hatch: { gap, pen }, strokes: { gap, pen } })   shadows; pens 1…5',

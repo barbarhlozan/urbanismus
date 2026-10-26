@@ -4,6 +4,12 @@
 // longer, potter about in front of the house, a loop walk, a park, an errand,
 // work, a trip off the map; workers take lunch walks and delivery drives.
 //
+// People can also be sent: send() has those of given houses go to one
+// place, stay and come back (cmd.send, by house number; the story next).
+// At a fire (src/sim/fire.js) neighbours and the brigade are taken over by
+// the FireSystem (state 'fire', or 'fireWait' while out of sight): it moves
+// them itself and hands them back on a leg home.
+//
 // Trips to a place pick a mode (planCommute):
 //   walk   – within comfortable walking distance over footpaths and street
 //            sidewalks (or reachable on foot only)
@@ -65,7 +71,7 @@
 //
 // The renderer only reads visible() and x / y / trip.mode.
 
-import { STRUCTURE_TYPES, matches, codeOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES, matches, codeOf, statsOf } from '../../structures/index.js';
 import { compass } from '../ui/annotations.js';
 import { findPath } from '../roads/pathfinding.js';
 import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, roadway } from '../roads/geometry.js';
@@ -102,6 +108,7 @@ export class AgentSystem {
     this._balance = null; // cached { residents, jobs, workplaces }
     this.log = () => {}; // (text, [x, y]) – set by main to feed annotations
     this.trains = null;  // TrainSystem, set by main: closed level crossings
+    this.fires = null;   // FireSystem, set by main: fire engines pulling up
     this.queues = new Map(); // closed crossing + heading + kind -> people queued there
 
     const rebalance = () => (this._balance = null);
@@ -117,9 +124,9 @@ export class AgentSystem {
   // Match the number of agents (and trucks) to the structure's type.
   sync(s) {
     const def = STRUCTURE_TYPES[s.type];
-    const count = def ? def.agents ?? 1 : 0;
+    const count = def && !s.ruin ? def.agents ?? 1 : 0; // (nobody in a ruin)
     const trucks = this.config.trucks;
-    const fleet = def && can('trucks') && trucks.homes.some((n) => matches(def, n)) ? def.trucks ?? 1 : 0;
+    const fleet = def && !s.ruin && can('trucks') && trucks.homes.some((n) => matches(def, n)) ? def.trucks ?? 1 : 0;
     this.syncCount(s, '', count, () => this.homeDwell(s) * Math.random());
     this.syncCount(s, 't', fleet, () => trucks.firstTrip * Math.random(), { truck: true });
   }
@@ -132,7 +139,11 @@ export class AgentSystem {
           this.agents.set(id, newAgent({ id, home: s.id, state: 'home', timer: timer(), ...extra }));
         }
       } else if (this.agents.has(id)) {
-        this.agents.delete(id);
+        // (out at the fire that took their home: they go to the neighbours
+        // when it's over, src/sim/fire.js)
+        const a = this.agents.get(id);
+        if (a.state === 'fire' || a.state === 'fireWait') a.drop = true;
+        else this.agents.delete(id);
       } else {
         break;
       }
@@ -146,7 +157,7 @@ export class AgentSystem {
     for (const [id, a] of this.agents) {
       const kind = a.bus ? 'buses' : a.truck ? 'trucks' : a.trip?.mode === 'drive' ? 'cars' : null;
       if (!kind || can(kind)) continue;
-      if (a.visitor) {
+      if (a.visitor || a.engine) {
         this.agents.delete(id);
         continue;
       }
@@ -161,6 +172,13 @@ export class AgentSystem {
 
   despawnFor(s) {
     for (const [id, a] of this.agents) if (a.home === s.id && !a.visitor) this.agents.delete(id);
+  }
+
+  // A new agent of someone else's (a fire engine and its crew, src/sim/fire.js).
+  spawn(fields) {
+    const a = newAgent(fields);
+    this.agents.set(a.id, a);
+    return a;
   }
 
   visitorCount() {
@@ -187,7 +205,7 @@ export class AgentSystem {
     const workplaces = [];
     for (const s of this.world.structures.values()) {
       if (!this.world.isServed(s)) continue;
-      const stats = STRUCTURE_TYPES[s.type].stats ?? {};
+      const stats = statsOf(s);
       residents += stats.residents ?? 0;
       jobs += stats.jobs ?? 0;
       if (stats.jobs) workplaces.push(s);
@@ -216,7 +234,7 @@ export class AgentSystem {
     if (trip.outside || trip.transit) return between(this.config.sim.outsideMin, this.config.sim.outsideMax);
     if (trip.visitor) return between(this.config.visitors.dwellMin, this.config.visitors.dwellMax);
     const d = this.config.dwell;
-    return between(...(trip.purpose === 'work' ? d.work : trip.purpose === 'stroll' ? d.turn : d.errand));
+    return between(...(trip.purpose === 'work' ? d.work : trip.purpose === 'stroll' ? d.turn : trip.purpose === 'visit' ? d.visit : d.errand));
   }
 
   // Seconds at home (for workers: at work) before setting off again.
@@ -298,7 +316,7 @@ export class AgentSystem {
         // falls through
         case 'back': {
           const leg = a.state === 'out' ? a.trip.out : a.trip.back;
-          const step = this.speedOf(a.trip.mode) * paceAt(leg, a.s) * a.followK * this.doorEase(a, leg) * (a.truck ? this.config.trucks.speed : 1) * dt;
+          const step = this.speedOf(a.trip.mode) * paceAt(leg, a.s) * a.followK * this.doorEase(a, leg) * (a.engine ? this.config.fire.engineSpeed : a.truck ? this.config.trucks.speed : 1) * dt;
           a.s = Math.min(a.s + Math.min(step, a.room), Math.max(a.s, this.crossingStop(a, leg)));
           [a.x, a.y] = pointAt(leg, a.s);
           if (a.truck) [a.tx, a.ty] = backPoint(leg, a.s, this.config.trucks.trailer);
@@ -319,6 +337,8 @@ export class AgentSystem {
   // At the end of the way out.
   arrive(a) {
     const { trip } = a;
+    if (trip.purpose === 'fire') return this.fires?.arrived(a); // a fire engine pulling up
+    if (trip.purpose === 'refuge') return this.agents.delete(a.id); // taken in by the neighbours
     if (trip.transit) {
       a.state = 'wait';
       a.timer = this.config.transit.maxWait;
@@ -334,6 +354,7 @@ export class AgentSystem {
   }
 
   arriveHome(a) {
+    if (a.engine || a.drop) return this.agents.delete(a.id); // (a fire engine back, a brigade on foot, or homeless: gone)
     a.state = 'home';
     a.trip = null;
     a.wander = null;
@@ -883,7 +904,7 @@ export class AgentSystem {
     return false;
   }
 
-  // Structures matching any of `names` (ids or tags), excluding home.
+  // Structures matching any of `names` (ids or tags), excluding home (and ruins).
   // A fresh list (callers take from it) of the other structures matching
   // `names`. Every trip out asks, so the matches are kept per set of names
   // until a structure is built, removed or converted (world.structureVersion).
@@ -900,7 +921,7 @@ export class AgentSystem {
       all = [];
       for (const s of this.world.structures.values()) {
         const def = STRUCTURE_TYPES[s.type];
-        if (names.some((n) => matches(def, n))) all.push(s);
+        if (!s.ruin && names.some((n) => matches(def, n))) all.push(s);
       }
       this.matched.set(key, all);
     }
@@ -913,6 +934,12 @@ export class AgentSystem {
     const home = this.world.structures.get(a.home);
     if (!home) return false;
     if (a.truck) return this.startTruckTrip(a, home);
+    if (a.sentTo != null) { // sent somewhere (send): there, if there's still a way
+      const dest = this.world.structures.get(a.sentTo);
+      a.sentTo = null;
+      const plan = dest && this.planCommute(home, dest);
+      if (plan) return this.begin(a, { ...plan, purpose: 'visit' }, dest.id);
+    }
     if (a.retry) { // gave up waiting for a bus / train: drive instead
       const { commute } = a.retry;
       a.retry = null;
@@ -966,7 +993,7 @@ export class AgentSystem {
       case 'errand':
         return this.goTo(a, home, this.config.activities.errands, 'errand');
       case 'work': {
-        const lives = STRUCTURE_TYPES[home.type].stats?.residents;
+        const lives = statsOf(home).residents;
         if (lives && Math.random() < this.outboundShare()) { // not enough jobs in town
           const leave = this.planLeave(home, 'goes to work outside', true);
           if (leave) return this.begin(a, leave.plan, leave.dest);
@@ -989,6 +1016,33 @@ export class AgentSystem {
       }
     }
     return null;
+  }
+
+  // Sends the people of `homes` (structures) who are in to `dest`: each
+  // leaves the house a moment apart (config.dwell.setOff), goes as to any
+  // errand – walking, cycling or driving – stays a while (dwell.visit) and
+  // comes home. Whoever is out already carries on. { sent, missed }:
+  // how many set off, and the homes none did from, with why.
+  send(homes, dest) {
+    let sent = 0;
+    const missed = [];
+    for (const home of homes) {
+      if (dest.ruin) { missed.push({ home, why: 'burnt down' }); continue; }
+      if (home.id === dest.id) { missed.push({ home, why: 'already there' }); continue; }
+      if (!this.planCommute(home, dest)) { missed.push({ home, why: 'no way there' }); continue; }
+      let n = 0;
+      for (const a of this.agents.values()) {
+        if (a.home !== home.id || a.truck || a.state !== 'home') continue;
+        a.sentTo = dest.id;
+        a.retry = null;
+        a.timer = between(...this.config.dwell.setOff);
+        n++;
+      }
+      if (n) this.log(`č. p. ${home.no ?? codeOf(home)} sent to č. p. ${dest.no ?? codeOf(dest)} · ${n}`, this.world.grid.xy(home.node));
+      else missed.push({ home, why: 'nobody in' });
+      sent += n;
+    }
+    return { sent, missed };
   }
 
   // To a random structure matching `names`, walking, cycling or driving.
@@ -1473,7 +1527,7 @@ export class AgentSystem {
 }
 
 // States in which an agent is out and about (drawn).
-const VISIBLE = new Set(['out', 'back', 'linger', 'wait']);
+const VISIBLE = new Set(['out', 'back', 'linger', 'wait', 'fire']);
 
 const NONE = [];
 
@@ -1514,7 +1568,8 @@ function newAgent(fields) {
     visitor: false, commuter: false, truck: false, bus: false,
     followK: 1, room: Infinity, held: 0, creep: 0, stall: 0, fx: 0, fy: 0, bx: 0, by: 0, hx: 1, hy: 0, half: 0, next: -1,
     box: null, toBox: Infinity, claim: false, yieldTo: null, nose: 0, len: 0, px: 0, py: 0, v: 0, aside: false, leader: null, blocker: null, ahead: Infinity, across: Infinity,
-    waitKey: null, slot: 0, wander: null, retry: null,
+    waitKey: null, slot: 0, wander: null, retry: null, sentTo: null,
+    fire: null, carry: null, watch: null, engine: null, drop: false,
     legs: null, leg: 0, call: 0, pause: 0, left: 0,
   }, fields);
 }

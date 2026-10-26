@@ -687,3 +687,160 @@ stadium
 stadium.blurb
   cs: Sportovní areál
   en: Sports grounds
+
+
+# ---------- Who runs a place (structures/staff.js) ----------
+# staff.<role> is what it's called, staff.<role>.f for a woman when that's
+# another word. The people's names stay Czech in every language.
+
+staff.hostinsky
+  cs: Hostinský
+  en: Innkeeper
+
+staff.hostinsky.f
+  cs: Hostinská
+  en: Innkeeper
+
+staff.servirka
+  cs: Servírka
+  en: Waitress
+
+staff.vedouci
+  cs: Vedoucí prodejny
+  en: Shop manager
+
+staff.prodavacka
+  cs: Prodavačka
+  en: Shop assistant
+
+staff.predseda_mnv
+  cs: Předseda MNV
+  en: Chairman of the MNV
+
+staff.postmistr
+  cs: Poštmistr
+  en: Postmaster
+
+staff.postmistr.f
+  cs: Poštmistrová
+  en: Postmistress
+
+staff.listonos
+  cs: Listonoš
+  en: Postman
+
+staff.listonos.f
+  cs: Listonoška
+  en: Postwoman
+
+staff.recepcni
+  cs: Recepční
+  en: Receptionist
+
+staff.velitel_sboru
+  cs: Velitel sboru
+  en: Fire chief
+
+staff.prislusnik_vb
+  cs: Příslušník VB
+  en: VB officer
+
+staff.lekar
+  cs: Obvodní lékař
+  en: District doctor
+
+staff.lekar.f
+  cs: Obvodní lékařka
+  en: District doctor
+
+staff.sestra
+  cs: Zdravotní sestra
+  en: Nurse
+
+staff.primar
+  cs: Primář
+  en: Head physician
+
+staff.primar.f
+  cs: Primářka
+  en: Head physician
+
+staff.reditel_skoly
+  cs: Ředitel školy
+  en: Headmaster
+
+staff.reditel_skoly.f
+  cs: Ředitelka školy
+  en: Headmistress
+
+staff.ucitel
+  cs: Učitel
+  en: Teacher
+
+staff.ucitel.f
+  cs: Učitelka
+  en: Teacher
+
+staff.vedouci_kd
+  cs: Vedoucí kulturního domu
+  en: Head of the culture house
+
+staff.farar
+  cs: Farář
+  en: Parish priest
+
+staff.hrobnik
+  cs: Hrobník
+  en: Gravedigger
+
+staff.prednosta
+  cs: Přednosta stanice
+  en: Stationmaster
+
+staff.vypravci
+  cs: Výpravčí
+  en: Dispatcher
+
+staff.pumpar
+  cs: Pumpař
+  en: Pump attendant
+
+staff.pekar
+  cs: Pekař
+  en: Baker
+
+staff.kovar
+  cs: Kovář
+  en: Blacksmith
+
+staff.truhlar
+  cs: Truhlář
+  en: Joiner
+
+staff.automechanik
+  cs: Automechanik
+  en: Car mechanic
+
+staff.sladek
+  cs: Sládek
+  en: Brewmaster
+
+staff.reditel_zavodu
+  cs: Ředitel závodu
+  en: Works director
+
+staff.predseda_jzd
+  cs: Předseda JZD
+  en: JZD chairman
+
+staff.reditel_statku
+  cs: Ředitel statku
+  en: State farm director
+
+staff.agronom
+  cs: Agronom
+  en: Agronomist
+
+staff.agronom.f
+  cs: Agronomka
+  en: Agronomist

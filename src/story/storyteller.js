@@ -2,8 +2,13 @@
 // Every few seconds the rules are checked against the town (variables.js),
 // in the order they are written; the first that holds, for a branch not
 // told yet, is told in the dialogue window. Each branch is told once.
-// What has been told, and the numbers the story `set`, are kept with the
-// town (world.story), so a reload carries on where it was.
+// What has been told, the numbers the story `set` and the buildings it
+// picked (house numbers by name) are kept with the town (world.story), so
+// a reload carries on where it was. A picked name reads as its number in
+// conditions and in {name}; send, ignite, put out and burn act on it
+// (agents.send; fires: it burns a while as the town turns out, then it's a
+// ruin unless put out – the town's own doing, not the player's: ⌘Z
+// leaves it).
 //
 // Mistakes in the file are listed in the dialogue window when it loads (and
 // in the console), with their line.
@@ -16,11 +21,17 @@
 import { parseStory, evaluate, fillIn, namesIn, normalName } from './script.js';
 import { townVariables } from './variables.js';
 import { UNLOCKS, loadUnlocks, resolveScheme, applyScheme } from './unlocks.js';
+import { STRUCTURE_TYPES, isNumbered } from '../../structures/index.js';
+
+// Can `pick` look for this (a normalName)? A type, a tag, or any building.
+const PICKABLE = (what) => what === 'building' || what === 'buildings'
+  || Object.values(STRUCTURE_TYPES).some((def) => [def.id, ...(def.tags ?? [])].some((n) => normalName(n) === what));
 
 export class Storyteller {
-  constructor({ world, agents, trains, dialogue, chronicle, config }) {
+  constructor({ world, agents, fires, trains, dialogue, chronicle, config }) {
     this.world = world;
     this.agents = agents;
+    this.fires = fires;
     this.trains = trains;
     this.dialogue = dialogue;
     this.chronicle = chronicle;
@@ -52,8 +63,14 @@ export class Storyteller {
     }
     // names a condition reads that are neither the town's nor set anywhere
     const known = this.variables();
-    const set = new Set();
+    const set = new Set(this.script.picked);
     for (const b of this.script.branches.values()) for (const s of b.steps) if (s.kind === 'set') set.add(s.name);
+    for (const b of this.script.branches.values()) {
+      for (const s of b.steps) {
+        if (s.kind !== 'pick') continue;
+        if (s.which.what && !PICKABLE(s.which.what)) problems.push(`${this.config.file} line ${s.line}: "${s.which.what}" is nothing that can be built (a type or tag, or building)`);
+      }
+    }
     const conditions = [
       ...this.script.rules.map((r) => [r.expr, r.line]),
       ...[...this.script.branches.values()].flatMap((b) => b.steps.filter((s) => s.expr).map((s) => [s.expr, s.line])),
@@ -81,15 +98,58 @@ export class Storyteller {
   reset() {
     this.state.seen = [];
     this.state.vars = {};
+    this.state.places = {};
     this.world.events.emit('story:changed');
   }
 
   // The town's numbers, then what the story set (the town's win: a story
-  // can't change how many houses there are).
+  // can't change how many houses there are), then the places it picked.
   variables() {
     const v = townVariables(this.world, { agents: this.agents, trains: this.trains, photos: this.state.vars.photos_taken ?? 0 });
     for (const [k, n] of Object.entries(this.state.vars)) if (!v.has(k)) v.set(k, n);
+    // a name picked means that building's number, even one the town counts
+    // by (pick farm = …: `farm` is no longer how many farms there are)
+    for (const [k, n] of Object.entries(this.state.places)) v.set(k, n);
     return v;
+  }
+
+  // ----- buildings -----
+
+  // The house number a place in the story means (placeRef in script.js):
+  // a number as it is, a name what was picked for it (0: nothing).
+  numberOf(ref) {
+    return ref.no ?? this.state.places[ref.name] ?? 0;
+  }
+
+  // The building standing there, not burnt, or null.
+  standing(ref) {
+    const s = this.world.structureByNo(this.numberOf(ref));
+    return s && !s.ruin ? s : null;
+  }
+
+  // `pick`: the house number of a building chosen by `which` (0 when
+  // there's none). Only those standing; one picked under another name is
+  // passed over while there are others, so two picks are two buildings.
+  pick(name, which) {
+    if (which.no != null) return which.no;
+    const all = (which.what === 'building' || which.what === 'buildings')
+      ? (def) => isNumbered(def)
+      : (def) => [def.id, ...(def.tags ?? [])].some((n) => normalName(n) === which.what);
+    const taken = new Set(Object.entries(this.state.places).filter(([k]) => k !== name).map(([, n]) => n));
+    let list = [...this.world.structures.values()].filter((s) => s.no != null && !s.ruin && all(STRUCTURE_TYPES[s.type]));
+    if (list.some((s) => !taken.has(s.no))) list = list.filter((s) => !taken.has(s.no));
+    if (!list.length) return 0;
+    if (which.how === 'oldest') return Math.min(...list.map((s) => s.no));
+    if (which.how === 'newest') return Math.max(...list.map((s) => s.no));
+    if (which.how === 'nearest') {
+      const from = this.world.structureByNo(this.numberOf(which.to));
+      if (!from) return 0;
+      const [fx, fy] = this.world.centerOf(from);
+      const far = (s) => { const [x, y] = this.world.centerOf(s); return Math.hypot(x - fx, y - fy); };
+      list = list.filter((s) => s !== from);
+      return list.length ? list.reduce((a, b) => (far(b) < far(a) ? b : a)).no : 0;
+    }
+    return list[Math.floor(Math.random() * list.length)].no;
   }
 
   seen(key) {
@@ -105,7 +165,8 @@ export class Storyteller {
     const v = this.variables();
     const lookup = (k) => v.get(k);
     const seen = (k) => this.seen(k);
-    const rule = this.script.rules.find((r) => !this.seen(r.branch) && evaluate(r.expr, lookup, seen));
+    const exists = (ref) => !!this.standing(ref);
+    const rule = this.script.rules.find((r) => !this.seen(r.branch) && evaluate(r.expr, lookup, seen, exists));
     if (rule) this.play(rule.branch);
   }
 
@@ -141,6 +202,7 @@ export class Storyteller {
       const v = this.variables();
       const lookup = (k) => v.get(k);
       const seen = (k) => this.seen(k);
+      const exists = (ref) => !!this.standing(ref);
       const fill = (t) => fillIn(t, lookup, this.world.name);
       switch (step.kind) {
         case 'say':
@@ -154,11 +216,36 @@ export class Storyteller {
           break;
         }
         case 'jump':
-          if (!step.expr || evaluate(step.expr, lookup, seen)) enter(step.to);
+          if (!step.expr || evaluate(step.expr, lookup, seen, exists)) enter(step.to);
           break;
+        case 'pick':
+          this.state.places[step.name] = this.pick(step.name, step.which);
+          this.world.events.emit('story:changed');
+          break;
+        case 'send': {
+          const dest = this.standing(step.to);
+          const homes = step.from.map((r) => this.standing(r)).filter(Boolean);
+          if (dest && homes.length) this.agents?.send(homes, dest);
+          break;
+        }
+        case 'burn': {
+          const s = this.standing(step.place);
+          if (s) this.world.history.aside(() => (this.fires ? this.fires.burnDown(s) : this.world.burnStructure(s.id)));
+          break;
+        }
+        case 'ignite': {
+          const s = this.standing(step.place);
+          if (s && !s.burning) this.world.history.aside(() => this.fires?.ignite(s, step.minutes === null ? null : step.minutes * 60));
+          break;
+        }
+        case 'putOut': {
+          const s = this.standing(step.place);
+          if (s?.burning) this.world.history.aside(() => (this.fires ? this.fires.putOut(s) : this.world.extinguishStructure(s.id)));
+          break;
+        }
         case 'set':
           if (v.has(step.name) && !(step.name in this.state.vars)) console.warn(`${this.config.file} line ${step.line}: ${step.name} is one of the town's numbers, the story can't change it`);
-          this.state.vars[step.name] = evaluate(step.expr, lookup, seen);
+          this.state.vars[step.name] = evaluate(step.expr, lookup, seen, exists);
           this.world.events.emit('story:changed');
           break;
         case 'scheme':

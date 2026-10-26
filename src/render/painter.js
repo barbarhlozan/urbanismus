@@ -155,7 +155,6 @@ export const LOOK = {
   round: { walls: 1, roofs: 1, windows: 0.4 }, clear: 0.08,
 };
 
-
 // The hand-drawn sway of roads: a smooth shift [dx, dy] of the map at
 // (x, y), made of a few long slow waves. Everything on the road network
 // (roads, kerbs, footpaths, driveways, people and cars) is shifted by it,
@@ -633,7 +632,12 @@ export class Painter {
   // through it (Renderer.renderWindows).
   covers() {
     const out = [];
-    for (const s of this.solids) if (s.cover?.length >= 3) out.push(hull2(s.cover));
+    for (const s of this.solids) {
+      if (!(s.cover?.length >= 3)) continue;
+      const h = hull2(s.cover);
+      if (s.aside) h.aside = true; // (its yard's, not the building's: render/fire.js)
+      out.push(h);
+    }
     return out;
   }
 
@@ -1520,7 +1524,7 @@ export class Painter {
   // groups each such piece in a <g class="aside">, so the building's own
   // parts can be told apart (Renderer.buildingParts).
   merge(other, { aside = false } = {}) {
-    if (aside) for (const solid of other.solids) solid.aside = true;
+    if (aside) for (const one of [...other.solids, ...other.panes]) one.aside = true;
     this.feet.push(...other.feet);
     this.casts.push(...other.casts);
     this.panes.push(...other.panes);

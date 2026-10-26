@@ -344,6 +344,7 @@ export const stop = {
   name: 'Stop',
   size: 'Stop',
   code: 'SP',
+  numbered: false, // a shelter by the track
   footprint: [[0, 0], [1, 0]],
   stats: { jobs: 1 },
   agents: 0,

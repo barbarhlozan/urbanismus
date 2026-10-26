@@ -46,7 +46,8 @@ one name.
 | `house`, `block`, `block_wide`, `jednota`, `hospoda`, `school`, `church`, `pit`, `jzd`, … | how many there are, by type id (as in `structures/`; one size each) |
 | `residential`, `business`, `industrial`, `park`, `square`, `services`, `mine`, `farm`, `heritage`, … | how many there are, by tag (every home, every shop and office…) |
 | `residents`, `jobs` | people living and working in town |
-| `buildings` | everything built |
+| `buildings` | everything built (ruins too) |
+| `ruins` | buildings burnt down and not cleared away (a burnt house counts as no `house`) |
 | `roads`, `lanes`, `streets`, `footpaths`, `railways` | how long, in dots |
 | `bridges` | crossings over water |
 | `trees` | trees and other nature on the map |
@@ -80,6 +81,11 @@ The wind blows over the meadow.
 | `chronicle: text` | write a line in the town's chronicle (the book by the town's name) |
 | `unlock name` / `lock name` | what may be built, and which buttons show (see below) |
 | `scheme name` | switch the colour scheme (`scheme Black pen`) |
+| `pick name = …` | choose a building and remember it as `name` (see below) |
+| `send places -> place` | the people of those buildings go there, stay a while and come home |
+| `ignite place` | the building catches fire (`ignite place for 2 minutes`: and burns down then) |
+| `put out place` | the fire there is put out, the building stays |
+| `burn place` | the building burns down |
 | `# …` | a comment |
 
 `{name}` in any line is replaced by that number, and `{town}` by the town's
@@ -91,6 +97,76 @@ is true once someone picked that choice.
 The player clicks the dialogue window, or presses Enter, to go on. Choices
 are picked with a click, or with ↑ ↓ and Enter. The town keeps going
 underneath.
+
+## Buildings
+
+Every building has a house number, the *číslo popisné* (č. p.) on its
+card. Numbers are given in the order things are built, through the whole
+town, and a number never comes back once its building is gone. Parks,
+squares, bus stops, halts, memorials and the cemetery have none.
+
+A story can't know which numbers a player's town will have, so it
+**picks** buildings by what they are and gives them a name:
+
+```
+::Fire::
+pick farm = oldest house
+pick pub = nearest hospoda to farm
+pick neighbour = random residential
+send farm, neighbour -> pub
+Grandma: The folks from č. p. {farm} went down to the pub again.
+burn farm
+chronicle: Č. p. {farm} burned down in the night.
+```
+
+| What to pick | Which |
+|---|---|
+| `oldest house` (or `first`) | the lowest number of that type or tag |
+| `newest block` (or `last`) | the highest |
+| `random farm` (or just `farm`) | any one of them |
+| `nearest hospoda to farm` | the closest to a building already picked (or to a number) |
+| `4` | č. p. 4 itself |
+
+Any type or tag goes, as in the counts above; `building` is any building.
+Only buildings still standing are picked, and a building already picked
+under another name is passed over while there are others, so two picks are
+two buildings. When there's none, the name is 0.
+
+From then on the name means that building, and is kept with the town:
+
+- `{farm}` in a line is its number.
+- In a condition, `farm` is its number too. A picked name wins over the
+  town's count of the same name: after `pick farm = …`, `farm` is no
+  longer how many farms there are.
+- `exists(farm)` is true while it stands and hasn't burnt down. It takes a
+  number too: `exists(4)`.
+
+Wherever a place goes you can write a name picked or a house number:
+`send farm, 2 and 3 -> pub` (or `to pub`), `burn 4`.
+
+- `send`: whoever is at home in those buildings sets off, a moment apart,
+  walking, cycling or driving as they would anyway, stays a while and
+  comes home. Whoever is out already carries on.
+- `ignite`: the building catches fire. The neighbours come to watch and
+  to help with buckets, and the nearest fire brigade drives over. Their
+  water doesn't save it: it burns until the story says `put out` or
+  `burn`. Or give it a time – `ignite farm for 2 minutes` – and it burns
+  down by itself when that's up (unless put out before).
+- `put out`: the fire there is put out. The flames die down, the house
+  stays, and everyone goes home.
+- `burn`: the building burns down, now: a fire there ends, and one that
+  wasn't burning burns down at once. It smoulders a little while, then
+  stays where it stood as a ruin, its
+  number with it: nobody lives or works there, nobody goes there, and it
+  counts for nothing until the player clears it away. Undo doesn't
+  bring it back; that was the town's doing, not the player's.
+
+A line that starts with `send`, `ignite`, `put out`, `burn` or `pick` is read as one of these,
+so narration like "Send them to bed." is listed as a mistake (`them` was
+never picked). Say it another way.
+
+To try it from the browser console: `cmd.house(4)`, `cmd.send([1, 2], 4)`,
+`cmd.ignite(4)`, `cmd.putOut(4)`, `cmd.burn(4)`.
 
 ## What can be built
 

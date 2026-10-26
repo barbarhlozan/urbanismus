@@ -50,6 +50,8 @@ export const VEHICLES = {
 //   trucks  one rigid model each (see truckFor): a Praga V3S (bonnet, cab
 //           behind it; canvas-covered, a box body or an open flatbed) or a
 //           Tatra 815 (cab-over, a tipper body), three axles
+//   cas     Tatra 148 CAS 32, a fire station's engine; dvs: Avia A30 DVS, a
+//           village brigade's (src/sim/fire.js)
 // `glass` gets each face with n (normal), x and z (its middle along the car
 // and up), side (±1 the flat sides, 0 the faces round the profile).
 const MODELS = {
@@ -120,6 +122,40 @@ const MODELS = {
     wheels: { x: [0.064, -0.05, -0.076], r: 0.021 },
     glass: (face) => face.side === 0 && face.n[0] > 0 && face.z > 0.06 && face.x > 0.09, // the windscreen
     panes: [[[0.04, 0.062], [0.07, 0.062], [0.07, 0.088], [0.04, 0.088]]],
+  },
+  // Fire engines (src/sim/fire.js), the same length as the trucks.
+  // Tatra 148 CAS 32, a station's: a long crew cab ahead of a tall tank
+  // body with shutters down its side, the ladder along its roof, three axles
+  cas: {
+    body: { w: 0.037, profile: [[-0.1, 0.024], [0.1, 0.024], [0.1, 0.05], [-0.1, 0.05]] },
+    top: [
+      { w: 0.042, profile: [[0.02, 0.05], [0.102, 0.05], [0.099, 0.088], [0.093, 0.095], [0.02, 0.095]] },
+      { w: 0.045, profile: [[-0.1, 0.05], [0.014, 0.05], [0.014, 0.1], [-0.096, 0.1], [-0.1, 0.096]] },
+      { w: 0.012, profile: [[-0.098, 0.1], [0.06, 0.1], [0.06, 0.108], [-0.098, 0.108]] },
+    ],
+    wheels: { x: [0.066, -0.048, -0.074], r: 0.021 },
+    glass: (face) => face.side === 0 && face.n[0] > 0 && face.z > 0.06 && face.x > 0.09, // the windscreen
+    panes: [
+      [[0.028, 0.064], [0.052, 0.064], [0.052, 0.086], [0.028, 0.086]],
+      [[0.058, 0.064], [0.084, 0.064], [0.084, 0.086], [0.058, 0.086]],
+      ...[-0.09, -0.052, -0.014].map((x) => [[x, 0.058], [x + 0.03, 0.058], [x + 0.03, 0.06], [x, 0.06]]), // the shutters' handles
+    ],
+  },
+  // Avia A30 DVS, a village brigade's: a small cab-over, a box behind it
+  // for the crew and the portable pump, the ladder on the roof, two axles
+  dvs: {
+    body: { w: 0.032, profile: [[-0.088, 0.02], [0.088, 0.02], [0.088, 0.042], [-0.088, 0.042]] },
+    top: [
+      { w: 0.035, profile: [[0.034, 0.042], [0.09, 0.042], [0.087, 0.074], [0.08, 0.082], [0.034, 0.082]] },
+      { w: 0.037, profile: [[-0.088, 0.042], [0.028, 0.042], [0.028, 0.084], [-0.088, 0.084]] },
+      { w: 0.011, profile: [[-0.09, 0.084], [0.07, 0.084], [0.07, 0.091], [-0.09, 0.091]] },
+    ],
+    wheels: { x: [0.058, -0.056], r: 0.018 },
+    glass: (face) => face.side === 0 && face.n[0] > 0 && face.z > 0.052 && face.x > 0.08, // the windscreen
+    panes: [
+      [[0.042, 0.054], [0.072, 0.054], [0.072, 0.074], [0.042, 0.074]],
+      [[-0.02, 0.058], [0.016, 0.058], [0.016, 0.074], [-0.02, 0.074]],
+    ],
   },
 };
 

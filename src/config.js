@@ -128,7 +128,7 @@ export const CONFIG = {
   // station when there is no other way out).
   trains: {
     interval: 85,       // seconds between arrivals through one exit
-    max: 3,             // trains on the map at once
+    max: 1,             // trains on the map at once
     speed: 0.9,         // grid steps per second at full speed
     accel: 0.15,        // grid steps per second² (braking too)
     dwell: 17,          // seconds stopped at a station
@@ -361,6 +361,8 @@ export const CONFIG = {
     work: [60, 140],    // at work (also workers between their outings)
     errand: [12, 30],   // at a shop, a service, a delivery
     turn: [1, 4],       // a pause at a stroll's far end
+    visit: [40, 80],    // where they were sent (AgentSystem.send: cmd.send, the story)
+    setOff: [0.5, 4],   // seconds before each one sent leaves the house
   },
 
   // Lingering: people standing about in view, stepping between spots.
@@ -419,6 +421,38 @@ export const CONFIG = {
     deliveryInterval: 85,           // seconds between delivery trucks from outside, full-size city
     deliveryMax: 4,                 // delivery trucks in the city at once
     trailer: 0.2,                   // grid steps from the truck's front to its back
+  },
+
+  // A fire (src/sim/fire.js): the house burns until the story puts it out
+  // or burns it down (or for as long as the story said), whatever the
+  // town does. Neighbours in reach come – some to watch, some to
+  // help with buckets (the first each running to and from home, then a
+  // chain growing from the fire towards the nearest house) – and
+  // the nearest brigade drives over.
+  fire: {
+    embers: [40, 70],     // seconds a ruin smoulders after
+    reach: 12,            // grid steps (straight) people come from
+    turnOut: 0.75,        // of those at home this near, the share that come (fewer further)
+    household: [0, 2],    // more of each household that comes, with them
+    most: 48,             // people at one fire at most
+    helpers: 0.45,        // share of them who help, the rest watch
+    notice: [3, 14],      // seconds before each sets off
+    hurry: 1.5,           // everyone's pace to a fire, a share of walking speed
+    crowd: [0.35, 0.75],  // watchers stand this far out from the building's edge…
+    spread: 1.1,          // …within this angle (radians) either side of the way they came
+    chainSource: 3,       // a bucket chain runs from a house this near (straight)…
+    chainStart: 3,        // …once this many helpers have got to the fire, growing as more come…
+    chainGap: 0.12,       // …someone every this many grid steps along it (as far apart as a bucket can be handed on)…
+    chainClose: 0.07,     // …or closer, down to this, when there are more of them than it needs
+    gapRunners: 4,        // while it doesn't reach the house: one helper in this many runs buckets to its end
+    pass: 1.6,            // buckets passed along a chain per second
+    splash: [1, 1.8],     // seconds a runner stands throwing water
+    refill: [3, 6],       // seconds a runner is in the house filling the bucket
+    alarm: { 'fire-house': [16, 30], station: [6, 12] }, // seconds before the brigade sets off
+    crew: { 'fire-house': 3, station: 5 },
+    engineSpeed: 1,       // the engine's pace, a share of a car's
+    after: [6, 24],       // seconds people stay after it has burnt down
+    brigadeAfter: [18, 30], // …and the brigade, damping it down
   },
 
   // Buses: come in through a road exit, call at a few bus stops (nearest

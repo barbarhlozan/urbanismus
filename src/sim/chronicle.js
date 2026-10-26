@@ -14,7 +14,7 @@
 // written twice; world.chronicle.seen counts the entries read, so the book
 // can mark the rest (and the button wears a dot while there are any).
 
-import { STRUCTURE_TYPES, matches } from '../../structures/index.js';
+import { STRUCTURE_TYPES, matches, statsOf } from '../../structures/index.js';
 
 // How a first is written, by structure id (sizes of one thing share a
 // line: the first of either is written). The rest get "The first <name>
@@ -316,7 +316,7 @@ export class Chronicle {
   countResidents() {
     let n = 0;
     for (const s of this.world.structures.values()) {
-      if (this.world.isServed(s)) n += STRUCTURE_TYPES[s.type].stats?.residents ?? 0;
+      if (this.world.isServed(s)) n += statsOf(s).residents ?? 0;
     }
     return n;
   }

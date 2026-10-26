@@ -6,7 +6,10 @@
 // face the viewer like the map's other glyphs; the renderer mirrors them to
 // face the way they walk. A cyclist is the same kind of figure, shorter,
 // seated and empty-handed, on a sketched bike set along the way it rides;
-// in a canoe (canoeSVG), one or two of them seated, paddling.
+// in a canoe (canoeSVG), one or two of them seated, paddling. At a fire
+// (src/sim/fire.js) they carry a bucket, throw it, or hold the hose
+// (carried()), always out on their right: the renderer mirrors them to
+// face the fire.
 //
 // Drawn in scene px around the figure's ground point. PEOPLE.bodies
 // variants per kind, picked by the agent's id; the cyclists' wheels come in
@@ -119,17 +122,58 @@ function umbrella(variant, height, parts) {
   parts.push([rnd() < 0.5 ? 'fig-ink' : 'fig-body', `${d}Z`]);
 }
 
+// What a figure at a fire holds, out on its right (+x): 'bucket' hanging
+// from the hand, 'throw' swung up in front with the water flying out of
+// it, 'hose' the branch pipe held level in both hands and its jet arcing
+// out and down.
+function carried(variant, height, parts, what) {
+  const rnd = mulberry32(variant * 3266489917 + 7);
+  const [sx, sy, w] = parts.shoulder;
+  const pt = (x, y) => `${r2(x)} ${r2(y)}`;
+  const bw = height * 0.09, bh = height * 0.12; // the bucket: a little tub, wider at the top
+  const tub = (x, y, tilt) => {
+    const c = Math.cos(tilt), s = Math.sin(tilt);
+    const at = (u, v) => pt(x + u * c - v * s, y + u * s + v * c);
+    return `M${at(-bw, 0)}L${at(bw, 0)}L${at(bw * 0.75, bh)}L${at(-bw * 0.75, bh)}Z`;
+  };
+  if (what === 'bucket') {
+    const hx = sx + w * 1.15, hy = sy + height * 0.22;
+    parts.push(['fig-line', `M${pt(sx + w * 0.9, sy)}L${pt(hx, hy)}`]); // the arm down
+    parts.push(['fig-body', tub(hx, hy + height * 0.02, 0)]);
+    parts.push(['fig-line', `M${pt(hx - bw, hy + height * 0.02)}Q${pt(hx, hy - height * 0.06)} ${pt(hx + bw, hy + height * 0.02)}`]); // the handle
+  } else if (what === 'throw') {
+    const hx = sx + w + height * 0.16, hy = sy - height * 0.04;
+    parts.push(['fig-line', `M${pt(sx + w * 0.8, sy)}L${pt(hx, hy)}M${pt(sx + w * 0.6, sy + height * 0.06)}L${pt(hx - bw * 0.3, hy + bh * 0.8)}`]);
+    parts.push(['fig-body', tub(hx + bw * 0.4, hy - bh * 0.3, -1.1)]);
+    // the water, out of its mouth and falling away
+    const mx = hx + bw * 1.3, my = hy - bh * 0.9, k = 0.8 + rnd() * 0.4;
+    parts.push(['fig-line', `M${pt(mx, my)}Q${pt(mx + height * 0.25 * k, my - height * 0.12)} ${pt(mx + height * 0.42 * k, my + height * 0.2)}`
+      + `M${pt(mx + height * 0.08, my + height * 0.05)}Q${pt(mx + height * 0.24 * k, my - height * 0.02)} ${pt(mx + height * 0.33 * k, my + height * 0.25)}`]);
+  } else if (what === 'hose') {
+    const hy = sy + height * 0.08, nx = sx + w + height * 0.28;
+    parts.push(['fig-line', `M${pt(sx + w * 0.8, sy + height * 0.02)}L${pt(nx - height * 0.08, hy)}M${pt(sx + w * 0.4, sy + height * 0.12)}L${pt(nx - height * 0.16, hy + height * 0.02)}`]);
+    parts.push(['fig-ink', `M${pt(sx + w * 0.6, hy - height * 0.025)}L${pt(nx, hy - height * 0.012)}L${pt(nx, hy + height * 0.012)}L${pt(sx + w * 0.6, hy + height * 0.03)}Z`]); // the branch pipe
+    // the hose itself, down in front to the ground and away behind the feet
+    parts.push(['fig-line', `M${pt(sx + w * 0.6, hy + height * 0.02)}Q${pt(sx + w * 1.5, hy + height * 0.3)} ${pt(sx + w * 0.6, -height * 0.01)}L${pt(sx - w * 2.6, height * 0.01)}`]);
+    // the jet: up a little, out and falling, breaking up at its end
+    const k = 0.9 + rnd() * 0.3, ex = nx + height * 0.85 * k, ey = hy + height * 0.3;
+    parts.push(['fig-line', `M${pt(nx, hy)}Q${pt(nx + height * 0.45 * k, hy - height * 0.32)} ${pt(ex, ey)}`
+      + `M${pt(ex + height * 0.05, ey + height * 0.06)}L${pt(ex + height * 0.08, ey + height * 0.13)}M${pt(ex - height * 0.06, ey + height * 0.08)}L${pt(ex - height * 0.05, ey + height * 0.14)}`]);
+  }
+}
+
 const svgOf = (parts) => parts.map(([cls, d]) => `<path class="${cls}" d="${d}"/>`).join('');
 
 const cache = new Map();
 
 // Inner SVG of a walker (body variant `variant`).
-// `rain`: under an umbrella.
-export function walkerSVG(variant, rain = false) {
-  const key = `w${variant}${rain ? 'u' : ''}`;
+// `rain`: under an umbrella; `carry`: what it holds at a fire (carried()).
+export function walkerSVG(variant, rain = false, carry = null) {
+  const key = `w${variant}${rain ? 'u' : ''}${carry ?? ''}`;
   if (!cache.has(key)) {
     const parts = figure(variant, PEOPLE.height);
-    if (rain) umbrella(variant, PEOPLE.height, parts);
+    if (carry) carried(variant, PEOPLE.height, parts, carry);
+    else if (rain) umbrella(variant, PEOPLE.height, parts);
     cache.set(key, svgOf(parts));
   }
   return cache.get(key);

@@ -19,7 +19,7 @@ import { riverField } from '../terrain/rivers.js';
 import { RoadNetwork, edgeKey } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
 import { validateRoute } from '../roads/routing.js';
-import { STRUCTURE_TYPES, footprintOffsets, newSeed } from '../../structures/index.js';
+import { STRUCTURE_TYPES, footprintOffsets, newSeed, isNumbered } from '../../structures/index.js';
 import { mulberry32 } from './random.js';
 import { smoothLine } from './geom2d.js';
 import { meanderPaths } from '../roads/meander.js';
@@ -47,9 +47,10 @@ export class World {
     this.structureAtNode = new Map(); // node -> structure id (every footprint node)
     this.featureAtNode = new Map();   // node -> feature id
     this.nextId = 1;
+    this.nextNo = 1; // the next house number (numberStructure); a number gone with its building isn't given again
     this.time = 0; // simulated seconds the town has been running (the clock, kept in the save)
     this.weather = { kind: 'fair', from: 'fair', since: 0, until: 0, n: 0 }; // the weather now, the one before, since and until when (world.time), and how many changes so far (src/sim/weather.js)
-    this.story = { seen: [], vars: {}, unlocks: [] }; // what the story has told and unlocked (src/story/)
+    this.story = { seen: [], vars: {}, unlocks: [], places: {} }; // what the story has told, set, unlocked and picked (src/story/)
     this.chronicle = { entries: [], marks: [] }; // the town's chronicle (src/sim/chronicle.js)
     this.history = new History(this); // undo and redo of the player's changes; every change below calls history.touch() first
 
@@ -856,11 +857,74 @@ export class World {
     if (!this.canPlaceStructure(type, node, rotation).ok) return null;
     this.history.touch();
     const s = { id: this.nextId++, type, node, rotation, seed, data };
+    this.numberStructure(s);
     this._insertStructure(s);
     this.nodesOf(s).forEach((n) => this.clearFeaturesAt(n));
     STRUCTURE_TYPES[type].placed?.(this, s); // e.g. a station lays its track
     this.events.emit('structure:added', s);
     return s;
+  }
+
+  // House numbers, as the číslo popisné of a Czech village: every building
+  // gets the next one when it is built (s.no), and keeps it whatever it
+  // turns into. Numbers run through the whole town and a building's dies
+  // with it: the next house is never given a number already gone (only
+  // ⌘Z takes one back, History.apply). Open ground has none (isNumbered).
+  numberStructure(s) {
+    if (!isNumbered(STRUCTURE_TYPES[s.type])) delete s.no;
+    else s.no ??= this.nextNo++;
+  }
+
+  // The structure with house number `no`, or null.
+  structureByNo(no) {
+    for (const s of this.structures.values()) if (s.no === no) return s;
+    return null;
+  }
+
+  // A building catches fire, and burns while the neighbours come to watch
+  // and help and the brigade comes (src/sim/fire.js): until it's put out
+  // (extinguishStructure) or burns down (burnStructure) – or, given
+  // `seconds` of game time, burns down by itself when they're up.
+  // s.burning = { age, left, total } (saved with it): seconds it has
+  // burnt, and those left of `seconds` (null without), counted by
+  // src/sim/fire.js. The story's `ignite`, `put out` and `burn` and the
+  // same console commands do these.
+  igniteStructure(id, seconds = null) {
+    const s = this.structures.get(id);
+    if (!s || s.ruin || s.burning || !isNumbered(STRUCTURE_TYPES[s.type])) return false;
+    this.history.touch();
+    s.burning = { age: 0, left: seconds, total: seconds };
+    this.events.emit('structure:changed', s);
+    return true;
+  }
+
+  // The fire is put out: the house stands (no ruin).
+  extinguishStructure(id) {
+    const s = this.structures.get(id);
+    if (!s?.burning) return false;
+    this.history.touch();
+    delete s.burning;
+    this.events.emit('structure:changed', s);
+    return true;
+  }
+
+  // A building burns down: it stands as a ruin (s.ruin) on its ground,
+  // its house number with it, until it's demolished. Nobody lives or
+  // works there and it counts for nothing (statsOf), nobody goes there,
+  // and it's drawn as burnt-out walls (structures/ruin.js). The story
+  // burns things (`burn`, src/story/). For `embers` seconds after, it
+  // still smoulders (s.embers = { left, total }, counted down by
+  // src/sim/fire.js).
+  burnStructure(id, embers = 0) {
+    const s = this.structures.get(id);
+    if (!s || s.ruin || !isNumbered(STRUCTURE_TYPES[s.type])) return false;
+    this.history.touch();
+    delete s.burning;
+    s.ruin = true;
+    if (embers > 0) s.embers = { left: embers, total: embers };
+    this.structureVersion = (this.structureVersion ?? 0) + 1;
+    this.events.emit('structure:changed', s);
+    return true;
   }
 
   removeStructure(id) {
@@ -906,6 +970,7 @@ export class World {
     const s = this.structures.get(id);
     this._unindexStructure(s);
     s.type = type;
+    this.numberStructure(s);
     this._insertStructure(s);
     this.nodesOf(s).forEach((n) => this.clearFeaturesAt(n));
     this.events.emit('structure:changed', s);
@@ -1100,6 +1165,7 @@ export class World {
       width: this.grid.width,
       height: this.grid.height,
       nextId: this.nextId,
+      nextNo: this.nextNo,
       terrain: this.terrain.toJSON(),
       networks: Object.fromEntries(Object.entries(this.networks).map(([k, l]) => [k, l.graph.toJSON()])),
       sidewalks: [...this.sidewalks],
@@ -1162,9 +1228,14 @@ export class World {
       if (FEATURE_TYPES[f.type] && !world.structureAt(f.node)) world._insertFeature(f);
     }
     world.nextId = data.nextId;
+    // house numbers: a town saved before them numbers its buildings once,
+    // in the order they were built (and any that became buildings since
+    // get the next ones)
+    world.nextNo = Math.max(data.nextNo ?? 1, ...[...world.structures.values()].map((s) => (s.no ?? 0) + 1));
+    for (const s of [...world.structures.values()].sort((a, b) => a.id - b.id)) world.numberStructure(s);
     world.time = data.time ?? 0;
     if (data.weather) world.weather = { kind: data.weather.kind, from: data.weather.from, since: data.weather.since, until: data.weather.until, n: data.weather.n ?? 0 }; // (older saves start fair; without `from` or `since`, WeatherSystem works them out)
-    world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [] };
+    world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [], places: data.story?.places ?? {} };
     const marks = data.chronicle?.marks ?? [];
     world.chronicle = { entries: data.chronicle?.entries ?? [], marks: (data.version ?? 1) < 4 ? upgradeMarks(marks) : marks };
     // how many of the entries have been read, and the book's tab last open

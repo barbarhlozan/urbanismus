@@ -4,9 +4,10 @@
 // the town; the storyteller (storyteller.js) hands in the numbers.
 //
 //   parseStory(text)          { rules, branches, errors }
-//   evaluate(expr, lookup)    the value of a parsed condition; lookup(name)
-//                             gives a variable's value, seen(name) whether a
-//                             branch has been told
+//   evaluate(expr, lookup, seen, exists)   the value of a parsed condition;
+//                             lookup(name) gives a variable's value,
+//                             seen(name) whether a branch has been told,
+//                             exists(ref) whether a building stands
 //   normalName(name)          how names are compared: lower case, '_' for
 //                             any '-', '.' or space, no '_amount' at the end
 //
@@ -23,6 +24,16 @@
 //   chronicle: text     write a line in the town's chronicle
 //   unlock name / lock name    what may be built (see unlocks.js)
 //   scheme name         the colour scheme (as in unlocks.txt)
+//   pick name = <which> a building, by its house number, remembered as
+//                       `name`: a number, or [oldest | newest | random]
+//                       <type or tag>, or nearest <type or tag> to <place>
+//   send <places> -> <place>   their people go there, stay, come home
+//   ignite <place>      it catches fire, and burns until put out or burnt
+//   ignite <place> for <n> minutes   …or burns down when they're up
+//   put out <place>     the fire there is put out: it stays
+//   burn <place>        it burns down (now, burning or not)
+// A <place> is a house number or a name picked; exists(place) in a
+// condition is whether it stands (and isn't burnt).
 // '#' starts a comment (a whole line). {name} in a text is replaced by the
 // variable's value, {town} by the town's name.
 
@@ -120,9 +131,14 @@ export function parseExpression(src) {
       if (isOp('(')) {
         take();
         const arg = take();
+        if (low === 'exists') {
+          if (!(arg?.k === 'name' || arg?.k === 'num') || !isOp(')')) throw new Error('exists( ) takes a house number or a name picked');
+          take();
+          return { exists: placeRef(String(arg.v)), name: String(arg.v) };
+        }
         if (arg?.k !== 'name' || !isOp(')')) throw new Error(`${t.v}( ) takes one name`);
         take();
-        if (low !== 'seen') throw new Error(`unknown function ${t.v}( ) – only seen( ) is known`);
+        if (low !== 'seen') throw new Error(`unknown function ${t.v}( ) – only seen( ) and exists( ) are known`);
         return { seen: normalName(arg.v), name: arg.v };
       }
       return { var: normalName(t.v), name: t.v };
@@ -135,11 +151,12 @@ export function parseExpression(src) {
   return e;
 }
 
-export function evaluate(e, lookup, seen = () => false) {
-  const ev = (x) => evaluate(x, lookup, seen);
+export function evaluate(e, lookup, seen = () => false, exists = () => false) {
+  const ev = (x) => evaluate(x, lookup, seen, exists);
   if ('num' in e) return e.num;
   if ('var' in e) return Number(lookup(e.var)) || 0;
   if ('seen' in e) return seen(e.seen) ? 1 : 0;
+  if ('exists' in e) return exists(e.exists) ? 1 : 0;
   switch (e.op) {
     case 'or': return ev(e.a) || ev(e.b) ? 1 : 0;
     case 'and': return ev(e.a) && ev(e.b) ? 1 : 0;
@@ -161,7 +178,7 @@ export function evaluate(e, lookup, seen = () => false) {
 
 // The variable names a condition reads (to warn about unknown ones).
 export function namesIn(e, out = []) {
-  if (!e || 'num' in e) return out;
+  if (!e || 'num' in e || 'exists' in e) return out;
   if ('var' in e) out.push(e);
   if (e.a) namesIn(e.a, out);
   if (e.b) namesIn(e.b, out);
@@ -180,6 +197,32 @@ const CHRONICLE = /^chronicle\s*:\s*(.+)$/i;
 const UNLOCK = /^(unlock|lock)\s+([^:]+)$/i;
 const SCHEME = /^scheme\s+([^:]+)$/i;
 const SAY = /^([^:]{1,40}?)\s*:\s+(.+)$/;
+const PICK = /^pick\s+([A-Za-z_][\w.\-]*)\s*=\s*(.+)$/i;
+const SEND = /^send\s+(.+?)\s*(?:->|\s+to\s+)\s*([^\s,]+)\s*$/i;
+const BURN = /^burn\s+([^\s,]+)\s*$/i;
+const IGNITE = /^ignite\s+([^\s,]+)(?:\s+for\s+(\d+(?:[.,]\d+)?)\s*(?:minutes?|min))?\s*$/i;
+const PUT_OUT = /^put\s+out\s+([^\s,]+)\s*$/i;
+
+// A building named in the story: { no } (a house number) or { name } (one
+// picked, normalName).
+export function placeRef(text) {
+  const t = String(text).trim();
+  return /^\d+$/.test(t) ? { no: Number(t) } : { name: normalName(t) };
+}
+
+// What `pick` takes: a number, or [oldest | first | newest | last | random]
+// <type or tag>, or nearest <type or tag> to <place>. `what` is normalName'd;
+// 'building' (or 'buildings') is any of them.
+function parseWhich(src) {
+  const t = src.trim();
+  if (/^\d+$/.test(t)) return { no: Number(t) };
+  let m = /^nearest\s+(.+?)\s+(?:to|near)\s+(\S+)$/i.exec(t);
+  if (m) return { how: 'nearest', what: normalName(m[1]), to: placeRef(m[2]), toText: m[2] };
+  m = /^(?:(oldest|first|newest|last|random|any)\s+)?(.+)$/i.exec(t);
+  const how = { first: 'oldest', last: 'newest', any: 'random' }[m[1]?.toLowerCase()] ?? m[1]?.toLowerCase() ?? 'random';
+  if (/\s/.test(m[2].trim())) throw new Error(`can't tell what "${t}" is: say oldest house, newest pub, random farm, nearest hospoda to farm, or a number`);
+  return { how, what: normalName(m[2]) };
+}
 
 export function parseStory(text) {
   const rules = [];
@@ -226,7 +269,23 @@ export function parseStory(text) {
     }
 
     let m;
-    if ((m = JUMP_IF.exec(t))) {
+    if ((m = PICK.exec(t))) {
+      try {
+        branch.steps.push({ kind: 'pick', name: normalName(m[1]), which: parseWhich(m[2]), line });
+      } catch (err) {
+        fail(line, err.message);
+      }
+    } else if ((m = SEND.exec(t))) {
+      const from = m[1].split(/\s*,\s*|\s+and\s+|\s+/i).filter(Boolean);
+      branch.steps.push({ kind: 'send', from: from.map(placeRef), fromText: from, to: placeRef(m[2]), toText: m[2], line });
+    } else if ((m = BURN.exec(t))) {
+      branch.steps.push({ kind: 'burn', place: placeRef(m[1]), text: m[1], line });
+    } else if ((m = IGNITE.exec(t))) {
+      const minutes = m[2] ? Number(m[2].replace(',', '.')) : null;
+      branch.steps.push({ kind: 'ignite', place: placeRef(m[1]), text: m[1], minutes, line });
+    } else if ((m = PUT_OUT.exec(t))) {
+      branch.steps.push({ kind: 'putOut', place: placeRef(m[1]), text: m[1], line });
+    } else if ((m = JUMP_IF.exec(t))) {
       const expr = cond(m[1], line);
       if (expr) branch.steps.push({ kind: 'jump', expr, to: normalName(m[2]), target: m[2], line });
     } else if ((m = JUMP.exec(t))) {
@@ -258,8 +317,15 @@ export function parseStory(text) {
   };
   for (const r of rules) check(r.branch, r.target, r.line);
   // seen(Name) in any condition
+  // the names picked, so exists( ), send and burn only name those
+  const picked = new Set();
+  for (const b of all) for (const st of b.steps) if (st.kind === 'pick') picked.add(st.name);
+  const placeOk = (ref, text, line) => {
+    if (ref.name && !picked.has(ref.name)) fail(line, `"${text}" is no house number and nothing picked (pick ${text} = …)`);
+  };
   const seenIn = (e, line) => {
     if (!e || 'num' in e || 'var' in e) return;
+    if ('exists' in e) return placeOk(e.exists, e.name, line);
     if ('seen' in e) return check(e.seen, e.name, line);
     seenIn(e.a, line);
     seenIn(e.b, line);
@@ -269,10 +335,13 @@ export function parseStory(text) {
   for (const b of all) {
     for (const s of b.steps) {
       if (s.kind === 'jump') check(s.to, s.target, s.line);
+      if (s.kind === 'send') { s.from.forEach((r, k) => placeOk(r, s.fromText[k], s.line)); placeOk(s.to, s.toText, s.line); }
+      if (s.kind === 'burn' || s.kind === 'ignite' || s.kind === 'putOut') placeOk(s.place, s.text, s.line);
+      if (s.kind === 'pick' && s.which.to) placeOk(s.which.to, s.which.toText, s.line);
       if (s.kind === 'choice') for (const o of s.options) check(o.to, o.target, o.line);
     }
   }
-  return { rules, branches, errors };
+  return { rules, branches, errors, picked };
 }
 
 // {name} in a line: a variable's value (or the town's name for {town}).

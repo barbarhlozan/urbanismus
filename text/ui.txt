@@ -548,6 +548,66 @@ north.up
 
 # ---------- Clicking something on the map ----------
 
+# the house number on its card, as on the plate by the door (č. p.,
+# číslo popisné): the short word before the number, then the whole name
+inspect.no
+  cs: č. p.
+  en: No.
+
+inspect.no.full
+  cs: Číslo popisné {no}
+  en: House number {no}
+
+# between two families' names in a home's title: Novákovi a Dvořákovi
+# (the names themselves stay Czech in every language)
+families.and
+  cs: a
+  en: and
+
+# a slot at a place nobody holds yet (structures/staff.js)
+staff.vacant
+  cs: volné místo
+  en: vacant
+
+# the dev buttons, top middle (src/ui/devStrip.js, for now): a minute
+# ahead, the building they act on before one is picked, and the fires
+dev.jump
+  cs: +1 min
+  en: +1 min
+
+dev.fold
+  cs: Schovat ladění
+  en: Hide the dev buttons
+
+dev.open
+  cs: Ladění
+  en: Dev
+
+dev.pick
+  cs: klepni na dům
+  en: tap a house
+
+dev.ignite
+  cs: Zapálit
+  en: Set alight
+
+dev.ignite.timed
+  cs: Zapálit na {n} min
+  en: Set alight, {n} min
+
+dev.put-out
+  cs: Uhasit
+  en: Put out
+
+dev.burn
+  cs: Shořet
+  en: Burn down
+
+# on the card of a building that burnt down (World.burnStructure)
+inspect.ruin
+  cs: Spáleniště
+  en: Burnt ruin
+
 inspect.needs.any
   cs: Potřebuje silnici nebo pěšinu
   en: Needs a road or footpath

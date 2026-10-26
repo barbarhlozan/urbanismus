@@ -35,6 +35,7 @@
 //              player can't turn it; a bus stop). Other single-dot ones can
 //              be turned side or back to it (s.data.turn, World.facingRotation)
 //   yards      surroundings styles it may get (see yards.js)
+//   numbered   false = gets no house number, not being a building (see isNumbered)
 
 import { rotateQuarter } from '../src/core/grid.js';
 import { mulberry32 } from '../src/core/random.js';
@@ -124,6 +125,19 @@ export function matches(def, name) {
 // Display name for a type id or tag used in rules.
 export function nameOf(name) {
   return (STRUCTURE_TYPES[name]?.name ?? name).toLowerCase();
+}
+
+// Does it get a house number (číslo popisné, World.numberStructure)? Every
+// building does; open ground (parks, squares) and what isn't a building
+// (`numbered: false`: a bus stop, a halt, a memorial, the cemetery) don't.
+export function isNumbered(def) {
+  return !!def && !def.site && def.numbered !== false;
+}
+
+// The numbers a structure counts for (residents, jobs…, def.stats): none
+// for a ruin (World.burnStructure).
+export function statsOf(s) {
+  return s.ruin ? {} : STRUCTURE_TYPES[s.type]?.stats ?? {};
 }
 
 // Short technical code for annotations, e.g. "R-012".

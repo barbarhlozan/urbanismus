@@ -1,4 +1,8 @@
-// Default tool: click a building to get its card – its name, how many live
+// Default tool: click a building to get its card – its name (a home's:
+// the families living there, sim/families.js; three or more listed
+// under it instead), its house number (č. p., World.numberStructure),
+// who of the house runs a place in town and who runs this one
+// (structures/staff.js), how many live
 // there under it (a little figure for each), and a row of drawings, all in
 // the middle: another look, its surroundings, Zbourat (an eraser). Roads, railways, paths, fences and
 // trees open nothing: Erase takes them away (and ⌘Z brings them back).
@@ -10,6 +14,8 @@ import { statIcon } from '../ui/icons.js';
 import { iconSvg } from '../ui/uiIcons.js';
 import { t, hasText } from '../core/text.js';
 import { nameOf } from '../ui/names.js';
+import { familyName, personName } from '../core/surnames.js';
+import { ROLES } from '../../structures/staff.js';
 
 // names of the surroundings (yard.<id>), else their own
 const yardName = (id) => (hasText(`yard.${id}`) ? t(`yard.${id}`) : YARDS[id].name);
@@ -32,6 +38,7 @@ export function createInspectTool(ctx) {
     click(node, event) {
       const s = node < 0 ? null : ctx.world.structureAt(node);
       if (!s) return ctx.popup.hide();
+      ctx.onPick?.(s); // (the dev buttons act on it, ui/devStrip.js)
       const { title, items } = structureMenu(ctx, s);
       // beside the building's own drawing as it's shown (its tower or
       // chimney too), or failing that its footprint and some height
@@ -88,13 +95,71 @@ function warning(def) {
   return `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${t(def.access === 'any' ? 'inspect.needs.any' : 'inspect.needs.road')}</span></div>`;
 }
 
+// The house number as the little enamel plate by the door: "č. p." and
+// the number, in a frame.
+function plate(no) {
+  const full = esc(t('inspect.no.full', { no }));
+  return `<span class="bi-no" role="img" title="${full}" aria-label="${full}"><small>${esc(t('inspect.no'))}</small>${no}</span>`;
+}
+
+// What a role is called, for a man or a woman (text/buildings.txt).
+const roleName = (role, sex) => t(sex === 'f' && hasText(`staff.${role}.f`) ? `staff.${role}.f` : `staff.${role}`);
+
+// Where a building is, in a line: its number, or what it is if it has none.
+const whereIs = (s) => (s.no != null ? `${t('inspect.no')}\u00a0${s.no}` : nameOf(STRUCTURE_TYPES[s.type]));
+
+// A home's families: by name in the title when one or two, else listed.
+function familiesOf(s) {
+  const names = (s.data.families ?? []).map((f) => familyName(f.surname));
+  if (!names.length) return { title: null, list: '' };
+  if (names.length <= 2) return { title: names.join(` ${t('families.and')} `), list: '' };
+  return { title: null, list: `<ul class="bi-list bi-families">${names.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` };
+}
+
+// Who runs a place: a row a slot – the role, then who (and from which
+// house), or that it's vacant.
+function staffRows(world, s) {
+  const rows = (s.data.staff ?? []).map((p) => {
+    const home = p.first && world.structures.get(p.home);
+    const who = p.first ? `<span><b>${esc(personName(p))}</b>${home ? ` · ${esc(whereIs(home))}` : ''}</span>` : `<span class="bi-kind">${esc(t('staff.vacant'))}</span>`;
+    return `<li><span class="bi-role">${esc(roleName(p.role, p.sex ?? (ROLES[p.role] === 'f' ? 'f' : 'm')))}</span>${who}</li>`;
+  });
+  return rows.length ? `<ul class="bi-list bi-staff">${rows.join('')}</ul>` : '';
+}
+
+// Who from this home runs a place in town: a row each – the person, then
+// the role and where.
+function workRows(world, s) {
+  const rows = [];
+  for (const o of world.structures.values()) {
+    for (const p of o.data.staff ?? []) {
+      if (p.first && p.home === s.id) rows.push(`<li><span class="bi-role">${esc(roleName(p.role, p.sex))} · ${esc(whereIs(o))}</span><b>${esc(personName(p))}</b></li>`);
+    }
+  }
+  return rows.length ? `<ul class="bi-list bi-staff">${rows.join('')}</ul>` : '';
+}
+
 function structureMenu({ world }, s) {
   const def = STRUCTURE_TYPES[s.type];
 
-  // under its name, how many live there and a warning if nothing reaches
-  // it; then a row of drawings
-  const people = residents(def);
+  // under its name its house number (and what it is, when the name is the
+  // families'), the families when there are many, who runs what, how many
+  // live there and a warning if nothing reaches it; then a row of drawings
+  const people = s.ruin ? '' : residents(def);
+  const families = familiesOf(s);
+  const title = families.title ?? nameOf(def);
   const items = [];
+  const kind = families.title ? `<span class="bi-kind">${esc(nameOf(def))}</span>` : '';
+  if (s.no != null || kind) items.push({ block: `<div class="bi-row bi-head">${s.no != null ? plate(s.no) : ''}${kind}</div>` });
+  // burnt down: what it is now, and only taking it down
+  if (s.ruin) {
+    items.push({ block: `<span class="bi-kind">${esc(t('inspect.ruin'))}</span>` });
+    items.push(demolish(world, s));
+    return { title, items };
+  }
+  if (families.list) items.push({ block: families.list });
+  const work = staffRows(world, s) + workRows(world, s);
+  if (work) items.push({ block: work });
   if (people) items.push({ block: people });
   if (!world.isServed(s)) items.push({ block: warning(def) });
 
@@ -130,11 +195,15 @@ function structureMenu({ world }, s) {
   }
 
   // …and taking it down (⌘Z puts it back)
-  items.push({
+  items.push(demolish(world, s));
+
+  return { title, items };
+}
+
+function demolish(world, s) {
+  return {
     icon: iconSvg('erase', 'class="icon" aria-hidden="true"', ERASE, '0 0 32 32'),
     label: t('inspect.demolish'),
     action: () => world.removeStructure(s.id),
-  });
-
-  return { title: nameOf(def), items };
+  };
 }

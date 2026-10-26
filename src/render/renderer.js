@@ -66,9 +66,11 @@ import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
 import { AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
 import { ParticleCanvas } from './particles.js';
+import { FireCanvas } from './fire.js';
 import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
 import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
+import { drawRuin } from '../../structures/ruin.js';
 import { YARDS } from '../../structures/yards.js';
 import { drawPlot, boundaryChance, wander, SPREAD, SPREAD_DENSITY } from '../../structures/plots.js';
 import { rotateQuarter, ORTHO } from '../core/grid.js';
@@ -279,6 +281,8 @@ export class Renderer {
     this.penTop = GLMovers.make(document.getElementById('trains-top'));
     // over those: chimney smoke (particles.js, smokeFrame)
     this.smoke = new ParticleCanvas(document.getElementById('smoke'));
+    // and over them a building on fire (fire.js, fireFrame)
+    this.fire = new FireCanvas(document.getElementById('fire'), world);
     this.parking = parking;
     this.world = world;
     this.camera = camera;
@@ -2400,7 +2404,7 @@ export class Renderer {
         orderChanged = true;
       }
       const s = key[0] === 's' && world.structures.get(id);
-      const sig = s && `${s.type}|${s.seed}`;
+      const sig = s && `${s.type}|${s.seed}|${s.ruin ? 'ruin' : ''}`; // (burning down: the house rubbed out, the ruin drawn)
       if (sig !== entry.sig && entry.sig && animate && swaps < DRAW.cap && !this.born.has(key) && entry.shown !== false) {
         // the old drawing is erased as a ghost, the new one drawn after it
         swaps++;
@@ -3092,7 +3096,8 @@ export class Renderer {
     painter.join = joinSides(world, s);
     painter.setTilt(tiltOf(def, s, painter.join, world));
     painter.roadGap = world.nodesOf(s).length === 1 ? roadFront(world, s).gap : 1; // see busStop.js
-    def.draw(painter, s);
+    if (s.ruin) drawRuin(painter, def); // burnt down (World.burnStructure)
+    else def.draw(painter, s);
     const core = painter.bounds;
 
     // Front yard between the building and its road.
@@ -3676,6 +3681,12 @@ export class Renderer {
     this.smoke.frame(this.camera, this.strokeK, vents, time, env);
   }
 
+  // A building on fire, burning out or put out (fire.js), drawn from its
+  // windows and outline as drawn: `time` simulated seconds, `env` the weather.
+  fireFrame(time, env) {
+    this.fire.frame(this.camera, this.strokeK, (id) => this.objs.get(`s${id}`), time, env);
+  }
+
   // The mist (weather 'mist', mist.js): `risen` 0 (none) to 1, in steps
   // (sim/weather.js mistRisen); each step draws it again.
   setMist(risen) {
@@ -3967,7 +3978,7 @@ export class Renderer {
       el.seen = now; // (gone: not seen this frame)
       const k = growScale(now - el.born);
       if (kind === 'truck' || kind === 'bus') {
-        this.placeVehicle(el, a, kind === 'bus' ? 'bus' : truckFor(a.id));
+        this.placeVehicle(el, a, kind === 'bus' ? 'bus' : a.engine ?? truckFor(a.id));
         this.drawAgent(el, k);
         continue;
       }
@@ -4173,12 +4184,15 @@ export class Renderer {
     // put up an umbrella; who does is fixed per walker, so worked out once
     const share = this.umbrellas;
     const brolly = kind === 'walker' && share > 0 && ((el.brolly ??= bodyFor(`${a.id}u`)) + 0.5) / PEOPLE.bodies <= share;
-    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.angle}` : `w${body}${brolly ? 'u' : ''}`;
+    const carry = kind === 'walker' ? a.carry : null; // (at a fire: a bucket, the hose)
+    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.angle}` : `w${body}${brolly ? 'u' : ''}${carry ?? ''}`;
     if (el.key !== key) {
       el.key = key;
       el.shapes = !close ? [shape(kind, personMark(kind, a.id))]
-        : shapesOf(kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body, brolly));
+        : shapesOf(kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body, brolly, carry));
     }
+    // at a fire, facing it (or whoever they pass the bucket to)
+    if (a.watch) el.left = this.projectDeck(a.watch[0], a.watch[1], 0.04)[0] < sx;
     // cyclists' wheels already follow the way they ride
     return close && kind === 'walker' && !!el.left;
   }

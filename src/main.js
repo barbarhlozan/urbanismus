@@ -18,7 +18,9 @@ import { Renderer } from './render/renderer.js';
 import { SUN, sunAt, DAY, hourAt } from './render/shadows.js';
 import { OverlayKit } from './render/overlay.js';
 import { AgentSystem } from './sim/agents.js';
+import { FireSystem } from './sim/fire.js';
 import { GrowthSystem } from './sim/growth.js';
+import { Families } from './sim/families.js';
 import { SimClock } from './sim/clock.js';
 import { WeatherSystem, mistRisen } from './sim/weather.js';
 import { Ambience } from './audio/ambience.js';
@@ -44,6 +46,7 @@ import { printImage, putPrint, deletePrint, newPrintId, clearPrints } from './ui
 import { Popup } from './ui/popup.js';
 import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
+import { DevStrip } from './ui/devStrip.js'; // TEMPORARY
 import { ColorMenu } from './ui/colorMenu.js';
 import { NewMapMenu } from './ui/newMapMenu.js';
 import { askLanguage } from './ui/languages.js';
@@ -148,7 +151,9 @@ clock.elapsed = world.time; // (the town's own time carries on from the save)
 DAY.shift = DAY.start - hourAt(world.time, { ...DAY, shift: 0 }); // (but each visit opens in the morning)
 const parking = new ParkingSystem(world);
 const agents = new AgentSystem(world, CONFIG, parking);
+const fires = new FireSystem(world, agents, CONFIG);
 const growth = new GrowthSystem(world, CONFIG);
+new Families(world); // who lives where and runs what (kept on the buildings)
 const trains = new TrainSystem(world, CONFIG);
 const boats = new BoatSystem(world, CONFIG);
 const deer = new DeerSystem(world, CONFIG, agents);
@@ -198,7 +203,7 @@ agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos)
 UNLOCKS.setWorld(world); // (what may be built: story/unlocks.txt, read with the story)
 const chronicle = new Chronicle(world, CONFIG);
 const dialogue = new Dialogue(uiRoot, { typing: CONFIG.story.typing, avoid: '.build-menu' });
-const story = new Storyteller({ world, agents, trains, dialogue, chronicle, config: CONFIG });
+const story = new Storyteller({ world, agents, fires, trains, dialogue, chronicle, config: CONFIG });
 // (read with the opening, below: openIntro)
 
 const tools = new ToolManager(world.grid, 'inspect');
@@ -694,6 +699,7 @@ function loop(now) {
     world.time = clock.elapsed;
     weather.update();
     agents.update(simDt);
+    fires.update(simDt);
     trains.update(simDt);
     boats.update(simDt);
     deer.update(simDt);
@@ -721,6 +727,7 @@ function loop(now) {
     wind += (sky.wind - wind) * Math.min(1, simDt / 4);
     renderer.swayTrees(world.time, wind);
     renderer.smokeFrame(world.time, { wind, rain: sky.rain, mist: renderer.mistRisen });
+    renderer.fireFrame(world.time, { wind, rain: sky.rain });
     hud.update();
     chronicle.update(dt);
     if (!opening) story.update(dt); // (the story waits for the map to be drawn)
@@ -732,4 +739,9 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // Handy for debugging from the console: cmd.help() (src/dev/commands.js).
-window.cmd = createCommands({ world, config: CONFIG, clock, weather, agents, trains, boats, deer, livestock, growth, story, annotations, renderer, unlocks: UNLOCKS });
+window.cmd = createCommands({ world, config: CONFIG, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, annotations, renderer, unlocks: UNLOCKS });
+// TEMPORARY: time and fire buttons always on screen, for the phone; they
+// act on the building whose card was opened last
+const devStrip = new DevStrip(uiRoot, { world, clock, cmd: window.cmd });
+ctx.onPick = (s) => devStrip.pick(s);
+sketchFrames(uiRoot, '.dev-strip');
