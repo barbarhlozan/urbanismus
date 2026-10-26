@@ -453,14 +453,15 @@ export function flagpole(g, x, y, h) {
   g.shape(x, y, h - 0.06, [[0, 0], [0.09, 0.03], [0, 0.06]]);
 }
 
-// Door outline on the front (-y) wall.
+// Door outline on the front (-y) wall, its corners rounded as the windows' are.
 export function door(g, x, y, w = 0.07, h = 0.12) {
-  g.line([[x - w / 2, y, 0], [x - w / 2, y, h], [x + w / 2, y, h], [x + w / 2, y, 0]], { facing: [0, -1, 0] });
+  g.line([[x - w / 2, y, 0], [x - w / 2, y, h], [x + w / 2, y, h], [x + w / 2, y, 0]], { facing: [0, -1, 0], round: LOOK.round.windows });
 }
 
-// Rectangle on the front (-y) wall.
+// Rectangle on the front (-y) wall: a shop front, a sign, a name board –
+// its corners rounded as the windows' are (LOOK.round).
 export function panel(g, x0, x1, y, z0, z1) {
-  g.line([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [x0, y, z0]], { facing: [0, -1, 0] });
+  g.line([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [x0, y, z0]], { facing: [0, -1, 0], round: LOOK.round.windows });
 }
 
 // ----- housing estate props -----

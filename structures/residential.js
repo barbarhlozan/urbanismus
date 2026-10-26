@@ -81,7 +81,7 @@ function farmstead(g) {
 
   // the door on the side, near the front
   const xd = side > 0 ? x1 : x0, yd = y + d * 0.3;
-  g.line([[xd, yd - 0.025, 0], [xd, yd - 0.025, 0.1], [xd, yd + 0.025, 0.1], [xd, yd + 0.025, 0]], { facing: [side, 0, 0] });
+  g.line([[xd, yd - 0.025, 0], [xd, yd - 0.025, 0.1], [xd, yd + 0.025, 0.1], [xd, yd + 0.025, 0]], { facing: [side, 0, 0], round: LOOK.round.windows });
 }
 
 // Family houses: the 70s "cube" with a pyramid roof, village houses

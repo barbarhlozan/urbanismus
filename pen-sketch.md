@@ -74,8 +74,10 @@ edges: left off for now.
   gables use it: the sawtooth halls' end walls, the ruined castle gables.
   The farmstead's street front has no cornice across it and its windows
   go through `g.windows`, so they keep clear of the corners too. Left as
-  they are, being real details: the Renaissance attic over a façade, castle
-  battlements, shop fronts and signs drawn as panels.
+  they are, being real details: the Renaissance attic over a façade and
+  castle battlements.
+- Shop fronts, signs, name boards (`panel` in kit.js) and doors are placed
+  by design, but rounded as the windows are (`LOOK.round.windows`).
 
 ## Countryside's colours (styles.css, html.tint)
 
