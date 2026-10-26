@@ -60,6 +60,8 @@ edges: left off for now.
 - Windows: ink blocks, not upright, 1.2× fewer than the bays
   (`LOOK.ink`, `tall: false`, `thin`). Close up they open into frames, with
   glazing bars from 0.6 px wide (`LOOK.open`, `LOOK.pane`).
+- Windows stand at least 0.08 from a wall's corners (`LOOK.clear`), so the
+  corner's line never runs into them; they spread evenly between.
 - A thin eave board (`LOOK.fascia` 0.006). No storey lines, no sills.
 - A gable end is one wall from the ground to the peak, with no line across
   it at the eaves. The roof doesn't overhang it, so the ridge ends exactly

@@ -139,6 +139,8 @@ const ON_GROUND = 0.03;
 //           line, in grid units (0 = straight; see wobble())
 //   tilt    houses stand askew by up to this many degrees either way (types
 //           with `tilt: true`, see tiltOf in structures/index.js; 0 = square)
+//   clear   windows stand at least this far from a wall's corners (grid
+//           units; Painter.windows)
 //   round   corners rounded off by up to this much (scene px at tile 32, at
 //           most a third of an edge), for walls, roofs (and other faces) and
 //           windows' frames apart (0 = sharp, as a ruler draws them)
@@ -147,7 +149,7 @@ export const LOOK = {
   eave: 0.03, fascia: 0.006, sill: false, tall: false, sketch: 2.5,
   overshoot: 0, ink: true, thin: 1.2, hatch: 0.0225, ground: 0, floors: false, roads: 0.035,
   tilt: 8, open: true, pane: 0.6,
-  round: { walls: 0, roofs: 0, windows: 0 },
+  round: { walls: 0, roofs: 0, windows: 0 }, clear: 0.08,
 };
 
 
@@ -1062,9 +1064,19 @@ export class Painter {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
       const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
       const at = (t, z) => [a[0] + ux * t, a[1] + uy * t, z];
-      const cols = Math.floor(len / spacing);
+      let cols = Math.floor(len / spacing);
       if (cols < 1) continue;
       const pad = (len - cols * spacing) / 2;
+      // each window in the middle of its bay – but at least LOOK.clear from
+      // the corners (where the pen's lines would run into it): then spread
+      // evenly between, one fewer while they would stand too close
+      const clear = Math.min(LOOK.clear, (len - ww) / 2);
+      let place = (c) => pad + c * spacing + (spacing - ww) / 2;
+      if (place(0) < clear) {
+        while (cols > 1 && (len - 2 * clear - cols * ww) / (cols - 1) < ww * 0.8) cols--;
+        const step = cols > 1 ? (len - 2 * clear - ww) / (cols - 1) : 0;
+        place = (c) => (cols > 1 ? clear + c * step : (len - ww) / 2);
+      }
       for (let i = from; i < storeys; i++) {
         const zb = z0 + i * step + (step - wh) * (LOOK.tall ? 0.4 : 0.55), zt = zb + wh;
         if (ribbon) {
@@ -1073,7 +1085,7 @@ export class Painter {
           continue;
         }
         for (let c = 0; c < cols; c++) {
-          const t0 = pad + c * spacing + (spacing - ww) / 2, t1 = t0 + ww;
+          const t0 = place(c), t1 = t0 + ww;
           this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n, cls });
           if (sill) this.line([at(t0 - sill, zb - sill * 0.6), at(t1 + sill, zb - sill * 0.6)], { facing: n });
         }
