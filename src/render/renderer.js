@@ -197,16 +197,16 @@ const WINDOWS_BY = 0.06;
 const SHADE_SWEEP = 1600;
 // ms between the sun's moves between the day's steps (followSun)
 const SUN_EVERY = 100;
-// While the view moves the map is drawn in draft (goDraft): any move that
-// has the browser draw it again – a zoom, a turn, a pan further than `pan`
-// of the window – leaves out the meadow's tufts, the parked cars and the
-// buildings' and gardens' fine detail (styles.css, svg.draft). The
-// shadows stay, moved with the map (their canvas is in its wrapper) – but
-// a turn hides the objects' (cast for the view as it was, they would point
-// the wrong way; the hills' stay, read again as it turns). Once it rests
-// the detail is back; the shadows wait until what the turn redraws is
-// drawn (frame), then are hatched in in `steps`, `step` ms apart.
-const DRAFT = { pan: 0.12, steps: 3, step: 80 };
+// While the view turns the map is drawn in draft (goDraft): it leaves out
+// the meadow's tufts, the parked cars and the buildings' and gardens' fine
+// detail (styles.css, svg.draft), and the objects' shadows (cast for the
+// view as it was, they would point the wrong way; the hills' stay, read
+// again as it turns). Panning and zooming leave everything as it is:
+// what is on the GPU is drawn anew cheaply, and the rest moves with the
+// map. Once it rests the detail is back; the shadows wait until what the
+// turn redraws is drawn (frame), then are hatched in in `steps`, `step`
+// ms apart.
+const DRAFT = { steps: 3, step: 80 };
 const SWEEP_STEPS = 6; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
 // A closed outline, its points (gl/movers.js drawScene).
@@ -1739,7 +1739,7 @@ export class Renderer {
       const turned = d && d.angle !== cam.angle;
       if (d && (covered || turned) && this.deferView && now - this.movedAt < VIEW_SETTLE) {
         css = `translate(${tx}px, ${ty}px) scale(${k})`;
-        if (turned || k !== 1 || Math.hypot(tx, ty) > DRAFT.pan * Math.min(W, H)) this.goDraft(turned);
+        if (turned) this.goDraft();
         if (turned && !this.turning) this.startTurn();
       } else {
         if (this.turning || turned) this.land();
@@ -2873,9 +2873,9 @@ export class Renderer {
   // what the front has not reached, the new clipped to what it has. (The
   // objects' follow the sun as it goes, followSun.) A sweep still going
   // ends at once.
-  // The map in draft while the view moves (DRAFT)…
-  goDraft(turned = false) {
-    if (turned) this.hideShadows();
+  // The map in draft while the view turns (DRAFT)…
+  goDraft() {
+    this.hideShadows();
     if (this.drafting) return;
     this.drafting = true;
     for (const svg of this.svgs) svg.classList.add('draft');
