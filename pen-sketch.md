@@ -69,6 +69,13 @@ edges: left off for now.
   painter.js). Its top corners go up to where the roof's edge passes over
   them (the roof overhangs the long walls), so the gable meets the roof
   with no glimpse under it.
+- Any wall can rise past its eaves as one face (`opts.gables` on `g.box` /
+  `g.prism`: a peak, or a profile such as a sawtooth roof's ends). Hand-built
+  gables use it: the sawtooth halls' end walls, the ruined castle gables.
+  The farmstead's street front has no cornice across it and its windows
+  go through `g.windows`, so they keep clear of the corners too. Left as
+  they are, being real details: the Renaissance attic over a façade, castle
+  battlements, shop fronts and signs drawn as panels.
 
 ## Countryside's colours (styles.css, html.tint)
 

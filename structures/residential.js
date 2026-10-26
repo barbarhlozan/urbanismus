@@ -54,19 +54,20 @@ function frontWindow(g, cx, y, z, w, h) {
 
 // South Bohemian farmstead (Holašovice): a one-storey house with a steep
 // gable to the street and its door on the side; a trim along the gable's
-// edge, windows in the gable and quoins on the corners.
+// edge, windows in the gable and quoins on the corners. The street front
+// one wall up to the roof (no cornice across it at the eaves), its windows
+// kept off the corners as on every wall (LOOK.clear).
 function farmstead(g) {
   const side = g.pick([-1, 1]); // the side the door is on: local -x or +x
   const w = g.range(0.26, 0.3), d = g.range(0.42, 0.48), h = g.range(0.15, 0.17), r = g.range(0.26, 0.31);
   const cx = 0, x0 = cx - w / 2, x1 = cx + w / 2, y = -d / 2;
   const line = (pts) => g.line(pts, { facing: FRONT });
 
-  // the house: three windows to the street, a plinth and a cornice
+  // the house: windows to the street (two or three, as they fit), a plinth
   g.roofed(x0, y, 0, w, d, h, { h: r, ridge: 'y' });
   g.windows(x0, y, w, d, 0, h, h, 0.085, { h: 0.42, skip: ['front'] });
-  for (const k of [-1, 0, 1]) frontWindow(g, cx + k * w * 0.29, y, h * 0.36, 0.034, h * 0.38);
+  g.windows(x0, y, w, d, 0, h, h, 0.075, { h: 0.38, skip: ['right', 'back', 'left'] });
   line([[x0, y, 0.025], [x1, y, 0.025]]);
-  line([[x0 - 0.008, y, h], [x1 + 0.008, y, h]]);
   // quoins: short courses up both corners
   for (let z = 0.04; z < h - 0.01; z += 0.03) {
     line([[x0, y, z], [x0 + 0.022, y, z]]);

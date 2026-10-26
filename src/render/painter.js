@@ -9,6 +9,9 @@
 // Primitives
 //   g.box(x, y, z, w, d, h, opts)            axis-aligned block
 //   g.prism(base[[x,y]…], z0, z1, opts)      any convex CCW footprint, extruded
+//                                            (opts.gables: { side: { peak } | { top: [[t, z]…] } } –
+//                                            walls rising past z1 as one face, see _walls; a box's
+//                                            sides are 0 front (-y), 1 right, 2 back, 3 left)
 //   g.gable(x, y, z, w, d, h, roofH, opts)   block with a pitched roof (ridge along x)
 //   g.gableY(x, y, z, w, d, h, roofH, opts)  same, ridge along y
 //   g.roofed(x, y, z, w, d, h, roof, opts)   block with a hip / gable / pyramid /
@@ -633,12 +636,19 @@ export class Painter {
   // corner a, eb at b, their top corners go up to where its verges pass
   // over them, so the wall meets the roof (no gap under it). Along the top
   // its outline is left to the verges, but on a side whose roof plane is
-  // turned away (not drawn).
+  // turned away (not drawn). Or { top: [[t, z]…] }: the wall's top from
+  // corner a (t = 0) to b (t = 1), whatever is drawn on it (a sawtooth
+  // roof's teeth) meeting it at those very points.
   _walls(base, z0, z1, opts, gables = null) {
     for (let i = 0; i < base.length; i++) {
       const [ax, ay] = base[i];
       const [bx, by] = base[(i + 1) % base.length];
-      const { peak: zr, ea = 0, eb = 0 } = gables?.[i] ?? {};
+      const { peak: zr, ea = 0, eb = 0, top } = gables?.[i] ?? {};
+      if (top) {
+        const at = ([t, z]) => [ax + (bx - ax) * t, ay + (by - ay) * t, z];
+        this.face([[ax, ay, z0], [bx, by, z0], ...[...top].reverse().map(at)], opts);
+        continue;
+      }
       if (zr > z1) {
         const mx = (ax + bx) / 2, my = (ay + by) / 2, half = Math.hypot(bx - ax, by - ay) / 2;
         const za = z1 + ((zr - z1) * ea) / (half + ea), zb = z1 + ((zr - z1) * eb) / (half + eb);
@@ -984,7 +994,7 @@ export class Painter {
     const cx = base.reduce((s, p) => s + p[0], 0) / base.length;
     const cy = base.reduce((s, p) => s + p[1], 0) / base.length;
     this.solid(cx, cy, (z0 + z1) / 2);
-    this._walls(base, z0, z1, opts);
+    this._walls(base, z0, z1, opts, opts.gables);
     this._foot(base, z0, z1 - z0);
     this.face(base.map(([x, y]) => [x, y, z1]), opts);
     return this;
