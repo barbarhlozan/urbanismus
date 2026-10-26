@@ -466,16 +466,23 @@ export class Painter {
     };
     if (r > 0 && pts.length > 2) {
       // each corner cut back by up to r along both its edges (at most a
-      // third of either) and turned in a curve through it
+      // third of the shorter) and turned in a curve through it – less where
+      // the shape is thin (a sign, a board: a rounded oblong, not a pill)
       const m = pts.length, at = (i) => pts[(i + m) % m];
-      const cut = (i, j) => {
+      const len = (i, j) => Math.hypot(at(j)[0] - at(i)[0], at(j)[1] - at(i)[1]);
+      const cutOf = (i) => {
+        const la = len(i, i - 1), lb = len(i, i + 1), lo = Math.min(la, lb), hi = Math.max(la, lb);
+        return hi > 1e-9 ? Math.min(r, lo / 3) * Math.min(1, Math.max(0.35, (2 * lo) / hi)) : 0;
+      };
+      const cut = (i, j, c) => {
         const p = at(i), q = at(j), l = Math.hypot(q[0] - p[0], q[1] - p[1]);
-        const c = l > 1e-9 ? Math.min(r, l / 3) / l : 0;
-        return [p[0] + (q[0] - p[0]) * c, p[1] + (q[1] - p[1]) * c];
+        const k = l > 1e-9 ? c / l : 0;
+        return [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k];
       };
       const rounded = (i) => closed || (i > 0 && i < m - 1);
-      const ins = pts.map((p, i) => (rounded(i) ? cut(i, i - 1) : p));
-      const outs = pts.map((p, i) => (rounded(i) ? cut(i, i + 1) : p));
+      const cuts = pts.map((p, i) => (rounded(i) ? cutOf(i) : 0));
+      const ins = pts.map((p, i) => (rounded(i) ? cut(i, i - 1, cuts[i]) : p));
+      const outs = pts.map((p, i) => (rounded(i) ? cut(i, i + 1, cuts[i]) : p));
       let d = `M${r2(outs[0][0])} ${r2(outs[0][1])}`;
       for (let i = 1; i < m; i++) {
         d += edge(pts[i - 1], pts[i], outs[i - 1], ins[i]);

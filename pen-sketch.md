@@ -20,7 +20,9 @@ A steady hand, between loose and ruled (rebased 2026-10-26):
 - No foot stroke under the walls: `LOOK.ground` 0.
 - Corners can be rounded off, separately for walls, roofs and windows'
   frames (`LOOK.round`, scene px at tile 32, at most a third of an edge).
-  Set to walls 1, roofs 1, windows 0.4.
+  Set to walls 1, roofs 1, windows 0.4. On thin shapes (signs, boards,
+  a chimney's side) the rounding shrinks to as little as a third, so they
+  stay rounded oblongs, not pills.
 - All three pen schemes (Blue pen, Black pen, Countryside) draw with this
   hand. Only Watercolour is `clean`: it keeps 0.15 of the wobble and
   tilt and no overshoot (`CLEAN` in painter.js).
