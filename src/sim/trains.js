@@ -71,9 +71,10 @@ export class TrainSystem {
 
   update(dt) {
     const exits = this.world.railExits();
-    if (exits.length && (this.timer -= dt) <= 0) {
+    // the clock for the next one only runs while there's room for it
+    if (exits.length && this.trains.size < this.config.max && (this.timer -= dt) <= 0) {
       this.timer = (this.config.interval / exits.length) * (0.6 + Math.random() * 0.8);
-      if (this.trains.size < this.config.max) this.spawn();
+      this.spawn();
     }
     for (const t of this.trains.values()) this.move(t, dt);
     for (const t of this.trains.values()) this.placeCars(t);

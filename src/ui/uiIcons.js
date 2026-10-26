@@ -57,6 +57,7 @@ export const ICONS = {
   'tab-farming': 'Build menu tab: Zemědělství / Farming',
   'tab-spaces': 'Build menu tab: Prostranství / Spaces',
   'tab-heritage': 'Build menu tab: Památky / Heritage',
+  'tool-street': 'Build menu tile: Ulice / Street',
   'tool-road': 'Build menu tile: Silnice / Road',
   'tool-lane': 'Build menu tile: Úzká silnice / Narrow road',
   'tool-path': 'Build menu tile: Pěšina / Footpath',

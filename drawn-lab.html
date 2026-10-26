@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dědina – drawn houses</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--main); font: 15px/1.5 Georgia, serif; margin: 0 auto; padding: 24px 16px 64px; max-width: 1180px; }
+    h1 { font-weight: normal; font-size: 30px; margin: 0 0 4px; }
+    h2 { font-weight: normal; font-size: 22px; margin: 40px 0 8px; }
+    p { max-width: 70ch; margin: 6px 0; }
+    .note { color: var(--detail); }
+    .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0; }
+    .bar button, .bar label.button { font: inherit; font-size: 14px; color: var(--main); background: var(--bg); border: 1.4px solid var(--main); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+    .bar button:hover, .bar label.button:hover { background: color-mix(in srgb, var(--main) 10%, var(--bg)); }
+    .bar input[type=file] { display: none; }
+    .swatch { display: inline-block; width: 14px; height: 14px; background: #f0f; vertical-align: -2px; border: 1px solid var(--detail); }
+    #status { font: 13px/1.5 ui-monospace, Menlo, monospace; color: var(--detail); white-space: pre-wrap; min-height: 1.5em; }
+    #status.error { color: #b3261e; }
+    #drop { border: 1.4px dashed var(--detail); border-radius: 8px; padding: 14px; }
+    #drop.over { background: color-mix(in srgb, var(--main) 8%, var(--bg)); }
+    .boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-top: 10px; align-items: end; }
+    .boxes figure { margin: 0; }
+    .boxes canvas { max-width: 100%; height: auto; display: block; background: #fff; border: 1px solid var(--detail); }
+    .boxes figcaption { font-size: 12px; color: var(--detail); margin-top: 3px; }
+    .legend { font-size: 13px; color: var(--detail); display: flex; gap: 18px; flex-wrap: wrap; }
+    .legend i { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-right: 5px; border: 1.5px solid; }
+    .views { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+    .views figure { margin: 0; position: relative; }
+    .views canvas { width: 100%; aspect-ratio: 4 / 3; display: block; border: 1px solid var(--detail); cursor: grab; touch-action: none; }
+    .views canvas:active { cursor: grabbing; }
+    .views figcaption { font-size: 12px; color: var(--detail); margin-top: 3px; }
+    /* the game's pen over the painting: faces white, so multiplied they leave
+       the paint as it is and still hide the lines behind them */
+    .pen { position: absolute; left: 1px; top: 1px; pointer-events: none; mix-blend-mode: multiply; }
+    .pen polygon, .pen .filled { fill: #fff !important; }
+    .row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .row figure { margin: 0; border: 1px solid var(--detail); }
+    .row svg { display: block; }
+    .row figcaption { font-size: 12px; padding: 2px 6px; color: var(--detail); }
+  </style>
+</head>
+<body>
+  <h1>Drawn houses</h1>
+  <p class="note">A test page, apart from the game: a building's own faces painted by hand on a blueprint, shown as the map and a photo would show them.</p>
+
+  <h2>Painted</h2>
+  <p>The building is the game's own (<span id="building"></span>); its blueprint lays every face out flat at its true shape. Download it and import it into Procreate as the bottom layer, paint the faces on layers above it, square the windows in <span class="swatch"></span> magenta, hide the blueprint layer and export a PNG. Paint outside the outlines is left out.</p>
+  <div id="drop">
+    <div class="bar">
+      <button id="blueprint">Download the blueprint</button>
+      <button id="sample">Paint the sample house</button>
+      <label class="button">Open a painted PNG… <input id="file" type="file" accept="image/png,image/*"></label>
+      <label><input id="white" type="checkbox"> white is empty (an export with the paper showing)</label>
+    </div>
+    <div class="note">… or drop a PNG here.</div>
+  </div>
+  <div id="status"></div>
+
+  <div class="views">
+    <figure><canvas id="map"></canvas><svg class="pen" id="pen"></svg><figcaption>On the map: drag to turn, scroll to zoom · <label><input id="lines" type="checkbox" checked> the game's pen over it</label></figcaption></figure>
+    <figure><canvas id="photo"></canvas><figcaption>In a photo, from a person's eye height: drag to walk round, scroll to step closer</figcaption></figure>
+  </div>
+
+  <h2>The faces</h2>
+  <div class="legend">
+    <span><i style="border-color:#8f877a"></i>the face's outline</span>
+    <span><i style="border-color:#3b6fd8"></i>a window found (squared in magenta)</span>
+  </div>
+  <div class="boxes" id="boxes"></div>
+
+  <h2>Lines</h2>
+  <p class="note">The earlier version: strokes on an SVG sheet (drawings/chalupa.svg, see drawings/README.md) drawn with the game's own pen, turned four ways.</p>
+  <div class="row" id="linesRow"></div>
+
+  <script type="module">
+    import { applyTheme } from './src/theme.js';
+    import { BUILDING, facesOf, readSheet, meshOf, drawBuilding, nearWindow } from './src/lab/faces.js';
+    import { drawBlueprint, paintSample } from './src/lab/blueprint.js';
+    import { PaintedView, bleed } from './src/lab/paintedGL.js';
+    import { CHALUPA, loadSheets, drawSheet } from './src/lab/lines.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter, LOOK } from './src/render/painter.js';
+    import { sunFor, shadowSVG } from './src/render/shadows.js';
+
+    applyTheme();
+    const model = facesOf(BUILDING);
+    const $ = (id) => document.getElementById(id);
+    const status = (text, error = false) => { $('status').textContent = text; $('status').classList.toggle('error', error); };
+    $('building').textContent = `${model.def.name.toLowerCase()}, “${BUILDING.kind}”, seed ${BUILDING.seed}: ${model.panels.length} faces to paint`;
+
+    // ----- the blueprint -----
+    const blank = () => { const c = document.createElement('canvas'); c.width = model.width; c.height = model.height; return c; };
+    $('blueprint').onclick = () => {
+      const c = blank();
+      drawBlueprint(c.getContext('2d'), model);
+      c.toBlob((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${BUILDING.type}-${BUILDING.kind}-${BUILDING.seed}-blueprint.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      }, 'image/png');
+    };
+
+    // ----- a painting in -----
+    let source = null, sheet = null, mesh = null;
+    $('sample').onclick = () => {
+      const c = blank();
+      paintSample(c.getContext('2d'), model);
+      use(c, 'the sample house');
+    };
+    const open = async (file) => {
+      if (!file) return;
+      try {
+        const bmp = await createImageBitmap(file);
+        const c = document.createElement('canvas');
+        c.width = bmp.width; c.height = bmp.height;
+        c.getContext('2d').drawImage(bmp, 0, 0);
+        use(c, file.name);
+      } catch (e) { status(`Couldn't open ${file.name}: ${e.message}`, true); }
+    };
+    $('file').onchange = (e) => open(e.target.files[0]);
+    $('white').onchange = () => source && use(source.canvas, source.name);
+    const drop = $('drop');
+    drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
+    drop.ondragleave = () => drop.classList.remove('over');
+    drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); open(e.dataTransfer.files[0]); };
+
+    // ----- views -----
+    const views = {};
+    try {
+      views.map = { gl: new PaintedView($('map')), state: { mode: 'map', angle: Math.PI * 0.95, zoom: 600 } };
+      views.photo = { gl: new PaintedView($('photo')), state: { mode: 'photo', yaw: -Math.PI * 0.62, dist: 1.1 } };
+    } catch (e) { views.error = e.message; }
+    const redraw = () => {
+      for (const v of [views.map, views.photo]) v?.gl.draw(v.state);
+      pen();
+    };
+    const drag = (canvas, onMove) => {
+      let last = null;
+      canvas.onpointerdown = (e) => { last = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); };
+      canvas.onpointermove = (e) => {
+        if (!last) return;
+        onMove(e.clientX - last[0], e.clientY - last[1]);
+        last = [e.clientX, e.clientY];
+        redraw();
+      };
+      canvas.onpointerup = () => { last = null; };
+    };
+    if (views.map) {
+      drag($('map'), (dx) => { views.map.state.angle += dx * 0.01; });
+      $('map').onwheel = (e) => { e.preventDefault(); const s = views.map.state; s.zoom = Math.min(3000, Math.max(80, s.zoom * Math.exp(-e.deltaY * 0.002))); redraw(); };
+      drag($('photo'), (dx) => { views.photo.state.yaw -= dx * 0.008; });
+      $('photo').onwheel = (e) => { e.preventDefault(); const s = views.photo.state; s.dist = Math.min(6, Math.max(0.35, s.dist * Math.exp(e.deltaY * 0.0015))); redraw(); };
+      $('lines').onchange = pen;
+      addEventListener('resize', redraw);
+    }
+
+    function use(canvas, name) {
+      source = { canvas, name };
+      const t0 = performance.now();
+      try {
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if ($('white').checked) whiteToEmpty(image);
+        sheet = readSheet(image, model);
+        mesh = meshOf(model, sheet);
+      } catch (e) { status(`${name}: ${e.message}`, true); return; }
+      const texture = bleed(canvas, 14, (r, g, b) => nearWindow(r, g, b) || ($('white').checked && r > 225 && g > 225 && b > 225));
+      if (views.error) { status(views.error, true); return; }
+      for (const v of [views.map, views.photo]) v.gl.setHouse(mesh, texture);
+      const mc = $('map');
+      views.map.state.zoom = Math.min(mc.clientWidth, mc.clientHeight) * 0.85;
+      redraw();
+      const painted = model.panels.filter((p) => sheet.panels[p.id].painted);
+      const plain = model.panels.filter((p) => !sheet.panels[p.id].painted).map((p) => p.label);
+      status(`${name}: ${painted.length} of ${model.panels.length} faces painted · ${mesh.windows.length} windows · ${Math.round(performance.now() - t0)} ms`
+        + (plain.length ? `\nleft plain: ${plain.join(', ')}` : ''));
+      showFaces();
+    }
+
+    // An export with the paper left in: white is nothing painted.
+    function whiteToEmpty({ data }) {
+      for (let i = 0; i < data.length; i += 4) if (data[i] > 225 && data[i + 1] > 225 && data[i + 2] > 225) data[i + 3] = 0;
+    }
+
+    // The game's pen over the map view: the building drawn by its own code
+    // at the view's turn, without the lines a painting replaces (the
+    // windows and wall details on painted walls, the hatching on a painted
+    // roof) and with a window wherever one is squared in magenta.
+    function pen() {
+      const svg = $('pen'), canvas = $('map');
+      svg.style.display = $('lines').checked && mesh ? '' : 'none';
+      if (!mesh || !$('lines').checked) return;
+      const { angle, zoom } = views.map.state;
+      const cam = new Camera({ width: 1, height: 1 });
+      cam.angle = angle;
+      const paintedIn = new Set(model.panels.filter((p) => sheet.panels[p.id].painted).flatMap((p) => p.solids));
+      const { g } = drawBuilding(BUILDING, cam, (painter) => {
+        const line = painter.line;
+        painter.line = function (pts, opts = {}) {
+          // details on a face (opts.facing) of a painted solid go: the painting has its own
+          if (opts.facing && paintedIn.has(this.solids.indexOf(this.current) + 1)) return this;
+          return line.call(this, pts, opts);
+        };
+        const hatch = painter._hatch;
+        painter._hatch = function (...a) { if (!paintedIn.has(this.solids.indexOf(this.current) + 1)) hatch.apply(this, a); };
+      });
+      for (const p of model.panels) {
+        const s = sheet.panels[p.id];
+        if (!s.windows.length) continue;
+        g.current = g.solids[p.solids[0] - 1];
+        for (const w of mesh.windows.filter((w) => w.n === p.n)) g.line([...w.pts, w.pts[0]], { facing: w.n, cls: LOOK.ink ? 'ink' : undefined });
+      }
+      // the views' middle: the house's, at the map's pen size (tile 32)
+      const b = mesh.bounds, c = cam.project((b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2);
+      const w = canvas.clientWidth, h = canvas.clientHeight, k = cam.tile / zoom;
+      svg.setAttribute('width', w); svg.setAttribute('height', h);
+      // the pen as wide on screen as on the map at any zoom (styles.css: --stroke)
+      svg.style.setProperty('--stroke', k);
+      svg.setAttribute('viewBox', `${c[0] - (w * k) / 2} ${c[1] - (h * k) / 2} ${w * k} ${h * k}`);
+      svg.innerHTML = `<g class="scene layer-objects lod-0">${g.toSVG()}</g>`;
+    }
+
+    // Each face as painted (a quarter of the size), its outline, the
+    // windows found in it.
+    function showFaces() {
+      const out = $('boxes');
+      out.innerHTML = '';
+      const K = 4, k = sheet.k;
+      for (const p of model.panels) {
+        const c = document.createElement('canvas');
+        c.width = Math.max(8, Math.round(p.w / K)); c.height = Math.max(8, Math.round(p.h / K));
+        const ctx = c.getContext('2d');
+        ctx.drawImage(source.canvas, p.x * k, p.y * k, p.w * k, p.h * k, 0, 0, c.width, c.height);
+        ctx.strokeStyle = '#8f877a';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (const f of p.flat) f.forEach(([x, y], i) => (i ? ctx.lineTo(x / K, y / K) : ctx.moveTo(x / K, y / K)));
+        ctx.closePath();
+        ctx.stroke();
+        ctx.strokeStyle = '#3b6fd8';
+        ctx.lineWidth = 2;
+        for (const [x0, y0, x1, y1] of sheet.panels[p.id].windows) ctx.strokeRect(x0 / K, y0 / K, (x1 - x0) / K, (y1 - y0) / K);
+        const s = sheet.panels[p.id], fig = document.createElement('figure');
+        fig.append(c);
+        fig.insertAdjacentHTML('beforeend', `<figcaption>${p.label}${s.painted ? '' : ' · not painted'}${s.windows.length ? ` · ${s.windows.length} window${s.windows.length > 1 ? 's' : ''}` : ''}</figcaption>`);
+        out.append(fig);
+      }
+    }
+
+    // ----- lines: the earlier version, with the game's own pen -----
+    await loadSheets([CHALUPA]);
+    for (const [label, rotation] of [['front', 2], ['right', 3], ['back', 0], ['left', 1]]) {
+      const cam = new Camera({ width: 1, height: 1 }, { tile: 64 });
+      cam.rotation = rotation;
+      const g = new Painter(cam, { x: 0, y: 0 }, 0, 1);
+      g.near = true;
+      drawSheet(g, CHALUPA);
+      const svg = shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sunFor(cam)) + g.toSVG();
+      const fig = document.createElement('figure');
+      fig.innerHTML = `<svg width="260" height="260" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0">${svg}</g></svg><figcaption>${label}</figcaption>`;
+      $('linesRow').append(fig);
+      const el = fig.querySelector('svg'), bb = el.querySelector('g').getBBox(), m = Math.max(bb.width, bb.height) + 16;
+      el.setAttribute('viewBox', `${bb.x + bb.width / 2 - m / 2} ${bb.y + bb.height / 2 - m / 2} ${m} ${m}`);
+    }
+
+    $('sample').click();
+  </script>
+</body>
+</html>

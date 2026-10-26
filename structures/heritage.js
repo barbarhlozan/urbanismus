@@ -609,10 +609,11 @@ export const castle = {
         if (gap !== null) heap(g, ...at(gap), 0.05);
       }
     }
-    // roofless palace: walls with window holes, gable standing
-    g.box(-0.2, 0.55, 0, 0.7, 0.07, 0.36);
+    // roofless palace: walls with window holes, gable standing (the end
+    // wall one face from the ground to its peak, its top sloping off)
+    g.box(-0.2, 0.55, 0, 0.7, 0.07, 0.36, { gables: { 0: { peak: 0.52 }, 2: { peak: 0.52 } } });
     g.windows(-0.2, 0.55, 0.7, 0.07, 0.12, 0.36, 0.12, 0.14, { skip: ['left', 'right', 'back'] });
-    g.face([[-0.2, 0.55, 0.36], [0.5, 0.55, 0.36], [0.15, 0.55, 0.52]]);
+    for (const x of [-0.2, 0.5]) g.face(outward([[x, 0.55, 0.36], [0.15, 0.55, 0.52], [0.15, 0.62, 0.52], [x, 0.62, 0.36]], [0.15, 0.585, 0.4]));
     g.box(-0.2, 0.62, 0, 0.07, 0.4, 0.28);
     heap(g, 0.5, 0.2, 0.08);
     heap(g, 1.2, 0.2, 0.06);
@@ -641,11 +642,10 @@ export const castleSmall = {
       // the palace's end wall, its gable still up; the side wall behind
       // it and a low stretch in front have crumbled to courses
       const [a, b] = [M(-0.3), M(0.2)].sort((p, q) => p - q), h = g.range(0.26, 0.32);
-      g.box(a, 0.06, 0, b - a, 0.06, h);
-      g.windows(a, 0.06, b - a, 0.06, 0.1, h, 0.12, 0.13, { skip: ['left', 'right', 'back'] });
+      // (one face from the ground to its peak, front and back, its top sloping off)
       const m = (a + b) / 2, top = h + 0.16, c = [m, 0.09, h + 0.05];
-      g.solid(...c);
-      for (const y of [0.06, 0.12]) g.face(outward([[a, y, h], [b, y, h], [m, y, top]], c));
+      g.box(a, 0.06, 0, b - a, 0.06, h, { gables: { 0: { peak: top }, 2: { peak: top } } });
+      g.windows(a, 0.06, b - a, 0.06, 0.1, h, 0.12, 0.13, { skip: ['left', 'right', 'back'] });
       for (const x of [a, b]) g.face(outward([[x, 0.06, h], [m, 0.06, top], [m, 0.12, top], [x, 0.12, h]], c));
       ruinWall(g, [M(-0.27), 0.16], [M(-0.27), 0.4], g.range(0.18, 0.24));
       ruinWall(g, [M(-0.05), -0.26], [M(0.32), -0.26], g.range(0.09, 0.13));

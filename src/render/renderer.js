@@ -200,11 +200,12 @@ const SUN_EVERY = 100;
 // While the view moves the map is drawn in draft (goDraft): any move that
 // has the browser draw it again – a zoom, a turn, a pan further than `pan`
 // of the window – leaves out the meadow's tufts, the parked cars and the
-// buildings' and gardens' fine detail (styles.css, svg.draft), and the
-// objects' shadows, redrawn through their mask the dearest thing on the map
-// (the hills' stay: they lie over whole slopes). Once it rests the detail
-// is back; the shadows wait until what the zoom redraws is drawn (frame),
-// then are hatched in in `steps`, `step` ms apart.
+// buildings' and gardens' fine detail (styles.css, svg.draft). The
+// shadows stay, moved with the map (their canvas is in its wrapper) – but
+// a turn hides the objects' (cast for the view as it was, they would point
+// the wrong way; the hills' stay, read again as it turns). Once it rests
+// the detail is back; the shadows wait until what the turn redraws is
+// drawn (frame), then are hatched in in `steps`, `step` ms apart.
 const DRAFT = { pan: 0.12, steps: 3, step: 80 };
 const SWEEP_STEPS = 6; // ms the terrain as turned takes to fade, once the view rests (land)
 const COS30 = Math.cos(Math.PI / 6);
@@ -366,6 +367,7 @@ export class Renderer {
     this.sunCss = document.head.appendChild(document.createElement('style'));
     this.sunCss.id = 'sun-free';
     this.makeGlObjects();
+    this.makeGlMirrors();
     this.glNight = ['night-ground', 'night-top'].map((id) => GLNight.make(document.getElementById(id)));
     if (this.glNight.some((n) => !n)) this.glNight = null;
     this.glGround = [];
@@ -379,8 +381,8 @@ export class Renderer {
     // their pen's timing in ink layers (ink.js)
     this.glLines = GLLines.make(document.getElementById('map-gl'));
     this.ink = {
-      roads: new InkLayer(['driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
-      paths: new InkLayer(['footpath', 'bridge', 'bridge-post']),
+      roads: new InkLayer(['road-wash', 'road-wash-exit', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
+      paths: new InkLayer(['path-wash', 'footpath', 'bridge', 'bridge-post']),
       rails: new InkLayer(['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'bridge', 'bridge-post']),
       fences: new InkLayer(['fence-post', 'fence-pillar', 'fence']),
     };
@@ -690,6 +692,7 @@ export class Renderer {
     this.renderShadeCanvas();
     this.renderGlLines();
     this.renderGlObjects();
+    this.renderGlMirrors();
     if (overlaySVG !== this.lastOverlay) {
       this.letGo(overlaySVG);
       this.layers.overlay.innerHTML = overlaySVG;
@@ -996,7 +999,28 @@ export class Renderer {
     const open = (lines) => (hidden ? lines.flatMap((pts) => keepRuns(pts, (q) => !hidden(...q), 0.04)) : lines);
     // a path per chunk of the map (as the contours): a river runs right across it
     const path = (lines, cls) => chunked(cut(lines, CONTOUR_CHUNK), CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
-    return path(open(shore), 'shore') + path(open(bank), 'bank') + path(wave, 'wave');
+    return this.washWater(shore) + path(open(shore), 'shore') + path(open(bank), 'bank') + path(wave, 'wave');
+  }
+
+  // The watercolour scheme (html.wc) and the tone schemes (html.tone): the
+  // water painted in under its lines – a lake filled turquoise inside its
+  // shore, a river a turquoise wash along its course as wide as its banks
+  // are apart where it is narrowest (styles.css .pond, .river-wash).
+  washWater(shore) {
+    if (!/\b(wc|tone|tint)\b/.test(document.documentElement.className)) return '';
+    let out = '';
+    if (shore.length) {
+      const d = this.pathData(shore, false);
+      out += `<path class="pond" d="${d}"/>`;
+    }
+    const [ax, ay] = this.camera.project(0, 0, 0), [bx, by] = this.camera.project(1, 0, 0);
+    const unit = Math.hypot(bx - ax, by - ay);
+    for (const r of this.world.terrain.rivers) {
+      const d = this.pathData([r.points], true);
+      const across = 2 * ((r.width ?? 0.35) + (r.vary ?? 0.8) * 0.3) * unit;
+      out += `<path class="river-wash" d="${d}" style="stroke-width:${r2(across)}px"/>`;
+    }
+    return out;
   }
 
   // The water's lines in world units, { shore, bank, wave }, traced once
@@ -1192,8 +1216,9 @@ export class Renderer {
   // for each piece, a / b the dots it runs between, for the pen's order.
   inkItems(sway) {
     const items = [];
-    // (on the ground in world space: renderGlLines)
-    const lines = (ls) => ls.map((l) => this.worldLine(l, sway, true));
+    // (on the ground in world space: renderGlLines – but through a photo's
+    // camera, a perspective one, projected into the picture: photo.js)
+    const lines = this.camera.ahead ? (ls) => this.screenLines(ls, true, sway, true) : (ls) => ls.map((l) => this.worldLine(l, sway, true));
     const add = (key, cls, line, a, b) => {
       for (const pts of lines([line])) if (pts.length > 1) items.push({ key, cls, pts, a, b });
     };
@@ -1267,6 +1292,8 @@ export class Renderer {
     // has narrowed into them (see roadItems)
     const joined = new Map([...this.pathJoins().values()].map((j) => [j.fine, j]));
     const joinOf = (a, b) => joined.get(a)?.to === b ? joined.get(a) : joined.get(b)?.to === a ? joined.get(b) : null;
+    // the centre lines, for the painted schemes' wash (gl/lines.js)
+    networkPolylines(layer, this.config.path).forEach((pts, i) => add(`pw${i}`, 'path-wash', pts));
     for (const { key, kind, line, a, b } of roadEdges(layer, this.config.path, this.config.path.edge, [], (n) => !intoSite(n) && !joined.has(n))) {
       const j = kind === 'edge' && joinOf(a, b);
       const at = j && layer.pos(j.fine);
@@ -1419,6 +1446,41 @@ export class Renderer {
     this.layers.mist.style.display = 'none';
   }
 
+  // The ground's and the world's layers drawn with WebGL as the objects
+  // are (gl/objects.js), so their lines take the brush (brush.js): the
+  // terrain (brows, rocks, steep slopes, shores, waves, ponds), the
+  // meadow, the lots and the forest – each on a canvas just under its
+  // <svg>, which stays in the page as their source with what is drawn
+  // hidden (styles.css .gl-mirror), but for what WebGL can't draw: the
+  // forest's hatched band, with its pattern and clip, over the rest as it
+  // was (the forest the last of the world's layers).
+  makeGlMirrors() {
+    this.glMirrors = [];
+    for (const [svg, names] of [[this.ground, ['terrain']], [this.svg, ['meadow', 'lots', 'forest']]]) {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'map-canvas';
+      svg.before(canvas);
+      const layers = names.map((n) => this.layers[n]);
+      const gl = GLObjects.make(canvas, layers[0], svg, this.sunCss);
+      if (!gl) {
+        canvas.remove();
+        continue;
+      }
+      for (const l of layers.slice(1)) gl.watch(l);
+      // (water in a pool, a mine's pit: hatched as the pattern hatch-water)
+      if (SUN.hatch) gl.setTile({ ...SUN.hatch, angle: 320, gap: 5 / 32 }, 32, 0.6);
+      for (const l of layers) l.classList.add('gl-mirror');
+      this.glMirrors.push({ gl, layers });
+    }
+  }
+
+  renderGlMirrors() {
+    const d = this.drawn;
+    if (!d) return;
+    const view = { zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH };
+    for (const { gl, layers } of this.glMirrors ?? []) gl.drawLayers(view, layers);
+  }
+
   // The objects' groups put back in their layer (drawn with WebGL, which
   // keeps their order).
   placeObjectGroups(els) {
@@ -1445,7 +1507,20 @@ export class Renderer {
     }, {
       stroke: this.strokeK, near: !!this.railsNear, far: this.lodLevel === 2, palette: THEME.palette,
       fg: night > 0.005 ? mixColour(THEME.palette.main, THEME.palette.detail, night) : THEME.palette.main,
+      wash: this.lineWash(),
     });
+  }
+
+  // The painted schemes' roads and paths (watercolour, Painted): a wash of
+  // colour as wide as the way between its edges – sandy in the watercolour,
+  // a pale tone of the shade in the Painted ones; null in the others.
+  lineWash() {
+    const { palette } = THEME;
+    if (!palette.wash && !palette.painted) return null;
+    return {
+      road: this.config.road.edge * 1.15, path: this.config.path.edge * 1.3,
+      colour: palette.wash ? '#cdb489' : mixColour(palette.bg, palette.shade, 0.3), alpha: palette.wash ? 0.55 : 0.6,
+    };
   }
 
   // The railway's ink items. Its lines are kept (railLines, groundLines)
@@ -1604,6 +1679,13 @@ export class Renderer {
         add(`r${key}`, kind === 'fade' ? 'road-exit' : 'road', line, a, b);
       }
       for (const [n, { line }] of joins) line.forEach((pts, i) => add(`rj${n}:${i}`, 'road', pts, n, n));
+      // its centre lines, for the painted schemes' wash (gl/lines.js)
+      networkPolylines(layer, curve).forEach((pts, i) => add(`rw${i}`, 'road-wash', pts));
+      // …carried on off the map at its exits, fading out (as the edges' 'road-exit')
+      for (const { node, dir } of world.roadExits()) {
+        const [x, y] = layer.pos(node);
+        add(`rwx${node}`, 'road-wash-exit', [[x, y], [x + dir[0] * 1.9, y + dir[1] * 1.9]], node, node);
+      }
 
       // kerbs, rounding the corners, open where a footpath comes in
       const paths = pathIndex(world, this.config);
@@ -1657,7 +1739,7 @@ export class Renderer {
       const turned = d && d.angle !== cam.angle;
       if (d && (covered || turned) && this.deferView && now - this.movedAt < VIEW_SETTLE) {
         css = `translate(${tx}px, ${ty}px) scale(${k})`;
-        if (turned || k !== 1 || Math.hypot(tx, ty) > DRAFT.pan * Math.min(W, H)) this.goDraft();
+        if (turned || k !== 1 || Math.hypot(tx, ty) > DRAFT.pan * Math.min(W, H)) this.goDraft(turned);
         if (turned && !this.turning) this.startTurn();
       } else {
         if (this.turning || turned) this.land();
@@ -2792,11 +2874,11 @@ export class Renderer {
   // objects' follow the sun as it goes, followSun.) A sweep still going
   // ends at once.
   // The map in draft while the view moves (DRAFT)…
-  goDraft() {
+  goDraft(turned = false) {
+    if (turned) this.hideShadows();
     if (this.drafting) return;
     this.drafting = true;
     for (const svg of this.svgs) svg.classList.add('draft');
-    this.hideShadows();
   }
 
   // …its detail back as soon as it rests.
@@ -2807,7 +2889,7 @@ export class Renderer {
 
   // The shadows (gl/shadows.js), for the view the SVGs were last drawn
   // at, fading with the weather as they do (--sun, main.js); the objects'
-  // held while the view moves (hideShadows), hatched in once it rests.
+  // hidden while the view turns (hideShadows), hatched in once it rests.
   renderShadeCanvas() {
     const d = this.drawn;
     if (!d || !this.glShadows) return;

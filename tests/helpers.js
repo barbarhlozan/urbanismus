@@ -21,11 +21,8 @@ export function fineRun(world, [x0, y0], [x1, y1]) {
 export const road = (world, a, b) => world.buildNetwork('road', run(world, a, b));
 export const path = (world, a, b) => world.buildNetwork('path', fineRun(world, a, b));
 export const rail = (world, a, b) => world.buildNetwork('rail', fineRun(world, a, b));
-// a road with a footpath drawn along it: a street with sidewalks
-export const street = (world, a, b) => {
-  road(world, a, b);
-  return path(world, a, b);
-};
+// a road with sidewalks (and lamps)
+export const street = (world, a, b) => world.buildNetwork('road', run(world, a, b), { street: true });
 
 // A river across the map at column x (`width` columns wide).
 export function river(world, x, width = 1) {

@@ -24,6 +24,7 @@
 import { flattenPath, triangulate } from './geometry.js';
 import { penWatch, penLength } from '../draw.js';
 import { hatchTileLines } from '../hatch.js';
+import { brushWidths, brushPath2D, BRUSH_GLSL } from '../brush.js';
 
 // Curves flattened to within this of the true line (scene px).
 const TOLERANCE = 0.08;
@@ -40,7 +41,7 @@ layout(location = 0) in vec2 corner;
 layout(location = 1) in vec4 ab;      // a fill: its first two points; a stroke: a, b (the object's px)
 layout(location = 2) in vec4 cp;      // a fill: its third point; a stroke: the point before a, after b
 layout(location = 3) in vec4 kind;    // fill (0) or stroke (1), half width (px), ends at a and b (0 a join, 1 round, 2 butt)
-layout(location = 4) in vec4 style;   // its kind of element (the style table), and stroke (1) or fill (0)
+layout(location = 4) in vec4 style;   // its kind of element (the style table), and stroke (1) or fill (0); its pen element; a stroke's widths (brush.js)
 layout(location = 5) in vec4 slots;   // the object's matrix, its child's (-1 none); a stroke: how far along its line a and b are
 uniform vec3 base;                    // scene px -> device px
 uniform vec2 size;
@@ -57,9 +58,12 @@ flat out vec4 colourF;
 out float alongF;                     // how far along its line (a stroke)
 flat out float penVis;                // the pen has got this far along it
 out vec2 scene;                       // where it is (scene px: a hatched fill's strokes)
+flat out float shadeF;                // a fill laid on in brush strokes at (n - 10) sixths of a half turn (--fill-hatch 10–15, tone schemes)
+flat out vec2 brushW;                 // a stroke's width at a and at b, as shares of its pen's
 // (an end before its start: taken back, from all there to none)
 float span(float a, float b) { float d = b - a; return abs(d) < 1e-3 ? 1e-3 : d; }
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
+${BRUSH_GLSL}
 mat3 matAt(float s) {
   if (s < 0.0) return mat3(1.0);
   int i = int(s) * 2;
@@ -69,11 +73,13 @@ mat3 matAt(float s) {
 }
 void main() {
   mat3 m = matAt(slots.x) * matAt(slots.y);
+  brushW = vec2(1.0);
   mat3 M = mat3(base.x, 0.0, 0.0, 0.0, base.x, 0.0, base.y, base.z, 1.0) * m;
   vec2 A = (M * vec3(ab.xy, 1.0)).xy, B = (M * vec3(ab.zw, 1.0)).xy;
   int sid = int(style.x) * 3;
   vec4 look = texelFetch(styles, ivec2(sid + 2, 0), 0);
   colourF = texelFetch(styles, ivec2(sid + int(style.y), 0), 0) * alpha;
+  shadeF = look.w;
   float det = sqrt(abs(m[0][0] * m[1][1] - m[0][1] * m[1][0]));
   kindF = vec4(kind.x < 0.5 ? -look.z : kind.x, kind.y * look.x * 0.5 * base.x * det, kind.zw);
   if (look.y < 0.5 || colourF.a <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
@@ -101,7 +107,8 @@ void main() {
     local = vec2(0.0); joins = vec2(1e6); len = 0.0; alongF = 0.0;
   } else {
     vec2 pa = A, pb = B, pp = (M * vec3(cp.xy, 1.0)).xy, pn = (M * vec3(cp.zw, 1.0)).xy;
-    float r = kindF.y + 1.0;
+    brushW = brushUnpack(style.w);
+    float r = kindF.y * max(brushW.x, brushW.y) + 1.0;
     len = length(pb - pa);
     vec2 dir = unit(pb - pa, vec2(1.0, 0.0)), nrm = vec2(-dir.y, dir.x);
     vec2 tA = unit(dir + unit(pa - pp, dir), dir), tB = unit(dir + unit(pn - pb, dir), dir);
@@ -133,17 +140,51 @@ flat in float penVis;
 in vec2 scene;
 uniform sampler2D tile;               // the mist's strokes (setTile)
 uniform vec3 tileAt;                  // cos, sin of their angle, the tile's size (scene px)
+uniform int wash;                     // the watercolour scheme: paint laid unevenly (washTone)
+flat in float shadeF;
+flat in vec2 brushW;
 out vec4 outColour;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+// how much pigment a wash left here (1 as laid): blooms where it pooled
+// and dried darker, paler where it ran thin, and the paper's tooth – all
+// fixed to the map (scene px), so the paint stays put as the view moves
+float washTone(vec2 s) {
+  float bloom = noise(s * 0.06) * 0.5 + noise(s * 0.16 + 7.3) * 0.32 + noise(s * 0.45 + 3.1) * 0.18;
+  float tooth = noise(s * 1.9) - 0.5;
+  return 0.84 + 0.32 * bloom + 0.07 * tooth;
+}
 void main() {
   if (kindF.x < -0.5) {
     vec2 t = vec2(scene.x * tileAt.x + scene.y * tileAt.y, -scene.x * tileAt.y + scene.y * tileAt.x) / tileAt.z;
     outColour = colourF * texture(tile, t).a;
     return;
   }
-  if (kindF.x < 0.5) { outColour = colourF; return; }
+  if (kindF.x < 0.5) {
+    if (shadeF > 9.5) {
+      // (laid on with a flat brush: streaks along the face – down a wall,
+      // down a roof's slope –, the paint thinner and thicker across them,
+      // the paper's tooth catching it)
+      float ang = (shadeF - 10.0) * 0.5236;
+      vec2 d = vec2(cos(ang), sin(ang));
+      float along = dot(scene, d), across = dot(scene, vec2(-d.y, d.x));
+      float n = noise(vec2(along * 0.05, across * 0.7)) * 0.6 + noise(vec2(along * 0.13 + 3.0, across * 1.9)) * 0.4;
+      float dry = noise(vec2(along * 0.35, across * 3.5)) - 0.5;
+      outColour = colourF;
+      outColour.rgb = min(outColour.rgb * (0.86 + 0.24 * n + 0.07 * dry), vec3(outColour.a));
+      return;
+    }
+    outColour = colourF;
+    if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene), vec3(outColour.a));
+    return;
+  }
   if (joins.x < 0.0 || joins.y < 0.0 || alongF > penVis) discard;
-  float hw = kindF.y, d, edge = 1.0;
   float u = local.x, v = local.y;
+  float hw = kindF.y * mix(brushW.x, brushW.y, clamp(u / max(len, 1e-4), 0.0, 1.0)), d, edge = 1.0;
   float e = u < 0.0 ? -u : u - len;
   float end = u < 0.0 ? kindF.z : kindF.w;
   if (e > 0.0 && end > 0.5) {
@@ -153,6 +194,7 @@ void main() {
   float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
   if (cover <= 0.0) discard;
   outColour = colourF * cover;
+  if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene + 40.0), vec3(outColour.a));
 }`;
 
 function compile(gl, type, src) {
@@ -236,7 +278,7 @@ export class GLObjects {
     gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt'].map((n) => [n, gl.getUniformLocation(p, n)]));
+    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'wash'].map((n) => [n, gl.getUniformLocation(p, n)]));
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -317,8 +359,13 @@ export class GLObjects {
           g = g.parentNode;
         }
         const rec = g && this.records.get(g);
-        if (!rec) continue;
+        // (one not drawn yet shown again: the order made anew)
+        if (!rec) {
+          if (g === t) this.changed = true;
+          continue;
+        }
         this.changed = true;
+        if (r.type === 'attributes' && r.attributeName === 'style' && t === g && !SHAPES.has(g.tagName)) continue;
         if (r.type === 'attributes' && r.attributeName === 'transform' && (t === g || t === child && t.parentNode === g)) {
           if (t === g) this.setMat(rec.slot, own(g));
           else {
@@ -347,19 +394,27 @@ export class GLObjects {
   tileFor(q) {
     if (!this.tileArgs || q === this.tileQ) return;
     this.tileQ = q;
-    const { hatch, px, width } = this.tileArgs;
+    this.tileTex ??= this.gl.createTexture();
+    this.tileSize = this.paintTile(this.tileArgs, q, this.tileTex, gl => gl.TEXTURE2);
+  }
+
+  // A tile of hatch.js strokes (all tiers) drawn at q device px per scene
+  // px into `tex` (on the texture unit `unit` names); its size, scene px.
+  paintTile({ hatch, px, width }, q, tex, unit) {
     const { d, size } = hatchTileLines(3, hatch, px);
     const n = Math.max(1, Math.min(4096, Math.round(size * q)));
     const off = new OffscreenCanvas(n, n), c = off.getContext('2d');
     c.scale(n / size, n / size);
-    c.strokeStyle = '#fff';
+    // (the pen's strokes by the brush, brush.js, else even)
+    const brushed = brushPath2D(d, width);
+    c.fillStyle = c.strokeStyle = '#fff';
     c.lineWidth = width;
     c.lineCap = c.lineJoin = 'round';
-    c.stroke(new Path2D(d));
+    if (brushed) c.fill(brushed);
+    else c.stroke(new Path2D(d));
     const { gl } = this;
-    this.tileTex ??= gl.createTexture();
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.tileTex);
+    gl.activeTexture(unit(gl));
+    gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -367,7 +422,7 @@ export class GLObjects {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     gl.activeTexture(gl.TEXTURE0);
-    this.tileSize = size;
+    return size;
   }
 
   allocTex() {
@@ -470,7 +525,8 @@ export class GLObjects {
     s.hatched = cs.fill.startsWith('url(');
     let fill = cs.fill;
     if (s.hatched) {
-      s.el.style.fill = 'var(--bg)';
+      // (the mist's paper in its own colour; water, hatch-water, in the detail's)
+      s.el.style.fill = cs.fill.includes('hatch-water') ? 'var(--detail)' : 'var(--bg)';
       fill = getComputedStyle(s.el).fill;
       s.el.style.removeProperty('fill');
     }
@@ -480,14 +536,17 @@ export class GLObjects {
     s.cap = CAPS[cs.strokeLinecap] ?? 2;
     s.evenodd = cs.fillRule === 'evenodd';
     if (!(s.width > 0)) s.stroke = null;
-    this.styleData.set([...(s.fill ?? [0, 0, 0, 0]), ...(s.stroke ?? [0, 0, 0, 0]), s.width, s.shown ? 1 : 0, s.hatched ? 1 : 0, 0], s.id * 12);
+    s.shade = parseFloat(cs.getPropertyValue('--fill-hatch')) || 0;
+    this.styleData.set([...(s.fill ?? [0, 0, 0, 0]), ...(s.stroke ?? [0, 0, 0, 0]), s.width, s.shown ? 1 : 0, s.hatched ? 1 : 0, s.shade], s.id * 12);
     this.stylesDirty = true;
   }
 
   // An object's drawing read into pieces.
   build(g, rec) {
     const { gl } = this;
-    const children = [...g.children];
+    // (a shape standing in its layer itself – the terrain's –: its own only child)
+    const lone = SHAPES.has(g.tagName);
+    const children = lone ? [g] : [...g.children];
     const marks = g.querySelectorAll('path,polygon,polyline,line,rect,circle,ellipse').length;
     if (!rec || rec.n < children.length + 1 + marks) {
       if (rec) this.freeRecord(g, rec);
@@ -595,6 +654,7 @@ export class GLObjects {
           const ring = closed && count > 3;
           const L = pts.length;
           const [ma, mb, mc, md, me, mf] = m ?? [1, 0, 0, 1, 0, 0];
+          const widths = brushWidths(pts, count);
           for (let i = 1; i < count; i++) {
             const ip = i > 1 ? i - 2 : ring ? count - 2 : i - 1;
             const iq = i < count - 1 ? i + 1 : ring ? 1 : i;
@@ -612,7 +672,7 @@ export class GLObjects {
             D[o + 10] = i === 1 && !ring ? st.cap : ip !== i - 1 && turn > 0.35 ? 1 : 0;
             D[o + 11] = i === count - 1 && !ring ? st.cap : 0;
             const l = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]);
-            D[o + 12] = st.id; D[o + 13] = 1; D[o + 14] = ei; D[o + 15] = 0;
+            D[o + 12] = st.id; D[o + 13] = 1; D[o + 14] = ei; D[o + 15] = widths[i];
             D[o + 16] = rec.slot; D[o + 17] = slot; D[o + 18] = along; D[o + 19] = along + l;
             along += l;
           }
@@ -626,7 +686,7 @@ export class GLObjects {
       rec.children.set(c, slot);
       child = c;
       rec.boxes.set(c, [Infinity, Infinity, -Infinity, -Infinity]);
-      this.setMat(slot, own(c));
+      this.setMat(slot, c === g ? null : own(c));
       // (transforms below a child are kept in the pieces)
       const inner = (el, chain, m) => {
         const t = own(el);
@@ -639,7 +699,7 @@ export class GLObjects {
       if (c.tagName === 'g' || c.tagName === 'a') {
         const ch = `${root}>${c.tagName}.${c.getAttribute('class') ?? ''}`;
         for (const k of c.children) inner(k, ch, null);
-      } else visit(c, root, null, slot);
+      } else visit(c, lone ? '' : root, null, slot);
     });
     gl.bindBuffer(gl.ARRAY_BUFFER, rec.buf);
     gl.bufferData(gl.ARRAY_BUFFER, out.data.subarray(0, n * STRIDE), gl.STATIC_DRAW);
@@ -726,6 +786,17 @@ export class GLObjects {
     });
   }
 
+  // Each frame, for a mirror of whole layers (Renderer.makeGlMirrors): their
+  // groups in the page's order, those hidden by their style (the meadow's
+  // chunks out of view) left out. The list made again only after a change.
+  drawLayers(view, layers) {
+    if (this.changed || !this.layerOrder) {
+      this.layerOrder = [];
+      for (const l of layers) for (const g of l.children) if (g.style.display !== 'none') this.layerOrder.push({ g });
+    }
+    this.draw(view, this.layerOrder);
+  }
+
   // Each frame. `view`: the SVGs' drawn view and wrapper ({ zoom, panX,
   // panY, ox, oy, W, H }); `order`: the objects from the furthest (entries
   // with g, shown) – after the groups of the layer under them (watch).
@@ -797,6 +868,7 @@ export class GLObjects {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.uniform3f(this.u.base, dpr * view.zoom, dpr * (view.panX + view.ox), dpr * (view.panY + view.oy));
     gl.uniform2f(this.u.size, w, h);
+    gl.uniform1i(this.u.wash, document.documentElement.classList.contains('wc') ? 1 : 0);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.styleTex);
     gl.uniform1i(this.u.styles, 1);

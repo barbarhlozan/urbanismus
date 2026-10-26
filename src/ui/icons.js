@@ -149,6 +149,7 @@ function fit(inner, cls, pad) {
 // Hand-drawn icons in isometric directions, on a 32×32 box.
 const LINES = {
   road: '<path class="i-road" d="M4 22 L16 15 L28 22"/>',
+  street: '<path class="i-road" d="M4 22 L16 15 L28 22"/>',
   lane: '<path class="i-lane" d="M4 22 L16 15 L28 22"/>',
   path: '<path class="i-path" d="M4 22 L16 15 L28 22"/>',
   // the map symbol: a solid line with dashes of the background inside
@@ -159,7 +160,7 @@ const LINES = {
 };
 
 // the tools drawn from a file of their own, icons/ui/tool-…
-const TOOL_FILES = { road: 'tool-road', lane: 'tool-lane', path: 'tool-path', rail: 'tool-rail', fence: 'tool-fence', bulldoze: 'tool-erase' };
+const TOOL_FILES = { street: 'tool-street', road: 'tool-road', lane: 'tool-lane', path: 'tool-path', rail: 'tool-rail', fence: 'tool-fence', bulldoze: 'tool-erase' };
 
 export function toolIcon(tool) {
   if (tool.defs) return structureIcon(tool.defs[0]);

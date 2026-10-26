@@ -199,6 +199,14 @@ color.detail
   cs: Detail
   en: Detail
 
+color.shade
+  cs: Stín
+  en: Shade
+
+color.green
+  cs: Zeleň
+  en: Greenery
+
 scheme.blue-pen
   cs: Modré pero
   en: Blue pen
@@ -207,9 +215,9 @@ scheme.black-pen
   cs: Černé pero
   en: Black pen
 
-scheme.night
-  cs: Noc
-  en: Night
+scheme.watercolour
+  cs: Akvarel
+  en: Watercolour
 
 scheme.countryside
   cs: Venkov
@@ -391,6 +399,14 @@ tool.select
   cs: Vybrat
   en: Select
 
+tool.street
+  cs: Ulice
+  en: Street
+
+tool.street.blurb
+  cs: Silnice s chodníky a lampami
+  en: A road with sidewalks and lamps
+
 tool.road
   cs: Silnice
   en: Road
@@ -456,6 +472,10 @@ bend.straight
 network.stop.road
   cs: Ukončit silnici
   en: End the road
+
+network.stop.street
+  cs: Ukončit ulici
+  en: End the street
 
 network.stop.lane
   cs: Ukončit úzkou silnici

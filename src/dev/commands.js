@@ -102,16 +102,16 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     return world.placeStructure(type, at.node, { rotation: at.rotation });
   }
 
-  const NETWORKS = { road: ['road', false], lane: ['road', true], path: ['path', false], rail: ['rail', false], fence: ['fence', false] };
+  const NETWORKS = { street: ['road', false, true], road: ['road', false], lane: ['road', true], path: ['path', false], rail: ['rail', false], fence: ['fence', false] };
 
   // A straight (or diagonal, then straight) run from one dot to another.
   function road(kind, [x0, y0], [x1, y1]) {
     const entry = NETWORKS[kind];
     if (!entry) throw new Error(`cmd.road(${Object.keys(NETWORKS).map((k) => `'${k}'`).join(' | ')}, [x, y], [x, y])`);
-    const [layerKind, lane] = entry, layer = world.networks[layerKind];
+    const [layerKind, lane, street] = entry, layer = world.networks[layerKind];
     const a = layer.nodeAt(x0, y0), b = layer.nodeAt(x1, y1);
     if (a < 0 || b < 0 || a === b) return fail(`Can't lay ${kind}`, 'off the map, or both ends the same');
-    const result = world.buildNetwork(layerKind, planRoute(layer.grid, a, b), { lane });
+    const result = world.buildNetwork(layerKind, planRoute(layer.grid, a, b), { lane, street });
     return result.ok ? true : fail(`Can't lay ${kind}`, result.reason);
   }
 
@@ -296,7 +296,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         "cmd.story.play('Branch') / .reset() / .reload()",
         'cmd.log(n)               the last things the systems reported',
         "cmd.build('house', x, y, { rotation: 0..3 })   see cmd.types()",
-        "cmd.road('road' | 'lane' | 'path' | 'rail' | 'fence', [x, y], [x, y])",
+        "cmd.road('street' | 'road' | 'lane' | 'path' | 'rail' | 'fence', [x, y], [x, y])",
         'cmd.tree(x, y)',
         'cmd.house(4)              the building č. p. 4; cmd.house() every one',
         'cmd.send([1, 2, 3], 7)    the people of č. p. 1, 2, 3 go to č. p. 7, stay and come home',

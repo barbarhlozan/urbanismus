@@ -24,7 +24,7 @@
 //                                              its name in the Build menu
 //   house_wide, fire_house, office_tower…      one size, by its id
 //   residential, business, heritage, park…     a tag (every type that has it)
-//   road, lane, footpath, railway             the network tools
+//   street, road, lane, footpath, railway     the network tools
 //   chronicle, photo, terrain, colors, assets, debug, export, import,
 //   new_map, fullscreen                        the buttons at the top (not in
 //                                              `all`; `controls`: all of them)
@@ -33,7 +33,8 @@
 //
 // And one more line, in the file or the story: `scheme Night` – the colour
 // scheme (by name, by number from 1, `custom`, or three colours: bg, main,
-// detail, e.g. `scheme #ebe7dd #3e12b6 #9b9486`). The file's is put on when
+// detail, e.g. `scheme #ebe7dd #3e12b6 #9b9486` – or five, shade and green
+// after them). The file's is put on when
 // it changes, or every time while `colors` is locked; the player's own pick
 // stays otherwise.
 //
@@ -43,7 +44,7 @@
 //
 //   UNLOCKS.allows(type)              may this type be built?
 //   UNLOCKS.allowsTool(tool)          may this tool be picked up?
-//   UNLOCKS.allowsNetwork(kind)       'road' | 'lane' | 'path' | 'rail' | 'fence'
+//   UNLOCKS.allowsNetwork(kind)       'street' | 'road' | 'lane' | 'path' | 'rail' | 'fence'
 //   UNLOCKS.allowsControl(id)         a button at the top, by its data-act ('debug'…)
 //   UNLOCKS.allowsVehicle(kind)       'cars' | 'trucks' | 'buses'
 //   UNLOCKS.scheme                    the file's `scheme` line: { value, line } or null
@@ -55,6 +56,7 @@ import { SCHEMES, COLOR_NAMES, normalizeHex, applyTheme, setCustomColor } from '
 
 // Names of the network tools (tool id -> names that mean it).
 const NETWORKS = {
+  street: ['street', 'streets'],
   road: ['road', 'roads'],
   lane: ['lane', 'lanes'],
   path: ['footpath', 'footpaths', 'path', 'paths'],
@@ -104,7 +106,7 @@ export function parseUnlocks(text) {
     if (!t || t.startsWith('#') || t.startsWith('//')) return;
     const sm = /^(?:scheme|colou?rs?)\s+(.+)$/i.exec(t);
     if (sm) {
-      if (!resolveScheme(sm[1])) return errors.push({ line: k + 1, msg: `"${sm[1].trim()}" is no colour scheme – ${SCHEMES.map((s) => s.name).join(', ')}, custom, or three colours` });
+      if (!resolveScheme(sm[1])) return errors.push({ line: k + 1, msg: `"${sm[1].trim()}" is no colour scheme – ${SCHEMES.map((s) => s.name).join(', ')}, custom, or three or five colours` });
       scheme = { value: sm[1].trim(), line: k + 1 };
       return;
     }
@@ -116,11 +118,14 @@ export function parseUnlocks(text) {
 }
 
 // A `scheme` value as applyTheme takes it (an index into SCHEMES, or
-// 'custom'), or three colours { bg, main, detail }; null if it's none.
+// 'custom'), or three or five colours { bg, main, detail, shade, green }; null if it's none.
 export function resolveScheme(value) {
   const v = String(value).trim();
   const hexes = v.split(/[\s,]+/).map(normalizeHex);
-  if (hexes.length === 3 && hexes.every(Boolean)) return Object.fromEntries(COLOR_NAMES.map((n, i) => [n, hexes[i]]));
+  // (three colours, bg main detail – or all five, shade and green after them)
+  if ((hexes.length === 3 || hexes.length === COLOR_NAMES.length) && hexes.every(Boolean)) {
+    return Object.fromEntries(hexes.map((h, i) => [COLOR_NAMES[i], h]));
+  }
   if (normalName(v) === 'custom') return { choice: 'custom' };
   const n = Number(v);
   if (Number.isInteger(n) && n >= 1 && n <= SCHEMES.length) return { choice: n - 1 };
@@ -133,7 +138,7 @@ export function applyScheme(value) {
   const s = resolveScheme(value);
   if (!s) return;
   if ('choice' in s) applyTheme(s.choice);
-  else for (const n of COLOR_NAMES) setCustomColor(n, s[n]);
+  else for (const n of COLOR_NAMES) if (s[n]) setCustomColor(n, s[n]);
 }
 
 class Unlocks {

@@ -17,6 +17,7 @@
 
 import { THEME } from '../../theme.js';
 import { flattenPath, triangulate } from './geometry.js';
+import { brushWidths, BRUSH_GLSL } from '../brush.js';
 
 // How far (css px) past the window edge something may stand and still show.
 const MARGIN = 60;
@@ -32,7 +33,7 @@ layout(location = 0) in vec2 corner;  // x 0 at a, 1 at b; y across (±1) – fo
 layout(location = 1) in vec4 ab;      // a fill: its first two points; a stroke: a, b (device px)
 layout(location = 2) in vec4 cp;      // a fill: its third point; a stroke: the point before a, after b
 layout(location = 3) in vec4 kind;    // fill (0) or stroke (1), the stroke's half width (px), its ends at a and b (0 a join, 1 round, 2 butt)
-layout(location = 4) in vec4 paint;   // colour index, alpha
+layout(location = 4) in vec4 paint;   // colour index, alpha; a stroke's widths (brush.js)
 uniform vec2 size;
 uniform vec4 colours[8];
 out vec2 local;
@@ -40,10 +41,13 @@ out vec2 joins;
 out float len;
 flat out vec4 kindF;
 flat out vec4 colour;
+flat out vec2 brushW;
+${BRUSH_GLSL}
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
 void main() {
   kindF = kind;
   colour = colours[int(paint.x)] * paint.y;
+  brushW = brushUnpack(paint.z);
   vec2 p;
   if (kind.x < 0.5) {
     // a triangle: corners 0, 1, 2 its points, 3 the last again
@@ -52,7 +56,7 @@ void main() {
     local = vec2(0.0); joins = vec2(1e6); len = 0.0;
   } else {
     vec2 pa = ab.xy, pb = ab.zw;
-    float r = kind.y + 1.0;
+    float r = kind.y * max(brushW.x, brushW.y) + 1.0;
     len = length(pb - pa);
     vec2 dir = unit(pb - pa, vec2(1.0, 0.0)), nrm = vec2(-dir.y, dir.x);
     vec2 tA = unit(dir + unit(pa - cp.xy, dir), dir), tB = unit(dir + unit(cp.zw - pb, dir), dir);
@@ -77,12 +81,13 @@ in vec2 joins;
 in float len;
 flat in vec4 kindF;
 flat in vec4 colour;
+flat in vec2 brushW;
 out vec4 outColour;
 void main() {
   if (kindF.x < 0.5) { outColour = colour; return; }
   if (joins.x < 0.0 || joins.y < 0.0) discard;
-  float hw = kindF.y, d, edge = 1.0;
   float u = local.x, v = local.y;
+  float hw = kindF.y * mix(brushW.x, brushW.y, clamp(u / max(len, 1e-4), 0.0, 1.0)), d, edge = 1.0;
   float e = u < 0.0 ? -u : u - len;
   float end = u < 0.0 ? kindF.z : kindF.w;
   if (e > 0.0 && end > 0.5) {
@@ -295,10 +300,13 @@ export class GLMovers {
         }
         if (style.stroke) {
           const hw = (style.width * px) / 2, c = colourIndex[style.stroke] ?? 1, cap = style.cap === 'round' ? 1 : 2;
-          for (const { pts, closed } of mesh.lines) {
+          for (const line of mesh.lines) {
+            const { pts, closed } = line;
             // the line where it shows (closed: its first point again at the end)
             let k = 0;
             const count = pts.length + (closed ? 1 : 0);
+            // (its widths by the brush, in its own units: kept with it)
+            const widths = (line.brush ??= brushWidths(pts, count));
             if (count * 2 > P.length) continue;
             for (let i = 0; i < count; i++) {
               const [x, y] = pts[i % pts.length];
@@ -321,7 +329,7 @@ export class GLMovers {
               D[o] = P[ia]; D[o + 1] = P[ia + 1]; D[o + 2] = P[ib]; D[o + 3] = P[ib + 1];
               D[o + 4] = P[ip]; D[o + 5] = P[ip + 1]; D[o + 6] = P[iq]; D[o + 7] = P[iq + 1];
               D[o + 8] = 1; D[o + 9] = hw; D[o + 10] = endA; D[o + 11] = endB;
-              D[o + 12] = c; D[o + 13] = alpha; D[o + 14] = D[o + 15] = 0;
+              D[o + 12] = c; D[o + 13] = alpha; D[o + 14] = widths[i]; D[o + 15] = 0;
             }
           }
         }

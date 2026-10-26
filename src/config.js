@@ -28,7 +28,7 @@ export const CONFIG = {
     // Roof hatching thins out further away so that its strokes stay about
     // this many px apart on screen (every 2nd, 4th, 8th stroke kept) and
     // never close up into solid ink.
-    roofGap: 2.2,
+    roofGap: 1.5,
     // Forest trees are drawn plainer further out (smoother crown outlines,
     // see features/trees.js): below `medium` a little, below `far` more
     // (each tree by its own share, as lod.spread).
@@ -128,7 +128,7 @@ export const CONFIG = {
   // station when there is no other way out).
   trains: {
     interval: 85,       // seconds between arrivals through one exit
-    max: 3,             // trains on the map at once
+    max: 1,             // trains on the map at once
     speed: 0.9,         // grid steps per second at full speed
     accel: 0.15,        // grid steps per second² (braking too)
     dwell: 17,          // seconds stopped at a station

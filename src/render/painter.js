@@ -9,6 +9,9 @@
 // Primitives
 //   g.box(x, y, z, w, d, h, opts)            axis-aligned block
 //   g.prism(base[[x,y]…], z0, z1, opts)      any convex CCW footprint, extruded
+//                                            (opts.gables: { side: { peak } | { top: [[t, z]…] } } –
+//                                            walls rising past z1 as one face, see _walls; a box's
+//                                            sides are 0 front (-y), 1 right, 2 back, 3 left)
 //   g.gable(x, y, z, w, d, h, roofH, opts)   block with a pitched roof (ridge along x)
 //   g.gableY(x, y, z, w, d, h, roofH, opts)  same, ridge along y
 //   g.roofed(x, y, z, w, d, h, roof, opts)   block with a hip / gable / pyramid /
@@ -88,6 +91,18 @@ import { SUN, sunFor, tierOf, tierClass, penClass, awayFrom, strokeShare, wallSt
 import { SUN_FREE, wallDir, strokeLevel } from './sunFree.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
+// The watercolour scheme, a tone scheme or the coloured sketch (theme.js,
+// `wash` / `tone` / `tint`) is on: faces get classes for their paint (Painter._wash).
+const washOn = () => typeof document !== 'undefined' && /\b(wc|tone|tint)\b/.test(document.documentElement.className);
+// …and the watercolour one: no overshoots at corners (a wash has no pen line to run on)
+const wcOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('wc');
+// A scheme drawn clean (theme.js `clean`): the hand's wobble, overshoots
+// and tilt cut to these shares.
+const cleanOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('clean');
+// (house-lab.html sets these live)
+export const CLEAN = { wobble: 0.15, tilt: 0.15, overshoot: 0 };
+// …and a Painted one (`painted`): windows as small dark arches (Painter.line)
+const paintedOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('painted');
 // Photos (a perspective camera): roof hatching at most this many px apart
 // on the picture; windows are drawn open, as frames (Painter._window), with
 // their glazing bars from this many px wide
@@ -98,10 +113,12 @@ const PHOTO_PANE = 7;
 // sill is at most `below` up the wall (grid units), `reach` out from the
 // wall, widening by `widen` of the window's width to each side.
 const SPILL = { below: 0.2, reach: 0.22, widen: 0.6 };
+// A drawing's roof paint (r0–3, styles.css) by its paint number (0–11),
+// so some roofs are commoner than others: in Countryside, as in a Czech
+// village of the 60s–80s, clay tiles (r0) on 5 in 12, grey eternit (r2)
+// on 4, weathered tiles (r1) on 2, tar paper (r3, a wooden building) on 1
+export const ROOF_OF = [0, 2, 0, 1, 2, 0, 3, 0, 2, 1, 0, 2];
 
-// The map (LOOK.open): glazing bars in windows from this many scene px wide
-// (at zoom 1; they show only close up, see Painter._window)
-const MAP_PANE = 1.2;
 // how near the ground (local z) a wall's foot is taken to stand on it
 const ON_GROUND = 0.03;
 
@@ -116,6 +133,8 @@ const ON_GROUND = 0.03;
 //   open    with ink, the map draws windows open too, as in photos: a
 //           frame, and close up its glazing bars (Painter._window)
 //   thin    with ink: this many times fewer windows along a wall (1 = every bay)
+//   pane    with open: glazing bars in windows from this many scene px wide
+//           (at zoom 1; they show only close up, see Painter._window)
 //   hatch   pencil strokes down pitched roofs, this far apart (0 = none)
 //   ground  a stroke along the foot of each building, running past its corners by about this much
 //   floors  draw g.floors() lines (storey bands); off for the sparer sketch look
@@ -123,10 +142,17 @@ const ON_GROUND = 0.03;
 //           line, in grid units (0 = straight; see wobble())
 //   tilt    houses stand askew by up to this many degrees either way (types
 //           with `tilt: true`, see tiltOf in structures/index.js; 0 = square)
+//   clear   windows stand at least this far from a wall's corners (grid
+//           units; Painter.windows)
+//   round   corners rounded off by up to this much (scene px at tile 32, at
+//           most a third of an edge), for walls, roofs (and other faces) and
+//           windows' frames apart (0 = sharp, as a ruler draws them)
+// (set with the user in house-lab.html, 2026-10-25: see pen-sketch.md)
 export const LOOK = {
-  eave: 0.03, fascia: 0, sill: false, tall: true, sketch: 5,
-  overshoot: 1.5, ink: true, thin: 1.4, hatch: 0.03, ground: 0.04, floors: false, roads: 0.035,
-  tilt: 10, open: true,
+  eave: 0.03, fascia: 0.006, sill: false, tall: false, sketch: 2.5,
+  overshoot: 0, ink: true, thin: 1.2, hatch: 0.0225, ground: 0, floors: false, roads: 0.035,
+  tilt: 8, open: true, pane: 0.6,
+  round: { walls: 1, roofs: 1, windows: 0.4 }, clear: 0.08,
 };
 
 // The hand-drawn sway of roads: a smooth shift [dx, dy] of the map at
@@ -252,6 +278,9 @@ export class Painter {
   constructor(camera, origin, rotation = 0, seed = 1) {
     this.camera = camera;
     this.random = mulberry32(seed);
+    // the watercolour scheme's colours for this drawing (wash()): which roof
+    // and which wall paint, seeded apart from the drawing's own randomness
+    this.paint = Math.floor(mulberry32(seed ^ 0x51ed27)() * 12);
     // drawn to hold for any sun (sunFree.js): the map's, not a photo's
     this.sunFree = SUN_FREE.on && !camera.perspective;
     this.ox = origin.x;
@@ -288,12 +317,20 @@ export class Painter {
     this.panes = [];      // its windows drawn: { pts: 4 scene points, n: 0–99, spill }, for the night (Renderer.renderLights)
     this.casts = [];      // other shapes that cast a shadow (trees), world, see Painter.cast
     this.casting = true;  // false: draw no shadows (icons)
+    this.wood = false;    // watercolour: what is drawn now is of wood (boards, a shingle roof; _wash)
+    this.stone = false;   // …or whitewashed masonry under slate, whatever its building (_wash)
+  }
+
+  // The watercolour scheme is on (drawings that paint differently in it)
+  get wash() {
+    return washOn();
   }
 
   // Turn the whole drawing by a small angle (radians, counter-clockwise
   // seen from above) on top of its quarter-turn rotation – houses standing a
   // little askew (tiltOf in structures/index.js). Call before drawing.
   setTilt(angle) {
+    if (cleanOn()) angle *= CLEAN.tilt;
     this.tilt = angle;
     this._tc = Math.cos(angle);
     this._ts = Math.sin(angle);
@@ -341,19 +378,19 @@ export class Painter {
   // LOOK.sketch a <path> whose corners are nudged and whose edges bow a
   // little, like a line drawn by hand. Closed outlines big enough also get
   // LOOK.overshoot: their edges run on a little past the corners.
-  _outline(points, closed, opts, lod) {
+  _outline(points, closed, opts, lod, base = closed ? 'sk filled' : 'sk ln') {
     if (closed) this._cover(this._screenRuns(points, closed).flat());
     if (!LOOK.sketch) {
       return this._screenRuns(points, closed)
-        .map((run) => `<${closed ? 'polygon' : 'polyline'} points="${run.map(([x, y]) => `${r2(x)},${r2(y)}`).join(' ')}"${attrs(opts, lod)}/>`)
+        .map((run) => `<${closed ? 'polygon' : 'polyline'} points="${run.map(([x, y]) => `${r2(x)},${r2(y)}`).join(' ')}"${attrs(opts, lod, base.replace('sk ', ''))}/>`)
         .join('');
     }
-    const { d, pts, size } = this._sketch(points, closed, opts.wobble ?? 1);
+    const { d, pts, size } = this._sketch(points, closed, opts.wobble ?? 1, opts.round ?? 0);
     if (!d) return '';
     // the overshoots go in the same path: open strokes have no area, so the
     // fill ignores them, and it saves an element per face
     let ticks = '';
-    const os = LOOK.overshoot * this.camera.tile / 32;
+    const os = wcOn() ? 0 : LOOK.overshoot * (cleanOn() ? CLEAN.overshoot : 1) * this.camera.tile / 32;
     if (closed && os && size > os * 5) {
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1], b = pts[i];
@@ -365,21 +402,21 @@ export class Painter {
         ticks += `M${r2(b[0])} ${r2(b[1])}l${r2(ux * kb)} ${r2(uy * kb)}M${r2(a[0])} ${r2(a[1])}l${r2(-ux * ka)} ${r2(-uy * ka)}`;
       }
     }
-    return `<path d="${d}${ticks}"${attrs(opts, lod, closed ? 'sk filled' : 'sk ln')}/>`;
+    return `<path d="${d}${ticks}"${attrs(opts, lod, base)}/>`;
   }
 
   // Sketchy path data through 3D points: { d, pts (jittered screen points,
   // each [x, y, x0, y0]), size (longest edge on screen) }.
   // With a perspective camera an open line may come apart into several
   // runs where it passes behind the eye; `pts` then holds the last one.
-  _sketch(points, closed, wobble = 1) {
+  _sketch(points, closed, wobble = 1, round = 0) {
     const runs = this._screenRuns(points, closed);
     if (runs.length > 1) {
-      const parts = runs.map((run) => this._sketchScreen(run, false, wobble));
+      const parts = runs.map((run) => this._sketchScreen(run, false, wobble, round));
       return { d: parts.map((p) => p.d).join(''), pts: parts[parts.length - 1].pts, size: Math.max(...parts.map((p) => p.size)) };
     }
     if (!runs.length) return { d: '', pts: [], size: 0 };
-    return this._sketchScreen(runs[0], closed, wobble);
+    return this._sketchScreen(runs[0], closed, wobble, round);
   }
 
   // World points -> lists of screen points: one list, or with a perspective
@@ -392,8 +429,15 @@ export class Painter {
     return runs.map((run) => run.map((p) => this._project(...p)));
   }
 
-  _sketchScreen(scr, closed, wobble) {
-    const amp = LOOK.sketch * this.camera.tile / 32 * wobble;
+  _sketchScreen(scr, closed, wobble, round = 0) {
+    const amp = LOOK.sketch * this.camera.tile / 32 * wobble * (cleanOn() ? CLEAN.wobble : 1);
+    // rounded corners (LOOK.round): a line back where it started (a
+    // window's frame) taken as closed, so all its corners are
+    const r = (round * this.camera.tile) / 32;
+    if (r > 0 && !closed && scr.length > 3 && Math.hypot(scr[0][0] - scr[scr.length - 1][0], scr[0][1] - scr[scr.length - 1][1]) < 1e-6) {
+      scr = scr.slice(0, -1);
+      closed = true;
+    }
     // small shapes (windows) wobble less than walls and roofs
     let size = 0;
     for (let i = 1; i < scr.length; i++) size = Math.max(size, Math.hypot(scr[i][0] - scr[i - 1][0], scr[i][1] - scr[i - 1][1]));
@@ -408,18 +452,48 @@ export class Painter {
       const k = Math.min(jit, near(i) * 0.15);
       return [x + hash2(x, y, 1) * k, y + hash2(x, y, 2) * k, x, y];
     });
-    if (closed) pts.push(pts[0]);
-    let d = `M${r2(pts[0][0])} ${r2(pts[0][1])}`;
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1], b = pts[i];
+    // an edge from point a to b (each [x, y, x0, y0]), bowed a little,
+    // from `from` to `to` on it (where its corners are rounded off)
+    const edge = (a, b, from = a, to = b) => {
       // key the bow on the edge regardless of direction
       const [p, q] = a[2] < b[2] || (a[2] === b[2] && a[3] < b[3]) ? [a, b] : [b, a];
       const len = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
       const bow = hash2(p[2] + q[2], p[3] + q[3], 3) * Math.min(amp, len * 0.04);
-      const cx = (a[0] + b[0]) / 2 - ((q[1] - p[1]) / len) * bow;
-      const cy = (a[1] + b[1]) / 2 + ((q[0] - p[0]) / len) * bow;
-      d += `Q${r2(cx)} ${r2(cy)} ${r2(b[0])} ${r2(b[1])}`;
+      const cx = (from[0] + to[0]) / 2 - ((q[1] - p[1]) / len) * bow;
+      const cy = (from[1] + to[1]) / 2 + ((q[0] - p[0]) / len) * bow;
+      return `Q${r2(cx)} ${r2(cy)} ${r2(to[0])} ${r2(to[1])}`;
+    };
+    if (r > 0 && pts.length > 2) {
+      // each corner cut back by up to r along both its edges (at most a
+      // third of the shorter) and turned in a curve through it – less where
+      // the shape is thin (a sign, a board: a rounded oblong, not a pill)
+      const m = pts.length, at = (i) => pts[(i + m) % m];
+      const len = (i, j) => Math.hypot(at(j)[0] - at(i)[0], at(j)[1] - at(i)[1]);
+      const cutOf = (i) => {
+        const la = len(i, i - 1), lb = len(i, i + 1), lo = Math.min(la, lb), hi = Math.max(la, lb);
+        return hi > 1e-9 ? Math.min(r, lo / 3) * Math.min(1, Math.max(0.35, (2 * lo) / hi)) : 0;
+      };
+      const cut = (i, j, c) => {
+        const p = at(i), q = at(j), l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+        const k = l > 1e-9 ? c / l : 0;
+        return [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k];
+      };
+      const rounded = (i) => closed || (i > 0 && i < m - 1);
+      const cuts = pts.map((p, i) => (rounded(i) ? cutOf(i) : 0));
+      const ins = pts.map((p, i) => (rounded(i) ? cut(i, i - 1, cuts[i]) : p));
+      const outs = pts.map((p, i) => (rounded(i) ? cut(i, i + 1, cuts[i]) : p));
+      let d = `M${r2(outs[0][0])} ${r2(outs[0][1])}`;
+      for (let i = 1; i < m; i++) {
+        d += edge(pts[i - 1], pts[i], outs[i - 1], ins[i]);
+        if (rounded(i)) d += `Q${r2(pts[i][0])} ${r2(pts[i][1])} ${r2(outs[i][0])} ${r2(outs[i][1])}`;
+      }
+      if (closed) d += `${edge(pts[m - 1], pts[0], outs[m - 1], ins[0])}Q${r2(pts[0][0])} ${r2(pts[0][1])} ${r2(outs[0][0])} ${r2(outs[0][1])}Z`;
+      if (closed) pts.push(pts[0]);
+      return { d, pts, size };
     }
+    if (closed) pts.push(pts[0]);
+    let d = `M${r2(pts[0][0])} ${r2(pts[0][1])}`;
+    for (let i = 1; i < pts.length; i++) d += edge(pts[i - 1], pts[i]);
     return { d: closed ? d + 'Z' : d, pts, size };
   }
 
@@ -471,7 +545,7 @@ export class Painter {
       d[tierOf(k)] += LOOK.sketch ? this._sketch(line, false).d : `M${this._proj(line[0]).replace(',', ' ')}L${this._proj(line[1]).replace(',', ' ')}`;
     }
     d.forEach((path, n) => {
-      if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln roof-hatch${tierClass(n, 'rh')}`)}/>`);
+      if (path) this.current.parts.push(`<path d="${path}"${attrs({}, Math.max(1, this.lod), `ln roof-hatch${tierClass(n, 'rh')}${this._roofPaint()}`)}/>`);
     });
   }
 
@@ -567,11 +641,42 @@ export class Painter {
     return out;
   }
 
-  _walls(base, z0, z1, opts) {
+  // `gables`: { side index: { peak, ea, eb } } – those walls run on up to
+  // a peak over their middle, one face from the ground to the roof (no line
+  // across at the eaves); the roof overhanging the walls beside by ea at
+  // corner a, eb at b, their top corners go up to where its verges pass
+  // over them, so the wall meets the roof (no gap under it). Along the top
+  // its outline is left to the verges, but on a side whose roof plane is
+  // turned away (not drawn). Or { top: [[t, z]…] }: the wall's top from
+  // corner a (t = 0) to b (t = 1), whatever is drawn on it (a sawtooth
+  // roof's teeth) meeting it at those very points.
+  _walls(base, z0, z1, opts, gables = null) {
     for (let i = 0; i < base.length; i++) {
       const [ax, ay] = base[i];
       const [bx, by] = base[(i + 1) % base.length];
-      this.face([[ax, ay, z0], [bx, by, z0], [bx, by, z1], [ax, ay, z1]], opts);
+      const { peak: zr, ea = 0, eb = 0, top } = gables?.[i] ?? {};
+      if (top) {
+        const at = ([t, z]) => [ax + (bx - ax) * t, ay + (by - ay) * t, z];
+        this.face([[ax, ay, z0], [bx, by, z0], ...[...top].reverse().map(at)], opts);
+        continue;
+      }
+      if (zr > z1) {
+        const mx = (ax + bx) / 2, my = (ay + by) / 2, half = Math.hypot(bx - ax, by - ay) / 2;
+        const za = z1 + ((zr - z1) * ea) / (half + ea), zb = z1 + ((zr - z1) * eb) / (half + eb);
+        // the roof plane down from the peak to the eave at corner (cx, cy):
+        // through its top and along the ridge (across this wall)
+        const away = (cx, cy, zc) => {
+          const r = [by - ay, ax - bx, 0], v = [mx - cx, my - cy, zr - zc];
+          let n = [r[1] * v[2] - r[2] * v[1], r[2] * v[0] - r[0] * v[2], r[0] * v[1] - r[1] * v[0]];
+          if (n[2] < 0) n = n.map((k) => -k);
+          return !this._facing(n, [cx, cy, zc]);
+        };
+        let open = [4, 0, 1, 2];
+        const awayB = away(bx, by, zb), awayA = away(ax, ay, za);
+        if (awayB) open = [...open, 3];
+        if (awayA) open = awayB ? [...open, 4] : [3, ...open];
+        this.face([[ax, ay, z0], [bx, by, z0], [bx, by, zb], [mx, my, zr], [ax, ay, za]], { ...opts, open });
+      } else this.face([[ax, ay, z0], [bx, by, z0], [bx, by, z1], [ax, ay, z1]], opts);
     }
   }
 
@@ -669,10 +774,145 @@ export class Painter {
     this._spread(points);
     const n = newellNormal(points);
     if (opts.shadow !== false && !this._footOf(points, n)) this._castFace(points);
+    this._lastPaint = '';
     if (!this._facing(n, points[0])) return this;
-    if (this._lod(opts) <= this.keep) this.current.parts.push(this._outline(points, true, opts, this._lod(opts)));
+    const paint = this._wash(n, points);
+    this._lastPaint = paint;
+    // its corners rounded by what it is (LOOK.round): a wall, else a roof
+    if (opts.round === undefined) opts = { ...opts, round: LOOK.round[this._wallNormal(n) ? 'walls' : 'roofs'] };
+    if (paint) opts = { ...opts, cls: opts.cls ? `${opts.cls} ${paint}` : paint };
+    if (this._lod(opts) <= this.keep) {
+      const lod = this._lod(opts), { open, ...rest } = opts;
+      if (!open) this.current.parts.push(this._outline(points, true, opts, lod));
+      else {
+        // (filled whole, outlined only along the points listed, in order:
+        // its other edges are drawn by what lies over them)
+        this.current.parts.push(this._outline(points, true, { ...rest, stroke: 'none' }, lod));
+        this.current.parts.push(this._outline(open.map((i) => points[i]), false, { ...rest, fill: 'none' }, lod, 'sk filled'));
+      }
+    }
+    if (paint.startsWith('ww')) this._washDetail(points, n, paint);
     if (opts.shadow !== false && Math.max(1, this.lod) <= this.keep) this._shade(points, n);
     return this;
+  }
+
+  // The watercolour scheme's classes for a face (styles.css, html.wc): what
+  // it is – a wall (ww), a pitched roof (wp) or a flat top (wt) –, dark (wd)
+  // when it is turned to the right on screen, as the light falls from the
+  // left in a painted view, and the paint of this drawing's walls (v0–2)
+  // or roofs (r0–3). '' when the scheme is another or the face is a floor.
+  _wash(n, points) {
+    if (!washOn()) return '';
+    const len = Math.hypot(n[0], n[1], n[2]);
+    if (len < 1e-9) return '';
+    const wall = this._wallNormal(n);
+    const roof = this.wood ? 3 : this.stone ? 2 : ROOF_OF[this.paint];
+    if (!wall && n[2] > 0.985 * len) return `wt r${roof}`;
+    if (!wall && n[2] <= 0) return '';
+    const [tx, ty] = wall ?? this._turn(n[0], n[1]);
+    const o = this._world(...points[0]);
+    const a = this._project(o[0], o[1], o[2]), b = this._project(o[0] + tx * 0.2, o[1] + ty * 0.2, o[2]);
+    const dark = b[0] > a[0] + 1e-6 ? ' wd' : '';
+    if (!wall) return `wp${dark} r${roof} sa${this._slopeOnScreen(n, o, len)}`;
+    const mat = this._wallMat(points);
+    return `ww${dark} v${this.paint % 3}${mat ? ` ${mat}` : ''}`;
+  }
+
+  // Which way a roof runs down on screen, in sixths of a half turn (0–5):
+  // the Painted schemes' brush follows it (styles.css .sa0–5, gl/objects.js).
+  _slopeOnScreen([nx, ny, nz], o, len) {
+    const k = nz / len;
+    const [dx, dy] = this._turn((nx / len) * k, (ny / len) * k);
+    const dz = k * k - 1;
+    const a = this._project(o[0], o[1], o[2]), b = this._project(o[0] + dx * 0.2, o[1] + dy * 0.2, o[2] + dz * 0.2);
+    const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    return ((Math.round(ang / (Math.PI / 6)) % 6) + 6) % 6;
+  }
+
+  // What a wall standing on the ground is built of, in the watercolour
+  // scheme: timber boards under a brown roof (barns, sheds), logs on some
+  // one-storey cottages under tiles (roubenky, their gables plastered), else plaster
+  // ('').
+  _wallMat(points) {
+    if (this.stone) return '';
+    const wood = this.wood || ROOF_OF[this.paint] === 3;
+    if (!points.some((p) => p[2] <= ON_GROUND)) return wood ? 'wtimber' : '';
+    if (wood) return 'wtimber';
+    const level = Math.min(...points.filter((p) => p[2] > ON_GROUND).map((p) => p[2]));
+    // (not under slate: that is the 70s cube house's roof, never a log one's)
+    return level <= 0.22 && this.paint % 5 < 2 && ROOF_OF[this.paint] !== 2 ? 'wlogs' : '';
+  }
+
+  // The painted detail on a wall in the watercolour scheme (`paint` its
+  // classes from _wash): a stone plinth along its foot, and logs or boards
+  // up to its eaves (a gable above stays plastered).
+  _washDetail(points, n, paint) {
+    const L = points.length;
+    const i = points.findIndex((p, k) => p[2] <= ON_GROUND && points[(k + 1) % L][2] <= ON_GROUND);
+    const dark = /\bwd\b/.test(paint) ? ' wd' : '';
+    if (i < 0) {
+      // (a gable drawn apart from its walls: a triangle above the eaves)
+      const q = [...points].sort((p, r) => p[2] - r[2]);
+      if (L === 3 && Math.max(1, this.lod) <= this.keep && Math.abs(q[0][2] - q[1][2]) < 0.01 && q[2][2] > q[0][2] + 0.04) {
+        this._washGable(q[0], q[1], q[2], n, !this.stone && (this.wood || ROOF_OF[this.paint] === 3), dark);
+      }
+      return;
+    }
+    const a = points[i], b = points[(i + 1) % L];
+    const level = Math.min(...points.filter((p) => p[2] > ON_GROUND).map((p) => p[2]));
+    const lod = Math.max(1, this.lod);
+    // (no detail on what is barely a wall: a kerb, a fence's foot)
+    if (lod > this.keep || !(level < Infinity) || level < 0.04) return;
+    const band = (z0, z1, cls) => this.current.parts.push(this._outline(
+      [[a[0], a[1], z0], [b[0], b[1], z0], [b[0], b[1], z1], [a[0], a[1], z1]], true, { cls: cls + dark, wobble: 0.08 }, lod));
+    const PLINTH = 0.022;
+    if (/\bwlogs\b/.test(paint)) {
+      for (let z = PLINTH + 0.006; z + 0.01 < level; z += 0.021) band(z, Math.min(z + 0.012, level), 'wlog');
+    } else if (/\bwtimber\b/.test(paint)) {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const k = Math.max(2, Math.round(len / 0.028));
+      for (let j = 1; j < k; j++) {
+        const t = j / k, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t;
+        this.line([[x, y, PLINTH], [x, y, level - 0.004]], { facing: n, cls: `wboard${dark}`, wobble: 0.3, lod });
+      }
+    }
+    band(0, PLINTH, 'wplinth');
+    const top = points.reduce((m, p) => (p[2] > m[2] ? p : m));
+    if (top[2] >= level + 0.04) this._washGable([a[0], a[1], level], [b[0], b[1], level], top, n, /\bwtimber\b/.test(paint), dark);
+  }
+
+  // A gable above the eaves (A, B its foot, `top` its peak): a board across
+  // its foot, and on a barn (`wood`) the gable boarded upright (lomenice),
+  // on a house a trim painted in round its edge, as on the whitewashed
+  // gables of Bohemian villages.
+  _washGable(A, B, top, n, wood, dark) {
+    const ab = [B[0] - A[0], B[1] - A[1]], l2 = ab[0] * ab[0] + ab[1] * ab[1];
+    if (l2 < 1e-6) return;
+    const level = A[2];
+    const tt = Math.min(0.95, Math.max(0.05, ((top[0] - A[0]) * ab[0] + (top[1] - A[1]) * ab[1]) / l2));
+    const lineOn = (pts, cls) => this.line(pts, { facing: n, cls: cls + dark, wobble: 0.3, lod: 2 });
+    lineOn([A, B], 'wtrim');
+    if (wood) {
+      const k = Math.max(3, Math.round(Math.sqrt(l2) / 0.028));
+      for (let j = 1; j < k; j++) {
+        const t = j / k, h = (top[2] - level) * (t < tt ? t / tt : (1 - t) / (1 - tt));
+        if (h < 0.01) continue;
+        const x = A[0] + ab[0] * t, y = A[1] + ab[1] * t;
+        lineOn([[x, y, level], [x, y, level + h - 0.006]], 'wboard');
+      }
+    } else {
+      const c = [0, 1, 2].map((i) => (A[i] + B[i] + top[i]) / 3);
+      const inset = (p, k) => p.map((v, i) => v + (c[i] - v) * k);
+      lineOn([inset(A, 0.28), inset(top, 0.28), inset(B, 0.28)], 'wtrim');
+    }
+  }
+
+  // The paint of the roof plane just drawn (face, _wash), for its hatching:
+  // the coloured sketch draws the strokes in it (styles.css html.tint).
+  // Its colour classes only (wp, wd, r0–3), so few kinds of stroke.
+  _roofPaint() {
+    const tags = (this._lastPaint ?? '').split(' ').filter((c) => c === 'wp' || c === 'wd' || /^r\d$/.test(c));
+    return tags.includes('wp') ? ` ${tags.join(' ')}` : '';
   }
 
   // A wall turned away from the sun gets hatched (SUN.strokes,
@@ -765,7 +1005,7 @@ export class Painter {
     const cx = base.reduce((s, p) => s + p[0], 0) / base.length;
     const cy = base.reduce((s, p) => s + p[1], 0) / base.length;
     this.solid(cx, cy, (z0 + z1) / 2);
-    this._walls(base, z0, z1, opts);
+    this._walls(base, z0, z1, opts, opts.gables);
     this._foot(base, z0, z1 - z0);
     this.face(base.map(([x, y]) => [x, y, z1]), opts);
     return this;
@@ -780,10 +1020,8 @@ export class Painter {
     const zt = z + h, zr = zt + roofH;
     this._grow([[x0, y0], [x1, y1]]);
     this.solid(x + w / 2, ym, z + (h + roofH) / 2);
-    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts);
+    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts, { 1: { peak: zr }, 3: { peak: zr } });
     this._foot([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, h);
-    this.face([[x0, y1, zt], [x0, y0, zt], [x0, ym, zr]], opts);
-    this.face([[x1, y0, zt], [x1, y1, zt], [x1, ym, zr]], opts);
     this._plane([[x0, y0, zt], [x1, y0, zt], [x1, ym, zr], [x0, ym, zr]], opts);
     this._plane([[x1, y1, zt], [x0, y1, zt], [x0, ym, zr], [x1, ym, zr]], opts);
     return this;
@@ -851,9 +1089,19 @@ export class Painter {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
       const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
       const at = (t, z) => [a[0] + ux * t, a[1] + uy * t, z];
-      const cols = Math.floor(len / spacing);
+      let cols = Math.floor(len / spacing);
       if (cols < 1) continue;
       const pad = (len - cols * spacing) / 2;
+      // each window in the middle of its bay – but at least LOOK.clear from
+      // the corners (where the pen's lines would run into it): then spread
+      // evenly between, one fewer while they would stand too close
+      const clear = Math.min(LOOK.clear, (len - ww) / 2);
+      let place = (c) => pad + c * spacing + (spacing - ww) / 2;
+      if (place(0) < clear) {
+        while (cols > 1 && (len - 2 * clear - cols * ww) / (cols - 1) < ww * 0.8) cols--;
+        const step = cols > 1 ? (len - 2 * clear - ww) / (cols - 1) : 0;
+        place = (c) => (cols > 1 ? clear + c * step : (len - ww) / 2);
+      }
       for (let i = from; i < storeys; i++) {
         const zb = z0 + i * step + (step - wh) * (LOOK.tall ? 0.4 : 0.55), zt = zb + wh;
         if (ribbon) {
@@ -862,7 +1110,7 @@ export class Painter {
           continue;
         }
         for (let c = 0; c < cols; c++) {
-          const t0 = pad + c * spacing + (spacing - ww) / 2, t1 = t0 + ww;
+          const t0 = place(c), t1 = t0 + ww;
           this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n, cls });
           if (sill) this.line([at(t0 - sill, zb - sill * 0.6), at(t1 + sill, zb - sill * 0.6)], { facing: n });
         }
@@ -876,10 +1124,8 @@ export class Painter {
     const zt = z + h, zr = zt + roofH;
     this._grow([[x0, y0], [x1, y1]]);
     this.solid(xm, y + d / 2, z + (h + roofH) / 2);
-    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts);
+    this._walls([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, zt, opts, { 0: { peak: zr }, 2: { peak: zr } });
     this._foot([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], z, h);
-    this.face([[x0, y0, zt], [x1, y0, zt], [xm, y0, zr]], opts);
-    this.face([[x1, y1, zt], [x0, y1, zt], [xm, y1, zr]], opts);
     this._plane([[x0, y1, zt], [x0, y0, zt], [xm, y0, zr], [xm, y1, zr]], opts);
     this._plane([[x1, y0, zt], [x1, y1, zt], [xm, y1, zr], [xm, y0, zr]], opts);
     return this;
@@ -893,6 +1139,9 @@ export class Painter {
   //            A number sets both. Default 0.
   //   mansard  { h, inset }: a steep lower roof first, the roof above it.
   //            Gable ends (hip 0) stay vertical there.
+  //   hatch    false = no pencil hatching on the roof planes
+  //   on       () => …: drawing on the roof, done with the roof's solid
+  //            current (lab/lines.js: a hand-drawn roof)
   // }
   // g.roofed(x, y, 0, w, d, h, { h: 0.15 }) is g.gable(...);
   // { h: 0.1, hip: w / 2, ridge: 'x' } on a square is a pyramid roof.
@@ -914,15 +1163,32 @@ export class Painter {
     const plane = (pts) => {
       face(pts);
       const q = pts.map(([u, v, zz]) => P(u, v, zz));
-      this._hatch(q, newellNormal(alongY ? [...q].reverse() : q));
+      if (roof.hatch !== false) this._hatch(q, newellNormal(alongY ? [...q].reverse() : q));
     };
     const hip = Array.isArray(roof.hip) ? roof.hip : [roof.hip ?? 0, roof.hip ?? 0];
     const rh = roof.h ?? 0, zt = z + h;
     const m = roof.mansard;
 
+    // gable ends (a pitched roof, no hip there, no mansard): their walls
+    // run on up to the ridge (_walls), whose ends sit on their peaks – the
+    // roof doesn't overhang them, so the two meet in one point
+    const gabled = [!m && rh > 0 && !(hip[0] > 0), !m && rh > 0 && !(hip[1] > 0)];
+    // (the eaves beside them: on the walls along v = 0 and v = D, none
+    // over a wall shared with a neighbour – as below)
+    const eaveAt = (v) => {
+      const [px] = P(L / 2, v, 0);
+      return (this.join.left && px <= -0.5 + 1e-6) || (this.join.right && px >= 0.5 - 1e-6) ? 0 : (roof.eave ?? LOOK.eave);
+    };
+    const [e0, e1] = [eaveAt(0), eaveAt(D)];
+    // (each gable wall's corners a, b – in _walls' order round the base –
+    // on the v = 0 or the v = D side)
+    const gables = {};
+    if (gabled[0]) gables[alongY ? 0 : 3] = alongY ? { peak: zt + rh, ea: e0, eb: e1 } : { peak: zt + rh, ea: e1, eb: e0 };
+    if (gabled[1]) gables[alongY ? 2 : 1] = alongY ? { peak: zt + rh, ea: e1, eb: e0 } : { peak: zt + rh, ea: e0, eb: e1 };
+
     this._grow([[x, y], [x + w, y + d]]);
     this.solid(x + w / 2, y + d / 2, z + (h + rh + (m?.h ?? 0)) / 2);
-    this._walls([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, zt, opts);
+    this._walls([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, zt, opts, gables);
     this._foot([[x, y], [x + w, y], [x + w, y + d], [x, y + d]], z, h);
     // The roof is its own solid just in front of the walls, so window lines
     // drawn on the walls afterwards stay under the eaves.
@@ -946,6 +1212,7 @@ export class Painter {
 
     if (rh <= 0) {
       face([[u0, v0, zb], [u1, v0, zb], [u1, v1, zb], [u0, v1, zb]]);
+      roof.on?.();
       this.current = walls;
       return this;
     }
@@ -964,14 +1231,15 @@ export class Painter {
       return (this.join.left && px <= -0.5 + 1e-6) || (this.join.right && px >= 0.5 - 1e-6);
     };
     const ev0 = shared(L / 2, v0) ? 0 : e, ev1 = shared(L / 2, v1) ? 0 : e;
-    const eu0 = shared(u0, D / 2) ? 0 : e, eu1 = shared(u1, D / 2) ? 0 : e;
+    const eu0 = gabled[0] || shared(u0, D / 2) ? 0 : e, eu1 = gabled[1] || shared(u1, D / 2) ? 0 : e;
     const [U0, U1, V0, V1] = [u0 - eu0, u1 + eu1, v0 - ev0, v1 + ev1];
     const RA = ra > u0 ? ra : U0, RB = rb < u1 ? rb : U1;
 
-    // gable walls belong to the walls, so the verges overlap them
+    // gables on a mansard belong to the walls, so the verges overlap them
+    // (other gables are the walls' own, _walls)
     onWalls(() => {
-      if (ra <= u0) face([[u0, v1, zb], [u0, v0, zb], [u0, vm, zr]]);
-      if (rb >= u1) face([[u1, v0, zb], [u1, v1, zb], [u1, vm, zr]]);
+      if (ra <= u0 && !gabled[0]) face([[u0, v1, zb], [u0, v0, zb], [u0, vm, zr]]);
+      if (rb >= u1 && !gabled[1]) face([[u1, v0, zb], [u1, v1, zb], [u1, vm, zr]]);
     });
     const f = e ? LOOK.fascia : 0;
     if (f) {
@@ -984,6 +1252,7 @@ export class Painter {
     plane([[U1, V1, zb], [U0, V1, zb], [RA, vm, zr], [RB, vm, zr]]);
     if (ra > u0) plane([[U0, V1, zb], [U0, V0, zb], [RA, vm, zr]]);
     if (rb < u1) plane([[U1, V0, zb], [U1, V1, zb], [RB, vm, zr]]);
+    roof.on?.();
     this.current = walls;
     return this;
   }
@@ -1274,9 +1543,33 @@ export class Painter {
     if (opts.facing && !this._facing(opts.facing, points[0])) return this;
     const lod = opts.lod ?? (opts.facing ? Math.max(2, this.lod) : this.lod);
     if (lod > this.keep) return this;
+    if (opts.cls === 'ink' && paintedOn() && this._arch(points, lod)) return this;
     if (opts.cls === 'ink' && (this.camera.perspective || LOOK.open) && this._window(points, opts, lod)) return this;
     this.current.parts.push(this._outline(points, false, opts, lod));
     return this;
+  }
+
+  // A window in a Painted scheme: a small dark opening with a round top, as
+  // in a gouache of a village – narrower and lower than the window it
+  // stands for, in its middle. `points`: its outline on the wall, closed
+  // (bottom left, bottom right, top right, top left, back to the start).
+  // False if it isn't one.
+  _arch(points, lod) {
+    if (points.length !== 5) return false;
+    const [p0, p1, , p3] = points;
+    const u = [0, 1, 2].map((i) => p1[i] - p0[i]), v = [0, 1, 2].map((i) => p3[i] - p0[i]);
+    const w = Math.hypot(...u), h = Math.hypot(...v);
+    if (w < 1e-6 || h < 1e-6) return false;
+    const W = 0.6, H = 0.8, r = (W * w) / 2;
+    const at = (x, y) => [0, 1, 2].map((i) => p0[i] + (u[i] / w) * x + (v[i] / h) * y);
+    const x0 = (w - W * w) / 2, cx = w / 2, y0 = (h - H * h) / 2, spring = Math.max(y0, y0 + H * h - r);
+    const pts = [at(x0, y0), at(x0 + W * w, y0)];
+    for (let k = 0; k <= 6; k++) {
+      const a = (k / 6) * Math.PI;
+      pts.push(at(cx + Math.cos(a) * r, spring + Math.sin(a) * r));
+    }
+    this.current.parts.push(this._outline(pts, true, { cls: 'arch', wobble: 0.1 }, lod));
+    return true;
   }
 
   // An ink window (a closed outline of four corners: bottom left, bottom
@@ -1284,7 +1577,7 @@ export class Painter {
   // on the map with LOOK.open. Its glazing bars – a casement's cross, a
   // ribbon's mullions every opts.bay – only close up: in a photo once the
   // window is PHOTO_PANE px wide, on the map when the building is drawn
-  // `near` (Renderer.paintStructure, lod.near) and the window is MAP_PANE
+  // `near` (Renderer.paintStructure, lod.near) and the window is LOOK.pane
   // wide. On the map they go after the solid's other parts, so the frames
   // of a wall make one run (mergeRuns) and the bars another, rather than
   // an element each.
@@ -1321,9 +1614,9 @@ export class Painter {
     }
     const wide = Math.hypot(sb[0] - sa[0], sb[1] - sa[1]), high = Math.hypot(sc[0] - sb[0], sc[1] - sb[1]);
     const out = this.current.parts;
-    out.push(this._outline(points, false, { ...opts, cls: 'pane' }, lod));
+    out.push(this._outline(points, false, { ...opts, cls: 'pane', round: LOOK.round.windows }, lod));
     // the map's windows are 1–3 px at zoom 1: bars only where there's room
-    if (photo ? wide < PHOTO_PANE : !this.near || (wide * 32) / this.camera.tile < MAP_PANE) return true;
+    if (photo ? wide < PHOTO_PANE : !this.near || (wide * 32) / this.camera.tile < LOOK.pane) return true;
     const late = photo ? out : (this.current.late ??= []);
     const mix = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t);
     const bar = (p, q) => late.push(this._outline([p, q], false, { ...opts, cls: 'pane bar' }, lod));
@@ -1355,6 +1648,11 @@ export class Painter {
     const [sx, sy, t] = a;
     const p = points.map(([u, v]) => [r2(sx + u * t), r2(sy - v * t)]);
     this._cover(p);
+    // (watercolour: a crown's paint, by where the tree stands, see _wash)
+    if (washOn() && /\b(crown|pool)\b/.test(opts.cls ?? '')) {
+      const [wx, wy] = this._world(x, y, z);
+      opts = { ...opts, cls: `${opts.cls} t${Math.floor((hash2(wx, wy, 11) + 1) * 2.5) % 5}` };
+    }
     if (!opts.smooth) {
       this.current.parts.push(`<polygon points="${p.map((q) => q.join(',')).join(' ')}"${attrs(opts, this._lod(opts))}/>`);
       return this;
@@ -1377,6 +1675,12 @@ export class Painter {
     this._ensure(groups[0].x, groups[0].y, groups[0].z);
     // one decimal is plenty for these small glyphs, and keeps the markup small
     const r1 = (n) => Math.round(n * 10) / 10;
+    // (a crown's outline and its leaves in the crown's own paint, by where
+    // the tree stands as shape() picks it: the coloured sketch, html.tint)
+    if (washOn() && /\b(crown-line|leaf)\b/.test(opts.cls ?? '')) {
+      const [wx, wy] = this._world(groups[0].x, groups[0].y, groups[0].z);
+      opts = { ...opts, cls: `${opts.cls} crown t${Math.floor((hash2(wx, wy, 11) + 1) * 2.5) % 5}` };
+    }
     let d = '';
     for (const { x, y, z, lines } of groups) {
       const a = this._anchor(x, y, z);

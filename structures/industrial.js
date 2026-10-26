@@ -27,8 +27,15 @@ export function coolingTower(g, x, y, h, r = 0.3) {
 }
 
 // Hall with a sawtooth roof: each tooth is a triangular prism along y.
+// Its two end walls run on up into the teeth, one face each (no line
+// across them where the teeth begin).
 function sawtoothHall(g, x0, y0, x1, y1, h, teeth, th) {
-  g.box(x0, y0, 0, x1 - x0, y1 - y0, h);
+  // the ends' top, by how far along x (0 at x0, 1 at x1): up each tooth's
+  // glazing, down its slope
+  const prof = [];
+  for (let i = 0; i < teeth; i++) prof.push([i / teeth, h + th], [(i + 1) / teeth, h]);
+  const front = prof, back = prof.map(([t, z]) => [1 - t, z]).reverse();
+  g.box(x0, y0, 0, x1 - x0, y1 - y0, h, { gables: { 0: { top: front }, 2: { top: back } } });
   g.windows(x0, y0, x1 - x0, y1 - y0, 0, h, h, 0.13, { w: 0.5, h: 0.55, skip: ['front'] });
   const tw = (x1 - x0) / teeth;
   for (let i = 0; i < teeth; i++) {
@@ -36,8 +43,6 @@ function sawtoothHall(g, x0, y0, x1, y1, h, teeth, th) {
     g.solid((a + b) / 2, (y0 + y1) / 2, h + th / 2);
     g.face([[a, y1, h], [a, y0, h], [a, y0, h + th], [a, y1, h + th]]); // glazing (-x)
     g.face([[a, y0, h + th], [b, y0, h], [b, y1, h], [a, y1, h + th]]); // slope
-    g.face([[a, y0, h], [b, y0, h], [a, y0, h + th]]);                 // front end (-y)
-    g.face([[b, y1, h], [a, y1, h], [a, y1, h + th]]);                 // back end (+y)
   }
 }
 

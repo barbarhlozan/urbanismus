@@ -13,7 +13,7 @@
 //
 // Coordinates: plot painters use world axes, (0, 0) = the building's anchor dot.
 
-import { tree, bush, shed, bench, bins, crates, pallets, bricks, cableDrum, concreteRings, woodpile, trailer, fenceAlong, hedgeAlong, carpetRack, dryingFrame, sandpit, climbingFrame, barrels, timber, heap, tank, transformer } from './kit.js';
+import { tree, bush, shed, wooden, outhouse, shrine, bench, bins, crates, pallets, bricks, cableDrum, concreteRings, woodpile, trailer, fenceAlong, hedgeAlong, carpetRack, dryingFrame, sandpit, climbingFrame, barrels, timber, heap, tank, transformer } from './kit.js';
 
 // Share of the trees a plot would have that it gets (the rest of their
 // spots stay open lawn), so a building stands in the open with a tree or
@@ -51,6 +51,22 @@ const FENCE_WANDER = { garden: 0.05 };
 // Share of a style's density kept (gardens are the most common plot, and
 // every prop is SVG: fewer of them draw faster and look calmer).
 const STYLE_DENSITY = { garden: 0.8 };
+
+// The watercolour scheme's village (Painter.wash): wooden sheds and an
+// outhouse in the gardens, a wayside shrine on the greens (by a church or
+// a chapel). Other schemes keep PLOT_STYLES as they are, prop for prop.
+const WASH_STYLES = {
+  get garden() {
+    return [
+      ...PLOT_STYLES.garden.slice(0, 2),
+      [1, 0.09, (g, x, y) => wooden(g, () => shed(g, x, y)), 1],
+      [2, 0.07, (g, x, y) => outhouse(g, x, y), 1],
+    ];
+  },
+  get green() {
+    return [...PLOT_STYLES.green, [1, 0.06, (g, x, y) => shrine(g, x, y), 1]];
+  },
+};
 
 // Weighted props per style: [weight, radius, draw(g, x, y), most per plot]
 export const PLOT_STYLES = {
@@ -122,7 +138,7 @@ const BOUNDARY = {
 //   densityAt(x, y)                 optional: that, varying over the plot
 // }
 export function drawPlot(g, plot) {
-  const style = PLOT_STYLES[plot.style];
+  const style = (g.wash && WASH_STYLES[plot.style]) || PLOT_STYLES[plot.style];
   if (!style) return;
 
   // Boundary lines, with gaps wherever something is in the way.

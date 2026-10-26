@@ -31,9 +31,10 @@
 #   public                            obcanska_vybavenost + prostranstvi
 #
 # Network tools
+#   street               (a road with sidewalks and lamps)
 #   road
 #   lane
-#   footpath             (no footpath: no new streets with sidewalks either)
+#   footpath
 #   railway
 #
 # Shared names (tags) – each covers several things at once
@@ -155,7 +156,7 @@
 # ------------------------------------
 #
 # And the colour scheme the game starts in:
-#   scheme Blue pen        (or Black pen, Night, Countryside; a number from 1;
+#   scheme Blue pen        (or Black pen, Countryside, Watercolour; a number from 1;
 #                           custom; or three colours: scheme #ebe7dd #3e12b6 #9b9486
 #                           – background, main, detail)
 # It's put on whenever this line changes. While `colors` is locked it's put on

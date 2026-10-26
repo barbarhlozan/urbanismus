@@ -57,7 +57,7 @@ export class World {
     this.sidewalks = new Set(); // edgeKey of road segments that are streets (have sidewalks)
     this.lanes = new Set();     // edgeKey of road segments that are single-track lanes (never streets)
     this.laneWalks = new Map(); // edgeKey of lanes -> sides with a sidewalk: bit 1 left of the way from
-                                // the lower dot to the higher (offsetPolyline +), bit 2 right (see sideOf)
+                                // the lower dot to the higher (offsetPolyline +), bit 2 right
 
     this.networks = {
       road: new NetworkLayer({
@@ -99,7 +99,8 @@ export class World {
         grid: this.fine,
         scale: 0.5,
         isBlocked: (f) => this.isPathBlocked(f),
-        conflicts: (f, g) => this.rails.hasEdge(f, g),
+        // (not along a road: sidewalks come with streets, the Street tool)
+        conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'paths:changed',
         // a dense dot is over water if a main dot around it is; a two-dot
@@ -1001,10 +1002,11 @@ export class World {
   }
 
   // `nodes` is an ordered list of adjacent nodes on that layer's grid.
-  // Footpaths drawn on or right beside a road become that road's sidewalks
-  // (see absorbSidewalks). Roads: `lane` builds single-track lanes; drawn
-  // over existing road, a lane narrows it and a road widens a lane.
-  buildNetwork(kind, nodes, { lane = false } = {}) {
+  // Roads come in three widths, and drawing one over another converts it:
+  // `street` builds roads with sidewalks (and their lamps), `lane`
+  // single-track lanes, neither a plain road. A street narrowed to a lane
+  // keeps a sidewalk each side.
+  buildNetwork(kind, nodes, { lane = false, street = false } = {}) {
     const layer = this.networks[kind];
     const check = validateRoute(layer, nodes, { lane });
     if (!check.ok) return check;
@@ -1015,35 +1017,23 @@ export class World {
       const c = layer.coarseOf(n);
       if (c >= 0) this.clearFeaturesAt(c);
     }
+    let walks = false;
     for (let i = 0; i < nodes.length - 1; i++) {
       layer.graph.addEdge(nodes[i], nodes[i + 1]);
       if (kind !== 'road') continue;
       const key = edgeKey(nodes[i], nodes[i + 1]);
-      // a street narrowed to a lane keeps a sidewalk each side; a lane
-      // widened with any sidewalk becomes a street
       if (lane) {
         if (this.sidewalks.delete(key)) this.laneWalks.set(key, 3);
         this.lanes.add(key);
-      } else if (this.lanes.delete(key) && this.laneWalks.delete(key)) this.sidewalks.add(key);
-    }
-    // a footpath drawn right on a lane gives it a sidewalk on the right of
-    // the way it was drawn (draw back the other way for the other side)
-    if (kind === 'path') {
-      for (let i = 0; i < nodes.length - 1; i++) {
-        const [fx, fy] = this.fine.xy(nodes[i]), [gx, gy] = this.fine.xy(nodes[i + 1]);
-        const road = this.roadOn(fx, fy, gx, gy);
-        if (!road || !this.isLane(...road)) continue;
-        const [lo, hi] = road[0] < road[1] ? road : [road[1], road[0]];
-        const [lx, ly] = this.grid.xy(lo), [hx, hy] = this.grid.xy(hi);
-        const key = edgeKey(...road);
-        // (with y down, the right of the way is the + offset side of lo -> hi)
-        const side = (gx - fx) * (hx - lx) + (gy - fy) * (hy - ly) > 0 ? 1 : 2;
-        this.laneWalks.set(key, (this.laneWalks.get(key) ?? 0) | side);
+        continue;
       }
+      if (this.lanes.delete(key)) walks = this.laneWalks.delete(key) || walks;
+      if (street ? !this.sidewalks.has(key) : this.sidewalks.has(key)) walks = true;
+      if (street) this.sidewalks.add(key);
+      else this.sidewalks.delete(key);
     }
-    this.absorbSidewalks(kind !== 'path'); // a path build announces itself below
     layer.version++;
-    this.events.emit(layer.event, { layer, nodes });
+    this.events.emit(layer.event, { layer, nodes, sidewalks: walks || undefined });
     return check;
   }
 
@@ -1066,69 +1056,6 @@ export class World {
   }
 
   // ---------- streets (roads with sidewalks) ----------
-
-  // Footpath segments that run along a road – on its dots or on the row of
-  // dense dots right beside it – are really sidewalks: remove them from the
-  // footpaths and make those road segments streets instead. Runs after every
-  // build and on load, so it doesn't matter which was drawn first.
-  // Lanes keep their narrow look: a footpath beside one becomes a sidewalk
-  // on that side only (draw one each side for two), and one right on it is
-  // taken in by it (drawn on it, it gave it a sidewalk, see buildNetwork;
-  // a lane drawn over a footpath just upgrades it).
-  absorbSidewalks(notify = true) {
-    const streets = [], walked = [];
-    const gone = [];
-    for (const [f, g] of this.paths.edges()) {
-      const road = this.roadBeside(f, g);
-      if (!road) continue;
-      if (this.isLane(...road)) {
-        const side = this.sideOf(f, g, road);
-        if (side) {
-          this.laneWalks.set(edgeKey(...road), (this.laneWalks.get(edgeKey(...road)) ?? 0) | side);
-          walked.push(road);
-        }
-      } else streets.push(road);
-      gone.push(f, g);
-      this.paths.removeEdge(f, g);
-    }
-    if (!gone.length) return false;
-    for (const [a, b] of streets) this.sidewalks.add(edgeKey(a, b));
-    this.networks.road.version++;
-    if (notify) {
-      const path = this.networks.path;
-      path.version++;
-      this.events.emit(path.event, { layer: path, nodes: gone });
-    }
-    this.events.emit('roads:changed', { layer: this.networks.road, nodes: [...streets, ...walked].flat(), sidewalks: true });
-    return true;
-  }
-
-  // The road segment [a, b] that the footpath step f -> g runs along (on it,
-  // or parallel right beside it), or null.
-  roadBeside(f, g) {
-    const [fx, fy] = this.fine.xy(f);
-    const [gx, gy] = this.fine.xy(g);
-    for (const [dx, dy] of [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]]) {
-      // (sideways only: a footpath carrying straight on from a road's end
-      // isn't beside it)
-      if ((dx || dy) && dx * (gy - fy) === dy * (gx - fx)) continue;
-      const road = this.roadOn(fx + dx, fy + dy, gx + dx, gy + dy);
-      if (road) return road;
-    }
-    return null;
-  }
-
-  // Which side of road segment [a, b] the footpath step f -> g runs on: 1
-  // left of the way from the lower dot to the higher, 2 right, 0 on it
-  // (the bits of laneWalks).
-  sideOf(f, g, [a, b]) {
-    const [lo, hi] = a < b ? [a, b] : [b, a];
-    const [lx, ly] = this.grid.xy(lo), [hx, hy] = this.grid.xy(hi);
-    const [fx, fy] = this.fine.xy(f), [gx, gy] = this.fine.xy(g);
-    const mx = (fx + gx) / 4 - lx, my = (fy + gy) / 4 - ly; // (dense dots are half a dot apart)
-    const cross = (hx - lx) * my - (hy - ly) * mx;
-    return Math.abs(cross) < 1e-6 ? 0 : cross > 0 ? 1 : 2;
-  }
 
   // The road segment covering the dense-grid step (fx, fy) -> (gx, gy), or
   // null. A road segment spans three dense dots: its two ends and its middle.
@@ -1277,7 +1204,6 @@ export class World {
       if (world.roads.hasEdge(a, b) && !world.lanes.has(key)) world.sidewalks.add(key);
     }
     for (const [key, sides] of data.laneWalks ?? []) if (world.lanes.has(key)) world.laneWalks.set(key, sides);
-    world.absorbSidewalks(false); // footpaths drawn beside roads before streets existed
 
     for (const s of data.structures) {
       s.rotation ??= 0;
