@@ -569,23 +569,56 @@ staff.vacant
   cs: volné místo
   en: vacant
 
-# the dev buttons, top middle (src/ui/devStrip.js, for now): a minute
-# ahead, the building they act on before one is picked, and the fires
+# the time and fire menus beside the chronicle (src/ui/devMenus.js, for
+# now): their names, what's in them, the building they act on before one
+# is picked
+dev.time
+  cs: Čas
+  en: Time
+
+dev.fire
+  cs: Oheň
+  en: Fire
+
+dev.play
+  cs: Spustit
+  en: Go on
+
+dev.pause
+  cs: Zastavit
+  en: Stop
+
+dev.speed
+  cs: Rychlost
+  en: Speed
+
 dev.jump
-  cs: +1 min
-  en: +1 min
+  cs: O minutu dál
+  en: A minute on
 
-dev.fold
-  cs: Schovat ladění
-  en: Hide the dev buttons
+dev.hour
+  cs: Hodina
+  en: Hour
 
-dev.open
-  cs: Ladění
-  en: Dev
+dev.hour.held
+  cs: stojí – klepni, ať jde dál
+  en: held – tap to let it go on
+
+dev.hour.running
+  cs: jde – klepni, ať stojí
+  en: going on – tap to hold it
+
+dev.earlier
+  cs: O hodinu dřív
+  en: An hour earlier
+
+dev.later
+  cs: O hodinu později
+  en: An hour later
 
 dev.pick
-  cs: klepni na dům
-  en: tap a house
+  cs: Nejdřív klepni na dům.
+  en: Tap a house first.
 
 dev.ignite
   cs: Zapálit

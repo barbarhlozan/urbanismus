@@ -46,7 +46,7 @@ import { printImage, putPrint, deletePrint, newPrintId, clearPrints } from './ui
 import { Popup } from './ui/popup.js';
 import { Hud } from './ui/hud.js';
 import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
-import { DevStrip } from './ui/devStrip.js'; // TEMPORARY
+import { DevMenus } from './ui/devMenus.js'; // TEMPORARY
 import { ColorMenu } from './ui/colorMenu.js';
 import { NewMapMenu } from './ui/newMapMenu.js';
 import { askLanguage } from './ui/languages.js';
@@ -740,8 +740,7 @@ requestAnimationFrame(loop);
 
 // Handy for debugging from the console: cmd.help() (src/dev/commands.js).
 window.cmd = createCommands({ world, config: CONFIG, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, annotations, renderer, unlocks: UNLOCKS });
-// TEMPORARY: time and fire buttons always on screen, for the phone; they
-// act on the building whose card was opened last
-const devStrip = new DevStrip(uiRoot, { world, clock, cmd: window.cmd });
-ctx.onPick = (s) => devStrip.pick(s);
-sketchFrames(uiRoot, '.dev-strip');
+// TEMPORARY: the time and the fires from two drawings beside the chronicle
+// (the fires act on the building whose card was opened last)
+const devMenus = new DevMenus(uiRoot, { world, clock, cmd: window.cmd, popup });
+ctx.onPick = (s) => devMenus.pick(s);

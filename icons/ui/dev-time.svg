@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+  <!-- The time (for now, beside the chronicle): a clock face, drawn round once and a touch past where it began, and its two hands -->
+  <path d="M8.3 2.3 C11.4 2.3 13.8 4.8 13.7 8.1 C13.6 11.3 11.1 13.8 7.9 13.7 C4.7 13.6 2.3 11.1 2.3 7.9 C2.4 4.9 4.8 2.5 7.6 2.2 L9.1 2.4"/>
+  <path d="M8 4.9 V8.2 L10.3 9.7"/>
+</svg>

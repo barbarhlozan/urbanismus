@@ -32,6 +32,8 @@ export const ICONS = {
   'lang-en': 'Menu: English, shown while the game is in Czech',
   rename: 'Top left: beside the town\'s name, to rename it',
   chronicle: 'Top left: the chronicle book, beside the town\'s name',
+  'dev-time': 'Top left, after the chronicle, for now: the time menu (play, speed, the hour)',
+  'dev-fire': 'Top left, after the time, for now: the fire menu (set alight, put out, burn down the building tapped last)',
   camera: 'Build menu, last in the row under the rail (on a phone, the panel\'s bottom row): photo mode, P; and the dock while it\'s on',
   rotate: 'Tool dock: rotate option, Tab',
   'bend-diagonal': 'Tool dock: a line\'s bend, diagonal first, Tab',

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Fires (for now, beside the chronicle): a little flame, a smaller one inside it -->
+  <path d="M8 14 C5.1 14 3.4 11.9 3.8 9.3 C4.2 6.9 6.2 5.7 6.4 3.1 C8.4 4.5 9.1 6.3 8.6 8 C9.4 7.4 9.8 6.6 9.8 5.6 C11.6 7 12.6 8.8 12.2 10.8 C11.8 12.8 10.2 14 8 14"/>
+  <path d="M8 13.9 C6.9 13.7 6.3 12.6 6.7 11.4 C7 10.5 7.8 10 8 9.2 C9 10.2 9.6 11.2 9.3 12.3 C9.1 13.2 8.6 13.8 8 13.9"/>
+</svg>
