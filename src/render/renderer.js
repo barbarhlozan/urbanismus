@@ -142,11 +142,14 @@ const LINES = ['roads', 'paths', 'rails', 'fences'];
 const GL_LINES = ['paths', 'rails', 'roads', 'fences'];
 // The terrain's lines on the GPU as well, in world space (renderGlTerrain),
 // back to front, and the classes the SVG had for them, whose pens and
-// colours they take (terrainStyles). What of the terrain is worked out for
-// the view (brows, rock faces) or drawn on the screen (the summits' marks,
-// the water's washes) stays in its SVG.
+// colours they take (terrainStyles). The brows, worked out for the view,
+// are put on the ground where they were drawn (browOnGround): a turn carries
+// them with their hills until they are worked out again where it rests.
+// What is drawn on the screen (the summits' marks, the water's washes)
+// stays in its SVG.
 const TERRAIN_LINES = {
   steep: 'steep', 'contour-d2': 'contour d2', 'contour-d1': 'contour d1', 'contour-index': 'contour index',
+  'brow-light': 'brow light', brow: 'brow', 'brow-outline': 'brow outline', 'rock-face': 'rock-face', 'rock-lip': 'rock-lip',
   shore: 'shore', bank: 'bank', wave: 'wave',
 };
 // The steps of a whole turn (Camera.STEP); the views an object keeps of
@@ -909,7 +912,7 @@ export class Renderer {
   // renderGlTerrain, left out of the SVG)
   renderTerrain() {
     const lines = this.glTerrain ? [] : null;
-    this.layers.terrain.innerHTML = (this.contours ? this.renderContours(lines) : this.renderSteep(lines)) + this.renderBrows() + this.renderWater(lines);
+    this.layers.terrain.innerHTML = (this.contours ? this.renderContours(lines) : this.renderSteep(lines)) + this.renderBrows(lines) + this.renderWater(lines);
     if (!lines) return;
     // (the same lines as last time – a turn landing redraws the brows – kept
     // as they are on the GPU, not built again)
@@ -1000,7 +1003,7 @@ export class Renderer {
   // faces (rocks.js), worked out for each turn of the view and kept (the
   // last few turns, per relief: turning back to a view finds them ready);
   // as pencil strokes, a path per kind and chunk of the map.
-  renderBrows() {
+  renderBrows(lines = null) {
     const { camera, world } = this;
     if (!BROWS.on || !camera.lift) return '';
     if (this.brows?.lift !== camera.lift) this.brows = { lift: camera.lift, views: new Map() };
@@ -1010,14 +1013,19 @@ export class Renderer {
       const m = 1.2; // (as the contours)
       const height = (x, y) => camera.lift(x, y) + terrain.heightAt(x, y);
       const vis = visibility(camera, height, [-m, -m, grid.width - 1 + m, grid.height - 1 + m]);
-      const tiers = [[], [], []];
+      const tiers = [[], [], []], runs = [[], [], []];
       browLines(vis, camera).forEach((line, n) => {
-        for (const run of browRuns(line)) tiers[run.tier].push(...pencil(run.points, n, BROWS.pencil));
+        for (const run of browRuns(line)) {
+          const strokes = pencil(run.points, n, BROWS.pencil);
+          tiers[run.tier].push(...strokes);
+          // (and on the ground, for the GPU: browOnGround)
+          for (const st of strokes) runs[run.tier].push(this.browOnGround(st, run.points));
+        }
       });
       // the rock faces turned to the viewer (those turned away are brows)
       const rocks = rockLines(world, camera, height, [-0.5, -0.5, grid.width - 0.5, grid.height - 0.5], (x, y) => hiddenAt(vis, camera, x, y));
       const lips = rocks.lips.flatMap((l, n) => pencil(l, n, ROCK_LOOK.pencil));
-      view = { tiers, lips, faces: rocks.faces };
+      view = { tiers, runs, lips, faces: rocks.faces };
       if (this.brows.views.size >= 6) this.brows.views.delete(this.brows.views.keys().next().value);
       this.brows.views.set(camera.angle, view);
     }
@@ -1026,7 +1034,31 @@ export class Renderer {
     const t = camera.tile;
     const flat = (lines, cls) => chunked(lines, CONTOUR_CHUNK / 2).map((ls) => `<path class="${cls}" d="${ls.map((pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x * t)} ${r2(y * t)}`).join('')).join('')}"/>`).join('');
     const { tiers, lips, faces } = view;
+    if (lines) {
+      ['brow-light', 'brow', 'brow-outline'].forEach((cls, i) => view.runs[i].forEach((pts) => lines.push({ key: `t${lines.length}`, cls, pts })));
+      this.terrainItems(lines, faces, 'rock-face');
+      this.terrainItems(lines, lips, 'rock-lip');
+      return '';
+    }
     return flat(tiers[0], 'brow light') + flat(tiers[1], 'brow') + flat(tiers[2], 'brow outline') + paths(faces, 'rock-face') + paths(lips, 'rock-lip');
+  }
+
+  // A brow's pencil stroke (screen tiles, as the view is now) on the ground
+  // in world space, for gl/lines.js: each point on its screen column (u)
+  // where the brow it was drawn along lies on it (t, browLines: between the
+  // run's points), raised to show just where it is drawn now – so a turn
+  // carries it with its hill. [[x, y, z]…], z in grid units.
+  browOnGround(stroke, run) {
+    const cam = this.camera;
+    return stroke.map(([X, Y]) => {
+      let k = 1;
+      while (k < run.length - 1 && run[k][0] < X) k++;
+      const [x0, , t0] = run[k - 1], [x1, , t1] = run[k];
+      const f = x1 !== x0 ? Math.min(1, Math.max(0, (X - x0) / (x1 - x0))) : 0;
+      const u = X / COS30, t = t0 + (t1 - t0) * f;
+      const [dx, dy] = cam.toWorld((t + u) / 2, (t - u) / 2);
+      return [dx + cam.cx, dy + cam.cy, (t / 2 - Y) / cam.zScale];
+    });
   }
 
   // Faint lines on the slopes too steep to build on (steep.js), traced once

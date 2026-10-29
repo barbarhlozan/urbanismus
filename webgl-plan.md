@@ -253,6 +253,14 @@ uploaded per frame.
   of building a frame), so whole groves vanished for a frame or two (23 of
   24 objects in sight, measured). The new group now carries the one it
   replaced (`standIn`), drawn until it is built: at most 1 missing.
+- **Brows and rocks on the ground**: the brows are still worked out for the
+  view (visibility, browLines, on the screen), but each pencil stroke is put
+  back on the ground (`browOnGround`: its column u, where along it the brow
+  lies, t, carried from browLines, and the height that shows it just where
+  it is drawn) and drawn by the terrain's GLLines with the rock faces and
+  lips (world lines); so mid-turn they stay on their hills, and the outline
+  is worked out anew where the view rests. GLLines' style tables 32 -> 48.
+  Still sheet-turned: summit marks, the painted schemes' water washes.
 
 ## The plan
 

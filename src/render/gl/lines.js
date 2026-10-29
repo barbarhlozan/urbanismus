@@ -62,7 +62,14 @@ const STYLES = {
   shore: { colour: 'detail', width: 1.4, cap: 'butt' },
   bank: { colour: 'detail', width: 1, cap: 'butt' },
   wave: { colour: 'detail', width: 1, cap: 'round' },
+  'brow-light': { colour: 'detail', width: 1, cap: 'round' },
+  brow: { colour: 'detail', width: 1, cap: 'round' },
+  'brow-outline': { colour: 'detail', width: 1.4, cap: 'round' },
+  'rock-face': { colour: 'detail', width: 0.5, cap: 'round' },
+  'rock-lip': { colour: 'detail', width: 1, cap: 'round' },
 };
+// (the shaders' tables hold this many)
+const MAX_STYLES = 48;
 // the far-out level of detail leaves these out (styles.css #world.lod-2)
 const FAR_HIDDEN = new Set(['driveway', 'zebra']);
 // the painted schemes leave these out: the washes stand for them
@@ -91,7 +98,7 @@ uniform vec3 iso;                      // tile·cos30, tile·sin30, tile·zScale
 uniform vec3 place;                    // zoom, pan x, pan y (wrapper px, the overscan in)
 uniform vec2 size;                     // the canvas in device px
 uniform float dpr;
-uniform vec4 width[32];                // per style: half width in device px, a wash (1)?, fading from, to (world units along)
+uniform vec4 width[${MAX_STYLES}];                // per style: half width in device px, a wash (1)?, fading from, to (world units along)
 out vec2 local;                        // px from a: along, across
 out vec2 joins;                        // px inside the joins' lines at a and at b (< 0: the neighbour's)
 out float len;                         // the segment's length in px
@@ -149,9 +156,9 @@ flat in vec2 endsF;
 flat in vec2 brushW;
 in float along;
 in float dashAt;
-uniform vec4 width[32];
-uniform vec4 colour[32];               // premultiplied
-uniform vec4 dashes[32];               // on, off (scene px), dashed?, shown?
+uniform vec4 width[${MAX_STYLES}];
+uniform vec4 colour[${MAX_STYLES}];               // premultiplied
+uniform vec4 dashes[${MAX_STYLES}];               // on, off (scene px), dashed?, shown?
 uniform sampler2D items;               // per item: shown up to (world units), from the end?, its length, shown at all
 uniform int washPass;                  // drawing the washes (1, under the lines) or the lines (0)
 out vec4 outColour;
@@ -458,7 +465,7 @@ export class GLLines {
     gl.uniform1f(u.dpr, dpr);
     // the pens: a width in scene px (pen · --stroke, the line weight in it),
     // on the screen times the zoom, in device px times the pixel ratio
-    const widths = new Float32Array(32 * 4), colours = new Float32Array(32 * 4), dashes = new Float32Array(32 * 4);
+    const widths = new Float32Array(MAX_STYLES * 4), colours = new Float32Array(MAX_STYLES * 4), dashes = new Float32Array(MAX_STYLES * 4);
     const { wash } = look;
     const colourOf = { fg: rgb(look.fg), main: rgb(look.fg), detail: rgb(look.palette.detail), bg: rgb(look.palette.bg), wash: rgb(wash?.colour ?? '#000') };
     const tile = view.iso[1] * 2;
