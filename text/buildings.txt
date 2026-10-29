@@ -115,8 +115,8 @@ house.blurb
   en: A cottage, a farmhouse, a long house
 
 house-wide.blurb
-  cs: Dvojdomek, stavení se stodolou
-  en: Two houses under one roof, a house and barn
+  cs: Dvojdomek, stavení se stodolou nebo políčkem
+  en: Two houses under one roof, a house with a barn or a field
 
 family_house
   cs: Rodinný domek
@@ -125,10 +125,6 @@ family_house
 family-house.blurb
   cs: Kostka nebo vila se zahrádkou
   en: A cube house or a villa with a garden
-
-family-house-wide.blurb
-  cs: Řadové domky
-  en: Terraced houses
 
 apartments
   cs: Činžovní dům

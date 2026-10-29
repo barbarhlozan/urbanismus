@@ -37,7 +37,7 @@ export function settlementOf(residents) {
 
 // Homes: how many each structure is (the two-plot family houses are two
 // little houses).
-const HOMES = { house: 1, 'house-wide': 2, 'family-house': 1, 'family-house-wide': 2, apartments: 1, 'apartments-wide': 1, block: 1, 'block-wide': 1 };
+const HOMES = { house: 1, 'house-wide': 2, 'family-house': 1, apartments: 1, 'apartments-wide': 1, block: 1, 'block-wide': 1 };
 
 // What stands in the town, in the order a register lists it – church and
 // offices, the services, the shops, the railway and the road, work and the

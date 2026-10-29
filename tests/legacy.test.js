@@ -76,8 +76,9 @@ test('houses of before version 6 keep their look under the tool it belongs to no
     seen.add(s.type);
   }
   assert.equal(seen.size, 2);
-  // terraced rows go to the wide family house, the rest stay
-  assert.equal(rehouse({ type: 'house-wide', seed: 1, data: { kind: 'row' } }).type, 'family-house-wide');
+  // terraced rows become the farmstead with a barn, the rest stay
+  assert.deepEqual(rehouse({ type: 'house-wide', seed: 1, data: { kind: 'row' } }), { type: 'house-wide', seed: 1, data: { kind: 'barn' } });
+  assert.deepEqual(unretire({ type: 'family-house-wide', seed: 1, data: { kind: 'row' } }), { type: 'house-wide', seed: 1, data: { kind: 'barn' } });
   assert.deepEqual(rehouse({ type: 'house-wide', seed: 1, data: { kind: 'longhouse' } }), { type: 'house-wide', seed: 1, data: { kind: 'longhouse' } });
   assert.deepEqual(rehouse({ type: 'apartments', seed: 1, data: {} }), { type: 'apartments', seed: 1, data: {} });
 });

@@ -68,6 +68,8 @@ const SPLIT = {
     { brewery: 'pivovar-medium', dairy: 'mlekarna-medium', heating: 'vytopna-medium' }],
   plant: [['works', 'works', 'heating', 'chemical', 'grain', 'panel', 'power', 'lime'],
     { works: ['strojirna', 'halls'], heating: 'vytopna-large', chemical: 'cukrovar', grain: 'zzn-large', panel: 'panelarna', power: 'elektrarna', lime: 'vapenka' }],
+  // the terraced row, briefly a family house of its own: the farmstead with a barn
+  'family-house-wide': [['row'], { row: ['house-wide', 'barn'] }],
 };
 
 // Parks before version 5, when one tool held looks that were different
@@ -108,13 +110,14 @@ export function regroup(s) {
 // family houses alike: old type -> its kinds then, in order, and kind ->
 // what it is now ([type, kind]). Each keeps its look: the kind is written
 // into s.data, so the new kinds' order and weights don't redraw it. The
-// mansard house is gone: it's a villa now.
+// mansard house is gone: it's a villa now; the terraced row is the
+// farmstead with a barn.
 const REHOUSED = {
   house: [['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard', 'farmstead', 'farmstead'],
     { cube: ['family-house', 'cube'], villa: ['family-house', 'villa'], mansard: ['family-house', 'villa'],
       street: ['house', 'street'], farm: ['house', 'farm'], farmstead: ['house', 'farmstead'] }],
   'house-wide': [['twin', 'twin', 'twin', 'row', 'longhouse'],
-    { twin: ['house-wide', 'twin'], longhouse: ['house-wide', 'longhouse'], row: ['family-house-wide', 'row'] }],
+    { twin: ['house-wide', 'twin'], longhouse: ['house-wide', 'longhouse'], row: ['house-wide', 'barn'] }],
 };
 
 // A saved house of before version 6 as the tool its look belongs to now.

@@ -27,7 +27,7 @@
 //               Keep within about ±0.4 of the footprint dots, and keep separate
 //               solids side by side rather than overlapping.
 
-import { door, panel, chimney, aerials, frontage, shared, hips, kindOf } from './kit.js';
+import { door, panel, chimney, aerials, frontage, shared, hips, kindOf, tree } from './kit.js';
 import { LOOK } from '../src/render/painter.js';
 
 const FRONT = [0, -1, 0];
@@ -372,8 +372,10 @@ function balconies(g, xs, y, z0, z1, fh) {
   });
 }
 
-// Semi-detached houses (dvojdomek) under one roof, and a village house
-// with its eaves to the street and the barn under the same ridge.
+// Semi-detached houses (dvojdomek) under one roof, a village house with
+// its eaves to the street and the barn under the same ridge, a farmstead
+// with its barn (stodola) beside it on the second plot, and a chalupa with
+// a little field (záhumenek) for potatoes and vegetables.
 export const houseWide = {
   id: 'house-wide',
   name: 'House',
@@ -387,10 +389,34 @@ export const houseWide = {
   agents: 2,
   yards: ['garden', 'garden', 'trees'],
   // (saves from before version 6 have their kind written in: legacy.js)
-  kinds: ['twin', 'longhouse'],
+  kinds: ['twin', 'longhouse', 'barn', 'field'],
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
-    if (kind === 'twin') {
+    const line = (pts) => g.line(pts, { facing: FRONT });
+    if (kind === 'barn') {
+      // the farmstead, and its barn across the back of the next plot:
+      // boarded, a tall roof along the street, double doors to the yard
+      farmstead(g);
+      const x0 = 0.6, x1 = 1.4, y = -0.02, d = 0.4, h = 0.17;
+      g.gable(x0, y, 0, x1 - x0, d, h, 0.2);
+      const dx = (x0 + x1) / 2 + g.range(-0.08, 0.08), dw = 0.18, dh = 0.15;
+      line([[dx - dw / 2, y, 0], [dx - dw / 2, y, dh], [dx + dw / 2, y, dh], [dx + dw / 2, y, 0]]);
+      line([[dx, y, 0], [dx, y, dh]]);
+      g.detailed(1, () => {
+        for (let x = x0 + 0.04; x < x1 - 0.02; x += 0.04) {
+          if (Math.abs(x - dx) > dw / 2 + 0.01) line([[x, y, 0.01], [x, y, h - 0.01]]);
+        }
+      });
+      tree(g, g.range(0.75, 1.25), -0.3, 0.9, 'spreading');
+    } else if (kind === 'field') {
+      // the chalupa, and behind it on the next plot a small patch dug in
+      // rows, a fruit tree at its corner
+      chalupa(g);
+      const x0 = 0.68, x1 = 1.1, y0 = -0.08, y1 = 0.28;
+      g.groundPoly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], { lod: 1 });
+      for (let x = x0 + 0.05; x < x1 - 0.025; x += 0.05) g.groundLine([[x, y0 + 0.025], [x, y1 - 0.025]], { dash: '3 2', lod: 2 });
+      tree(g, g.pick([x0 - 0.06, x1 + 0.08]), g.range(-0.3, -0.2), 0.8, 'spreading');
+    } else if (kind === 'twin') {
       const w = g.range(0.96, 1.04), d = g.range(0.36, 0.4), h = 0.28, r = g.range(0.1, 0.13);
       const x0 = 0.5 - w / 2, y = -d / 2;
       g.roofed(x0, y, 0, w, d, h, { h: r, hip: g.range(0.14, 0.2) });
@@ -411,36 +437,6 @@ export const houseWide = {
       g.line([[x1 - 0.32, y, 0], [x1 - 0.32, y, 0.15], [x1 - 0.1, y, 0.15], [x1 - 0.1, y, 0]], { facing: FRONT });
       g.detailed(2, () => g.line([[x1 - 0.32, y, 0], [x1 - 0.1, y, 0.15]], { facing: FRONT }));
       door(g, xm + 0.1, y, 0.06, 0.11);
-    }
-  },
-};
-
-// A row of 80s terraced houses (řadové domky), flat-roofed or each under
-// its own gable. (kinds: one, so the drawing's first pick stays as it was)
-export const familyHouseWide = {
-  id: 'family-house-wide',
-  name: 'Family house',
-  blurb: 'Terraced houses, two plots',
-  size: 'Wide',
-  ...HOME,
-  tags: [...HOME.tags, 'houses'],
-  footprint: [[0, 0], [1, 0]],
-  plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
-  stats: { residents: 8 },
-  agents: 2,
-  yards: ['garden', 'garden', 'trees'],
-  kinds: ['row'],
-  draw(g, s) {
-    kindOf(g, s, this.kinds);
-    const n = g.int(3, 4), x0 = -0.3, x1 = 1.3, w = (x1 - x0) / n, d = 0.4;
-    const flat = g.chance(0.4);
-    for (let i = 0; i < n; i++) {
-      const a = x0 + i * w, y = -d / 2 + (i % 2 ? 0.03 : 0), h = 0.26;
-      const skip = [i > 0 && 'left', i < n - 1 && 'right'].filter(Boolean);
-      if (flat) g.box(a, y, 0, w, d, h);
-      else g.roofed(a, y, 0, w, d, h, { h: g.range(0.14, 0.17), ridge: 'y' });
-      g.windows(a, y, w, d, 0, h, h / 2, 0.1, { skip, h: 0.4 });
-      door(g, a + w * 0.3, y, 0.05, 0.1);
     }
   },
 };
