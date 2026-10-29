@@ -30,7 +30,8 @@ export class GrowthSystem {
 
   // Maybe build a church: on free land where its front (local -y) faces a
   // road, with at least `minHomes` homes within `radius`, and no church
-  // within `spacing`. The spot with the most homes around wins.
+  // within `spacing`. The spot with the most homes around wins. It is the
+  // village church, the first of the church's kinds.
   spawnChurch() {
     const rule = this.config.church;
     if (!rule || Math.random() > rule.chance) return;
@@ -78,7 +79,7 @@ export class GrowthSystem {
     }
     if (!best) return;
     // (the town's own doing: not the player's to undo, see core/history.js)
-    const s = world.history.aside(() => world.placeStructure('church', best.n, { rotation: best.rotation }));
+    const s = world.history.aside(() => world.placeStructure('church', best.n, { rotation: best.rotation, data: { kind: STRUCTURE_TYPES.church.kinds[0] } }));
     if (s) this.log(`${codeOf(s)} consecrated · ${STRUCTURE_TYPES.church.name}`, world.centerOf(s));
   }
 }

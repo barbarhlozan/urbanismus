@@ -92,7 +92,7 @@ test('an old save: levels become their own structures, keeping their look', asyn
   assert.deepEqual([block.type, fountain.type, pit.type], ['block', 'fountain-square', 'pit']);
   assert.equal(drawSeed(block), (1234 ^ Math.imul(3, 0x9e3779b1)) >>> 0); // as it was drawn at level 3
   assert.equal(block.level, undefined);
-  assert.deepEqual(block.data, {});
+  assert.deepEqual(block.data, { face: 0 }); // facing the road it stands by (World.faceOnce)
   assert.deepEqual(old.chronicle.marks, ['first:house', 'first:block', 'first:road']);
 });
 

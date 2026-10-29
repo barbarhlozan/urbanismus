@@ -7,12 +7,18 @@ import { tree, bench, door, star } from './kit.js';
 // ----- cemetery -----
 
 // Graves in rows between x0 and x1, from y0 to y1: a mound outline on the
-// ground and, close up, a headstone at the head of each.
-function graves(g, x0, x1, y0, y1) {
+// ground and, close up, a headstone at the head of each. (The churchyard
+// round a village church has them too, heritage.js.)
+export function graves(g, x0, x1, y0, y1) {
   for (let y = y0; y < y1 - 0.06; y += 0.14) {
     for (let x = x0; x < x1 - 0.03; x += 0.08) {
       g.groundPoly([[x, y], [x + 0.04, y], [x + 0.04, y + 0.07], [x, y + 0.07]], { lod: 1 });
-      g.detailed(2, () => g.box(x + 0.005, y + 0.07, 0, 0.03, 0.01, g.pick([0.03, 0.04, 0.05])));
+      // (each headstone at its own ground, not level with the church or
+      // the mourning chapel: Painter.stand)
+      const h = g.pick([0.03, 0.04, 0.05]), was = g.level;
+      g.stand?.([[x, y + 0.07], [x + 0.04, y + 0.08]]);
+      g.detailed(2, () => g.box(x + 0.005, y + 0.07, 0, 0.03, 0.01, h));
+      g.level = was;
     }
   }
 }

@@ -1,5 +1,5 @@
-// Heritage: old landmarks the town grew around – a wayside chapel, a
-// baroque church, a town hall in three sizes, a war memorial, a castle
+// Heritage: old landmarks the town grew around – a chapel on the green, a
+// church (three kinds), a town hall in three sizes, a war memorial, a castle
 // (ruin, castle or chateau). They draw visitors and strollers (tag
 // 'heritage').
 // A church can also appear by itself in a grown neighbourhood without one
@@ -7,7 +7,8 @@
 //
 // 2×2 ones: local area covers x, y from about -0.4 to 1.4, front on -y.
 
-import { door, panel, paving, star, flagpole, flowerBed, tree, fountain, heap, roundWindows, FRAME, outward, statue, figure, kindOf } from './kit.js';
+import { door, panel, paving, star, flagpole, flowerBed, tree, fountain, heap, roundWindows, FRAME, outward, statue, figure, kindOf, fenceAlong } from './kit.js';
+import { graves } from './grounds.js';
 
 const FRONT = [0, -1, 0];
 
@@ -76,17 +77,13 @@ export const chapel = {
   footprint: [[0, 0]],
   stats: {},
   agents: 0,
-  yards: ['trees', 'garden'],
+  // the chapel on the village green (návesní kaple, as at Holašovice): a
+  // lime tree beside it, no fence
+  plot: { props: 'green', boundary: 0, density: 0.15 },
+  yards: [],
   draw(g) {
-    if (g.chance(0.3)) {
-      // wayside shrine: a pillar with a niche and a little roof
-      g.box(-0.05, -0.05, 0, 0.1, 0.1, 0.24);
-      panel(g, -0.025, 0.025, -0.05, 0.14, 0.21);
-      g.roofed(-0.07, -0.07, 0.24, 0.14, 0.14, 0, { h: 0.07, hip: 0.07 });
-      cross(g, 0, 0, 0.31, 0.025);
-      return;
-    }
     const w = 0.26, d = 0.38, y = -0.2, h = 0.22, r = 0.17;
+    tree(g, 0.3, 0.05, 1.05, 'spreading');
     g.roofed(-w / 2, y, 0, w, d, h, { h: r, ridge: 'y' });
     door(g, 0, y, 0.07, 0.13);
     naveWindows(g, -w / 2, y, w, d, h);
@@ -104,32 +101,564 @@ export const church = {
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
   stats: { jobs: 2 },
   agents: 1,
-  yards: ['trees', 'plaza'],
-  kinds: ['onion', 'onion', 'twin', 'gothic'],
+  // (the churchyard is drawn with the church; nothing else round it)
+  plot: { props: 'green', boundary: 0, density: 0 },
+  yards: [],
+  // Space steps through them in this order; one the town builds by itself
+  // is the first (spawnChurch). Four village churches, then the big one:
+  //   onion   baroque, after Černošín: a tall front tower with a slate
+  //           helmet, its graves round it but no wall
+  //   bulb    white, with a red bulb on its tower and a gothic chancel
+  //           with buttresses, the graves round it
+  //   stone   old fieldstone under slate, a slim tower with a dark helmet,
+  //           in a walled churchyard with an arched gate and a charnel house
+  //   gothic  small and old: a short tower with a steep tiled pyramid, a
+  //           rounded churchyard wall with a roofed gateway and steps
+  //   twin    the big two-towered baroque pilgrimage church, after Skoky:
+  //           on a terrace walled all round, no graves
+  kinds: ['onion', 'bulb', 'stone', 'gothic', 'twin'],
+  // What lies round it, switched on the building's card (Surroundings,
+  // tools/inspect.js) in this order: the graves of the churchyard, a few
+  // old ones at the back, or none. The village churches have their graves
+  // until told otherwise, the big one none.
+  // And what encloses it, switched the same way: nothing, a straight wall
+  // with an arched gateway, a wall with rounded corners (a roofed gateway,
+  // or the terrace's steps), a fence. Each kind starts with the one its
+  // model has.
+  switches: {
+    grounds: { label: 'inspect.yard', values: ['graves', 'few', 'none'], start: (kind) => (kind === 'twin' ? 'none' : 'graves') },
+    wall: {
+      label: 'inspect.wall',
+      values: ['none', 'straight', 'rounded', 'fence'],
+      start: (kind) => ({ stone: 'straight', gothic: 'rounded', twin: 'rounded' })[kind] ?? 'none',
+    },
+  },
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
-    const nx = 0.18, nw = 0.64, ny = 0.06, nd = 1.08, nh = 0.46, nr = 0.36;
-    // nave, ridge running away from the street
-    g.roofed(nx, ny, 0, nw, nd, nh, { h: nr, ridge: 'y' });
-    naveWindows(g, nx, ny, nw, nd, nh);
-    // chancel at the back, narrower and lower, hipped at its end
-    g.roofed(0.3, ny + nd, 0, 0.4, 0.26, nh * 0.85, { h: 0.26, ridge: 'y', hip: [0, 0.16] });
-    if (kind === 'twin') {
-      const t = 0.12;
-      for (const cx of [nx + t, nx + nw - t]) {
-        const h = tower(g, cx, ny - t - 0.02, t, 0.95);
-        onion(g, cx, ny - t - 0.02, h, t);
-      }
-      door(g, 0.5, ny, 0.12, 0.22);
-    } else {
-      const t = 0.16, cy = ny - t - 0.02;
-      const h = tower(g, 0.5, cy, t, kind === 'gothic' ? 0.9 : 1.0);
-      if (kind === 'gothic') spire(g, 0.5, cy, h, t, 0.6);
-      else onion(g, 0.5, cy, h, t);
-      door(g, 0.5, cy - t, 0.1, 0.2);
-    }
+    const grounds = switchOf(this, s, 'grounds', kind), wall = switchOf(this, s, 'wall', kind);
+    const draw = { onion: baroqueChurch, bulb: bulbChurch, stone: stoneChurch, gothic: smallChurch, twin: pilgrimageChurch }[kind];
+    draw(g, grounds, wall);
   },
 };
+
+// ----- the baroque village church, after the one at Černošín -----
+// A tall front tower in two stages, each with a cornice, an arched window
+// and (below) a round one, the clock under the top cornice; on it a dark
+// helmet: a broad low bulb, an open lantern, a small bulb and a needle with
+// a cross. Behind it a narrow nave under a red tile roof, pilasters between
+// tall round-headed windows; a polygonal chancel nearly as wide, a little
+// lower; a sacristy with a hipped roof beside it. No trees round it; its
+// graves and wall as chosen (church.switches). (Left out: the volute gables
+// beside the tower, pilasters on its corners.)
+
+// A round-headed window on a wall: P(u, z) is the point u along the wall
+// (from the window's middle) at height z, n the wall's outward normal.
+function archWindow(g, P, n, w, zb, zt) {
+  const r = w / 2, zs = zt - r;
+  const arc = Array.from({ length: 7 }, (_, i) => {
+    const a = (i / 6) * Math.PI;
+    return P(Math.cos(a) * r, zs + Math.sin(a) * r);
+  });
+  g.line([P(-r, zb), P(r, zb), ...arc, P(-r, zb)], { facing: n });
+}
+
+// A ring on a wall (an oculus, a clock face), as archWindow.
+function ring(g, P, n, z, r) {
+  g.line(Array.from({ length: 13 }, (_, i) => P(Math.cos((i / 12) * Math.PI * 2) * r, z + Math.sin((i / 12) * Math.PI * 2) * r)), { facing: n, lod: 1 });
+}
+
+// The four faces of a square tower of half-width t round (x, y): each a
+// P(u, z) and its normal.
+function towerFaces(x, y, t) {
+  return [
+    [(u, z) => [x + u, y - t, z], [0, -1, 0]],
+    [(u, z) => [x + t, y + u, z], [1, 0, 0]],
+    [(u, z) => [x - u, y + t, z], [0, 1, 0]],
+    [(u, z) => [x - t, y - u, z], [-1, 0, 0]],
+  ];
+}
+
+// A thin projecting band round a square tower: its cornice.
+function cornice(g, x, y, t, z, k = 0.018, h = 0.03) {
+  g.box(x - t - k, y - t - k, z, 2 * (t + k), 2 * (t + k), h);
+}
+
+// Chancel from y0, x0..x1 wide, `d` deep, walls `h` high, its roof `rh`
+// high: a ridge along y running into a hipped end faceted like the walls –
+// three sides of an octagon at the back, or (round) a half circle.
+function apse(g, x0, x1, y0, d, h, rh, { round = false } = {}) {
+  const w = x1 - x0, y1 = y0 + d, xm = (x0 + x1) / 2, r = w / 2;
+  let end; // the end's corners, from the right-hand side round to the left
+  if (round) end = Array.from({ length: 7 }, (_, i) => [xm + Math.cos((i / 6) * Math.PI) * r, y1 - r + Math.sin((i / 6) * Math.PI) * r]);
+  else {
+    const c = w * 0.3;
+    end = [[x1, y1 - c], [x1 - c, y1], [x0 + c, y1], [x0, y1 - c]];
+  }
+  const base = [[x0, y0], [x1, y0], ...end];
+  g.prism(base, 0, h);
+  const zt = h, zr = h + rh;
+  const top = [xm, y1 - r, zr]; // where the ridge ends, the end's facets meet
+  const [ye0, ye1] = [end[0][1], end[end.length - 1][1]];
+  g._plane([[x1, y0, zt], [x1, ye0, zt], top, [xm, y0, zr]]);
+  g._plane([[x0, ye1, zt], [x0, y0, zt], [xm, y0, zr], top]);
+  for (let i = 0; i + 1 < end.length; i++) g._plane([[...end[i], zt], [...end[i + 1], zt], top]);
+  return base;
+}
+
+function baroqueChurch(g, grounds, wall) {
+  const paint = g.paint;
+  g.paint = 2; // plastered walls, red tiles (ROOF_OF; not one whose low annexes are logs)
+  const x = 0.5, t1 = 0.14, t2 = 0.12, cy = t1 + 0.06;
+  const z1 = 0.5, z2 = 0.86; // the tops of the two stages
+  const nw = 0.4, nx = x - nw / 2, ny = cy + t1, nd = 0.56, nh = 0.34, nr = 0.28;
+
+  // nave: pilasters between the windows along both long walls
+  g.roofed(nx, ny, 0, nw, nd, nh, { h: nr, ridge: 'y' });
+  g.detailed(1, () => {
+    for (const [X, s] of [[nx, -1], [nx + nw, 1]]) {
+      const P = (yy) => (u, z) => [X, yy - u * s, z];
+      const bays = 4, bay = nd / bays;
+      for (let i = 0; i < bays; i++) archWindow(g, P(ny + (i + 0.5) * bay), [s, 0, 0], 0.055, 0.1, 0.27);
+      for (let i = 1; i < bays; i++) g.line([[X, ny + i * bay, 0.02], [X, ny + i * bay, nh - 0.01]], { facing: [s, 0, 0] });
+    }
+  });
+
+  // chancel and sacristy
+  const cw = nw * 0.88;
+  apse(g, x - cw / 2, x + cw / 2, ny + nd, 0.26, nh * 0.94, nr * 0.86);
+  g.detailed(1, () => {
+    for (const [X, s] of [[x - cw / 2, -1], [x + cw / 2, 1]]) archWindow(g, (u, z) => [X, ny + nd + 0.08 - u * s, z], [s, 0, 0], 0.05, 0.1, 0.25);
+  });
+  g.roofed(x + cw / 2, ny + nd + 0.02, 0, 0.12, 0.16, 0.17, { h: 0.08, ridge: 'y', hip: 0.06 });
+
+  // tower: the lower stage as high as the nave's eaves and a little over
+  const wasStone = g.stone;
+  g.box(x - t1, cy - t1, 0, 2 * t1, 2 * t1, z1);
+  cornice(g, x, cy, t1, z1 - 0.03);
+  g.box(x - t2, cy - t2, z1, 2 * t2, 2 * t2, z2 - z1);
+  cornice(g, x, cy, t2, z2);
+  g.detailed(1, () => {
+    for (const [P, n] of towerFaces(x, cy, t1)) {
+      if (n[1] === 1) continue; // (the nave's against it)
+      ring(g, P, n, 0.3, 0.022);
+      if (n[1] === -1) archWindow(g, P, n, 0.06, 0.24, 0.4); // the choir window over the door
+    }
+    for (const [P, n] of towerFaces(x, cy, t2)) {
+      archWindow(g, P, n, 0.06, z1 + 0.08, z1 + 0.24); // the belfry
+      ring(g, P, n, z2 - 0.06, 0.035); // the clock
+    }
+  });
+  // the helmet, in slate: broad bulb, open lantern, small bulb, needle
+  g.stone = true;
+  const z = z2 + 0.03, T = t2 + 0.02;
+  g.lathe(x, cy, z, [
+    [T * 0.95, 0], [T * 1.12, T * 0.35], [T * 1.05, T * 0.75], [T * 0.75, T * 1.15], [T * 0.4, T * 1.4], [T * 0.32, T * 1.5],
+  ], 8, { phase: 0.5 });
+  const zl = z + T * 1.5, lh = T * 0.85;
+  g.lathe(x, cy, zl, [[T * 0.32, 0], [T * 0.32, lh]], 8, { phase: 0.5 });
+  g.detailed(1, () => {
+    for (let j = 0; j < 8; j++) {
+      const a = ((j + 1) / 8) * Math.PI * 2, r = T * 0.325;
+      const [ux, uy] = [Math.cos(a) * r, Math.sin(a) * r];
+      g.line([[x + ux, cy + uy, zl + lh * 0.15], [x + ux, cy + uy, zl + lh * 0.85]], { facing: [Math.cos(a), Math.sin(a), 0] });
+    }
+  });
+  g.lathe(x, cy, zl + lh, [
+    [T * 0.45, 0], [T * 0.2, T * 0.14], [T * 0.36, T * 0.4], [T * 0.3, T * 0.65], [T * 0.08, T * 0.9], [T * 0.05, T * 1.1], [0, T * 2.3],
+  ], 8, { phase: 0.5 });
+  g.stone = wasStone;
+  cross(g, x, cy, zl + lh + T * 2.3);
+  door(g, x, cy - t1, 0.07, 0.16);
+  g.paint = paint;
+
+  enclosure(g, wall, cy - t1);
+  graveRows(g, x - cw / 2 - 0.12, x + cw / 2 + 0.12, ny + nd + 0.38, grounds);
+}
+
+// ----- the two-towered pilgrimage church, after the one at Skoky -----
+// Two towers at the front corners, three stages each with cornices and
+// arched windows, under bell-shaped tin helmets with a little lantern; a
+// curved gable between them over the portal and a big window; a broad nave
+// under red tiles, hipped at the front, pilasters between tall windows; a
+// narrower chancel with a round end, a sacristy beside it. It stands on a
+// terrace: a retaining wall all round it, curving round the front, with
+// steps up the middle.
+
+// What fn draws stands at the highest ground under `pts` (local) rather
+// than with the church (Painter.stand): on a slope, the churchyard's walls,
+// gates and the like step down with the ground instead of standing level
+// with the church and running down to it.
+function standing(g, pts, fn) {
+  const was = g.level;
+  g.stand(pts);
+  fn();
+  g.level = was;
+}
+
+// A wall `h` high, `d` thick, along a polyline, stepping down a slope in
+// blocks about 0.12 long, each at its own ground.
+function wallAlong(g, pts, h, d = 0.035) {
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [[ax, ay], [bx, by]] = [pts[i], pts[i + 1]];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len < 1e-6) continue;
+    const [nx, ny] = [(-(by - ay) / len) * d, ((bx - ax) / len) * d];
+    const at = (t) => [ax + (bx - ax) * t, ay + (by - ay) * t];
+    const quad = (t0, t1) => {
+      const [[px, py], [qx, qy]] = [at(t0), at(t1)];
+      return [[px, py], [qx, qy], [qx + nx, qy + ny], [px + nx, py + ny]];
+    };
+    // pieces at nearly one height are one block (on flat ground, the whole)
+    const n = Math.max(1, Math.round(len / 0.12)), runs = [];
+    for (let k = 0; k < n; k++) {
+      const was = g.level;
+      const level = g.stand(quad(k / n, (k + 1) / n)).level;
+      g.level = was;
+      const last = runs[runs.length - 1];
+      if (last && Math.abs(last.level - level) < 0.006) last.t1 = (k + 1) / n;
+      else runs.push({ t0: k / n, t1: (k + 1) / n, level });
+    }
+    for (const r of runs) {
+      const was = g.level;
+      g.level = g.relief ? r.level : was;
+      g.prism(quad(r.t0, r.t1), 0, h);
+      g.level = was;
+    }
+  }
+}
+
+function pilgrimageChurch(g, grounds, wall) {
+  const paint = g.paint;
+  g.paint = 2; // as the village church
+  const nx = 0.2, nw = 0.6, ny = 0.04, nd = 0.82, nh = 0.44, nr = 0.3, t = 0.12;
+  const xm = nx + nw / 2;
+
+  // nave, hipped at the front behind the gable
+  g.roofed(nx, ny, 0, nw, nd, nh, { h: nr, ridge: 'y', hip: [0.16, 0] });
+  g.detailed(1, () => {
+    for (const [X, s] of [[nx, -1], [nx + nw, 1]]) {
+      const P = (yy) => (u, z) => [X, yy - u * s, z];
+      const bays = 4, y0 = ny + 2 * t - 0.06, bay = (ny + nd - y0) / bays;
+      for (let i = 0; i < bays; i++) archWindow(g, P(y0 + (i + 0.5) * bay), [s, 0, 0], 0.06, 0.12, 0.34);
+      for (let i = 0; i <= bays; i++) g.line([[X, y0 + i * bay, 0.02], [X, y0 + i * bay, nh - 0.01]], { facing: [s, 0, 0] });
+    }
+  });
+  // the curved gable between the towers, the window and portal under it
+  const fy = ny - 0.005, xa = nx + 2 * t, xb = nx + nw - 2 * t, gh = 0.2;
+  const curve = Array.from({ length: 9 }, (_, i) => {
+    const u = i / 8; // from the right-hand tower over to the left
+    return [xb - (xb - xa) * u, fy, nh + 0.04 + gh * Math.pow(Math.sin(u * Math.PI), 0.7)];
+  });
+  g.face([[xa, fy, nh], [xb, fy, nh], ...curve]);
+  g.detailed(1, () => {
+    const P = (u, z) => [xm + u, fy - 0.001, z];
+    archWindow(g, P, [0, -1, 0], 0.08, 0.24, 0.42);
+    ring(g, P, [0, -1, 0], nh + 0.11, 0.025);
+  });
+  door(g, xm, fy, 0.09, 0.18);
+
+  // chancel with a round end, the sacristy beside it
+  const cw = nw * 0.7;
+  apse(g, xm - cw / 2, xm + cw / 2, ny + nd, 0.36, nh * 0.9, nr * 0.85, { round: true });
+  g.roofed(xm + cw / 2, ny + nd + 0.04, 0, 0.12, 0.18, 0.2, { h: 0.08, ridge: 'y', hip: 0.06 });
+
+  // towers: three stages, the top one the belfry
+  const cy = ny + t - 0.08;
+  for (const cx of [nx + t, nx + nw - t]) {
+    const z = [0, 0.38, 0.68, 0.92];
+    for (let k = 0; k < 3; k++) {
+      const tk = t - k * 0.006;
+      g.box(cx - tk, cy - tk, z[k], 2 * tk, 2 * tk, z[k + 1] - z[k]);
+      cornice(g, cx, cy, tk, z[k + 1] - 0.025, 0.014, 0.025);
+    }
+    g.detailed(1, () => {
+      for (const [P, n] of towerFaces(cx, cy, t)) {
+        if (n[1] === 1 || n[0] * (cx - xm) < 0) continue; // (not into the nave)
+        archWindow(g, P, n, 0.05, 0.14, 0.28);
+        archWindow(g, P, n, 0.05, 0.44, 0.6);
+        archWindow(g, P, n, 0.06, 0.73, 0.88);
+      }
+    });
+    // the helmet, in tin: a broad bell, a lantern, its cap
+    const wasStone = g.stone;
+    g.stone = true;
+    const T = t + 0.01, zh = z[3];
+    g.lathe(cx, cy, zh, [
+      [T * 0.98, 0], [T * 1.12, T * 0.25], [T * 1.08, T * 0.6], [T * 0.8, T * 1.0], [T * 0.45, T * 1.3], [T * 0.3, T * 1.4],
+    ], 8, { phase: 0.5 });
+    g.lathe(cx, cy, zh + T * 1.4, [[T * 0.3, 0], [T * 0.3, T * 0.35], [T * 0.4, T * 0.4], [0, T * 0.7]], 8, { phase: 0.5 });
+    g.stone = wasStone;
+    cross(g, cx, cy, zh + T * 2.1, 0.03);
+  }
+  g.paint = paint;
+
+  enclosure(g, wall, cy - t, { terrace: true });
+  graveRows(g, nx, nx + nw, ny + nd + 0.4, grounds);
+}
+
+// A wall `h` high round the rectangle x0..x1, yf..yb, its corners rounded
+// (r at the front, rb at the back), open in the front between xm ± gap.
+function roundedWall(g, x0, x1, yf, yb, r, rb, xm, gap, h) {
+  const arc = (cx, cy, rr, a0, a1) => Array.from({ length: 6 }, (_, i) => {
+    const a = a0 + ((a1 - a0) * i) / 5;
+    return [cx + Math.cos(a) * rr, cy + Math.sin(a) * rr];
+  });
+  wallAlong(g, [
+    [xm + gap, yf], ...arc(x1 - r, yf + r, r, Math.PI * 1.5, Math.PI * 2),
+    ...arc(x1 - rb, yb - rb, rb, 0, Math.PI * 0.5), ...arc(x0 + rb, yb - rb, rb, Math.PI * 0.5, Math.PI),
+    ...arc(x0 + r, yf + r, r, Math.PI, Math.PI * 1.5), [xm - gap, yf],
+  ], h);
+}
+
+// A gateway in a churchyard wall at (x, y), `w` wide: piers, a round arch
+// over the way through, and (roofed) a little tiled roof on top.
+function gateway(g, x, y, w, h, opts = {}) {
+  standing(g, [[x - w / 2 - 0.04, y - 0.025], [x + w / 2 + 0.04, y + 0.025]], () => gatewayHere(g, x, y, w, h, opts));
+}
+
+function gatewayHere(g, x, y, w, h, { roofed = false } = {}) {
+  const d = 0.05, p = 0.04;
+  g.box(x - w / 2 - p, y - d / 2, 0, p, d, h);
+  g.box(x + w / 2, y - d / 2, 0, p, d, h);
+  g.box(x - w / 2 - p, y - d / 2, h, w + 2 * p, d, 0.05);
+  g.detailed(1, () => {
+    const arc = Array.from({ length: 7 }, (_, i) => {
+      const a = (i / 6) * Math.PI;
+      return [x + Math.cos(a) * (w / 2), y - d / 2 - 0.001, h - w / 2 + Math.sin(a) * (w / 2) * 0.9];
+    });
+    g.line(arc, { facing: [0, -1, 0] });
+  });
+  if (roofed) g.roofed(x - w / 2 - p - 0.015, y - d / 2 - 0.015, h + 0.05, w + 2 * p + 0.03, d + 0.03, 0, { h: 0.05, ridge: 'x' });
+}
+
+// A buttress against a wall at (x, y), standing out along (ux, uy): one
+// narrow block whose top slopes down away from the wall, from h at the
+// wall to a little over half of it at its face.
+function buttress(g, x, y, ux, uy, h, l = 0.04, w = 0.016) {
+  const [vx, vy] = [-uy * w, ux * w];
+  const at = (k, side) => [x - ux * 0.01 + ux * k * (l + 0.01) + side * vx, y - uy * 0.01 + uy * k * (l + 0.01) + side * vy];
+  const foot = [at(0, -1), at(1, -1), at(1, 1), at(0, 1)];
+  const [lo, hi] = [h * 0.62, h];
+  g.prism(foot, 0, lo);
+  const [p0, p1, p2, p3] = foot;
+  g.face([[...p0, hi], [...p1, lo], [...p2, lo], [...p3, hi]]);
+  // the sides under the slope, wound as the walls below them
+  g.face([[...p0, lo], [...p1, lo], [...p0, hi]]);
+  g.face([[...p2, lo], [...p3, lo], [...p3, hi]]);
+}
+
+// Buttresses round a chancel: one out from each corner of its end (as
+// apse() returns the base).
+function buttresses(g, base, h) {
+  const end = base.slice(2);
+  const cx = (base[0][0] + base[1][0]) / 2, cy = end[0][1] - (base[1][0] - base[0][0]) * 0.2;
+  for (const [x, y] of end) {
+    const [dx, dy] = [x - cx, y - cy], len = Math.hypot(dx, dy);
+    buttress(g, x, y, dx / len, dy / len, h);
+  }
+}
+
+// The nave's tall round-headed windows, `bays` along each long wall from
+// y0 to y1, at x = xa and xb.
+function sideWindows(g, xa, xb, y0, y1, bays, w, zb, zt) {
+  g.detailed(1, () => {
+    for (const [X, s] of [[xa, -1], [xb, 1]]) {
+      const bay = (y1 - y0) / bays;
+      for (let i = 0; i < bays; i++) {
+        const yy = y0 + (i + 0.5) * bay;
+        archWindow(g, (u, z) => [X, yy - u * s, z], [s, 0, 0], w, zb, zt);
+      }
+    }
+  });
+}
+
+// A tower's helmet from z: a bulb (`bulb` of its half-width T wide, `rise`
+// T tall), an open lantern and a small bulb with a spike, and the cross.
+function helmet(g, x, y, z, T, { bulb = 1.12, rise = 1.4, lantern = 0.7 } = {}) {
+  g.lathe(x, y, z, [
+    [T * 0.98, 0], [T * bulb, rise * T * 0.22], [T * bulb * 0.95, rise * T * 0.52], [T * 0.7, rise * T * 0.8], [T * 0.36, rise * T * 0.97], [T * 0.28, rise * T],
+  ], 8, { phase: 0.5 });
+  const zl = z + rise * T, lh = lantern * T;
+  g.lathe(x, y, zl, [[T * 0.28, 0], [T * 0.28, lh]], 8, { phase: 0.5 });
+  g.detailed(1, () => {
+    for (let j = 0; j < 8; j++) {
+      const a = ((j + 1) / 8) * Math.PI * 2, r = T * 0.285;
+      g.line([[x + Math.cos(a) * r, y + Math.sin(a) * r, zl + lh * 0.15], [x + Math.cos(a) * r, y + Math.sin(a) * r, zl + lh * 0.85]], { facing: [Math.cos(a), Math.sin(a), 0] });
+    }
+  });
+  const zc = zl + lh;
+  g.lathe(x, y, zc, [[T * 0.38, 0], [T * 0.18, T * 0.12], [T * 0.3, T * 0.34], [T * 0.24, T * 0.55], [T * 0.06, T * 0.76], [T * 0.04, T * 0.92], [0, T * 1.7]], 8, { phase: 0.5 });
+  cross(g, x, y, zc + T * 1.7, 0.03);
+}
+
+// ----- the white village church with a red bulb (as at many a village in
+// Bohemia): a tall plain tower at the front, its clock under the cornice and
+// a window and a niche below, the bulb in red tiles with a lantern; a nave
+// under red tiles, and an older gothic chancel, three-sided at its end;
+// buttresses (one sloping-topped block each) round it and along the sides.
+// The graves round it, no wall.
+function bulbChurch(g, grounds, wall) {
+  const paint = g.paint;
+  g.paint = 2;
+  const x = 0.5, t = 0.12, cy = t + 0.06, th = 0.8;
+  const nw = 0.42, nx = x - nw / 2, ny = cy + t, nd = 0.56, nh = 0.34, nr = 0.3;
+  g.roofed(nx, ny, 0, nw, nd, nh, { h: nr, ridge: 'y' });
+  sideWindows(g, nx, nx + nw, ny, ny + nd, 3, 0.055, 0.1, 0.27);
+  const cw = 0.34, base = apse(g, x - cw / 2, x + cw / 2, ny + nd, 0.32, nh * 0.96, nr * 0.95);
+  buttresses(g, base, nh * 0.7);
+  // and along the side walls: between the nave's windows, where the
+  // chancel meets it
+  for (const [X, sx] of [[nx, -1], [nx + nw, 1]]) {
+    for (const k of [1, 2]) buttress(g, X, ny + (nd * k) / 3, sx, 0, nh * 0.7);
+    buttress(g, x + sx * cw / 2, ny + nd + 0.03, sx, 0, nh * 0.66);
+  }
+  g.detailed(1, () => {
+    for (const [X, s] of [[x - cw / 2, -1], [x + cw / 2, 1]]) archWindow(g, (u, z) => [X, ny + nd + 0.1 - u * s, z], [s, 0, 0], 0.045, 0.1, 0.27);
+  });
+  g.box(x - t, cy - t, 0, 2 * t, 2 * t, th);
+  cornice(g, x, cy, t, th, 0.016, 0.03);
+  g.detailed(1, () => {
+    for (const [P, n] of towerFaces(x, cy, t)) {
+      if (n[1] === 1) continue;
+      ring(g, P, n, th - 0.06, 0.03); // the clock
+      archWindow(g, P, n, 0.05, th - 0.26, th - 0.12);
+      if (n[1] === -1) archWindow(g, P, n, 0.03, 0.34, 0.44); // the niche with its saint
+    }
+  });
+  helmet(g, x, cy, th + 0.03, t + 0.02, { bulb: 1.18, rise: 1.5, lantern: 0.75 });
+  door(g, x, cy - t, 0.07, 0.15);
+  g.paint = paint;
+  enclosure(g, wall, cy - t);
+  graveRows(g, x - cw / 2 - 0.12, x + cw / 2 + 0.12, ny + nd + 0.44, grounds);
+}
+
+// ----- the old fieldstone church: a broad nave of rubble stone under a
+// steep slate roof, gabled at both ends; a slim tower at the front with a
+// round-headed belfry window on each face and a dark helmet, bulb and
+// lantern. A walled churchyard with a white arched gateway, and a little
+// charnel house (kostnice) inside by the wall.
+function stoneChurch(g, grounds, wall) {
+  const wasStone = g.stone;
+  g.stone = true; // whitewashed masonry under slate (the Watercolour wash)
+  const x = 0.5, t = 0.1, cy = t + 0.06, th = 0.66;
+  const nw = 0.46, nx = x - nw / 2, ny = cy + t - 0.02, nd = 0.72, nh = 0.3, nr = 0.4;
+  g.roofed(nx, ny, 0, nw, nd, nh, { h: nr, ridge: 'y' });
+  sideWindows(g, nx, nx + nw, ny + 0.1, ny + nd, 3, 0.04, 0.1, 0.22);
+  g.box(x - t, cy - t, 0, 2 * t, 2 * t, th);
+  cornice(g, x, cy, t, th, 0.012, 0.025);
+  g.detailed(1, () => {
+    for (const [P, n] of towerFaces(x, cy, t)) {
+      if (n[1] === 1) continue;
+      archWindow(g, P, n, 0.045, th - 0.18, th - 0.06);
+    }
+  });
+  helmet(g, x, cy, th + 0.025, t + 0.015, { bulb: 1.1, rise: 1.3, lantern: 0.8 });
+  door(g, x, cy - t, 0.06, 0.14);
+  // the charnel house in the front left corner (inside any wall)
+  standing(g, [[-0.22, -0.22], [-0.02, -0.06]], () => g.roofed(-0.22, -0.22, 0, 0.2, 0.16, 0.13, { h: 0.1, ridge: 'x' }));
+  g.stone = wasStone;
+  enclosure(g, wall, cy - t);
+  graveRows(g, nx - 0.04, nx + nw + 0.04, ny + nd + 0.14, grounds);
+}
+
+// ----- the small old church (Romanesque or early gothic, as on many a
+// hill above a village): a short white tower before the front gable, a round-
+// headed window high up, under a steep tiled pyramid, a ball and a cross
+// on top; a nave under red tiles and a three-sided
+// chancel. A churchyard wall with rounded corners round it, a roofed
+// gateway with an arch and steps up to it.
+function smallChurch(g, grounds, wall) {
+  const paint = g.paint;
+  g.paint = 2;
+  // the tower stands whole in front of the nave, its back against the gable
+  const x = 0.5, t = 0.12, cy = t + 0.06, th = 0.6, rh = 0.4;
+  const nw = 0.42, nx = x - nw / 2, ny = cy + t, nd = 0.5, nh = 0.3, nr = 0.32;
+  g.roofed(nx, ny, 0, nw, nd, nh, { h: nr, ridge: 'y' });
+  sideWindows(g, nx, nx + nw, ny, ny + nd, 2, 0.045, 0.1, 0.24);
+  const cw = 0.32;
+  apse(g, x - cw / 2, x + cw / 2, ny + nd, 0.26, nh * 0.95, nr * 0.9);
+  g.box(x - t, cy - t, 0, 2 * t, 2 * t, th);
+  g.detailed(1, () => {
+    const [P, n] = towerFaces(x, cy, t)[0];
+    archWindow(g, P, n, 0.06, th - 0.2, th - 0.06);
+    for (const [Q, m] of towerFaces(x, cy, t).slice(1)) if (m[1] !== 1) archWindow(g, Q, m, 0.04, th - 0.16, th - 0.06);
+  });
+  // the steep pyramid roof, tiled like the nave's
+  g.roofed(x - t, cy - t, th, 2 * t, 2 * t, 0, { h: rh, hip: t });
+  g.detailed(1, () => g.lathe(x, cy, th + rh, [[0, 0], [0.018, 0.012], [0.018, 0.026], [0, 0.038]], 6));
+  cross(g, x, cy, th + rh + 0.04, 0.03);
+  door(g, x, cy - t, 0.07, 0.15);
+  g.paint = paint;
+  enclosure(g, wall, cy - t);
+  graveRows(g, x - cw / 2 - 0.1, x + cw / 2 + 0.1, ny + nd + 0.36, grounds);
+}
+
+// A church's switch (church.switches): the player's choice, else what its
+// kind starts with.
+function switchOf(def, s, key, kind) {
+  const sw = def.switches[key];
+  return sw.values.includes(s.data?.[key]) ? s.data[key] : sw.start(kind);
+}
+
+// What encloses a church (2×2) whose door is at y = door, x = 0.5, and the
+// path up to it from the street:
+//   none      only the path
+//   straight  a low wall with square corners, a whitewashed arched gateway
+//   rounded   a wall with rounded corners, a gateway with a little tiled
+//             roof and two steps up to it – or (terrace, the big church)
+//             a taller retaining wall, three steps up through it
+//   fence     a picket fence, a pier either side of the way in
+function enclosure(g, wall, door, { terrace = false } = {}) {
+  const [x0, y0, x1, y1, xm] = [-0.36, -0.3, 1.36, 1.38, 0.5];
+  let w = 0.04; // half the way in
+  // steps up to the way in, outside it: k-th from the wall `d` deep
+  const steps = (n, x, ww, d, h0, dh) => {
+    for (let k = 0; k < n; k++) {
+      const yk = y0 - d * (k + 1);
+      standing(g, [[x - ww, yk], [x + ww, yk + d]], () => g.box(x - ww, yk, 0, 2 * ww, d, h0 - k * dh));
+    }
+  };
+  if (wall === 'straight') {
+    wallAlong(g, [[xm - 0.06, y0], [x0, y0], [x0, y1], [x1, y1], [x1, y0], [xm + 0.06, y0]], 0.08, 0.03);
+    gateway(g, xm, y0 - 0.015, 0.1, 0.17);
+  } else if (wall === 'rounded' && terrace) {
+    w = 0.08;
+    roundedWall(g, x0 + 0.04, x1 - 0.04, y0, y1 - 0.02, 0.36, 0.2, xm, w, 0.1);
+    steps(3, xm, w, 0.03, 0.08, 0.025);
+  } else if (wall === 'rounded') {
+    w = 0.07;
+    roundedWall(g, x0, x1, y0, y1, 0.32, 0.16, xm, w + 0.04, 0.1); // (round the graves)
+    gateway(g, xm, y0, 2 * w, 0.16, { roofed: true });
+    steps(2, xm, w + 0.02, 0.035, 0.05, 0.025);
+  } else if (wall === 'fence') {
+    const yf = y0 - 0.01, pts = [[xm - 0.07, yf], [x0, yf], [x0, y1], [x1, y1], [x1, yf], [xm + 0.07, yf]];
+    // in pieces, each at its own ground (three points: a run fenceAlong draws)
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [[ax, ay], [bx, by]] = [pts[i], pts[i + 1]];
+      const n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / 0.12));
+      for (let k = 0; k < n; k++) {
+        const at = (t) => [ax + (bx - ax) * t, ay + (by - ay) * t];
+        const [p, m, q] = [at(k / n), at((k + 0.5) / n), at((k + 1) / n)];
+        standing(g, [p, q], () => fenceAlong(g, [p, m, q], 0.06));
+      }
+    }
+    for (const x of [xm - 0.07, xm + 0.07]) standing(g, [[x - 0.015, yf - 0.015], [x + 0.015, yf + 0.015]], () => g.box(x - 0.015, yf - 0.015, 0, 0.03, 0.03, 0.1));
+  }
+  g.groundLine([[xm - w, y0], [xm - 0.04, door]], { lod: 1 });
+  g.groundLine([[xm + w, y0], [xm + 0.04, door]], { lod: 1 });
+}
+
+// Graves round a church (2×2) standing between x = a and b and ending at
+// y = back: 'graves' in rows down both sides and behind it, 'few' a short
+// row or two at the back of each side, 'none' none.
+function graveRows(g, a, b, back, grounds) {
+  const [x0, y0, x1, y1] = [-0.36, -0.3, 1.36, 1.38];
+  if (grounds === 'none') return;
+  const from = grounds === 'few' ? y1 - 0.36 : y0 + 0.28;
+  graves(g, x0 + 0.08, a - 0.08, from, y1 - 0.06);
+  graves(g, b + 0.08, x1 - 0.06, from, y1 - 0.06);
+  if (grounds === 'graves' && back < y1 - 0.2) graves(g, a, b, back, y1 - 0.06);
+}
 
 // ----- town halls, in three sizes -----
 // Small 1×1 (a little town's hall with a turret on the ridge), Medium 2×1

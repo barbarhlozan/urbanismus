@@ -784,9 +784,28 @@ export class World {
     return (base + turn) % 4;
   }
 
-  // The rotation structure s is drawn with (see facingRotation).
+  // The rotation structure s is drawn with (see facingRotation): the one it
+  // was built with (s.data.face, see faceOnce) – a road laid past it later
+  // doesn't turn it round – except for those that always face their road.
   drawnRotation(s) {
+    if (s.data?.face != null && !STRUCTURE_TYPES[s.type]?.facesRoad) return s.data.face;
     return this.facingRotation(s.type, s.node, s.rotation, s.data?.turn ?? 0);
+  }
+
+  // The way s's front would look if it weren't turned side or back to its
+  // road (s.data.turn): the rotation drawnRotation turns from.
+  frontRotation(s) {
+    return (this.drawnRotation(s) - (s.data?.turn ?? 0) + 4) % 4;
+  }
+
+  // A single-dot building takes its facing once, as it is built: towards
+  // the road (or footpath) there is then, else as the player placed it
+  // (and with no road to be turned from, s.data.turn goes).
+  faceOnce(s) {
+    const nodes = this.nodesOf(s);
+    if (nodes.length !== 1 || STRUCTURE_TYPES[s.type]?.facesRoad) return;
+    if (!this.frontFor(nodes)) delete s.data.turn;
+    s.data.face = this.facingRotation(s.type, s.node, s.rotation, s.data.turn ?? 0);
   }
 
   // Map exits: roads that end at the edge of the map continue off it.
@@ -859,6 +878,7 @@ export class World {
     const s = { id: this.nextId++, type, node, rotation, seed, data };
     this.numberStructure(s);
     this._insertStructure(s);
+    this.faceOnce(s);
     this.nodesOf(s).forEach((n) => this.clearFeaturesAt(n));
     STRUCTURE_TYPES[type].placed?.(this, s); // e.g. a station lays its track
     this.events.emit('structure:added', s);
@@ -1226,6 +1246,8 @@ export class World {
       if (world.fitsStructure(s.type, s.node, s.rotation).ok) world._insertStructure(s);
       else console.warn(`Dropped ${s.type} #${s.id}: no longer fits`);
     }
+    // towns saved before buildings kept their facing: as they stand now
+    for (const s of world.structures.values()) if (s.data.face == null) world.faceOnce(s);
     for (const f of data.features) {
       if (FEATURE_TYPES[f.type] && !world.structureAt(f.node)) world._insertFeature(f);
     }

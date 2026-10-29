@@ -194,10 +194,30 @@ function structureMenu({ world }, s) {
     });
   }
 
+  // …or, for a building that draws its own surroundings (a church's
+  // graves and wall, def.switches), each, stepping through its values
+  for (const [key, sw] of Object.entries(def.switches ?? {})) {
+    const current = sw.values.includes(s.data[key]) ? s.data[key] : sw.start(kindShown(def, s));
+    const next = sw.values[(sw.values.indexOf(current) + 1) % sw.values.length];
+    items.push({
+      icon: iconSvg('yard', 'class="icon" aria-hidden="true"', YARD),
+      label: `${t(sw.label)}: ${t(`${key}.${current}`)}`,
+      keepOpen: true,
+      action: () => setSwitch(world, s, key, next),
+    });
+  }
+
   // …and taking it down (⌘Z puts it back)
   items.push(demolish(world, s));
 
   return { title, items };
+}
+
+// One of a building's own switches set (def.switches), as World.setYard.
+function setSwitch(world, s, key, value) {
+  world.history.touch();
+  s.data[key] = value;
+  world.events.emit('structure:changed', s);
 }
 
 function demolish(world, s) {
