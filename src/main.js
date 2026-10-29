@@ -58,7 +58,7 @@ import { reveal } from './ui/motion.js';
 import { attachInput } from './ui/input.js';
 import { exportCity, pickCity, putPrints } from './ui/saveFile.js';
 import { createCommands } from './dev/commands.js';
-import { BUILD_FAMILIES, STRUCTURE_TYPES, kindShown } from '../structures/index.js';
+import { BUILD_FAMILIES, STRUCTURE_TYPES, REVIEWED, kindShown } from '../structures/index.js';
 import { keyOf } from './ui/keys.js';
 import { loadText, t, reasonText, language, saveLanguage, needsLanguage, LANGUAGES } from './core/text.js';
 
@@ -207,7 +207,7 @@ const story = new Storyteller({ world, agents, fires, trains, dialogue, chronicl
 // (read with the opening, below: openIntro)
 
 const tools = new ToolManager(world.grid, 'inspect');
-tools.allowed = (tool) => UNLOCKS.allowsTool(tool);
+tools.allowed = (tool) => (!tool.defs || tool.defs.some((d) => REVIEWED.has(d.id))) && UNLOCKS.allowsTool(tool);
 // (contours: the Terrain button beside Erase, tools/terrain.js; the button is
 // told whenever it changes)
 const contours = contoursSetting({ renderer, fallback: STYLE.contours, changed: (on) => hud.buildMenu.showTerrain(on) });

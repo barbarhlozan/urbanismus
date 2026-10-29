@@ -109,6 +109,11 @@ export const BUILD_FAMILIES = [
   [heritage.castle, heritage.castleSmall], [landmarks.tvTower], [landmarks.stadium],
 ];
 
+// Buildings through the one-by-one review: only their tools are offered
+// for now. The rest stay registered (saves still load and draw them) but
+// can't be picked up until their turn comes.
+export const REVIEWED = new Set(['house', 'house-wide', 'family-house', 'family-house-wide', 'chapel', 'church']);
+
 export const STRUCTURES = BUILD_FAMILIES.flat();
 
 export const STRUCTURE_TYPES = Object.fromEntries(STRUCTURES.map((s) => [s.id, s]));
