@@ -164,8 +164,49 @@ export const house = {
   },
 };
 
-// Newer family houses: the 70s "cube" (kostka) with a pyramid roof, and
-// a two-storey villa under a hipped roof.
+// Windows along one wall, from a to b ([x, y]) with outward normal n:
+// `count` windows from z, and with `hood` each under a cornice of its own
+// (the šambrána of the upper floor), clear of the window by a pen's width.
+function dressedWindows(g, a, b, n, z, count, hood = true, ww = 0.036, wh = 0.066) {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
+  const at = (t, du, zz) => [a[0] + ux * (t + du), a[1] + uy * (t + du), zz];
+  for (let i = 0; i < count; i++) {
+    const t = len * (i + 0.5) / count;
+    g.line([at(t, -ww / 2, z), at(t, ww / 2, z), at(t, ww / 2, z + wh), at(t, -ww / 2, z + wh), at(t, -ww / 2, z)],
+      { facing: n, cls: LOOK.ink ? 'ink' : undefined });
+    if (hood) g.line([at(t, -ww / 2 - 0.01, z + wh + 0.022), at(t, ww / 2 + 0.01, z + wh + 0.022)], { facing: n });
+  }
+}
+
+// A line round the walls of a box at height z (a cornice, a belt course,
+// the top of the plinth), each wall only where it's seen; `gap` [xa, xb]
+// leaves the front open there (a door).
+function band(g, x0, y0, x1, y1, z, gap = null) {
+  const front = gap ? [[[x0, y0], [gap[0], y0]], [[gap[1], y0], [x1, y0]]] : [[[x0, y0], [x1, y0]]];
+  const sides = [...front.map(([p, q]) => [p, q, [0, -1, 0]]), [[x1, y0], [x1, y1], [1, 0, 0]], [[x1, y1], [x0, y1], [0, 1, 0]], [[x0, y1], [x0, y0], [-1, 0, 0]]];
+  for (const [p, q, n] of sides) g.line([[...p, z], [...q, z]], { facing: n });
+}
+
+// The shed against one side of the house (dir -1: local -x, 1: +x), set
+// back behind the front: a kůlna for wood and tools under its own small
+// gable to the street, a plank door and a hatch in its front.
+function shed(g, dir, edge, y0, y1) {
+  const sw = 0.13, sd = (y1 - y0) * 0.6, sh = 0.08, y = y1 - sd;
+  const a = dir > 0 ? edge : edge - sw;
+  g.roofed(a, y, 0, sw, sd, sh, { h: 0.06, ridge: 'y' });
+  const cx = a + sw / 2, line = (pts) => g.line(pts, { facing: FRONT });
+  line([[cx - 0.03, y, 0], [cx - 0.03, y, 0.065], [cx + 0.03, y, 0.065], [cx + 0.03, y, 0]]);
+  g.detailed(2, () => line([[cx, y, 0.005], [cx, y, 0.06]]));
+  frontWindow(g, cx, y, sh + 0.012, 0.02, 0.022);
+}
+
+// Family houses on the village street, as they stood from the turn of the
+// century into the 80s: two storeys, plastered, under a hipped roof, the
+// upper windows with cornices over them, a belt course between the
+// storeys and a stone plinth (Jestřebice near Bernartice). The cube is
+// square under a pyramid roof; the villa is wider, four windows to the
+// street under a hipped roof with a ridge. A shed stands against one side,
+// set back.
 export const familyHouse = {
   id: 'family-house',
   name: 'Family house',
@@ -181,19 +222,32 @@ export const familyHouse = {
   kinds: ['cube', 'cube', 'villa'],
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
-    if (kind === 'cube') {
-      const s = g.range(0.36, 0.42), h = 0.3, r = g.range(0.07, 0.1);
-      g.roofed(-s / 2, -s / 2, 0, s, s, h, { h: r, hip: s / 2 });
-      g.windows(-s / 2, -s / 2, s, s, 0, h, h / 2, 0.11, { h: 0.4 });
-      chimney(g, g.range(-0.06, 0.06), 0.04, h, r + 0.06);
-      door(g, g.range(-0.08, 0.08), -s / 2, 0.06, 0.11);
-    } else {
-      const w = g.range(0.42, 0.48), d = g.range(0.34, 0.38), h = 0.28, r = g.range(0.13, 0.17);
-      g.roofed(-w / 2, -d / 2, 0, w, d, h, { h: r, hip: g.range(0.1, 0.14) });
-      g.windows(-w / 2, -d / 2, w, d, 0, h, h / 2, 0.1, { h: 0.45 });
-      chimney(g, -w / 4, 0.03, h + r * 0.4, r * 0.8);
-      door(g, 0, -d / 2, 0.07, 0.12);
+    const cube = kind === 'cube';
+    const w = cube ? g.range(0.36, 0.4) : g.range(0.44, 0.48), d = cube ? w : g.range(0.34, 0.38);
+    const fh = 0.135, h = fh * 2 + 0.055, r = cube ? g.range(0.12, 0.15) : g.range(0.13, 0.16);
+    const x0 = -w / 2, x1 = w / 2, y0 = -d / 2, y1 = d / 2;
+    g.roofed(x0, y0, 0, w, d, h, { h: r, hip: cube ? w / 2 : g.range(0.12, 0.15) });
+    const front = cube ? 3 : 4, side = cube ? 3 : g.int(3, 4);
+    const dx = x0 + w * (cube ? 0.5 : g.pick([0.375, 0.625])); // the door, in a ground-floor bay
+    band(g, x0, y0, x1, y1, 0.035, [dx - 0.035, dx + 0.035]); // the stone plinth
+    band(g, x0, y0, x1, y1, 0.03 + fh);      // the belt course
+    const dir = g.pick([-1, 1]); // the side the shed stands against
+    const walls = [[[x0, y0], [x1, y0], [0, -1, 0], front], [[x1, y0], [x1, y1], [1, 0, 0], side],
+      [[x1, y1], [x0, y1], [0, 1, 0], front], [[x0, y1], [x0, y0], [-1, 0, 0], side]];
+    for (const [i, [p, q, n, count]] of walls.entries()) {
+      dressedWindows(g, p, q, n, 0.03 + fh + 0.02, count);
+      if (i > 0) { if (n[0] !== dir) dressedWindows(g, p, q, n, 0.06, count, false); } // (none behind the shed)
+      else {
+        // the ground floor to the street: the door in place of a window
+        door(g, dx, y0, 0.05, 0.1);
+        for (let k = 0; k < count; k++) {
+          const cx = x0 + w * (k + 0.5) / count;
+          if (Math.abs(cx - dx) > 0.05) dressedWindows(g, [cx - 0.03, y0], [cx + 0.03, y0], n, 0.06, 1, false);
+        }
+      }
     }
+    chimney(g, x0 + w * g.range(0.3, 0.7), 0.04, h, r + 0.05);
+    shed(g, dir, dir > 0 ? x1 : x0, y0, y1);
   },
 };
 
