@@ -89,7 +89,7 @@ test('an old save: levels become their own structures, keeping their look', asyn
   json.chronicle.marks = ['first:residential', 'first:residential:3', 'first:road'];
   const old = World.fromJSON(json);
   const [block, fountain, pit] = [90, 91, 92].map((id) => old.structures.get(id));
-  assert.deepEqual([block.type, fountain.type, pit.type], ['block', 'fountain-square', 'pit']);
+  assert.deepEqual([block.type, fountain.type, pit.type], ['block', 'plaza', 'pit']);
   assert.equal(drawSeed(block), (1234 ^ Math.imul(3, 0x9e3779b1)) >>> 0); // as it was drawn at level 3
   assert.equal(block.level, undefined);
   assert.deepEqual(block.data, { face: 0 }); // facing the road it stands by (World.faceOnce)

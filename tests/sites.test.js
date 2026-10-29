@@ -16,21 +16,33 @@ test('a plain road along a park is no way in', () => {
   assert.equal(w.sitePaths(park(w, 5, 6)).exits.length, 0);
 });
 
-test('a street along one side: one way in, a loop round the middle', () => {
+test('a street along a park is no way in: a footpath has to be brought to it', () => {
   const w = flatWorld();
   street(w, [2, 5], [10, 5]);
-  const paths = w.sitePaths(park(w, 5, 6));
-  assert.deepEqual(dirs(paths), ['0,-1']);
-  assert.deepEqual(paths.exits[0].pos, [5, 5.5]);
+  assert.equal(w.sitePaths(park(w, 5, 6)).exits.length, 0);
+  // (a square still opens onto its street)
+  const sq = w.placeStructure('plaza', w.grid.index(7, 6));
+  assert.deepEqual(dirs(w.sitePaths(sq)), ['0,-1']);
+});
+
+test('one way in runs to the middle and ends there', () => {
+  const w = flatWorld();
+  const p = park(w, 5, 6);
+  path(w, [5, 9], [5, 6.5]);
+  const paths = w.sitePaths(p);
+  assert.deepEqual(dirs(paths), ['0,1']);
   const walks = siteWalks(paths);
-  assert.ok(walks.loop > 0);
+  assert.deepEqual(walks.lines, [[[5, 6.5], [5, 6]]]);
+  assert.equal(walks.loop, 0);
   assert.equal(walks.plaza, 0);
+  // the middle, past its end, is left free
+  assert.ok(walks.centre[1] < 6);
 });
 
 test('two ways in on neighbouring sides curve into each other', () => {
   const w = flatWorld();
-  street(w, [2, 5], [10, 5]);
   const p = park(w, 5, 6);
+  path(w, [5, 3], [5, 5.5]);
   path(w, [8, 6], [5.5, 6]);
   const paths = w.sitePaths(p);
   assert.deepEqual(dirs(paths), ['0,-1', '1,0']);
@@ -41,15 +53,15 @@ test('two ways in on neighbouring sides curve into each other', () => {
   assert.notDeepEqual(walks.centre, paths.hubPos);
 });
 
-test('three ways in meet at a plaza', () => {
+test('three ways in cross in the middle, no round plaza', () => {
   const w = flatWorld();
-  street(w, [2, 5], [10, 5]);
   const p = park(w, 5, 6);
+  path(w, [5, 3], [5, 5.5]);
   path(w, [8, 6], [5.5, 6]);
   path(w, [5, 9], [5, 6.5]);
   const walks = siteWalks(w.sitePaths(p));
   assert.equal(walks.lines.length, 3);
-  assert.ok(walks.plaza > 0);
+  assert.equal(walks.plaza, 0);
 });
 
 test('a footpath only running along a side gives one way in, in the middle', () => {
@@ -73,20 +85,20 @@ test('sample ways in for parks drawn on their own', () => {
   for (let n = 0; n <= 4; n++) assert.equal(sampleSitePaths([0, 0, 1, 1], n).exits.length, n);
   const straight = siteWalks(sampleSitePaths([0, 0, 1, 1], 2));
   const bent = siteWalks(sampleSitePaths([0, 0, 1, 1], 2, { bend: true }));
-  assert.ok(straight.plaza > 0);
-  assert.equal(bent.plaza, 0);
+  assert.deepEqual(straight.centre, [0.5, 0.5]);
+  assert.notDeepEqual(bent.centre, [0.5, 0.5]);
 });
 
-// A way in from a street or lane runs on to the road as drawn (siteEdges):
+// A square's way in from a street or lane runs on to the road as drawn (siteEdges):
 // to a lane's edge or a street's kerb, never across the road – also where
 // the road bends in towards the park.
 test('walkways meet the road at its edge, not past it', () => {
   const lane = (w, a, b) => w.buildNetwork('road', run(w, a, b), { lane: true });
   const cases = [
-    [(w) => lane(w, [2, 5], [10, 5]), 'green', [5, 6], 5 + CONFIG.lane.edge],
-    [(w) => street(w, [2, 5], [10, 5]), 'green', [5, 6], 5 + CONFIG.road.kerb],
-    [(w) => lane(w, [2, 5], [10, 5]), 'meadow', [5, 6], 5 + CONFIG.lane.edge],
-    [(w) => lane(w, [5, 5], [5, 1]), 'green', [5, 6], 5 + CONFIG.lane.edge], // runs straight off
+    [(w) => lane(w, [2, 5], [10, 5]), 'plaza', [5, 6], 5 + CONFIG.lane.edge],
+    [(w) => street(w, [2, 5], [10, 5]), 'plaza', [5, 6], 5 + CONFIG.road.kerb],
+    [(w) => lane(w, [2, 5], [10, 5]), 'market-square', [5, 6], 5 + CONFIG.lane.edge],
+    [(w) => lane(w, [5, 5], [5, 1]), 'plaza', [5, 6], 5 + CONFIG.lane.edge], // runs straight off
   ];
   for (const [lay, type, [x, y], want] of cases) {
     const w = flatWorld();
@@ -99,7 +111,7 @@ test('walkways meet the road at its edge, not past it', () => {
   const w = flatWorld();
   lane(w, [4, 3], [4, 6]);
   lane(w, [4, 6], [6, 8]);
-  for (const e of siteEdges(w, CONFIG, w.sitePaths(w.placeStructure('green', w.grid.index(5, 6)))).exits) {
+  for (const e of siteEdges(w, CONFIG, w.sitePaths(w.placeStructure('plaza', w.grid.index(5, 6)))).exits) {
     assert.ok(e.edge, 'reaches the lane');
     // still on the park's side of the lane's centre
     const [ex, ey] = e.edge;

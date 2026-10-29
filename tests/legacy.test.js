@@ -3,7 +3,7 @@
 // keeps the kind it was drawn as.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { unretire, upgrade, regroup, rehouse, refarm } from '../src/core/legacy.js';
+import { unretire, upgrade, regroup, rehouse, refarm, repark } from '../src/core/legacy.js';
 import { STRUCTURE_TYPES, kindShown } from '../structures/index.js';
 
 const OLD = { 'service-centre': 4, tuzex: 1, workshop: 1, works: 1, 'plant-small': 1, 'workshop-medium': 2, 'works-medium': 2, 'plant-medium': 2, 'workshop-large': 6, factory: 6, plant: 6 };
@@ -47,7 +47,7 @@ test('parks of before version 5 go to the tool their look belongs to, the same s
   const OLD_PARKS = { green: 1, meadow: 4, 'garden-park': 1, 'pavilion-park': 1, 'city-park': 4 };
   for (const [type, dots] of Object.entries(OLD_PARKS)) {
     for (let seed = 1; seed < 200; seed++) {
-      const s = regroup({ type, seed, data: { turn: 1 } });
+      const s = repark(regroup({ type, seed, data: { turn: 1 } }));
       const def = STRUCTURE_TYPES[s.type];
       assert.ok(def, `${type} -> ${s.type}`);
       assert.equal(def.footprint.length, dots, `${type} -> ${s.type}`);
@@ -57,7 +57,7 @@ test('parks of before version 5 go to the tool their look belongs to, the same s
   }
   // a look the player chose wins over the seed
   assert.equal(regroup({ type: 'green', seed: 1, data: { kind: 'pitch' } }).type, 'pitch');
-  assert.deepEqual(regroup({ type: 'meadow', seed: 1, data: { kind: 'woods' } }), { type: 'meadow', seed: 1, data: { kind: 'woods' } });
+  assert.deepEqual(regroup({ type: 'meadow', seed: 1, data: { kind: 'woods' } }), { type: 'meadow', seed: 1, data: { kind: 'woods' } }); // (a meadow since version 9)
   assert.equal(regroup({ type: 'meadow', seed: 1, data: { kind: 'forest' } }).type, 'forest-park');
 });
 
@@ -87,4 +87,23 @@ test('farmsteads of before version 7 keep the layout they had', () => {
   assert.deepEqual(refarm({ type: 'farmstead', seed: 3, data: {} }), { type: 'farmstead', seed: 3, data: { kind: 'three-sided' } });
   assert.equal(kindShown(STRUCTURE_TYPES.farmstead, refarm({ type: 'farmstead', seed: 9, data: {} })), 'three-sided');
   assert.deepEqual(refarm({ type: 'jzd', seed: 3, data: {} }), { type: 'jzd', seed: 3, data: {} });
+});
+
+test('parks and squares of before version 9 keep their size, each look to the kind nearest it', () => {
+  const OLD = { meadow: 4, 'garden-park': 1, 'garden-park-large': 4, 'pond-park': 4, plaza: 1, 'fountain-square': 1,
+    'monument-square': 1, precinct: 1, 'market-square': 4, 'fountain-square-large': 4, 'grand-square': 4, 'parade-square': 4 };
+  for (const [type, dots] of Object.entries(OLD)) {
+    for (let seed = 1; seed < 100; seed++) {
+      const s = repark({ type, seed, data: { turn: 1 } });
+      const def = STRUCTURE_TYPES[s.type];
+      assert.ok(def, `${type} -> ${s.type}`);
+      assert.equal(def.footprint.length, dots, `${type} -> ${s.type}`);
+      assert.equal(s.data.turn, 1);
+      if (s.data.kind) assert.ok(def.kinds.includes(s.data.kind), `${s.type} ${s.data.kind}`);
+    }
+  }
+  assert.deepEqual(repark({ type: 'meadow', seed: 1, data: { kind: 'woods' } }), { type: 'meadow', seed: 1, data: { kind: 'meadow' } });
+  assert.deepEqual(repark({ type: 'pond-park', seed: 1, data: { kind: 'bridge' } }), { type: 'pond-park', seed: 1, data: { kind: 'fire-pond' } });
+  assert.deepEqual(repark({ type: 'grand-square', seed: 1, data: { kind: 'pair' } }), { type: 'market-square', seed: 1, data: { kind: 'column' } });
+  assert.deepEqual(repark({ type: 'green', seed: 1, data: {} }), { type: 'green', seed: 1, data: {} });
 });

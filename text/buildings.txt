@@ -566,13 +566,13 @@ sports_ground.blurb
   cs: Fotbalové hřiště
   en: A football pitch
 
-garden_park
-  cs: Sady
-  en: Gardens
+flower_beds
+  cs: Záhony
+  en: Flower beds
 
-garden_park.blurb
-  cs: Záhony a francouzský park
-  en: Flower beds and a formal garden
+flower_beds.blurb
+  cs: Květiny před národním výborem
+  en: Flowers outside the village hall
 
 forest_park
   cs: Lesopark
@@ -582,13 +582,13 @@ forest_park.blurb
   cs: Les a dřevěná rozhledna
   en: Woods and a wooden lookout tower
 
-pond_park
-  cs: Park u rybníka
-  en: Park by the pond
+village_pond
+  cs: Návesní rybník
+  en: Village pond
 
-pond_park.blurb
-  cs: Procházky kolem rybníka
-  en: Walks round a pond
+village_pond.blurb
+  cs: Voda pro hasiče, lípy kolem
+  en: Water for the firemen, lindens round it
 
 summer_cinema
   cs: Letní kino
@@ -598,53 +598,21 @@ summer_cinema.blurb
   cs: Plátno mezi stromy
   en: A screen among the trees
 
-plaza
-  cs: Plácek
-  en: Little square
+square
+  cs: Náměstí
+  en: Square
 
-plaza.blurb
-  cs: Vydlážděný plácek
-  en: A paved little square
-
-fountain_square
-  cs: Náměstí s kašnou
-  en: Square with a fountain
-
-fountain_square.blurb
-  cs: Lavičky kolem kašny
-  en: Benches round a fountain
+square.blurb
+  cs: Svatý, sloup nebo kašna
+  en: A saint, a column or a fountain
 
 shopping_precinct
-  cs: Pěší zóna
-  en: Pedestrian zone
+  cs: Nákupní středisko
+  en: Shopping centre
 
 shopping_precinct.blurb
-  cs: Truhlíky, stánky a plastika
-  en: Planters, kiosks and a sculpture
-
-monument_square
-  cs: Náměstí s pomníkem
-  en: Square with a monument
-
-monument_square.blurb
-  cs: Socha mezi lípami
-  en: A statue among lindens
-
-market_square
-  cs: Tržiště
-  en: Marketplace
-
-market_square.blurb
-  cs: Stánky pod stromy
-  en: Stalls under the trees
-
-parade_square
-  cs: Náměstí s tribunou
-  en: Square with a tribune
-
-parade_square.blurb
-  cs: Tribuna pro prvomájový průvod
-  en: A tribune for the May Day parade
+  cs: Pavilon s obchody, truhlíky a plastika
+  en: A shop pavilion, planters and a sculpture
 
 # ---------- Památky ----------
 

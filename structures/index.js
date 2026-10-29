@@ -104,9 +104,8 @@ export const BUILD_FAMILIES = [
   [industry.cukrovar],
   // Prostranství
   [park.green, park.meadow], [park.playgroundSmall, park.playgroundLarge], [park.pitchSmall, park.sportsGround],
-  [park.gardenPark, park.gardenParkLarge], [park.forestPark], [park.pondPark], [park.summerCinema],
-  [square.plaza], [square.fountainSquare, square.fountainSquareLarge], [square.monumentSquare, square.grandSquare],
-  [square.marketSquare], [square.precinct, square.precinctLarge], [square.paradeSquare],
+  [park.gardenPark], [park.forestPark], [park.pondPark], [park.summerCinema],
+  [square.plaza, square.marketSquare], [square.precinctLarge],
   // Památky
   [heritage.chapel], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
   [heritage.castle, heritage.castleSmall], [landmarks.tvTower], [landmarks.stadium],
@@ -115,7 +114,9 @@ export const BUILD_FAMILIES = [
 // Buildings through the one-by-one review: only their tools are offered
 // for now. The rest stay registered (saves still load and draw them) but
 // can't be picked up until their turn comes.
-export const REVIEWED = new Set(['house', 'house-wide', 'family-house', 'family-house-wide', 'chapel', 'church']);
+export const REVIEWED = new Set(['house', 'house-wide', 'family-house', 'family-house-wide', 'chapel', 'church',
+  'green', 'meadow', 'playground', 'playground-large', 'pitch', 'sports-ground', 'garden-park', 'forest-park', 'pond-park', 'summer-cinema',
+  'plaza', 'market-square']);
 
 export const STRUCTURES = BUILD_FAMILIES.flat();
 

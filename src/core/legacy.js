@@ -137,6 +137,42 @@ export function refarm(s) {
   return s;
 }
 
+// Parks and squares before version 9 (structures/park.js, square.js): old
+// type -> its kinds then, in order (none: []), and kind -> what it is now
+// ([type, kind]; a kind of null leaves it to the seed). The woods are a
+// meadow, the garden is flower beds only (its formal parterre, the large
+// baroque garden too, gone: a lime avenue), the pond a village pond; the
+// squares are one náměstí, small or large, each look to the kind nearest
+// it. The kind is written into s.data, so the new kinds' order doesn't
+// redraw it.
+const REPARKED = {
+  meadow: [['meadow', 'woods', 'avenue'], { meadow: ['meadow', 'meadow'], woods: ['meadow', 'meadow'], avenue: ['meadow', 'avenue'] }],
+  'garden-park': [['flowers', 'garden', 'formal'], { flowers: ['garden-park', null], garden: ['garden-park', null], formal: ['garden-park', null] }],
+  'garden-park-large': [[], { '': ['meadow', 'avenue'] }],
+  'pond-park': [['island', 'bridge'], { island: ['pond-park', 'village-pond'], bridge: ['pond-park', 'fire-pond'] }],
+  'fountain-square': [[], { '': ['plaza', 'fountain'] }],
+  'monument-square': [[], { '': ['plaza', 'nepomuk'] }],
+  precinct: [[], { '': ['plaza', 'fountain'] }],
+  'market-square': [[], { '': ['market-square', 'market'] }],
+  'fountain-square-large': [[], { '': ['market-square', 'fountain'] }],
+  'grand-square': [[], { '': ['market-square', 'column'] }],
+  'parade-square': [[], { '': ['market-square', 'fountain'] }],
+};
+
+// A saved park or square of before version 9 as what it is now.
+export function repark(s) {
+  const was = REPARKED[s.type];
+  if (!was) return s;
+  const [kinds, to] = was;
+  const kind = !kinds.length ? '' : kinds.includes(s.data?.kind) ? s.data.kind : kinds[Math.floor(mulberry32(drawSeed(s))() * kinds.length)];
+  const [type, look] = to[kind];
+  s.type = type;
+  s.data = { ...s.data };
+  if (look) s.data.kind = look;
+  else delete s.data.kind;
+  return s;
+}
+
 // A saved structure of a retired type as the one that replaced it.
 export function unretire(s) {
   const split = SPLIT[s.type];

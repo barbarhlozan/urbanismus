@@ -115,16 +115,12 @@
 #     green              green, meadow
 #     playground         playground, playground_large
 #     sports_ground      pitch, sports_ground
-#     garden_park        garden_park, garden_park_large
+#     flower_beds        garden_park
 #     forest_park        forest_park
-#     pond_park          pond_park
+#     village_pond       pond_park
 #     summer_cinema      summer_cinema
-#     plaza              plaza
-#     fountain_square    fountain_square, fountain_square_large
-#     monument_square    monument_square, grand_square
-#     market_square      market_square
-#     shopping_precinct  precinct, precinct_large
-#     parade_square      parade_square
+#     square             plaza, market_square
+#     shopping_precinct  precinct_large
 #   Památky
 #     chapel             chapel
 #     church             church

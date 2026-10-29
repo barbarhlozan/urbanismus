@@ -1,14 +1,15 @@
-// Squares: 1×1 and 2×2 paved public spaces, each kind its own thing to
-// build (its sizes one tool) – a plaza, a fountain square, a monument
-// square, a market square, and the modern kinds: a shopping precinct, a
-// parade square with a tribune. The ČSAD bus station is paved like them but
-// built from Doprava. Pedestrians like them. Reachable by road or footpath.
+// Squares: 1×1 and 2×2 paved public spaces. The náměstí is one tool: the
+// small one a plácek with a statue of St John of Nepomuk, a Marian column
+// or a kašna; the large one the town square round a kašna or a Marian
+// column, or on market day. Space steps through them. The 70s shopping
+// precinct of a sídliště, and the ČSAD bus station (paved like them, but
+// built from Doprava). Pedestrians like them. Reachable by road or footpath.
 // Paving fills g.site (up to the road, merging with neighbouring squares
 // and parks), without a border; trees and monuments stay near the middle.
 
 import {
-  tree, bench, lamp, fountain, statue, paving, sculpture, planter, streetClock, phoneBooth,
-  newsKiosk, noticeboard, flagpole, star, kindOf,
+  tree, bench, lamp, fountain, paving, sculpture, planter, streetClock, phoneBooth,
+  newsKiosk, noticeboard, figure, kindOf,
 } from './kit.js';
 
 const common = {
@@ -23,13 +24,142 @@ const common = {
   agents: 0,
 };
 
-// No border: the paving pattern itself marks the square (solid thin lines,
-// so it can't be mistaken for a footpath).
-function pave(g, step) {
-  paving(g, g.site.outline, step, { dash: null, outline: false, lod: 1 });
+// Is point p inside polygon poly?
+function inside([x, y], poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, ay] = poly[i], [bx, by] = poly[j];
+    if ((ay > y) !== (by > y) && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) c = !c;
+  }
+  return c;
 }
 
-// ----- the modern square: precincts, bus stations, parades -----
+// No border, and no grid over all of it: the paving is hinted the way a
+// hand sketches cobbles – a patch round what stands in the middle (cx, cy,
+// r out) and a few more scattered about, the rest left white.
+function pave(g, step, [cx, cy] = [0, 0], r = 0.22) {
+  const { x0, y0, x1, y1, outline } = g.site;
+  const patch = (x, y, w, h) => {
+    const [a, b, c, d] = [Math.max(x0, x - w), Math.max(y0, y - h), Math.min(x1, x + w), Math.min(y1, y + h)];
+    const box = [[a, b], [c, b], [c, d], [a, d]];
+    if (c - a > step && d - b > step && box.every((p) => inside(p, outline))) paving(g, box, step, { dash: null, outline: false, lod: 1 });
+  };
+  patch(cx, cy, r, r);
+  const n = Math.round(((x1 - x0) * (y1 - y0)) * 2.5);
+  for (let i = 0; i < n; i++) patch(g.range(x0, x1), g.range(y0, y1), g.range(0.08, 0.16), g.range(0.06, 0.12));
+}
+
+// ----- what stands on the náměstí -----
+
+// Mariánský (morový) sloup: a column on a stepped base with the Virgin on
+// top, put up after a plague; saints on the corners of the base, a low
+// railing round it. `k` scales it (1: the small square's).
+function marianColumn(g, x, y, k = 1) {
+  if (!g.isFree(x, y, 0.13 * k)) return;
+  const b = 0.13 * k, p = 0.055 * k, h = 0.42 * k;
+  g.box(x - b, y - b, 0, 2 * b, 2 * b, 0.02 * k);
+  g.box(x - b * 0.7, y - b * 0.7, 0.02 * k, 1.4 * b, 1.4 * b, 0.025 * k);
+  g.box(x - p, y - p, 0.045 * k, 2 * p, 2 * p, 0.09 * k);
+  g.lathe(x, y, 0.135 * k, [[0.026 * k, 0], [0.02 * k, h - 0.17 * k], [0.032 * k, h - 0.15 * k], [0.032 * k, h - 0.135 * k]], 10);
+  figure(g, x, y, h, 0.09 * k, 'mother');
+  g.detailed(1, () => {
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) figure(g, x + sx * b * 0.8, y + sy * b * 0.8, 0.045 * k, 0.06 * k);
+  });
+  g.detailed(2, () => g.groundPoly([[x - b - 0.04, y - b - 0.04], [x + b + 0.04, y - b - 0.04], [x + b + 0.04, y + b + 0.04], [x - b - 0.04, y + b + 0.04]], { dash: '1 1.5' }));
+}
+
+// Svatý Jan Nepomucký: the saint on a tall pedestal with a cornice, a ring
+// of stars over his head.
+function nepomuk(g, x, y, k = 1.3) {
+  if (!g.isFree(x, y, 0.07 * k)) return;
+  g.box(x - 0.06 * k, y - 0.06 * k, 0, 0.12 * k, 0.12 * k, 0.02 * k);
+  g.box(x - 0.04 * k, y - 0.04 * k, 0.02 * k, 0.08 * k, 0.08 * k, 0.15 * k);
+  g.box(x - 0.05 * k, y - 0.05 * k, 0.17 * k, 0.1 * k, 0.1 * k, 0.015 * k);
+  figure(g, x, y, 0.185 * k, 0.12 * k);
+  g.detailed(2, () => {
+    const z = (0.185 + 0.13) * k, r = 0.025 * k;
+    g.line(Array.from({ length: 11 }, (_, i) => [x + Math.cos((i / 10) * Math.PI * 2) * r, y + Math.sin((i / 10) * Math.PI * 2) * r, z]));
+  });
+}
+
+// Kašna: an eight-sided stone basin, a pillar in the middle with a bowl
+// and a little figure on top.
+function kasna(g, x, y, r = 0.12) {
+  if (!g.isFree(x, y, r)) return;
+  const k = r / 0.12; // pillar and figure grow with the basin
+  g.cylinder(x, y, 0, r, 0.045, 8);
+  g.detailed(2, () => g.groundCircle(x, y, r * 1.35, { dash: '2 2' }));
+  g.lathe(x, y, 0.045, [[r * 0.16, 0], [r * 0.12, 0.08 * k], [r * 0.4, 0.1 * k], [r * 0.12, 0.11 * k], [r * 0.1, 0.15 * k]], 8);
+  figure(g, x, y, 0.045 + 0.15 * k, 0.06 * k);
+}
+
+// Market day: rows of stánky, trestle tables under pitched canvas.
+function stalls(g, x0, x1, y, n) {
+  for (let i = 0; i < n; i++) {
+    const x = x0 + ((i + 0.5) / n) * (x1 - x0);
+    if (!g.isFree(x, y, 0.07)) continue;
+    g.box(x - 0.07, y - 0.045, 0, 0.14, 0.09, 0.04);
+    g.gable(x - 0.08, y - 0.055, 0.075, 0.16, 0.11, 0, 0.035);
+    g.detailed(1, () => {
+      for (const sx of [-1, 1]) g.line([[x + sx * 0.075, y - 0.05, 0.04], [x + sx * 0.075, y - 0.05, 0.075]]);
+    });
+  }
+}
+
+// ----- the náměstí -----
+
+// The plácek: a small paved square with a statue of St John of Nepomuk, a
+// Marian column or a kašna, two lindens, a bench and a lamp.
+export const plaza = {
+  ...common,
+  id: 'plaza',
+  name: 'Square',
+  blurb: 'A saint, a column or a fountain',
+  footprint: [[0, 0]],
+  kinds: ['nepomuk', 'column', 'fountain'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    pave(g, 0.14);
+    if (kind === 'nepomuk') nepomuk(g, 0, 0);
+    else if (kind === 'column') marianColumn(g, 0, 0);
+    else kasna(g, 0, 0, 0.11);
+    // two lindens behind it, never in front
+    for (const [x, y] of [[-0.3, -0.3], g.pick([[0.3, -0.3], [-0.3, 0.3]])]) tree(g, x, y, 1, 'spreading');
+    bench(g, 0, 0.3);
+    lamp(g, -0.25, 0.1);
+  },
+};
+
+// The town square: a kašna or a Marian column in the middle, lindens along
+// two sides, lamps; on market day rows of stalls, the kašna at one end.
+export const marketSquare = {
+  ...common,
+  id: 'market-square',
+  name: 'Square',
+  blurb: 'A saint, a column or a fountain',
+  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  kinds: ['fountain', 'column', 'market'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    const m = 0.5;
+    pave(g, 0.16, [0.5, 0.5], 0.4);
+    if (kind === 'column') marianColumn(g, m, m, 1.4);
+    else if (kind === 'fountain') kasna(g, m, m, 0.24);
+    else {
+      kasna(g, 1.05, m, 0.12);
+      for (const y of [0.05, 0.45, 0.85]) stalls(g, -0.25, 0.8, y, 4);
+    }
+    if (kind !== 'market') for (const [x, y] of [[m, 0.12], [m, 0.88]]) bench(g, x, y);
+    for (const t of [-0.25, 0.25, 0.75, 1.25]) {
+      tree(g, t, -0.32, 1, 'spreading');
+      tree(g, -0.32, t + 0.02, 1, 'spreading');
+    }
+    lamp(g, 0.1, m);
+    lamp(g, 1.25, 1.2);
+  },
+};
+
+// ----- the modern square: precincts, bus stations -----
 
 // Low shop pavilion of a shopping precinct (nákupní středisko) along x from
 // x0 to x1, back at y1: a glass front under a deep flat roof, a sign on top.
@@ -55,106 +185,7 @@ function busPlatform(g, x0, x1, y) {
   });
 }
 
-// Speakers' tribune for May Day parades: a stepped stand with a back wall,
-// a star over it, a row of flags on each side; front towards -y.
-function tribune(g, x, y, w = 0.6) {
-  g.box(x - w / 2, y, 0, w, 0.2, 0.06);
-  g.box(x - w / 2 + 0.04, y + 0.05, 0.06, w - 0.08, 0.15, 0.07);
-  g.box(x - w / 2, y + 0.18, 0, w, 0.05, 0.34);
-  g.box(x - 0.08, y + 0.17, 0.34, 0.16, 0.06, 0.08);
-  star(g, x, y + 0.17, 0.5, 0.055);
-  for (const k of [-1, 1]) for (let i = 0; i < 3; i++) flagpole(g, x + k * (w / 2 + 0.07 + i * 0.1), y + 0.1, 0.42);
-}
-
-// ----- 1×1 -----
-
-// Paving with two trees.
-export const plaza = {
-  ...common,
-  id: 'plaza',
-  name: 'Plaza',
-  blurb: 'A paved plaza',
-  footprint: [[0, 0]],
-  draw(g) {
-    pave(g, 0.14);
-    for (const [x, y] of g.pick([[[-0.28, -0.28], [0.28, 0.28]], [[0.28, -0.28], [-0.28, 0.28]]])) tree(g, x, y, 1);
-  },
-};
-
-// A fountain between two benches and two trees.
-export const fountainSquare = {
-  ...common,
-  id: 'fountain-square',
-  name: 'Fountain square',
-  blurb: 'Benches round a fountain',
-  footprint: [[0, 0]],
-  draw(g) {
-    pave(g, 0.14);
-    fountain(g, 0, 0, 0.1);
-    bench(g, 0, -0.3);
-    bench(g, 0, 0.3);
-    tree(g, -0.3, -0.3, 1);
-    tree(g, 0.3, 0.3, 1);
-  },
-};
-
-// 70s precinct corner: planters, a street clock, a phone booth, a newspaper
-// kiosk and an abstract sculpture.
-export const precinct = {
-  ...common,
-  id: 'precinct',
-  name: 'Shopping precinct',
-  blurb: 'Planters, kiosks, a sculpture',
-  footprint: [[0, 0]],
-  draw(g) {
-    pave(g, 0.14);
-    sculpture(g, 0, 0);
-    for (const [x, y] of [[-0.22, -0.22], [0.22, -0.22], [0.22, 0.22], [-0.22, 0.22]]) planter(g, x, y);
-    streetClock(g, -0.3, 0.02);
-    phoneBooth(g, 0.3, -0.05);
-    newsKiosk(g, 0.02, 0.3);
-    bench(g, 0, -0.3);
-  },
-};
-
-// A statue on a round base, a tree at each corner: a poet, a teacher, a
-// worker.
-export const monumentSquare = {
-  ...common,
-  id: 'monument-square',
-  name: 'Monument square',
-  blurb: 'A statue among lindens',
-  size: 'Small',
-  footprint: [[0, 0]],
-  kinds: ['statue', 'bust'],
-  draw(g, s) {
-    const kind = kindOf(g, s, this.kinds);
-    pave(g, 0.14);
-    g.groundCircle(0, 0, 0.2);
-    statue(g, 0, 0, kind === 'bust' ? 'bust' : null, 1.5);
-    for (const x of [-0.36, 0.36]) for (const y of [-0.36, 0.36]) tree(g, x, y, 0.9);
-    lamp(g, -0.2, 0.05);
-  },
-};
-
 // ----- 2×2 -----
-
-// A market stall between two rows of trees.
-export const marketSquare = {
-  ...common,
-  id: 'market-square',
-  name: 'Market square',
-  blurb: 'Market stalls under trees',
-  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
-  draw(g) {
-    pave(g, 0.16);
-    for (const t of [-0.25, 0.25, 0.75, 1.25]) {
-      tree(g, t, -0.3, 1);
-      tree(g, t, 1.3, 1);
-    }
-    g.box(0.3, 0.35, 0, 0.4, 0.3, 0.12); // market stall
-  },
-};
 
 // ČSAD bus station: platforms with curved shelters, a clock, a kiosk.
 // Paved like a square, but in Doprava with the stations.
@@ -172,24 +203,6 @@ export const busStation = {
     newsKiosk(g, 1.2, 0.5);
     phoneBooth(g, 1.25, 0.85);
     for (const t of [-0.25, 0.25, 0.75, 1.25]) tree(g, t, 1.3, 1);
-  },
-};
-
-// A big fountain in a ring of benches, a tree at each corner.
-export const fountainSquareLarge = {
-  ...common,
-  id: 'fountain-square-large',
-  name: 'Fountain square',
-  blurb: 'Benches round a fountain',
-  size: 'Large',
-  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
-  draw(g) {
-    const m = 0.5;
-    pave(g, 0.16);
-    g.groundCircle(m, m, 0.4);
-    fountain(g, m, m, 0.16);
-    for (const [x, y] of [[m, 0.0], [m, 1.0], [0.0, m], [1.0, m]]) bench(g, x, y, y !== m);
-    for (const [x, y] of [[-0.25, -0.25], [1.25, -0.25], [-0.25, 1.25], [1.25, 1.25]]) tree(g, x, y, 1.1);
   },
 };
 
@@ -215,60 +228,5 @@ export const precinctLarge = {
     noticeboard(g, 0.9, -0.3);
     newsKiosk(g, 0.1, -0.3);
     for (const [x, y] of [[0.2, 0.45], [0.8, 0.45]]) bench(g, x, y, false, x < m ? -1 : 1);
-  },
-};
-
-// The large monument square, the town's centrepiece in two rings of
-// paving: an obelisk, an equestrian statue or a statue group; trees along
-// two sides, a kiosk.
-export const grandSquare = {
-  ...common,
-  id: 'grand-square',
-  name: 'Monument square',
-  blurb: 'A statue among lindens',
-  size: 'Large',
-  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
-  kinds: ['obelisk', 'equestrian', 'pair'],
-  draw(g, s) {
-    const centre = kindOf(g, s, this.kinds);
-    const m = 0.5;
-    pave(g, 0.16);
-    g.groundCircle(m, m, 0.5);
-    g.groundCircle(m, m, 0.3);
-    if (centre === 'obelisk') {
-      g.box(m - 0.09, m - 0.09, 0, 0.18, 0.18, 0.08);
-      g.box(m - 0.03, m - 0.03, 0.08, 0.06, 0.06, 0.35);
-    } else {
-      statue(g, m, m, centre, 1.6);
-    }
-    for (const t of [-0.25, 0.25, 0.75, 1.25]) {
-      tree(g, t, -0.3, 1);
-      tree(g, -0.3, t + 0.02, 1);
-    }
-    g.box(1.08, -0.3, 0, 0.22, 0.18, 0.14); // kiosk
-    lamp(g, 0.1, m);
-    lamp(g, 0.9, m);
-  },
-};
-
-// Parade square: the tribune at the back, lamps lining the parade route
-// across the front, a row of lindens behind.
-export const paradeSquare = {
-  ...common,
-  id: 'parade-square',
-  name: 'Parade square',
-  blurb: 'A tribune for May Day',
-  footprint: [[0, 0], [1, 0], [0, 1], [1, 1]],
-  draw(g) {
-    const m = 0.5;
-    pave(g, 0.16);
-    tribune(g, m, 0.95);
-    for (const x of [-0.25, 0.25, 0.75, 1.25]) {
-      lamp(g, x, 0.0);
-      lamp(g, x, 0.55);
-      tree(g, x, 1.35, 1);
-    }
-    for (const x of [-0.2, 1.2]) planter(g, x, 0.95, 0.06);
-    g.groundLine([[-0.4, 0.28], [1.4, 0.28]], { dash: '4 3', lod: 1 });
   },
 };

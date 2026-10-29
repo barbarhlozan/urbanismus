@@ -41,11 +41,11 @@ test('the last line that matches wins', () => {
 });
 
 test('groups, by id, label or old name, and sizes', () => {
-  rules('lock landmarks\nlock fountain_square_large\nlock deep-mine\nunlock chapel');
+  rules('lock landmarks\nlock market_square\nlock deep-mine\nunlock chapel');
   assert.equal(UNLOCKS.allows('castle'), false);
   assert.equal(UNLOCKS.allows('chapel'), true);
-  assert.equal(UNLOCKS.allows('fountain-square'), true);
-  assert.equal(UNLOCKS.allows('fountain-square-large'), false);
+  assert.equal(UNLOCKS.allows('plaza'), true);
+  assert.equal(UNLOCKS.allows('market-square'), false);
   assert.equal(UNLOCKS.allows('colliery'), true);
   assert.equal(UNLOCKS.allows('deep-mine'), false);
   rules('lock Národní výbor');

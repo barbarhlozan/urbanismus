@@ -198,7 +198,7 @@ locked is open. What the story changed is kept with the town.
 | `all` | everything |
 | `doprava`, `bydleni`, `vyroba`, `obcanska_vybavenost`, `prostranstvi`, `pamatky` | a whole Build menu group (or by id: `transport`, `housing`, `work`, `amenities`, `spaces`, `heritage`; `zones` is housing and work, `public` amenities and spaces) |
 | `road`, `lane`, `footpath`, `railway` | the network tools (no footpath: no new streets either) |
-| `house`, `block`, `jednota`, `narodni_vybor`, `fire_station`, `fountain_square`, … | one thing in all its sizes, by its name in the Build menu (the sizes share it) |
+| `house`, `block`, `jednota`, `narodni_vybor`, `fire_station`, `square`, … | one thing in all its sizes, by its name in the Build menu (the sizes share it) |
 | `house_wide`, `office_tower`, `fire_house`, `precinct_large`, … | just that size, by its id |
 | `residential`, `business`, `industrial`, `park`, `square`, `services`, `heritage`, … | a tag: every home, every shop and office, every landmark… |
 | `chronicle`, `photo`, `terrain`, `colors`, `assets`, `debug`, `export`, `import`, `new_map`, `fullscreen` | a button at the top (`controls`: all of them). `all` leaves them be. |
