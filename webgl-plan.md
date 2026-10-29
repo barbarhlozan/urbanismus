@@ -248,6 +248,11 @@ uploaded per frame.
   sheet's matrix turns them flat and the shader raises each point by its
   height (`rise`), so they stay on their hills. A sun sweep's copy of the
   mask still reads the path data as before.
+- **Trees flickering mid-turn**: an object put in for its next step's view
+  (swapIn) wasn't drawn by gl/objects.js until its pieces were built (6 ms
+  of building a frame), so whole groves vanished for a frame or two (23 of
+  24 objects in sight, measured). The new group now carries the one it
+  replaced (`standIn`), drawn until it is built: at most 1 missing.
 
 ## The plan
 

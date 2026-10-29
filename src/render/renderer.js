@@ -2091,6 +2091,8 @@ export class Renderer {
     e.views.delete(view.k);
     for (const n of ['g', 'lg', 'sg']) {
       e[n].removeAttribute('transform');
+      // (shown on the GPU until the new one is built there: gl/objects.js)
+      view[n].standIn = e[n].standIn ?? e[n];
       e[n].parentNode?.replaceChild(view[n], e[n]);
     }
     Object.assign(e, view);

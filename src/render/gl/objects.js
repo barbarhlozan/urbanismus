@@ -829,6 +829,10 @@ export class GLObjects {
         if (performance.now() - t0 < budget) this.build(e.g, rec);
         else this.changed = true;
       } else if (rec.dirty) later.push(e.g);
+      // (a drawing put in for another – a turn's next step, Renderer.swapIn –
+      // shows the one it replaced until it is built, rather than nothing)
+      if (e.g.standIn && this.records.has(e.g)) e.g.standIn = null;
+      if (e.g.standIn) seen.add(e.g.standIn);
     }
     for (const g of later) {
       if (performance.now() - t0 >= budget) {
@@ -924,8 +928,9 @@ export class GLObjects {
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, rec.count);
     };
     for (const e of order ?? []) {
-      const rec = e.shown !== false && this.records.get(e.g);
-      if (rec?.count) one(e.g, rec);
+      const g = e.g && !this.records.has(e.g) && e.g.standIn ? e.g.standIn : e.g;
+      const rec = e.shown !== false && this.records.get(g);
+      if (rec?.count) one(g, rec);
       // (a drawing it replaced, fading out after it: Renderer.land)
       for (let n = e.g?.nextElementSibling; n?.fade; n = n.nextElementSibling) {
         const r = this.records.get(n);
