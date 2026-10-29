@@ -326,6 +326,8 @@
       [{ def: house, kind: 'farmstead', x: 0, court: { right: 'own' } }, { def: house, kind: 'street', x: 1.2, seed: 5, court: { left: 'own' } }], [-rise * 0.5, rise]);
     game(`6 · in the game · courtyard farmstead, falling ${pct} m a step towards the street`,
       [{ def: farm, kind: 'three-sided', x: 0, cx: 1, cy: 0.5, size: [3, 2] }], [-rise * 0.3, rise]);
+    for (const kind of ['walled', 'four-sided', 'one-sided']) game(`6 · in the game · ${kind} farmstead, falling ${pct} m a step towards the street`,
+      [{ def: farm, kind, x: 0, cx: 1, cy: 0.5, size: [3, 2] }], [-rise * 0.3, rise]);
   </script>
 </body>
 </html>

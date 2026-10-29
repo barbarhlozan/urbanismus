@@ -33,7 +33,7 @@ const STEP = 0.12;
 // (Painter.stand, `rect(u0, u1)` a piece's footprint): [u0, u1] each with
 // its `level`. Neighbours at nearly one height are one piece, so on flat
 // ground (or without relief) the wall is one.
-function steps(g, a, b, rect) {
+export function steps(g, a, b, rect) {
   if (!g.relief) return [Object.assign([a, b], { level: g.level })];
   const n = Math.max(1, Math.round((b - a) / STEP)), out = [];
   for (let k = 0; k < n; k++) {

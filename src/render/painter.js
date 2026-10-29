@@ -341,6 +341,7 @@ export class Painter {
     this.relief = null;
     this.level = 0;
     this._cellarDoor = false; // (one door into the cellar a drawing)
+    this.cellars = true;      // false: no cellar openings in what follows (a gateway)
   }
 
   // The watercolour scheme is on (drawings that paint differently in it)
@@ -1033,7 +1034,7 @@ export class Painter {
       const top = Math.max(...points.map((p) => p[2]));
       for (let i = 0; i < points.length; i++) {
         const j = (i + 1) % points.length;
-        if (on[i] && on[j] && top >= CELLAR.wall) this._cellar(points[i], points[j], -low[i][2], -low[j][2]);
+        if (on[i] && on[j] && top >= CELLAR.wall && this.cellars) this._cellar(points[i], points[j], -low[i][2], -low[j][2]);
       }
     }
     this._settling = false;

@@ -8,8 +8,29 @@
 
 import { door, stack, heap, tree, tractor, haystack, tank, transformer, hoops, kindOf } from './kit.js';
 import { LOOK } from '../src/render/painter.js';
+import { steps } from './courts.js';
 
 const FRONT = [0, -1, 0];
+
+// On uneven ground each range of a farm stands at the ground under it
+// (Painter.stand: the highest there), so the farm steps down a slope: a
+// rectangle's corners, or a point (a tree).
+function on(g, x0, y0, x1 = x0, y1 = y0) {
+  g.stand([[x0, y0], [x1, y1]]);
+}
+
+// A yard wall from (x0, y0) to (x1, y1), h high, stepping down a slope in
+// pieces as the courts' walls do (structures/courts.js).
+function wall(g, x0, y0, x1, y1, h) {
+  const alongX = x1 - x0 >= y1 - y0;
+  const [a, b] = alongX ? [x0, x1] : [y0, y1];
+  const rect = (u0, u1) => (alongX ? [[u0, y0], [u1, y1]] : [[x0, u0], [x1, u1]]);
+  for (const p of steps(g, a, b, rect)) {
+    g.level = p.level;
+    const [[px0, py0], [px1, py1]] = rect(p[0], p[1]);
+    g.box(px0, py0, 0, px1 - px0, py1 - py0, h);
+  }
+}
 
 // Long cowshed (kravín) along y, with a ventilation lantern on the ridge
 // and a row of small windows.
@@ -35,6 +56,7 @@ function steelSilo(g, x, y, r, h) {
 
 // Open hay barn: a roof on posts, hay under it.
 function hayBarn(g, x, y, w, d, h) {
+  on(g, x, y, x + w, y + d);
   g.detailed(1, () => {
     g.solid(x + w / 2, y + d / 2, h / 2);
     for (const [px, py] of [[x, y], [x + w, y], [x + w, y + d], [x, y + d]]) g.line([[px, py, 0], [px, py, h]]);
@@ -62,6 +84,7 @@ function frontWindow(g, cx, y, z, w, h) {
 // corners, a plinth; its door opens into the yard.
 function farmhouse(g, x, y, w, d, h, r) {
   const x1 = x + w, cx = x + w / 2, line = (pts) => g.line(pts, { facing: FRONT });
+  on(g, x, y, x1, y + d);
   g.gableY(x, y, 0, w, d, h, r);
   g.windows(x, y, w, d, 0, h, h, 0.1, { h: 0.42, skip: ['front', 'right'] });
   for (const k of [-1, 0, 1]) frontWindow(g, cx + k * w * 0.27, y, h * 0.3, 0.045, 0.07);
@@ -83,6 +106,7 @@ function farmhouse(g, x, y, w, d, h, r) {
 // quoins and a plinth; its door is in the yard.
 function longFarmhouse(g, x, y, w, d, h, r) {
   const x1 = x + w, line = (pts) => g.line(pts, { facing: FRONT });
+  on(g, x, y, x1, y + d);
   g.roofed(x, y, 0, w, d, h, { h: r, hip: [0.07, 0] });
   g.windows(x, y, w, d, 0, h, h, 0.11, { h: 0.42, skip: ['front', 'right', 'back'] });
   for (let k = 0; k < 5; k++) frontWindow(g, x + w * (k + 0.5) / 5, y, h * 0.3, 0.045, 0.07);
@@ -94,6 +118,8 @@ function longFarmhouse(g, x, y, w, d, h, r) {
 // over a wide arch with the gates in it, and the small door (branka) beside.
 function gateway(g, x0, x1, y, h) {
   const line = (pts) => g.line(pts, { facing: FRONT });
+  on(g, x0, y, x1, y + 0.06);
+  g.cellars = false; // (no cellar under an arch)
   g.box(x0, y, 0, x1 - x0, 0.06, h);
   const gw = (x1 - x0) * 0.55, gm = x0 + gw / 2 + 0.03, spring = h * 0.55, arch = [];
   for (let i = 0; i <= 8; i++) {
@@ -105,6 +131,7 @@ function gateway(g, x0, x1, y, h) {
   const bx = (gm + gw / 2 + x1) / 2;
   line([[bx - 0.025, y, 0], [bx - 0.025, y, 0.09], [bx + 0.025, y, 0.09], [bx + 0.025, y, 0]]);
   line([[x0, y, h - 0.02], [x1, y, h - 0.02]]); // the coping
+  g.cellars = true;
 }
 
 function barnDoor(g, x, y, w, h) {
@@ -166,37 +193,47 @@ function openFarm(g, kind, x0, x1, y1) {
   if (kind === 'one-sided') {
     // stables, then the barn, taller, at the end of the line
     const yb = hy1 + (y1 - hy1) * g.range(0.4, 0.55), sw = hw - 0.02;
+    on(g, x0 + 0.01, hy1, x0 + 0.01 + sw, yb);
     g.gableY(x0 + 0.01, hy1, 0, sw, yb - hy1, 0.15, sw * 0.45);
     g.windows(x0 + 0.01, hy1, sw, yb - hy1, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'left'], w: 0.35, h: 0.35 });
     g.paint = barnPaint;
     const bw = hw + 0.06;
+    on(g, x0 - 0.02, yb, x0 - 0.02 + bw, y1);
     g.gableY(x0 - 0.02, yb, 0, bw, y1 - yb, 0.2, bw * 0.5);
     const dy = yb + (y1 - yb) * g.range(0.3, 0.5), xb = x0 - 0.02 + bw;
     g.line([[xb, dy, 0], [xb, dy, 0.17], [xb, dy + 0.22, 0.17], [xb, dy + 0.22, 0]], { facing: [1, 0, 0] });
     g.paint = ranges;
     hayBarn(g, x0 + hw + g.range(0.25, 0.45), (hy1 + y1) / 2 - 0.2, 0.24, 0.36, 0.15);
-    tree(g, x0 + hw + g.range(0.5, 0.8), y0 + 0.35, 1.1, 'spreading');
+    const tx = x0 + hw + g.range(0.5, 0.8);
+    on(g, tx, y0 + 0.35);
+    tree(g, tx, y0 + 0.35, 1.1, 'spreading');
   } else if (kind === 'two-sided') {
     const sw = g.range(0.3, 0.36), bd = g.range(0.4, 0.5), yb = y1 - bd, sx = x0 + 0.02;
+    on(g, sx, hy1, sx + sw, yb);
     g.gableY(sx, hy1, 0, sw, yb - hy1, 0.15, sw * 0.4);
     g.windows(sx, hy1, sw, yb - hy1, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'left'], w: 0.35, h: 0.35 });
     g.paint = barnPaint;
     const bx = sx + sw, be = x1 - g.range(0, 0.3);
+    on(g, bx, yb, be, y1);
     g.gable(bx, yb, 0, be - bx, bd, 0.2, g.range(0.2, 0.24));
     barnDoor(g, bx + (be - bx) * g.range(0.3, 0.55), yb, 0.22, 0.17);
     g.paint = ranges;
+    on(g, (bx + be) / 2, (hy1 + yb) / 2);
     tree(g, (bx + be) / 2, (hy1 + yb) / 2, 1.1, 'spreading');
   } else {
     // the stables apart down the right, the barn apart at the back
     const rw = g.range(0.3, 0.36), ry0 = y0 + g.range(0.15, 0.4), ry1 = y1 - g.range(0.5, 0.7);
+    on(g, x1 - rw - 0.04, ry0, x1 - 0.04, ry1);
     g.gableY(x1 - rw - 0.04, ry0, 0, rw, ry1 - ry0, 0.15, rw * 0.4);
     g.windows(x1 - rw - 0.04, ry0, rw, ry1 - ry0, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'right'], w: 0.35, h: 0.35 });
     g.paint = barnPaint;
     const bd = g.range(0.38, 0.46), bx0 = x0 + g.range(0.02, 0.15), bx1 = x1 - rw - g.range(0.12, 0.25);
+    on(g, bx0, y1 - bd, bx1, y1);
     g.gable(bx0, y1 - bd, 0, bx1 - bx0, bd, 0.2, g.range(0.2, 0.24));
     barnDoor(g, bx0 + (bx1 - bx0) * g.range(0.3, 0.55), y1 - bd, 0.22, 0.17);
     g.paint = ranges;
     hayBarn(g, x0 + hw + g.range(0.1, 0.25), hy1 - 0.2, 0.22, 0.32, 0.15);
+    on(g, (x0 + x1) / 2, (hy1 + y1 - bd) / 2 + 0.05);
     tree(g, (x0 + x1) / 2, (hy1 + y1 - bd) / 2 + 0.05, 1.1, 'spreading');
   }
   g.paint = paint;
@@ -239,30 +276,35 @@ function statek(g, kind, x0, x1, y1) {
     g.paint = ranges;
     // the front wall, its gateway somewhere along it
     const gw = 0.48, ga = hx1 + g.range(0.04, Math.max(0.05, xs - hx1 - gw - 0.04));
-    if (ga - hx1 > 0.01) g.box(hx1, y0, 0, ga - hx1, 0.05, 0.12);
+    if (ga - hx1 > 0.01) wall(g, hx1, y0, ga, y0 + 0.05, 0.12);
     gateway(g, ga, ga + gw, y0 - 0.01, 0.21);
-    if (xs - ga - gw > 0.01) g.box(ga + gw, y0, 0, xs - ga - gw, 0.05, 0.12);
+    if (xs - ga - gw > 0.01) wall(g, ga + gw, y0, xs, y0 + 0.05, 0.12);
   }
   // the stables behind the house, in two parts stepping down
   const sx = x0 + 0.02, mid = hy1 + (yb - hy1) * g.range(0.4, 0.6);
   for (const [a, b, h] of [[hy1, mid, 0.15], [mid, yb, g.range(0.11, 0.14)]]) {
+    on(g, sx, a, sx + sw, b);
     g.gableY(sx, a, 0, sw, b - a, h, sw * 0.4);
     g.windows(sx, a, sw, b - a, 0, h, h, 0.12, { skip: ['front', 'back', 'left'], w: 0.35, h: 0.35 });
   }
   // the barn across the back
   g.paint = barnPaint;
   const bx = sx + sw;
+  on(g, bx, yb, xs, y1);
   g.gable(bx, yb, 0, xs - bx, bd, 0.2, g.range(0.2, 0.24));
   barnDoor(g, bx + (xs - bx) * g.range(0.3, 0.55), yb, 0.22, 0.17);
   g.paint = ranges;
   if (kind === 'walled') {
-    g.box(xs, y0, 0, 0.05, y1 - y0, 0.12);
+    wall(g, xs, y0, xs + 0.05, y1, 0.12);
     hayBarn(g, xs - 0.32, (hy1 + yb) / 2 - 0.2, 0.24, 0.4, 0.16);
+    on(g, (bx + xs) / 2 - 0.15, y0 + 0.5);
     tree(g, (bx + xs) / 2 - 0.15, y0 + 0.5, 1.1, 'spreading');
   } else {
+    on(g, xs, y0 + back, xs + rw, y1);
     g.gableY(xs, y0 + back, 0, rw, y1 - y0 - back, 0.15, 0.13);
     g.windows(xs, y0 + back, rw, y1 - y0 - back, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'right'], w: 0.35, h: 0.35 });
-    if (back > 0.03) g.box(xs, y0, 0, 0.05, back, 0.12);
+    if (back > 0.03) wall(g, xs, y0, xs + 0.05, y0 + back, 0.12);
+    on(g, (bx + xs) / 2, (hy1 + yb) / 2);
     tree(g, (bx + xs) / 2, (hy1 + yb) / 2, 1.1, 'spreading');
   }
   g.paint = paint;
@@ -288,7 +330,10 @@ export const farmstead = {
     // the courtyard, a field and an orchard beside it
     statek(g, kindOf(g, s, this.kinds), -0.32, 1.59, 1.36);
     field(g, 1.75, 2.36, -0.32, 0.7);
-    for (const [x, y] of [[1.85, 1.0], [2.1, 0.95], [2.3, 1.2], [1.95, 1.28]]) tree(g, x, y, 0.8, 'spreading');
+    for (const [x, y] of [[1.85, 1.0], [2.1, 0.95], [2.3, 1.2], [1.95, 1.28]]) {
+      on(g, x, y);
+      tree(g, x, y, 0.8, 'spreading');
+    }
   },
 };
 
@@ -304,7 +349,10 @@ export const farmsteadDeep = {
   footprint: [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2], [1, 2]],
   draw(g, s) {
     statek(g, kindOf(g, s, this.kinds), -0.32, 1.32, 2.0);
-    for (const [x, y] of [[-0.1, 2.25], [0.35, 2.2], [0.8, 2.3], [1.15, 2.22]]) tree(g, x, y, 0.8, 'spreading');
+    for (const [x, y] of [[-0.1, 2.25], [0.35, 2.2], [0.8, 2.3], [1.15, 2.22]]) {
+      on(g, x, y);
+      tree(g, x, y, 0.8, 'spreading');
+    }
   },
 };
 
