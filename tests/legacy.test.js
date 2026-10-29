@@ -3,7 +3,7 @@
 // keeps the kind it was drawn as.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { unretire, upgrade, regroup, rehouse } from '../src/core/legacy.js';
+import { unretire, upgrade, regroup, rehouse, refarm } from '../src/core/legacy.js';
 import { STRUCTURE_TYPES, kindShown } from '../structures/index.js';
 
 const OLD = { 'service-centre': 4, tuzex: 1, workshop: 1, works: 1, 'plant-small': 1, 'workshop-medium': 2, 'works-medium': 2, 'plant-medium': 2, 'workshop-large': 6, factory: 6, plant: 6 };
@@ -81,4 +81,10 @@ test('houses of before version 6 keep their look under the tool it belongs to no
   assert.deepEqual(unretire({ type: 'family-house-wide', seed: 1, data: { kind: 'row' } }), { type: 'house-wide', seed: 1, data: { kind: 'barn' } });
   assert.deepEqual(rehouse({ type: 'house-wide', seed: 1, data: { kind: 'longhouse' } }), { type: 'house-wide', seed: 1, data: { kind: 'longhouse' } });
   assert.deepEqual(rehouse({ type: 'apartments', seed: 1, data: {} }), { type: 'apartments', seed: 1, data: {} });
+});
+
+test('farmsteads of before version 7 keep the layout they had', () => {
+  assert.deepEqual(refarm({ type: 'farmstead', seed: 3, data: {} }), { type: 'farmstead', seed: 3, data: { kind: 'three-sided' } });
+  assert.equal(kindShown(STRUCTURE_TYPES.farmstead, refarm({ type: 'farmstead', seed: 9, data: {} })), 'three-sided');
+  assert.deepEqual(refarm({ type: 'jzd', seed: 3, data: {} }), { type: 'jzd', seed: 3, data: {} });
 });

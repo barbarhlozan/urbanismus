@@ -23,14 +23,14 @@ import { STRUCTURE_TYPES, footprintOffsets, newSeed, isNumbered } from '../../st
 import { mulberry32 } from './random.js';
 import { smoothLine } from './geom2d.js';
 import { meanderPaths } from '../roads/meander.js';
-import { upgrade, upgradeMarks, unretire, regroup, rehouse } from './legacy.js';
+import { upgrade, upgradeMarks, unretire, regroup, rehouse, refarm } from './legacy.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { History } from './history.js';
 
 // grade(): how finely a segment's climb is measured along it (grid units)
 const GRADE_STEP = 0.2;
 
-export const SAVE_VERSION = 6; // 3: railways on the fine grid; 4: no building levels (legacy.js); 5: parks regrouped; 6: houses regrouped
+export const SAVE_VERSION = 7; // 3: railways on the fine grid; 4: no building levels (legacy.js); 5: parks regrouped; 6: houses regrouped; 7: farmstead layouts
 
 export class World {
   constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1 }) {
@@ -1212,6 +1212,7 @@ export class World {
       if ((data.version ?? 1) < 4) upgrade(s); // buildings with levels: the structure each level is now
       if ((data.version ?? 1) < 5) regroup(s); // parks: each look to the tool it belongs to now
       if ((data.version ?? 1) < 6) rehouse(s); // houses: village houses and family houses apart
+      if ((data.version ?? 1) < 7) refarm(s); // farmsteads: the layout they had
       unretire(s); // buildings taken out of the game: what replaced them
       if (!STRUCTURE_TYPES[s.type]) continue;
       // Stations saved facing away from their track: turn them round.

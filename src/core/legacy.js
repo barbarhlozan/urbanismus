@@ -130,6 +130,13 @@ export function rehouse(s) {
   return s;
 }
 
+// Farmsteads before version 7 had one layout round their yard: the first
+// of their kinds now.
+export function refarm(s) {
+  if (s.type === 'farmstead' && !s.data?.kind) s.data = { ...s.data, kind: 'three-sided' };
+  return s;
+}
+
 // A saved structure of a retired type as the one that replaced it.
 export function unretire(s) {
   const split = SPLIT[s.type];
