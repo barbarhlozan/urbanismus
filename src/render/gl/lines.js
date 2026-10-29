@@ -16,6 +16,11 @@
 //   const gl = new GLLines(canvas)        (null-safe: GLLines.make returns null without WebGL2)
 //   gl.setLayer(name, items, classes)     items: [{ key, cls, pts|runs: [[x, y, z]…] }] in world space
 //   gl.draw(view, look)                   each frame; draws only when something changed
+//
+// The terrain's lines (contours, steep slopes, shores, banks, waves) are
+// drawn by one of these too, on a canvas of their own under the world's
+// layers (Renderer.renderGlTerrain): their pens and colours are the
+// browser's own for those classes, asked once (look.styles).
 
 import { brushWidths, BRUSH_GLSL } from '../brush.js';
 
@@ -49,6 +54,14 @@ const STYLES = {
   'fence-post': { colour: 'detail', width: 1, cap: 'round' },
   'fence-pillar': { colour: 'detail', width: 2, cap: 'butt' },
   fence: { colour: 'detail', width: 1, cap: 'round' },
+  // the terrain's: widths and colours from styles.css (look.styles)
+  steep: { colour: 'detail', width: 0.5, cap: 'round' },
+  'contour-d2': { colour: 'detail', width: 1, cap: 'butt' },
+  'contour-d1': { colour: 'detail', width: 1, cap: 'butt' },
+  'contour-index': { colour: 'detail', width: 1.4, cap: 'butt' },
+  shore: { colour: 'detail', width: 1.4, cap: 'butt' },
+  bank: { colour: 'detail', width: 1, cap: 'butt' },
+  wave: { colour: 'detail', width: 1, cap: 'round' },
 };
 // the far-out level of detail leaves these out (styles.css #world.lod-2)
 const FAR_HIDDEN = new Set(['driveway', 'zebra']);
@@ -187,6 +200,18 @@ const rgb = (hex) => {
   const n = /rgba?\(([^)]+)\)/.exec(hex)?.[1].split(',').map(Number);
   return n ? n.slice(0, 3).map((v) => v / 255) : [0, 0, 0];
 };
+// A computed colour as [r, g, b, a] (0–1): rgb(), rgba(), or color(srgb …)
+// as browsers give a color-mix().
+export function cssColour(css) {
+  const srgb = /color\(srgb\s+([^)/]+)(?:\/\s*([^)]+))?\)/.exec(css);
+  if (srgb) {
+    const [r, g, b] = srgb[1].trim().split(/\s+/).map(Number);
+    return [r, g, b, srgb[2] ? parseFloat(srgb[2]) / (srgb[2].includes('%') ? 100 : 1) : 1];
+  }
+  const n = /rgba?\(([^)]+)\)/.exec(css)?.[1].split(/[\s,/]+/).filter(Boolean).map(parseFloat);
+  if (n) return [n[0] / 255, n[1] / 255, n[2] / 255, n[3] ?? 1];
+  return [...rgb(css), 1];
+}
 
 export class GLLines {
   static make(canvas) {
@@ -396,8 +421,10 @@ export class GLLines {
   // One frame. `view`: { zoom, panX, panY (wrapper px, the overscan in),
   // cos, sin, angle, cx, cy, iso: [tile·cos30, tile·sin30, tile·zScale],
   // W, H (wrapper css px) }; `look`: { stroke, lineWeight, palette, near,
-  // far, fg, wash } – the map's --stroke and the colours; wash (painted
-  // schemes): { road, path (widths, world units), colour, alpha } or null.
+  // far, fg, wash, styles } – the map's --stroke and the colours; wash
+  // (painted schemes): { road, path (widths, world units), colour, alpha }
+  // or null; styles: { [class]: { width (scene px), colour (css), shown } }
+  // in place of the table's own for those classes, with stylesKey.
   draw(view, look, now = performance.now()) {
     const { gl, canvas } = this;
     // (lines being erased come and go with the pen: built again with them)
@@ -405,7 +432,7 @@ export class GLLines {
     const dpr = devicePixelRatio || 1;
     const w = Math.round(view.W * dpr), h = Math.round(view.H * dpr);
     const animating = [...this.layers.values()].some((l) => l.ink?.busy);
-    const key = `${w}|${h}|${view.zoom}|${view.panX}|${view.panY}|${view.angle}|${look.stroke}|${look.near}|${look.far}|${look.fg}|${look.palette.detail}|${look.palette.bg}|${JSON.stringify(look.wash ?? null)}|${this.count}`;
+    const key = `${w}|${h}|${view.zoom}|${view.panX}|${view.panY}|${view.angle}|${look.stroke}|${look.near}|${look.far}|${look.fg}|${look.palette.detail}|${look.palette.bg}|${JSON.stringify(look.wash ?? null)}|${look.stylesKey ?? ''}|${this.count}`;
     if (!animating && !this.wasAnimating && key === this.drawnKey) return;
     this.drawnKey = key;
     this.wasAnimating = animating;
@@ -436,7 +463,14 @@ export class GLLines {
     const colourOf = { fg: rgb(look.fg), main: rgb(look.fg), detail: rgb(look.palette.detail), bg: rgb(look.palette.bg), wash: rgb(wash?.colour ?? '#000') };
     const tile = view.iso[1] * 2;
     this.names.forEach((n, i) => {
-      const s = STYLES[n];
+      const s = STYLES[n], own = look.styles?.[n];
+      if (own) {
+        widths[i * 4] = (own.width * view.zoom * dpr) / 2;
+        const [r, g, b, a] = own.rgba ??= cssColour(own.colour);
+        colours.set([r * a, g * a, b * a, a], i * 4);
+        dashes.set([0, 0, 0, own.shown ? 1 : 0], i * 4);
+        return;
+      }
       const px = s.wash ? (wash?.[s.wash] ?? 0) * 2 * tile * view.zoom * dpr : s.width * look.stroke * view.zoom * dpr;
       widths[i * 4] = px / 2;
       widths[i * 4 + 1] = s.wash ? 1 : 0;

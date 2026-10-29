@@ -228,6 +228,21 @@ uploaded per frame.
   `mist`): times with the end before the start take a line back / thin a
   fill away. `hatchTile`, `mistTile`, `placeInOrder` removed.
 
+- **Terrain lines on the GPU (step 2, first part), 2026-10-29**: mid-turn
+  the terrain didn't turn at all – its GL mirror canvas (makeGlMirrors)
+  sat beside the <svg> that got the sheet's CSS transform – so the rivers
+  and hills slid off the roads and bridges until the view rested. Now the
+  contours, steep strokes, shores, banks and waves are a GLLines layer of
+  their own (`#terrain-gl`, under the world's layers), in world space with
+  the relief and warp in each point (`terrainItems`), so they are exact at
+  any angle as the roads are; their pens and colours are styles.css's,
+  asked of hidden probe paths (`terrainStyles`: scheme, level of detail,
+  --stroke, night ink). The ground's mirror canvas now takes the sheet's
+  transform mid-turn too. Look against the SVG at rest: mean ink
+  difference 0.1–0.5/255 (contour view 2.6, ink 1.025). Still sheet-turned
+  (close on flat ground, off over hills): brows, rock faces, summit marks,
+  the painted schemes' water washes, hill shadows, forest, meadow.
+
 ## The plan
 
 Each step lands on its own, switchable in the Debug panel against the SVG
