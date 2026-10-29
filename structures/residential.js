@@ -29,6 +29,7 @@
 
 import { door, panel, chimney, aerials, frontage, shared, hips, kindOf, tree } from './kit.js';
 import { LOOK } from '../src/render/painter.js';
+import { courtSide } from './courts.js';
 
 const FRONT = [0, -1, 0];
 
@@ -59,9 +60,10 @@ function frontWindow(g, cx, y, z, w, h) {
 // one wall up to the roof (no cornice across it at the eaves), its windows
 // kept off the corners as on every wall (LOOK.clear).
 function farmstead(g) {
-  const side = g.pick([-1, 1]); // the side the door is on: local -x or +x
+  const picked = g.pick([-1, 1]), side = courtSide(g.court) ?? picked; // the side the door is on: local -x or +x, the court's
   const w = g.range(0.26, 0.3), d = g.range(0.42, 0.48), h = g.range(0.15, 0.17), r = g.range(0.26, 0.31);
   const cx = 0, x0 = cx - w / 2, x1 = cx + w / 2, y = -d / 2;
+  g.body = { x0, y0: y, x1, y1: d / 2 };
   const line = (pts) => g.line(pts, { facing: FRONT });
 
   // the house: windows to the street (two or three, as they fit), a plinth
@@ -105,10 +107,11 @@ function chalupa(g) {
     }
   });
   frontWindow(g, 0, y, h + r * 0.35, 0.026, 0.035); // the loft hatch
-  const side = g.pick([-1, 1]), xd = side * w / 2, yd = y + d * g.range(0.55, 0.7);
+  g.body = { x0, y0: y, x1, y1: d / 2 };
+  const picked = g.pick([-1, 1]), side = courtSide(g.court) ?? picked, xd = side * w / 2, yd = y + d * g.range(0.55, 0.7);
   g.line([[xd, yd - 0.025, 0], [xd, yd - 0.025, 0.1], [xd, yd + 0.025, 0.1], [xd, yd + 0.025, 0]], { facing: [side, 0, 0], round: LOOK.round.windows });
   chimney(g, 0.02, g.range(-0.05, 0.1), h + r * 0.5, r * 0.6);
-  if (g.chance(0.5)) g.gable(-side * w / 2 - (side > 0 ? 0.14 : 0), d / 2 - 0.2, 0, 0.14, 0.18, 0.11, 0.06); // lean-to shed
+  if (g.chance(0.5) && !(side > 0 ? g.court.left : g.court.right)) g.gable(-side * w / 2 - (side > 0 ? 0.14 : 0), d / 2 - 0.2, 0, 0.14, 0.18, 0.11, 0.06); // lean-to shed
 }
 
 // A long house with its eaves to the street (okapem do ulice), as in the
@@ -117,6 +120,7 @@ function chalupa(g) {
 function longHouse(g) {
   const w = g.range(0.5, 0.58), d = g.range(0.28, 0.32), h = 0.17, r = g.range(0.18, 0.22);
   const x0 = -w / 2, y = -d / 2;
+  g.body = { x0, y0: y, x1: -x0, y1: d / 2 };
   g.roofed(x0, y, 0, w, d, h, { h: r, hip: 0.06 }); // half-hipped
   g.windows(x0, y, w, d, 0, h, h, 0.11, { h: 0.4, skip: ['front'] });
   // the porch, off the middle, and two windows each side of it
@@ -150,6 +154,9 @@ export const house = {
   agents: 1,
   yards: ['garden', 'garden', 'trees'],
   tilt: true,
+  // a walled court beside it: between two neighbours, or its own (courts.js)
+  join: { group: 'village', chance: 0.6 },
+  court: { own: 0.4 },
   // (saves from before version 6 have their kind written in: legacy.js)
   kinds: ['street', 'street', 'farmstead', 'farmstead', 'farm'],
   draw(g, s) {
@@ -200,6 +207,38 @@ function shed(g, dir, edge, y0, y1) {
   frontWindow(g, cx, y, sh + 0.012, 0.02, 0.022);
 }
 
+// The family house itself (see familyHouse below), on the dot at the
+// origin: square under a pyramid roof (`cube`) or wider under a hip, with
+// its shed against one side unless `withShed` is false.
+function dressedHouse(g, cube, withShed = true) {
+  const w = cube ? g.range(0.36, 0.4) : g.range(0.44, 0.48), d = cube ? w : g.range(0.34, 0.38);
+  const fh = 0.135, h = fh * 2 + 0.055, r = cube ? g.range(0.12, 0.15) : g.range(0.13, 0.16);
+  const x0 = -w / 2, x1 = w / 2, y0 = -d / 2, y1 = d / 2;
+  g.body = { x0, y0, x1, y1 };
+  g.roofed(x0, y0, 0, w, d, h, { h: r, hip: cube ? w / 2 : g.range(0.12, 0.15) });
+  const front = cube ? 3 : 4, side = cube ? 3 : g.int(3, 4);
+  const dx = x0 + w * (cube ? 0.5 : g.pick([0.375, 0.625])); // the door, in a ground-floor bay
+  band(g, x0, y0, x1, y1, 0.035, [dx - 0.035, dx + 0.035]); // the stone plinth
+  band(g, x0, y0, x1, y1, 0.03 + fh);      // the belt course
+  const dir = withShed ? g.pick([-1, 1]) : 0; // the side the shed stands against
+  const walls = [[[x0, y0], [x1, y0], [0, -1, 0], front], [[x1, y0], [x1, y1], [1, 0, 0], side],
+    [[x1, y1], [x0, y1], [0, 1, 0], front], [[x0, y1], [x0, y0], [-1, 0, 0], side]];
+  for (const [i, [p, q, n, count]] of walls.entries()) {
+    dressedWindows(g, p, q, n, 0.03 + fh + 0.02, count);
+    if (i > 0) { if (!withShed || n[0] !== dir) dressedWindows(g, p, q, n, 0.06, count, false); } // (none behind the shed)
+    else {
+      // the ground floor to the street: the door in place of a window
+      door(g, dx, y0, 0.05, 0.1);
+      for (let k = 0; k < count; k++) {
+        const cx = x0 + w * (k + 0.5) / count;
+        if (Math.abs(cx - dx) > 0.05) dressedWindows(g, [cx - 0.03, y0], [cx + 0.03, y0], n, 0.06, 1, false);
+      }
+    }
+  }
+  chimney(g, x0 + w * g.range(0.3, 0.7), 0.04, h, r + 0.05);
+  if (withShed) shed(g, dir, dir > 0 ? x1 : x0, y0, y1);
+}
+
 // Family houses on the village street, as they stood from the turn of the
 // century into the 80s: two storeys, plastered, under a hipped roof, the
 // upper windows with cornices over them, a belt course between the
@@ -220,34 +259,11 @@ export const familyHouse = {
   yards: ['garden', 'garden', 'trees'],
   tilt: true,
   kinds: ['cube', 'cube', 'villa'],
+  join: { group: 'village', chance: 0.6 },
+  court: { own: 0.4 },
   draw(g, s) {
-    const kind = kindOf(g, s, this.kinds);
-    const cube = kind === 'cube';
-    const w = cube ? g.range(0.36, 0.4) : g.range(0.44, 0.48), d = cube ? w : g.range(0.34, 0.38);
-    const fh = 0.135, h = fh * 2 + 0.055, r = cube ? g.range(0.12, 0.15) : g.range(0.13, 0.16);
-    const x0 = -w / 2, x1 = w / 2, y0 = -d / 2, y1 = d / 2;
-    g.roofed(x0, y0, 0, w, d, h, { h: r, hip: cube ? w / 2 : g.range(0.12, 0.15) });
-    const front = cube ? 3 : 4, side = cube ? 3 : g.int(3, 4);
-    const dx = x0 + w * (cube ? 0.5 : g.pick([0.375, 0.625])); // the door, in a ground-floor bay
-    band(g, x0, y0, x1, y1, 0.035, [dx - 0.035, dx + 0.035]); // the stone plinth
-    band(g, x0, y0, x1, y1, 0.03 + fh);      // the belt course
-    const dir = g.pick([-1, 1]); // the side the shed stands against
-    const walls = [[[x0, y0], [x1, y0], [0, -1, 0], front], [[x1, y0], [x1, y1], [1, 0, 0], side],
-      [[x1, y1], [x0, y1], [0, 1, 0], front], [[x0, y1], [x0, y0], [-1, 0, 0], side]];
-    for (const [i, [p, q, n, count]] of walls.entries()) {
-      dressedWindows(g, p, q, n, 0.03 + fh + 0.02, count);
-      if (i > 0) { if (n[0] !== dir) dressedWindows(g, p, q, n, 0.06, count, false); } // (none behind the shed)
-      else {
-        // the ground floor to the street: the door in place of a window
-        door(g, dx, y0, 0.05, 0.1);
-        for (let k = 0; k < count; k++) {
-          const cx = x0 + w * (k + 0.5) / count;
-          if (Math.abs(cx - dx) > 0.05) dressedWindows(g, [cx - 0.03, y0], [cx + 0.03, y0], n, 0.06, 1, false);
-        }
-      }
-    }
-    chimney(g, x0 + w * g.range(0.3, 0.7), 0.04, h, r + 0.05);
-    shed(g, dir, dir > 0 ? x1 : x0, y0, y1);
+    // (with a court beside it, its kůlna stands in for the shed)
+    dressedHouse(g, kindOf(g, s, this.kinds) === 'cube', !courtSide(g.court));
   },
 };
 

@@ -67,7 +67,8 @@ import { ParticleCanvas } from './particles.js';
 import { FireCanvas } from './fire.js';
 import { signsAt, signSVG, flashSVG, litLight } from './crossings.js';
 import { stationTracks } from '../../structures/station.js';
-import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront } from '../../structures/index.js';
+import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront, courtSides } from '../../structures/index.js';
+import { drawCourt } from '../../structures/courts.js';
 import { drawRuin } from '../../structures/ruin.js';
 import { YARDS } from '../../structures/yards.js';
 import { drawPlot, boundaryChance, wander, SPREAD, SPREAD_DENSITY } from '../../structures/plots.js';
@@ -3088,11 +3089,26 @@ export class Renderer {
       points.push([x0 + STRUCTURE_PAD, y0 + STRUCTURE_PAD], [x1 - STRUCTURE_PAD, y1 - STRUCTURE_PAD]);
     }
     painter.join = joinSides(world, s);
+    painter.court = courtSides(world, s);
     painter.setTilt(tiltOf(def, s, painter.join, world));
     painter.roadGap = world.nodesOf(s).length === 1 ? roadFront(world, s).gap : 1; // see busStop.js
     if (s.ruin) drawRuin(painter, def); // burnt down (World.burnStructure)
     else def.draw(painter, s);
     const core = painter.bounds;
+
+    // Courts: the walled yard beside a village house (structures/courts.js),
+    // standing with it, not lying on the ground like the front yard.
+    let courtWorld = [];
+    if (core && (painter.court.left || painter.court.right)) {
+      const cp = this.attachFree(new Painter(camera, { x, y, z }, world.drawnRotation(s), drawSeed(s) ^ 0x3c6ef372));
+      cp.setTilt(painter.tilt);
+      cp.rigid = rigid;
+      cp.sways = live;
+      keep(cp);
+      const body = painter.body ?? { x0: core[0], y0: core[1], x1: core[2], y1: core[3] };
+      courtWorld = drawCourt(cp, painter.court, body).map((o) => o.map(([lx, ly]) => cp.toWorld(lx, ly)));
+      painter.merge(cp, { aside: true });
+    }
 
     // Front yard between the building and its road.
     const frame = this.yardFrame(s);
@@ -3127,7 +3143,7 @@ export class Renderer {
       pp.follow = true;
       pp.lod = 1;
       keep(pp);
-      const plot = this.plotFor(s, plotDef, painter, core, yardWorld);
+      const plot = this.plotFor(s, plotDef, painter, core, yardWorld, courtWorld);
       drawPlot(pp, plot);
       painter.merge(pp, { aside: true });
       if (plot.spread) points.push([x + plot.cell[0], y + plot.cell[1]], [x + plot.cell[2], y + plot.cell[3]]);
@@ -3165,7 +3181,7 @@ export class Renderer {
   // or, for one turned to its road (roadTurn), in axes turned with it: the
   // largest such square inside its dot, all four sides its own. A garden
   // (SPREAD) not turned also takes the empty ground round it (claimFor).
-  plotFor(s, plotDef, painter, core, yardWorld) {
+  plotFor(s, plotDef, painter, core, yardWorld, courtWorld = []) {
     const { world } = this;
     const [ax, ay] = world.grid.xy(s.node);
     const pts = world.nodesOf(s).map((n) => world.grid.xy(n));
@@ -3189,7 +3205,9 @@ export class Renderer {
 
     const onBuildingW = (x, y, r) => x > bx0 - r - 0.03 && x < bx1 + r + 0.03 && y > by0 - r - 0.03 && y < by1 + r + 0.03;
     const onBuilding = (x, y, r) => onBuildingW(...toAnchor(x, y), r);
-    const inYard = (x, y) => yardLocal && pointInPolygon(toAnchor(x, y), yardLocal);
+    const courtsLocal = courtWorld.map((o) => o.map(([wx, wy]) => [wx - ax, wy - ay]));
+    // (the courts as well: no garden props or fences inside their walls)
+    const inYard = (x, y) => (yardLocal && pointInPolygon(toAnchor(x, y), yardLocal)) || courtsLocal.some((o) => pointInPolygon(toAnchor(x, y), o));
     // (on a water dot – or across the drawn shore, which curves in over
     // the land dots round a lake: as seen from the nearest own dot)
     const shores = this.shoreIndex();

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dědina – yard lab</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--fg); font: 12px system-ui; margin: 16px; }
+    h2 { font-weight: 500; margin: 24px 0 2px; }
+    p { margin: 0 0 6px; color: #777; max-width: 60em; }
+    .row { display: flex; flex-wrap: wrap; gap: 4px; }
+    figure { margin: 0; border: 1px solid #222; }
+    figcaption { padding: 2px 4px; color: #777; }
+    svg { display: block; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: yard options for village houses, drawn in the game's hand.
+    // yard-lab.html?seeds=4&size=320&scheme=2
+    import { applyTheme } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter } from './src/render/painter.js';
+    import { SUN, sunFor, shadowSVG } from './src/render/shadows.js';
+    import { STRUCTURE_TYPES } from './structures/index.js';
+    import { drawCourt } from './structures/courts.js';
+    const q = new URLSearchParams(location.search);
+    applyTheme(q.has('scheme') ? +q.get('scheme') : undefined);
+    const seeds = +(q.get('seeds') ?? 4), size = +(q.get('size') ?? 400);
+    const cam = new Camera({ width: 1, height: 1 }, { tile: 64 });
+    const out = document.getElementById('out');
+    const shade = (g) => shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sunFor(cam));
+
+    // Houses on dots 0 and 1, street to -y, each with the courts it is
+    // given (structures/courts.js, as the renderer draws them), all with
+    // one painter so houses and courts are depth-sorted together.
+    function scene(title, note, houses) {
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2><p>${note}</p>`);
+      const row = document.createElement('div');
+      row.className = 'row';
+      out.appendChild(row);
+      for (let k = 0; k < seeds; k++) for (const rot of [2, 3, 0]) {
+        cam.rotation = rot;
+        const seed = (k + 1) * 2654435761 >>> 0;
+        const g = new Painter(cam, { x: 0, y: 0 }, 0, seed);
+        houses.forEach(([def, kind, x, court], i) => {
+          g.ox = x;
+          g.court = { left: null, right: null, ...court };
+          g.body = null;
+          def.draw(g, { type: def.id, seed: seed + i, id: i, node: 0, rotation: 0, data: { kind } });
+          drawCourt(g, g.court, g.body);
+        });
+        const body = g.toGroundSVG() + shade(g) + g.toSVG();
+        const fig = document.createElement('figure');
+        fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0">${body}</g></svg><figcaption>#${k} · ${['from behind', '', 'from the street', 'from the side'][rot]}</figcaption>`;
+        row.appendChild(fig);
+        const el = fig.querySelector('svg'), b = el.querySelector('g').getBBox();
+        const m = Math.max(b.width, b.height) + 16;
+        el.setAttribute('viewBox', `${b.x + b.width / 2 - m / 2} ${b.y + b.height / 2 - m / 2} ${m} ${m}`);
+      }
+    }
+    const house = STRUCTURE_TYPES['house'], family = STRUCTURE_TYPES['family-house'];
+    const L = { left: 'shared' }, R = { right: 'shared' };
+    for (const [a, b] of [['farmstead', 'farmstead'], ['street', 'farm'], ['farm', 'street']]) {
+      scene(`A · shared · ${a} + ${b}`, 'Between two neighbouring houses: wall, vrata and branka in front, kůlna across the back.', [[house, a, 0, R], [house, b, 1, L]]);
+    }
+    scene('A · shared · family house + farmstead', '', [[family, 'cube', 0, R], [house, 'farmstead', 1, L]]);
+    for (const kind of ['farmstead', 'street', 'farm']) scene(`B · own · ${kind}`, 'Beside a house on its own.', [[house, kind, 0, { right: 'own' }]]);
+    scene('B · own · family house', 'Its kůlna in place of the shed.', [[family, 'cube', 0, { left: 'own' }]]);
+  </script>
+</body>
+</html>

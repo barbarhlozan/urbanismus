@@ -69,6 +69,10 @@
 // with its neighbour on the local -x (left) / +x (right) side. Draw up to
 // x = ∓0.5 there (structures opt in with `join`, see structures/index.js).
 //
+// Courts – g.court = { left, right }: 'shared', 'own' or null where a
+// village house has a walled yard beside it (structures/courts.js), drawn
+// by the renderer; the house sets g.body to its walls for the court to meet.
+//
 // Spots – g.spot(x, y, dir) marks a parking stall (cars are drawn and simulated
 // separately, see src/sim/parking.js).
 //
@@ -302,6 +306,8 @@ export class Painter {
     this.free = null;     // set by the renderer: (x, y, r) -> bool, local coords
     this.bounds = null;   // local [x0, y0, x1, y1] of all solids drawn
     this.join = { left: false, right: false }; // set by the renderer, see structures/index.js
+    this.court = { left: null, right: null }; // the same, see structures/courts.js
+    this.body = null; // a house's walls as it leaves them for its court (courts.js)
     this.current = null;
     this.near = true;     // drawn close up: windows with their glazing bars (set by the renderer, see _window)
     this.rigid = null;    // world [x, y]: move as one piece, see _project()

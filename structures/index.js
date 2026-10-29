@@ -33,13 +33,16 @@
 //              to the grid (squares: their paving joins the neighbours')
 //   facesRoad  true = a single-dot structure that always faces its road (the
 //              player can't turn it; a bus stop). Other single-dot ones can
-//              be turned side or back to it (s.data.turn, World.facingRotation)
+//              be turned side or back to it (s.data.turn, World.facingRotation); all
+//              but these keep the facing they were built with (World.faceOnce)
 //   yards      surroundings styles it may get (see yards.js)
 //   numbered   false = gets no house number, not being a building (see isNumbered)
+//   court      { own }: may have a walled yard beside it (see courts.js)
 
 import { rotateQuarter } from '../src/core/grid.js';
 import { mulberry32 } from '../src/core/random.js';
 import { YARDS } from './yards.js';
+import { courtOf } from './courts.js';
 import { LOOK } from '../src/render/painter.js';
 import * as housing from './residential.js';
 import * as business from './business.js';
@@ -218,7 +221,7 @@ export function roadFront(world, s) {
   const none = { tilt: 0, gap: 1 };
   // squares: their paving joins their neighbours' on the grid, never turned
   if (STRUCTURE_TYPES[s.type]?.keepsGrid) return none;
-  const rot = world.facingRotation(s.type, s.node, s.rotation);
+  const rot = world.frontRotation(s);
   const [fx, fy] = rotateQuarter(0, -1, rot);
   const r = world.grid.offset(s.node, fx, fy);
   if (r < 0 || !world.hasRoad(r)) return none;
@@ -273,12 +276,13 @@ export function joinedRow(world, s) {
 
 // The neighbour `s` shares its wall with on the local -x (dir -1) or +x
 // (dir 1) side, or null.
-function joinedNeighbour(world, s, dir) {
+// (`roll` false: whether one stands there to join, whatever the roll says)
+function joinedNeighbour(world, s, dir, roll = true) {
   const def = STRUCTURE_TYPES[s.type];
   const join = def?.join;
   if (!join || world.nodesOf(s).length !== 1) return null;
   if (s.data?.turn) return null; // turned away from the street front
-  const rot = world.facingRotation(s.type, s.node, s.rotation);
+  const rot = world.frontRotation(s);
   const [x, y] = world.grid.xy(s.node);
   const side = (dir) => {
     const [dx, dy] = rotateQuarter(dir, 0, rot);
@@ -288,12 +292,21 @@ function joinedNeighbour(world, s, dir) {
     const odef = STRUCTURE_TYPES[o.type];
     const ojoin = odef?.join;
     if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return null;
-    if (o.data?.turn || world.facingRotation(o.type, o.node, o.rotation) !== rot) return null;
+    if (o.data?.turn || world.frontRotation(o) !== rot) return null;
+    if (!roll) return o;
     const [a, b] = s.id < o.id ? [s, o] : [o, s];
-    const roll = mulberry32((drawSeed(a) ^ Math.imul(drawSeed(b), 0x85ebca6b) ^ 0x10ad) >>> 0)();
-    return roll < Math.min(join.chance ?? 1, ojoin.chance ?? 1) ? o : null;
+    const r = mulberry32((drawSeed(a) ^ Math.imul(drawSeed(b), 0x85ebca6b) ^ 0x10ad) >>> 0)();
+    return r < Math.min(join.chance ?? 1, ojoin.chance ?? 1) ? o : null;
   };
   return side(dir);
+}
+
+// The courts beside a village house (structures/courts.js): shared with a
+// joined neighbour, or its own away from any house it could have joined.
+export function courtSides(world, s) {
+  const def = STRUCTURE_TYPES[s.type];
+  if (!def?.court) return { left: null, right: null };
+  return courtOf(def, s, drawSeed(s), joinSides(world, s), (dir) => !!joinedNeighbour(world, s, dir, false));
 }
 
 // Footprint offsets relative to the anchor dot, after rotation.
