@@ -228,6 +228,40 @@ uploaded per frame.
   `mist`): times with the end before the start take a line back / thin a
   fill away. `hatchTile`, `mistTile`, `placeInOrder` removed.
 
+- **Terrain lines on the GPU (step 2, first part), 2026-10-29**: mid-turn
+  the terrain didn't turn at all – its GL mirror canvas (makeGlMirrors)
+  sat beside the <svg> that got the sheet's CSS transform – so the rivers
+  and hills slid off the roads and bridges until the view rested. Now the
+  contours, steep strokes, shores, banks and waves are a GLLines layer of
+  their own (`#terrain-gl`, under the world's layers), in world space with
+  the relief and warp in each point (`terrainItems`), so they are exact at
+  any angle as the roads are; their pens and colours are styles.css's,
+  asked of hidden probe paths (`terrainStyles`: scheme, level of detail,
+  --stroke, night ink). The ground's mirror canvas now takes the sheet's
+  transform mid-turn too. Look against the SVG at rest: mean ink
+  difference 0.1–0.5/255 (contour view 2.6, ink 1.025). Still sheet-turned
+  (close on flat ground, off over hills): brows, rock faces, summit marks,
+  the painted schemes' water washes, hill shadows, forest, meadow.
+- **Hill shadows raised on the GPU**: the hill shade's rings go to
+  gl/shadows.js laid flat with each point's height (`flatPoint`, the
+  path's `ground`), filled and dashed once (`Pieces.ground`); mid-turn the
+  sheet's matrix turns them flat and the shader raises each point by its
+  height (`rise`), so they stay on their hills. A sun sweep's copy of the
+  mask still reads the path data as before.
+- **Trees flickering mid-turn**: an object put in for its next step's view
+  (swapIn) wasn't drawn by gl/objects.js until its pieces were built (6 ms
+  of building a frame), so whole groves vanished for a frame or two (23 of
+  24 objects in sight, measured). The new group now carries the one it
+  replaced (`standIn`), drawn until it is built: at most 1 missing.
+- **Brows and rocks on the ground**: the brows are still worked out for the
+  view (visibility, browLines, on the screen), but each pencil stroke is put
+  back on the ground (`browOnGround`: its column u, where along it the brow
+  lies, t, carried from browLines, and the height that shows it just where
+  it is drawn) and drawn by the terrain's GLLines with the rock faces and
+  lips (world lines); so mid-turn they stay on their hills, and the outline
+  is worked out anew where the view rests. GLLines' style tables 32 -> 48.
+  Still sheet-turned: summit marks, the painted schemes' water washes.
+
 ## The plan
 
 Each step lands on its own, switchable in the Debug panel against the SVG

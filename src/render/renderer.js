@@ -141,6 +141,18 @@ const LINES = ['roads', 'paths', 'rails', 'fences'];
 // …of which these are on the ground in world space (gl/lines.js): the
 // camera turns them
 const GL_LINES = ['paths', 'rails', 'roads', 'fences'];
+// The terrain's lines on the GPU as well, in world space (renderGlTerrain),
+// back to front, and the classes the SVG had for them, whose pens and
+// colours they take (terrainStyles). The brows, worked out for the view,
+// are put on the ground where they were drawn (browOnGround): a turn carries
+// them with their hills until they are worked out again where it rests.
+// What is drawn on the screen (the summits' marks, the water's washes)
+// stays in its SVG.
+const TERRAIN_LINES = {
+  steep: 'steep', 'contour-d2': 'contour d2', 'contour-d1': 'contour d1', 'contour-index': 'contour index',
+  'brow-light': 'brow light', brow: 'brow', 'brow-outline': 'brow outline', 'rock-face': 'rock-face', 'rock-lip': 'rock-lip',
+  shore: 'shore', bank: 'bank', wave: 'wave d1',
+};
 // The steps of a whole turn (Camera.STEP); the views an object keeps of
 // the steps it has been drawn at, at most (Renderer.swapIn); and ms the
 // view must rest before those either side are made ready (prepareTurn).
@@ -379,6 +391,14 @@ export class Renderer {
     // the roads, footpaths, railways and fences on the GPU (gl/lines.js),
     // their pen's timing in ink layers (ink.js)
     this.glLines = GLLines.make(document.getElementById('map-gl'));
+    // …and the terrain's lines, under the world's layers, so they turn with
+    // the roads over the hills (renderTerrain): their styles asked of
+    // shapes with their classes, never drawn
+    this.glTerrain = GLLines.make(document.getElementById('terrain-gl'));
+    if (this.glTerrain) {
+      this.terrainProbe = this.ground.appendChild(document.createElementNS(SVGNS, 'g'));
+      this.terrainProbe.innerHTML = Object.values(TERRAIN_LINES).map((cls) => `<path class="${cls}"/>`).join('');
+    }
     this.ink = {
       roads: new InkLayer(['road-wash', 'road-wash-exit', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post']),
       paths: new InkLayer(['path-wash', 'footpath', 'bridge', 'bridge-post']),
@@ -689,6 +709,7 @@ export class Renderer {
     this.markHovered();
     this.renderShadeCanvas();
     this.renderGlLines();
+    this.renderGlTerrain();
     this.renderGlObjects();
     this.renderGlMirrors();
     if (overlaySVG !== this.lastOverlay) {
@@ -890,8 +911,52 @@ export class Renderer {
     }
   }
 
+  // (`lines`: the terrain's lines as items on the ground for the GPU,
+  // renderGlTerrain, left out of the SVG)
   renderTerrain() {
-    this.layers.terrain.innerHTML = (this.contours ? this.renderContours() : this.renderSteep()) + this.renderBrows() + this.renderWater();
+    const lines = this.glTerrain ? [] : null;
+    this.layers.terrain.innerHTML = (this.contours ? this.renderContours(lines) : this.renderSteep(lines)) + this.renderBrows(lines) + this.renderWater(lines);
+    if (!lines) return;
+    // (the same lines as last time – a turn landing redraws the brows – kept
+    // as they are on the GPU, not built again)
+    const was = this.terrainLines;
+    if (was?.length === lines.length && lines.every((l, i) => l.pts === was[i].pts && l.cls === was[i].cls)) return;
+    this.terrainLines = lines;
+    this.glTerrain.setLayer('terrain', lines, Object.keys(TERRAIN_LINES));
+  }
+
+  // Lines of the terrain (world units) as items for gl/lines.js, `cls` one
+  // of TERRAIN_LINES: on the ground as pathData puts them – the relief and
+  // the warp in each point, so the camera alone places them. Kept per line.
+  terrainItems(out, lines, cls) {
+    const cam = this.camera, { terrain } = this.world;
+    if (this.terrainPts?.lift !== cam.lift || this.terrainPts.warp !== cam.warp) this.terrainPts = { lift: cam.lift, warp: cam.warp, of: new WeakMap() };
+    for (const pts of lines) {
+      let ground = this.terrainPts.of.get(pts);
+      if (!ground) {
+        ground = pts.map(([x, y]) => {
+          const z = terrain.heightAt(x, y) + (cam.lift ? cam.lift(x, y) : 0);
+          return cam.warp ? [...cam.warp(x, y), z] : [x, y, z];
+        });
+        this.terrainPts.of.set(pts, ground);
+      }
+      if (ground.length > 1) out.push({ key: `t${out.length}`, cls, pts: ground });
+    }
+  }
+
+  // The pens and colours of the terrain's lines as styles.css has them now
+  // (the scheme, the level of detail, --stroke, the night's ink), asked of
+  // the probe's shapes only when one of those changes.
+  terrainStyles() {
+    const { palette } = THEME;
+    const key = `${document.documentElement.className}|${this.ground.getAttribute('class')}|${this.strokeK}|${this.inkSet ?? 0}|${palette.detail}|${palette.bg}|${palette.main}`;
+    if (this.terrainLook?.key === key) return this.terrainLook;
+    const styles = {};
+    [...this.terrainProbe.children].forEach((el, i) => {
+      const cs = getComputedStyle(el);
+      styles[Object.keys(TERRAIN_LINES)[i]] = { width: parseFloat(cs.strokeWidth) || 0, colour: cs.stroke, shown: cs.display !== 'none' && cs.stroke !== 'none' };
+    });
+    return (this.terrainLook = { key, styles });
   }
 
   // The shadows the hills cast (hillShadows.js): the shade and its
@@ -916,18 +981,32 @@ export class Renderer {
     let view = this.hills.views.get(camera.angle);
     if (view == null) {
       const d = this.hills.rings.length ? this.pathData(this.hills.rings, false) : '';
-      view = d ? `<path class="shade" fill-rule="evenodd" d="${d}"/>` : '';
+      // (and its rings laid flat with their heights, for the GPU: so mid-turn
+      // it is raised over the hills as they are – gl/shadows.js)
+      view = { svg: d ? `<path class="shade" fill-rule="evenodd" d="${d}"/>` : '', ground: this.hills.rings.map((ring) => ring.map(([x, y]) => this.flatPoint(x, y))) };
       if (this.hills.views.size >= 6) this.hills.views.delete(this.hills.views.keys().next().value);
       this.hills.views.set(camera.angle, view);
     }
-    el.innerHTML = view;
+    el.innerHTML = view.svg;
+    if (el.firstElementChild) el.firstElementChild.ground = view.ground;
+  }
+
+  // A world point on the ground as the view lies flat (scene px, the warp
+  // in), and its height there in scene px (the relief and the ground's own):
+  // [x, y, z], Renderer.project being [x, y - z].
+  flatPoint(x, y) {
+    const cam = this.camera;
+    const z = (this.world.terrain.heightAt(x, y) + (cam.lift ? cam.lift(x, y) : 0)) * cam.zScale * cam.tile;
+    const [wx, wy] = cam.warp ? cam.warp(x, y) : [x, y];
+    const [rx, ry] = cam.toView(wx - cam.cx, wy - cam.cy);
+    return [(rx - ry) * COS30 * cam.tile, (rx + ry) * 0.5 * cam.tile, z];
   }
 
   // What the camera sees of the ground, the brows (brows.js) and the rock
   // faces (rocks.js), worked out for each turn of the view and kept (the
   // last few turns, per relief: turning back to a view finds them ready);
   // as pencil strokes, a path per kind and chunk of the map.
-  renderBrows() {
+  renderBrows(lines = null) {
     const { camera, world } = this;
     if (!BROWS.on || !camera.lift) return '';
     if (this.brows?.lift !== camera.lift) this.brows = { lift: camera.lift, views: new Map() };
@@ -937,14 +1016,19 @@ export class Renderer {
       const m = 1.2; // (as the contours)
       const height = (x, y) => camera.lift(x, y) + terrain.heightAt(x, y);
       const vis = visibility(camera, height, [-m, -m, grid.width - 1 + m, grid.height - 1 + m]);
-      const tiers = [[], [], []];
+      const tiers = [[], [], []], runs = [[], [], []];
       browLines(vis, camera).forEach((line, n) => {
-        for (const run of browRuns(line)) tiers[run.tier].push(...pencil(run.points, n, BROWS.pencil));
+        for (const run of browRuns(line)) {
+          const strokes = pencil(run.points, n, BROWS.pencil);
+          tiers[run.tier].push(...strokes);
+          // (and on the ground, for the GPU: browOnGround)
+          for (const st of strokes) runs[run.tier].push(this.browOnGround(st, run.points));
+        }
       });
       // the rock faces turned to the viewer (those turned away are brows)
       const rocks = rockLines(world, camera, height, [-0.5, -0.5, grid.width - 0.5, grid.height - 0.5], (x, y) => hiddenAt(vis, camera, x, y));
       const lips = rocks.lips.flatMap((l, n) => pencil(l, n, ROCK_LOOK.pencil));
-      view = { tiers, lips, faces: rocks.faces };
+      view = { tiers, runs, lips, faces: rocks.faces };
       if (this.brows.views.size >= 6) this.brows.views.delete(this.brows.views.keys().next().value);
       this.brows.views.set(camera.angle, view);
     }
@@ -953,17 +1037,45 @@ export class Renderer {
     const t = camera.tile;
     const flat = (lines, cls) => chunked(lines, CONTOUR_CHUNK / 2).map((ls) => `<path class="${cls}" d="${ls.map((pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${r2(x * t)} ${r2(y * t)}`).join('')).join('')}"/>`).join('');
     const { tiers, lips, faces } = view;
+    if (lines) {
+      ['brow-light', 'brow', 'brow-outline'].forEach((cls, i) => view.runs[i].forEach((pts) => lines.push({ key: `t${lines.length}`, cls, pts })));
+      this.terrainItems(lines, faces, 'rock-face');
+      this.terrainItems(lines, lips, 'rock-lip');
+      return '';
+    }
     return flat(tiers[0], 'brow light') + flat(tiers[1], 'brow') + flat(tiers[2], 'brow outline') + paths(faces, 'rock-face') + paths(lips, 'rock-lip');
+  }
+
+  // A brow's pencil stroke (screen tiles, as the view is now) on the ground
+  // in world space, for gl/lines.js: each point on its screen column (u)
+  // where the brow it was drawn along lies on it (t, browLines: between the
+  // run's points), raised to show just where it is drawn now – so a turn
+  // carries it with its hill. [[x, y, z]…], z in grid units.
+  browOnGround(stroke, run) {
+    const cam = this.camera;
+    return stroke.map(([X, Y]) => {
+      let k = 1;
+      while (k < run.length - 1 && run[k][0] < X) k++;
+      const [x0, , t0] = run[k - 1], [x1, , t1] = run[k];
+      const f = x1 !== x0 ? Math.min(1, Math.max(0, (X - x0) / (x1 - x0))) : 0;
+      const u = X / COS30, t = t0 + (t1 - t0) * f;
+      const [dx, dy] = cam.toWorld((t + u) / 2, (t - u) / 2);
+      return [dx + cam.cx, dy + cam.cy, (t / 2 - Y) / cam.zScale];
+    });
   }
 
   // Faint lines on the slopes too steep to build on (steep.js), traced once
   // per terrain; the terrain view has the full contour lines instead.
-  renderSteep() {
+  renderSteep(lines = null) {
     if (!STEEP_LINES.on) return '';
     if (!this.steepLines) {
       const { grid } = this.world;
       const m = 1.2; // (as the contours)
       this.steepLines = steepLines(this.world, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], this.wetAt());
+    }
+    if (lines) {
+      this.terrainItems(lines, this.steepLines, 'steep');
+      return '';
     }
     return chunked(this.steepLines, CONTOUR_CHUNK).map((ls) => `<path class="steep" d="${this.pathData(ls, false)}"/>`).join('');
   }
@@ -986,7 +1098,7 @@ export class Renderer {
   // exactly its dots. A river's banks are a set distance from its
   // centreline instead (terrain/rivers.js), out to the edge of the map. Each
   // body of water is worked out on its own, over just its own box.
-  renderWater() {
+  renderWater(lines = null) {
     const { world } = this;
     const { list: bridges, deck } = this.bridgeState();
     this.waterBridges = this.bridgeKey; // drawn broken under these (see the constructor)
@@ -997,37 +1109,50 @@ export class Renderer {
     const open = (lines) => (hidden ? lines.flatMap((pts) => keepRuns(pts, (q) => !hidden(...q), 0.04)) : lines);
     // a path per chunk of the map (as the contours): a river runs right across it
     const path = (lines, cls) => chunked(cut(lines, CONTOUR_CHUNK), CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
-    return this.washWater(shore) + path(open(shore), 'shore') + path(open(bank), 'bank') + this.renderRipples(ripple, hidden);
+    // the ripples as short lines on the ground, level on the screen as the view rests
+    const ripples = this.rippleLines(ripple, hidden);
+    if (lines) {
+      this.terrainItems(lines, open(shore), 'shore');
+      this.terrainItems(lines, open(bank), 'bank');
+      this.terrainItems(lines, ripples, 'wave');
+      return this.washWater(shore);
+    }
+    return this.washWater(shore) + path(open(shore), 'shore') + path(open(bank), 'bank') + path(ripples, 'wave d1');
   }
 
-  // The ripples on the water, level on the screen whichever way the view is
-  // turned (their places are the world's, traceWater; while the view turns
-  // they turn with the terrain's sheet and are drawn level again once it
-  // rests). A path per chunk of the map, as the lines; left out under a
-  // bridge deck and from far off (d1).
-  renderRipples(spots, hidden) {
-    if (!spots.length) return '';
-    const cam = this.camera, { rise } = WATER.ripple;
-    // the ground's directions on the screen, and back: the world direction
-    // that runs `t` radians off level on the screen
+  // The ripples on the water (their places the world's, traceWater) as
+  // lines on the ground in world units: each a small wave, a crest and then
+  // a trough, level on the screen at the view's angle as it is now. On the
+  // GPU a turn carries them round with the water; once the view rests they
+  // are made level again (land redraws the terrain). Kept while the angle
+  // and the bridges stay the same, so the GPU keeps them too
+  // (renderTerrain); left out under a bridge deck.
+  rippleLines(spots, hidden) {
+    const cam = this.camera, key = `${cam.angle}|${this.bridgeKey}`;
+    if (this.ripples?.spots === spots && this.ripples.key === key) return this.ripples.lines;
+    const { rise } = WATER.ripple;
+    // the ground's directions on the screen, and back: the world offset of
+    // an offset on the screen (scene px)
     const [ox, oy] = cam.project(cam.cx, cam.cy, 0), [ax, ay] = cam.project(cam.cx + 1, cam.cy, 0), [bx, by] = cam.project(cam.cx, cam.cy + 1, 0);
     const [jxx, jyx, jxy, jyy] = [ax - ox, ay - oy, bx - ox, by - oy], det = jxx * jyy - jxy * jyx;
-    const along = (t) => {
-      const c = Math.cos(t), s = Math.sin(t);
-      const ux = (jyy * c - jxy * s) / det, uy = (jxx * s - jyx * c) / det, l = Math.hypot(ux, uy);
-      return [ux / l, uy / l];
-    };
-    const chunks = new Map();
+    const back = (sx, sy) => [(jyy * sx - jxy * sy) / det, (jxx * sy - jyx * sx) / det];
+    const lines = [];
     for (const { x, y, room, len, sign, tilt } of spots) {
       if (hidden?.(x, y)) continue;
-      const half = Math.min(len / 2, room * 0.9), [ux, uy] = along(tilt);
-      const a = this.project(x - ux * half, y - uy * half), b = this.project(x + ux * half, y + uy * half);
-      const vx = b[0] - a[0], vy = b[1] - a[1], h = Math.hypot(vx, vy) * rise * sign * 3.5; // (as photo.js ripple)
-      const key = `${Math.floor(x / CONTOUR_CHUNK)},${Math.floor(y / CONTOUR_CHUNK)}`;
-      const p = (q) => `${r2(q[0])} ${r2(q[1])}`;
-      chunks.set(key, (chunks.get(key) ?? '') + `M${p(a)}C${p([a[0] + vx / 3, a[1] + vy / 3 - h])} ${p([a[0] + (2 * vx) / 3, a[1] + (2 * vy) / 3 + h])} ${p(b)}`);
+      // as long on the screen as `len` (or the room there) along the ground
+      const c = Math.cos(tilt), s = Math.sin(tilt), l = Math.min(len, room * 1.8) / Math.hypot(...back(c, s));
+      const h = l * rise * sign * 3.5; // (a cubic's control points stand out about 3.5 times its height, as photo.js ripple)
+      const p0 = [-c * l / 2, -s * l / 2], p1 = [-c * l / 6, -s * l / 6 - h], p2 = [c * l / 6, s * l / 6 + h], p3 = [c * l / 2, s * l / 2];
+      const pts = [];
+      for (let k = 0; k <= 8; k++) {
+        const t = k / 8, u = 1 - t, w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
+        const [dx, dy] = back(w[0] * p0[0] + w[1] * p1[0] + w[2] * p2[0] + w[3] * p3[0], w[0] * p0[1] + w[1] * p1[1] + w[2] * p2[1] + w[3] * p3[1]);
+        pts.push([x + dx, y + dy]);
+      }
+      lines.push(pts);
     }
-    return [...chunks.values()].map((d) => `<path class="wave d1" d="${d}"/>`).join('');
+    this.ripples = { spots, key, lines };
+    return lines;
   }
 
   // The watercolour scheme (html.wc) and the tone schemes (html.tone): the
@@ -1205,7 +1330,7 @@ export class Renderer {
 
   // Contour lines out to the edge of the map, broken over water. Index lines
   // are brighter; the map's named hills have their tops marked.
-  renderContours() {
+  renderContours(lines = null) {
     const { grid } = this.world;
     const m = 1.2; // margin around the outermost dots
     if (!this.contourLines) {
@@ -1227,7 +1352,13 @@ export class Renderer {
     // thinned out with distance like the rest of the detail (d1 / d2); a
     // path per chunk of the map, not one across all of it, so drawing a
     // patch of the screen only goes through the lines near it
-    const line = (lines, cls) => chunked(lines, CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
+    if (lines) {
+      this.terrainItems(lines, tiers[2], 'contour-d2');
+      this.terrainItems(lines, tiers[1], 'contour-d1');
+      this.terrainItems(lines, tiers[0], 'contour-index');
+      return labels;
+    }
+    const line = (ls, cls) => chunked(ls, CONTOUR_CHUNK).map((c) => `<path class="${cls}" d="${this.pathData(c, false)}"/>`).join('');
     return line(tiers[2], 'contour d2') + line(tiers[1], 'contour d1') + line(tiers[0], 'contour index') + labels;
   }
 
@@ -1497,6 +1628,11 @@ export class Renderer {
     }
   }
 
+  // The canvas the terrain's SVG is drawn on (makeGlMirrors), or null.
+  groundMirror() {
+    return this.glMirrors?.find((m) => m.layers[0] === this.layers.terrain)?.gl.canvas ?? null;
+  }
+
   renderGlMirrors() {
     const d = this.drawn;
     if (!d) return;
@@ -1521,17 +1657,33 @@ export class Renderer {
   // with its overscan: placeView) at the angle the view has reached – as
   // the SVG lines are drawn mid-turn.
   renderGlLines() {
-    const gl = this.glLines, d = this.drawn, cam = this.camera;
+    const gl = this.glLines, d = this.drawn;
     if (!gl || !d) return;
     const night = this.inkSet ?? 0;
-    gl.draw({
-      zoom: d.zoom, panX: d.panX + this.ox, panY: d.panY + this.oy, cos: cam._cos, sin: cam._sin, angle: cam.angle, cx: cam.cx, cy: cam.cy,
-      iso: [cam.tile * COS30, cam.tile * 0.5, cam.tile * cam.zScale], W: this.winW + 2 * this.ox, H: this.winH + 2 * this.oy,
-    }, {
+    gl.draw(this.glLineView(), {
       stroke: this.strokeK, near: !!this.railsNear, far: this.lodLevel === 2, palette: THEME.palette,
       fg: night > 0.005 ? mixColour(THEME.palette.main, THEME.palette.detail, night) : THEME.palette.main,
       wash: this.lineWash(),
     });
+  }
+
+  // The view gl/lines.js draws for: the SVGs' (their wrapper with its
+  // overscan, placeView) at the angle the view has reached.
+  glLineView() {
+    const d = this.drawn, cam = this.camera;
+    return {
+      zoom: d.zoom, panX: d.panX + this.ox, panY: d.panY + this.oy, cos: cam._cos, sin: cam._sin, angle: cam.angle, cx: cam.cx, cy: cam.cy,
+      iso: [cam.tile * COS30, cam.tile * 0.5, cam.tile * cam.zScale], W: this.winW + 2 * this.ox, H: this.winH + 2 * this.oy,
+    };
+  }
+
+  // The terrain's lines (renderTerrain), as the roads: exact at any angle,
+  // mid-turn too.
+  renderGlTerrain() {
+    const gl = this.glTerrain;
+    if (!gl || !this.drawn) return;
+    const look = this.terrainStyles();
+    gl.draw(this.glLineView(), { stroke: this.strokeK, palette: THEME.palette, fg: THEME.palette.main, styles: look.styles, stylesKey: look.key });
   }
 
   // The painted schemes' roads and paths (watercolour, Painted): a wash of
@@ -1864,6 +2016,10 @@ export class Renderer {
     ground.style.transformOrigin = `${d.panX + this.ox}px ${d.panY + this.oy}px`;
     ground.style.transform = this.sheet(d.angle, a, true);
     ground.style.willChange = 'transform';
+    // (and the canvas its shapes are drawn on, gl/objects.js: what of the
+    // terrain is drawn for the view, the brows and rocks, and the washes)
+    const mirror = this.groundMirror();
+    if (mirror) Object.assign(mirror.style, { transformOrigin: ground.style.transformOrigin, transform: ground.style.transform });
     if (this.linesAngle !== a) {
       for (const l of LINES) {
         if (GL_LINES.includes(l)) continue; // (on the GPU the camera turns them)
@@ -2002,6 +2158,8 @@ export class Renderer {
     e.views.delete(view.k);
     for (const n of ['g', 'lg', 'sg']) {
       e[n].removeAttribute('transform');
+      // (shown on the GPU until the new one is built there: gl/objects.js)
+      view[n].standIn = e[n].standIn ?? e[n];
       e[n].parentNode?.replaceChild(view[n], e[n]);
     }
     Object.assign(e, view);
@@ -2146,6 +2304,8 @@ export class Renderer {
       old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: SETTLE_FADE, easing: 'ease-out', fill: 'forwards' }).finished.then(() => old.remove(), () => old.remove());
     }
     Object.assign(ground.style, { transform: '', transformOrigin: '', willChange: '' });
+    const mirror = this.groundMirror();
+    if (mirror) Object.assign(mirror.style, { transform: '', transformOrigin: '' });
     this.dirty.add('terrain');
     for (const l of SHEET) {
       this.layers[l].removeAttribute('transform');

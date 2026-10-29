@@ -13,9 +13,10 @@
 //                          of each column hidden behind nearer ground
 //                 events   per column the brow points found on it
 //   hiddenAt(vis, camera, x, y)  is the ground at world (x, y) hidden
-//   browLines(vis, camera)  -> [{ points: [[x, y]…], s: [strength…] }]
+//   browLines(vis, camera)  -> [{ points: [[x, y, t]…], s: [strength…] }]
 //                          the brow points joined across the columns, in
-//                          screen units (tiles)
+//                          screen units (tiles), each with how far along its
+//                          column it lies (t: where on the ground it is)
 //
 // View units: t = rx + ry grows towards the viewer, u = rx - ry runs across
 // the screen (rx, ry: Camera.rotated). A ground point at height h shows at
@@ -261,7 +262,7 @@ export function browLines(vis, camera, opts = BROWS) {
     const n = full.length;
     const [head, tail] = ends[c];
     const fade = (k) => Math.min(1, ((head ? Infinity : k) * step) / taper, ((tail ? Infinity : n - 1 - k) * step) / taper);
-    const at = (p, py) => [columns[p.i].u * COS30, py];
+    const at = (p, py) => [columns[p.i].u * COS30, py, p.t];
     const points = full.map((p, k) => at(p, y[k]));
     const strength = s.map((v, k) => v * fade(k));
     if (head) { points.unshift(at(head, head.y)); strength.unshift(strength[0]); }
