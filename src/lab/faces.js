@@ -18,7 +18,7 @@
 //   const sheet = readSheet(image, model)  { painted, windows } per panel
 //   const mesh = meshOf(model, sheet)      triangles for render/paintedGL.js
 
-import { Painter } from '../render/painter.js';
+import { Painter, LOOK } from '../render/painter.js';
 import { Camera } from '../render/camera.js';
 import { STRUCTURE_TYPES } from '../../structures/index.js';
 
@@ -84,11 +84,20 @@ function axesOf(n) {
 }
 
 // Where a face is turned, in words: as the street sees the house.
-function sideOf(n) {
+function sideOf(n, eave = false) {
   if (n[2] > 0.98) return 'top';
   if (n[2] < -0.98) return 'underside';
   const word = Math.abs(n[1]) >= Math.abs(n[0]) ? (n[1] < 0 ? 'front' : 'back') : n[0] > 0 ? 'left side' : 'right side';
+  if (eave) return `${word.replace(' side', '')} eave`;
   return n[2] > 0.15 ? `roof, ${word === 'front' || word === 'back' ? word : word.replace(' side', '')} slope` : word;
+}
+
+// The thin board under a roof's edge (LOOK.fascia): upright, no taller
+// than the board. Its own panel, with the roof, not a second wall.
+function isEave(pts, n) {
+  if (!LOOK.fascia || Math.abs(n[2]) > 0.15) return false;
+  const zs = pts.map((p) => p[2]);
+  return Math.max(...zs) - Math.min(...zs) <= LOOK.fascia + 1e-6;
 }
 
 // The model: the building's faces grouped into panels, laid out on the
@@ -116,19 +125,20 @@ export function facesOf(spec = BUILDING) {
   for (const f of faces) {
     const { n, area } = normalOf(f.pts);
     if (area < TINY) continue;
-    const piece = pieceOf(f.solid), d = dot(n, f.pts[0]);
+    const piece = pieceOf(f.solid), d = dot(n, f.pts[0]), eave = isEave(f.pts, n);
     const key = `${piece}|${f.solid}|${n.map((v) => v.toFixed(3))}|${d.toFixed(4)}`;
     // walls and roof of one roofed() are two solids next to each other: one piece
     const merged = piece === 'house' ? `house|${n.map((v) => v.toFixed(3))}|${d.toFixed(4)}` : key;
-    if (!panels.has(merged)) panels.set(merged, { piece, n, faces: [], solids: [] });
+    if (!panels.has(merged)) panels.set(merged, { piece, n, eave, faces: [], solids: [] });
     panels.get(merged).faces.push(f.pts);
     panels.get(merged).solids.push(f.solid);
   }
   // in order: the house's walls round from the left side, its roof, then
   // the rest, each piece in the same order
-  const ORDER = ['left side', 'front', 'right side', 'back', 'roof, left slope', 'roof, front slope', 'roof, right slope', 'roof, back slope', 'top', 'underside'];
+  const ORDER = ['left side', 'front', 'right side', 'back', 'roof, left slope', 'roof, front slope', 'roof, right slope', 'roof, back slope',
+    'left eave', 'front eave', 'right eave', 'back eave', 'top', 'underside'];
   const PIECES = ['house', 'annex', 'chimney'];
-  const list = [...panels.values()].map((p) => ({ ...p, side: sideOf(p.n) }))
+  const list = [...panels.values()].map((p) => ({ ...p, side: sideOf(p.n, p.eave) }))
     .sort((a, b) => PIECES.indexOf(a.piece) - PIECES.indexOf(b.piece) || ORDER.indexOf(a.side) - ORDER.indexOf(b.side));
   const count = {};
   for (const p of list) count[`${p.piece}|${p.side}`] = (count[`${p.piece}|${p.side}`] ?? 0) + 1;
@@ -168,9 +178,9 @@ function place(list) {
   let x = M, y = M + LABEL, rowH = 0, width = 0, row = null;
   for (const p of list) {
     const cell = Math.max(p.w, MIN_W);
-    // a row for the house's walls, one for its roof, one for each other
+    // a row for the house's walls, one for its roof (and eaves), one for each other
     // piece; and a new one when it's full
-    const group = p.piece === 'house' ? (/roof|top/.test(p.side) ? 'roof' : 'walls') : p.piece;
+    const group = p.piece === 'house' ? (/roof|eave|top/.test(p.side) ? 'roof' : 'walls') : p.piece;
     if (x > M && (x + cell > ROW || group !== row)) {
       x = M; y += rowH + GAP + LABEL; rowH = 0;
     }

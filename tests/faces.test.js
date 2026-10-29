@@ -9,9 +9,13 @@ test("the house's own faces, one panel per plane, named as the street sees them"
   for (const l of ['House · front', 'House · back', 'House · left side', 'House · right side', 'House · roof, left slope', 'House · roof, right slope', 'Chimney · top']) {
     assert.ok(labels.includes(l), l);
   }
-  // the front wall and the gable over it are one panel, taller than wide
+  // the front wall and the gable over it are one panel (one face since
+  // "Whole gables"), from the ground to the peak, taller than wide
   const front = model.panels.find((p) => p.label === 'House · front');
-  assert.ok(front.faces.length >= 2 && front.h > front.w);
+  const zs = front.faces.flat().map((q) => q[2]);
+  assert.ok(Math.min(...zs) === 0 && Math.max(...zs) > 0.4 && front.h > front.w);
+  // the eave boards under the roof's edges are their own, not more walls
+  assert.ok(labels.includes('House · left eave') && labels.includes('House · right eave'));
   // laid out without overlapping
   for (const a of model.panels) for (const b of model.panels) {
     if (a === b) continue;

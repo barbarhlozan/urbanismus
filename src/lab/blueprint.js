@@ -9,6 +9,7 @@ const MAGENTA = `rgb(${WINDOW.join(',')})`;
 
 // What each kind of panel is, under its name.
 const HOW = (p) => (/roof/.test(p.side) ? 'laid flat · eaves at the bottom, ridge at the top'
+  : /eave/.test(p.side) ? 'the board under the roof edge, seen from outside'
   : p.side === 'top' ? 'seen from above · the street down'
     : 'as seen from outside · ground at the bottom');
 
@@ -162,7 +163,7 @@ export function paintSample(ctx, model) {
   for (const p of model.panels) {
     // the panel's windows, in its px: [x0, y0, x1, y1]
     const wins = [];
-    const wall = p.piece === 'house' && !/roof|top/.test(p.side);
+    const wall = p.piece === 'house' && !/roof|eave|top/.test(p.side);
     if (wall) {
       const ww = 0.044 * S, wh = 0.068 * S, zb = 0.06 * S;
       const gable = p.side === 'front' || p.side === 'back';
@@ -184,6 +185,7 @@ export function paintSample(ctx, model) {
         const [x0, y0, x1, y1] = w, f = 7;
         c = x - x0 < f || x1 - x < f || y - y0 < f || y1 - y < f || Math.abs(x - (x0 + x1) / 2) < 3 || Math.abs(y - (y0 + (y1 - y0) * 0.38)) < 3 ? '#f4efe3' : '#2e4752';
       } else if (p.piece === 'chimney') c = p.side === 'top' ? '#3a2f2a' : Math.floor(y / 14) % 2 === Math.floor((x + (Math.floor(y / 14) % 2) * 9) / 18) % 2 ? '#a3563d' : '#8e4630';
+      else if (/eave/.test(p.side)) c = '#5f3c24';
       else if (/roof/.test(p.side)) c = (y % 34) < 5 ? '#7a3b28' : ((x + (Math.floor(y / 34) % 2) * 17) % 34) < 3 ? '#86412c' : '#a4553a';
       else if (p.piece === 'annex') c = x % 26 < 3 ? '#5f3c24' : '#8b5a35';
       else if (z > wallTop + 0.004) c = x % 26 < 4 ? '#5f3c24' : '#8b5a35';
