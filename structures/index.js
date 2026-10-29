@@ -99,7 +99,7 @@ export const BUILD_FAMILIES = [
   [industry.panelarna], [industry.vapenka], [industry.elektrarna],
   [mine.pit], [mine.colliery], [mine.deepMine],
   // Zemědělství
-  [farm.smallholding], [farm.farmstead], [farm.jzd], [farm.stateFarm],
+  [farm.smallholding], [farm.farmstead, farm.farmsteadDeep], [farm.jzd], [farm.stateFarm],
   [industry.mlekarna, industry.mlekarnaMedium], [industry.zzn, industry.zznLarge], [industry.sts, industry.stsLarge],
   [industry.cukrovar],
   // Prostranství

@@ -26,6 +26,10 @@ size.wide
   cs: Na dvě parcely
   en: Two plots
 
+size.deep
+  cs: Na hlubokém pozemku
+  en: Deep plot
+
 size.tower
   cs: Výšková
   en: High-rise
@@ -351,6 +355,10 @@ farmstead
 farmstead.blurb
   cs: Starý selský dvůr
   en: An old farmer's courtyard
+
+farmstead-deep.blurb
+  cs: Selský dvůr na hlubokém pozemku
+  en: A farmer's courtyard on a deep plot
 
 jzd
   cs: JZD

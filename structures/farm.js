@@ -149,6 +149,125 @@ export const smallholding = {
 
 // ----- 3×2 -----
 
+// A farm whose yard is open on one side or more, the shapes of the
+// farmsteads built up on fewer sides (named as the ethnographers do), between x0 and x1, from the street at y0 back to y1:
+//   one-sided  (jednostranný) the farmhouse, stables and barn in one line
+//              down the left, end to end under stepping roofs; the yard
+//              open beside them, a hay barn and a tree in it
+//   two-sided  (dvoustranný) an L: the farmhouse and stables down the
+//              left, the barn across the back; open to the street side
+//   scattered  (hromadný) the farmhouse at the street, the stables and the
+//              barn standing apart round an open yard, a hay barn between
+function openFarm(g, kind, x0, x1, y1) {
+  const y0 = -0.3, paint = g.paint, ranges = g.int(0, 11), barnPaint = g.int(0, 11);
+  const hw = g.range(0.36, 0.42), hy1 = y0 + g.range(0.6, 0.8);
+  farmhouse(g, x0, y0, hw, hy1 - y0, 0.18, g.range(0.24, 0.28));
+  g.paint = ranges;
+  if (kind === 'one-sided') {
+    // stables, then the barn, taller, at the end of the line
+    const yb = hy1 + (y1 - hy1) * g.range(0.4, 0.55), sw = hw - 0.02;
+    g.gableY(x0 + 0.01, hy1, 0, sw, yb - hy1, 0.15, sw * 0.45);
+    g.windows(x0 + 0.01, hy1, sw, yb - hy1, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'left'], w: 0.35, h: 0.35 });
+    g.paint = barnPaint;
+    const bw = hw + 0.06;
+    g.gableY(x0 - 0.02, yb, 0, bw, y1 - yb, 0.2, bw * 0.5);
+    const dy = yb + (y1 - yb) * g.range(0.3, 0.5), xb = x0 - 0.02 + bw;
+    g.line([[xb, dy, 0], [xb, dy, 0.17], [xb, dy + 0.22, 0.17], [xb, dy + 0.22, 0]], { facing: [1, 0, 0] });
+    g.paint = ranges;
+    hayBarn(g, x0 + hw + g.range(0.25, 0.45), (hy1 + y1) / 2 - 0.2, 0.24, 0.36, 0.15);
+    tree(g, x0 + hw + g.range(0.5, 0.8), y0 + 0.35, 1.1, 'spreading');
+  } else if (kind === 'two-sided') {
+    const sw = g.range(0.3, 0.36), bd = g.range(0.4, 0.5), yb = y1 - bd, sx = x0 + 0.02;
+    g.gableY(sx, hy1, 0, sw, yb - hy1, 0.15, sw * 0.4);
+    g.windows(sx, hy1, sw, yb - hy1, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'left'], w: 0.35, h: 0.35 });
+    g.paint = barnPaint;
+    const bx = sx + sw, be = x1 - g.range(0, 0.3);
+    g.gable(bx, yb, 0, be - bx, bd, 0.2, g.range(0.2, 0.24));
+    barnDoor(g, bx + (be - bx) * g.range(0.3, 0.55), yb, 0.22, 0.17);
+    g.paint = ranges;
+    tree(g, (bx + be) / 2, (hy1 + yb) / 2, 1.1, 'spreading');
+  } else {
+    // the stables apart down the right, the barn apart at the back
+    const rw = g.range(0.3, 0.36), ry0 = y0 + g.range(0.15, 0.4), ry1 = y1 - g.range(0.5, 0.7);
+    g.gableY(x1 - rw - 0.04, ry0, 0, rw, ry1 - ry0, 0.15, rw * 0.4);
+    g.windows(x1 - rw - 0.04, ry0, rw, ry1 - ry0, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'right'], w: 0.35, h: 0.35 });
+    g.paint = barnPaint;
+    const bd = g.range(0.38, 0.46), bx0 = x0 + g.range(0.02, 0.15), bx1 = x1 - rw - g.range(0.12, 0.25);
+    g.gable(bx0, y1 - bd, 0, bx1 - bx0, bd, 0.2, g.range(0.2, 0.24));
+    barnDoor(g, bx0 + (bx1 - bx0) * g.range(0.3, 0.55), y1 - bd, 0.22, 0.17);
+    g.paint = ranges;
+    hayBarn(g, x0 + hw + g.range(0.1, 0.25), hy1 - 0.2, 0.22, 0.32, 0.15);
+    tree(g, (x0 + x1) / 2, (hy1 + y1 - bd) / 2 + 0.05, 1.1, 'spreading');
+  }
+  g.paint = paint;
+}
+
+// A courtyard farm (statek) between x0 and x1, from its street front at
+// y0 back to y1: the farmhouse at the street, stables behind it down the
+// left in two parts, the barn across the back, a side range (or, walled,
+// a wall) down the right, and the front wall with its gateway between.
+// Each farm is measured out a little differently (seeded): the house
+// longer or shorter, the stables stepping down, the side range set back
+// from the street, the gateway off the middle, the barn deeper or not.
+// The ranges meet side by side, not in an L, so each sorts in depth on its
+// own (likewise the wall's pieces). Roofs of their own (g.paint, ROOF_OF in
+// painter.js): the farmhouse the farm's, the stables and side range one,
+// the barn another, as each was re-roofed in its time.
+//   three-sided  the farmhouse gable-end to the street
+//   walled       the same with a wall down the right instead of the side
+//                range, an open hay barn in the one big yard
+//   four-sided   the farmhouse long, its eaves to the street, the gateway
+//                beside it
+function statek(g, kind, x0, x1, y1) {
+  if (['one-sided', 'two-sided', 'scattered'].includes(kind)) return openFarm(g, kind, x0, x1, y1);
+  const y0 = -0.3, paint = g.paint, ranges = g.int(0, 11), barnPaint = g.int(0, 11);
+  const sw = g.range(0.3, 0.36);                      // the stables' depth
+  const rw = g.range(0.28, 0.36), back = kind === 'four-sided' ? 0 : g.range(0, 0.25); // side range, set back
+  const xs = kind === 'walled' ? x1 - 0.05 : x1 - rw;  // the right side's inner face
+  const bd = g.range(0.38, 0.5), yb = y1 - bd;        // the barn's front
+  let hx1, hy1;                                        // the farmhouse's far corner
+  if (kind === 'four-sided') {
+    const gw = g.range(0.46, 0.56);
+    hx1 = xs - gw; hy1 = y0 + 0.34;
+    longFarmhouse(g, x0, y0, hx1 - x0, 0.34, 0.17, g.range(0.18, 0.22));
+    g.paint = ranges;
+    gateway(g, hx1, xs, y0 - 0.01, 0.21);
+  } else {
+    const hw = g.range(0.36, 0.42);
+    hx1 = x0 + hw; hy1 = y0 + g.range(0.6, 0.8);
+    farmhouse(g, x0, y0, hw, hy1 - y0, 0.18, g.range(0.24, 0.28));
+    g.paint = ranges;
+    // the front wall, its gateway somewhere along it
+    const gw = 0.48, ga = hx1 + g.range(0.04, Math.max(0.05, xs - hx1 - gw - 0.04));
+    if (ga - hx1 > 0.01) g.box(hx1, y0, 0, ga - hx1, 0.05, 0.12);
+    gateway(g, ga, ga + gw, y0 - 0.01, 0.21);
+    if (xs - ga - gw > 0.01) g.box(ga + gw, y0, 0, xs - ga - gw, 0.05, 0.12);
+  }
+  // the stables behind the house, in two parts stepping down
+  const sx = x0 + 0.02, mid = hy1 + (yb - hy1) * g.range(0.4, 0.6);
+  for (const [a, b, h] of [[hy1, mid, 0.15], [mid, yb, g.range(0.11, 0.14)]]) {
+    g.gableY(sx, a, 0, sw, b - a, h, sw * 0.4);
+    g.windows(sx, a, sw, b - a, 0, h, h, 0.12, { skip: ['front', 'back', 'left'], w: 0.35, h: 0.35 });
+  }
+  // the barn across the back
+  g.paint = barnPaint;
+  const bx = sx + sw;
+  g.gable(bx, yb, 0, xs - bx, bd, 0.2, g.range(0.2, 0.24));
+  barnDoor(g, bx + (xs - bx) * g.range(0.3, 0.55), yb, 0.22, 0.17);
+  g.paint = ranges;
+  if (kind === 'walled') {
+    g.box(xs, y0, 0, 0.05, y1 - y0, 0.12);
+    hayBarn(g, xs - 0.32, (hy1 + yb) / 2 - 0.2, 0.24, 0.4, 0.16);
+    tree(g, (bx + xs) / 2 - 0.15, y0 + 0.5, 1.1, 'spreading');
+  } else {
+    g.gableY(xs, y0 + back, 0, rw, y1 - y0 - back, 0.15, 0.13);
+    g.windows(xs, y0 + back, rw, y1 - y0 - back, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'right'], w: 0.35, h: 0.35 });
+    if (back > 0.03) g.box(xs, y0, 0, 0.05, back, 0.12);
+    tree(g, (bx + xs) / 2, (hy1 + yb) / 2, 1.1, 'spreading');
+  }
+  g.paint = paint;
+}
+
 export const farmstead = {
   id: 'farmstead',
   name: 'Farmstead',
@@ -162,58 +281,30 @@ export const farmstead = {
   stats: { jobs: 4 },
   agents: 1,
   yards: ['garden', 'trees'],
-  // the layouts round the yard (saves from before version 7 are the first)
-  kinds: ['three-sided', 'walled', 'four-sided'],
+  // the layouts round the yard, from open to closed (saves from before
+  // version 7 are three-sided)
+  kinds: ['one-sided', 'two-sided', 'scattered', 'three-sided', 'walled', 'four-sided'],
   draw(g, s) {
-    // A courtyard farm: the farmhouse at the street, the big barn across
-    // the back, a wall with its gateway at the front; a field and an orchard
-    // beside. The ranges meet side by side, not in an L, so each sorts in
-    // depth on its own (likewise the wall's pieces).
-    //   three-sided  the farmhouse gable-end to the street with the stables
-    //                behind it down the left, a side range down the right
-    //   walled       the same with a wall down the right instead, and an
-    //                open hay barn in the one big yard
-    //   four-sided   the farmhouse long, its eaves to the street, the gateway
-    //                beside it; stables down the left, a side range right
-    const kind = kindOf(g, s, this.kinds);
-    // roofs of their own (g.paint, ROOF_OF in painter.js): the farmhouse
-    // the farm's, the stables and side range one, the barn another, as
-    // each was re-roofed in its time (eternit on the barn, tiles kept on
-    // the house)
-    const paint = g.paint, ranges = g.int(0, 11), barn = g.int(0, 11);
-    if (kind === 'four-sided') {
-      longFarmhouse(g, -0.32, -0.3, 1.02, 0.34, 0.17, 0.2);
-      g.paint = ranges;
-      g.gableY(-0.3, 0.04, 0, 0.34, 1.32, 0.15, 0.13);
-      g.windows(-0.3, 0.04, 0.34, 1.32, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'left'], w: 0.35, h: 0.35 });
-      gateway(g, 0.7, 1.25, -0.31, 0.21);
-    } else {
-      farmhouse(g, -0.32, -0.3, 0.38, 0.7, 0.18, 0.26);
-      g.paint = ranges;
-      g.gableY(-0.3, 0.4, 0, 0.34, 0.96, 0.15, 0.13);
-      g.windows(-0.3, 0.4, 0.34, 0.96, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'left'], w: 0.35, h: 0.35 });
-      g.box(0.06, -0.3, 0, 0.36, 0.05, 0.12);
-      gateway(g, 0.42, 0.9, -0.31, 0.21);
-      g.box(0.9, -0.3, 0, 0.35, 0.05, 0.12);
-    }
-    g.paint = barn;
-    g.gable(0.04, 0.9, 0, 1.21, 0.46, 0.2, 0.22);
-    barnDoor(g, 0.55, 0.9, 0.22, 0.17);
-    g.paint = ranges;
-    if (kind === 'walled') {
-      // the wall down the right, from the front wall to the barn's end
-      g.box(1.25, -0.3, 0, 0.05, 1.66, 0.12);
-      hayBarn(g, 0.95, 0.3, 0.24, 0.4, 0.16);
-      tree(g, 0.6, 0.35, 1.1, 'spreading');
-    } else {
-      g.gableY(1.25, -0.1, 0, 0.34, 1.46, 0.15, 0.13);
-      g.windows(1.25, -0.1, 0.34, 1.46, 0, 0.15, 0.15, 0.12, { skip: ['front', 'back', 'right'], w: 0.35, h: 0.35 });
-      g.box(1.25, -0.3, 0, 0.05, 0.2, 0.12);
-      tree(g, 0.9, 0.4, 1.1, 'spreading');
-    }
-    g.paint = paint;
+    // the courtyard, a field and an orchard beside it
+    statek(g, kindOf(g, s, this.kinds), -0.32, 1.59, 1.36);
     field(g, 1.75, 2.36, -0.32, 0.7);
     for (const [x, y] of [[1.85, 1.0], [2.1, 0.95], [2.3, 1.2], [1.95, 1.28]]) tree(g, x, y, 0.8, 'spreading');
+  },
+};
+
+// A deep statek, two dots to the street and three back, as the farms of
+// Holašovice and the South Bohemian villages stand on their narrow, deep
+// plots: a long yard between the stables and the side range, the barn
+// at the far end, the orchard behind it.
+export const farmsteadDeep = {
+  ...farmstead,
+  id: 'farmstead-deep',
+  blurb: 'A courtyard farm on a deep plot',
+  size: 'Deep',
+  footprint: [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2], [1, 2]],
+  draw(g, s) {
+    statek(g, kindOf(g, s, this.kinds), -0.32, 1.32, 2.0);
+    for (const [x, y] of [[-0.1, 2.25], [0.35, 2.2], [0.8, 2.3], [1.15, 2.22]]) tree(g, x, y, 0.8, 'spreading');
   },
 };
 
