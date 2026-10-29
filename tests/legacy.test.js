@@ -3,7 +3,7 @@
 // keeps the kind it was drawn as.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { unretire, upgrade, regroup } from '../src/core/legacy.js';
+import { unretire, upgrade, regroup, rehouse } from '../src/core/legacy.js';
 import { STRUCTURE_TYPES, kindShown } from '../structures/index.js';
 
 const OLD = { 'service-centre': 4, tuzex: 1, workshop: 1, works: 1, 'plant-small': 1, 'workshop-medium': 2, 'works-medium': 2, 'plant-medium': 2, 'workshop-large': 6, factory: 6, plant: 6 };
@@ -59,4 +59,25 @@ test('parks of before version 5 go to the tool their look belongs to, the same s
   assert.equal(regroup({ type: 'green', seed: 1, data: { kind: 'pitch' } }).type, 'pitch');
   assert.deepEqual(regroup({ type: 'meadow', seed: 1, data: { kind: 'woods' } }), { type: 'meadow', seed: 1, data: { kind: 'woods' } });
   assert.equal(regroup({ type: 'meadow', seed: 1, data: { kind: 'forest' } }).type, 'forest-park');
+});
+
+test('houses of before version 6 keep their look under the tool it belongs to now', () => {
+  const OLD_HOUSE = ['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard', 'farmstead', 'farmstead'];
+  const NOW = { cube: 'family-house', villa: 'family-house', mansard: 'family-house', street: 'house', farm: 'house', farmstead: 'house' };
+  const seen = new Set();
+  for (let seed = 1; seed < 400; seed++) {
+    const was = kindShown({ kinds: OLD_HOUSE }, { seed, data: {} });
+    const s = rehouse({ type: 'house', seed, data: { turn: 2 } });
+    const def = STRUCTURE_TYPES[s.type];
+    assert.equal(s.type, NOW[was]);
+    assert.equal(def.footprint.length, 1);
+    assert.equal(s.data.turn, 2);
+    assert.equal(kindShown(def, s), was === 'mansard' ? 'villa' : was);
+    seen.add(s.type);
+  }
+  assert.equal(seen.size, 2);
+  // terraced rows go to the wide family house, the rest stay
+  assert.equal(rehouse({ type: 'house-wide', seed: 1, data: { kind: 'row' } }).type, 'family-house-wide');
+  assert.deepEqual(rehouse({ type: 'house-wide', seed: 1, data: { kind: 'longhouse' } }), { type: 'house-wide', seed: 1, data: { kind: 'longhouse' } });
+  assert.deepEqual(rehouse({ type: 'apartments', seed: 1, data: {} }), { type: 'apartments', seed: 1, data: {} });
 });

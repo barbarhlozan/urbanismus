@@ -38,7 +38,8 @@
 #   railway
 #
 # Shared names (tags) – each covers several things at once
-#   residential          every home: house, apartments, block
+#   residential          every home: house, family_house, apartments, block
+#   houses               house and family_house, every size
 #   business             jednota, hospoda, obchodni_dum, narodni_vybor,
 #                        posta, hotel
 #   shop, pub, office, hotel
@@ -62,6 +63,7 @@
 #     benzina            benzina
 #   Bydlení
 #     house              house, house_wide
+#     family_house       family_house, family_house_wide
 #     apartments         apartments, apartments_wide
 #     block              block, block_wide
 #   Občanská vybavenost

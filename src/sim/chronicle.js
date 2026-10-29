@@ -221,7 +221,7 @@ export class Chronicle {
     this.types.set(s.id, s.type);
     const def = STRUCTURE_TYPES[s.type];
     if (matches(def, 'heritage')) return this.write(LANDMARK(def.name));
-    if (s.type === 'house' || s.type === 'house-wide') this.house(s);
+    if (def.tags?.includes('houses')) this.house(s);
     else this.firstOf(s);
   }
 
@@ -249,7 +249,7 @@ export class Chronicle {
 
   countHouses() {
     let n = 0;
-    for (const o of this.world.structures.values()) if (o.type === 'house' || o.type === 'house-wide') n++;
+    for (const o of this.world.structures.values()) if (STRUCTURE_TYPES[o.type]?.tags?.includes('houses')) n++;
     return n;
   }
 

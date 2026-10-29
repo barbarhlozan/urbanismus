@@ -79,7 +79,7 @@ export const BUILD_FAMILIES = [
   // Doprava
   [station.station, station.main, station.stop], [busStop], [square.busStation], [industry.benzina],
   // Bydlení
-  [housing.house, housing.houseWide], [housing.apartments, housing.apartmentsWide], [housing.block, housing.blockWide],
+  [housing.house, housing.houseWide], [housing.familyHouse, housing.familyHouseWide], [housing.apartments, housing.apartmentsWide], [housing.block, housing.blockWide],
   // Občanská vybavenost
   [business.jednota, business.jednotaWide], [business.hospoda, business.hospodaWide], [business.store, business.storeWide],
   [business.office, business.officeWide, business.officeTower, business.officeTowerWide],

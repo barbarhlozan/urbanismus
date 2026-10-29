@@ -107,16 +107,28 @@ benzina.blurb
 # ---------- Bydlení ----------
 
 house
+  cs: Stavení
+  en: Village house
+
+house.blurb
+  cs: Chalupa, statek, dlouhé stavení
+  en: A cottage, a farmhouse, a long house
+
+house-wide.blurb
+  cs: Dvojdomek, stavení se stodolou
+  en: Two houses under one roof, a house and barn
+
+family_house
   cs: Rodinný domek
   en: Family house
 
-house.blurb
-  cs: Domek se zahrádkou
-  en: A little house with a garden
+family-house.blurb
+  cs: Kostka nebo vila se zahrádkou
+  en: A cube house or a villa with a garden
 
-house-wide.blurb
-  cs: Domky na dvou parcelách
-  en: Little houses on two plots
+family-house-wide.blurb
+  cs: Řadové domky
+  en: Terraced houses
 
 apartments
   cs: Činžovní dům

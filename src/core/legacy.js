@@ -104,6 +104,29 @@ export function regroup(s) {
   return s;
 }
 
+// Houses before version 6, when one House held village houses and newer
+// family houses alike: old type -> its kinds then, in order, and kind ->
+// what it is now ([type, kind]). Each keeps its look: the kind is written
+// into s.data, so the new kinds' order and weights don't redraw it. The
+// mansard house is gone: it's a villa now.
+const REHOUSED = {
+  house: [['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard', 'farmstead', 'farmstead'],
+    { cube: ['family-house', 'cube'], villa: ['family-house', 'villa'], mansard: ['family-house', 'villa'],
+      street: ['house', 'street'], farm: ['house', 'farm'], farmstead: ['house', 'farmstead'] }],
+  'house-wide': [['twin', 'twin', 'twin', 'row', 'longhouse'],
+    { twin: ['house-wide', 'twin'], longhouse: ['house-wide', 'longhouse'], row: ['family-house-wide', 'row'] }],
+};
+
+// A saved house of before version 6 as the tool its look belongs to now.
+export function rehouse(s) {
+  const was = REHOUSED[s.type];
+  if (!was) return s;
+  const [kinds, to] = was;
+  const kind = kinds.includes(s.data?.kind) ? s.data.kind : kinds[Math.floor(mulberry32(drawSeed(s))() * kinds.length)];
+  [s.type, s.data] = [to[kind][0], { ...s.data, kind: to[kind][1] }];
+  return s;
+}
+
 // A saved structure of a retired type as the one that replaced it.
 export function unretire(s) {
   const split = SPLIT[s.type];

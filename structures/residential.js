@@ -1,6 +1,7 @@
 // A structure definition. Everything the game knows about a building type
-// lives here. Housing: House, Apartments and Block, each one dot or two
-// (the Wide ones) – separate things to build, nothing grows into another.
+// lives here. Housing: House, Family house, Apartments and Block, each one
+// dot or two (the Wide ones) – separate things to build, nothing grows into
+// another.
 //
 //   id          unique key (saved in save files, don't rename casually)
 //   name        shown in the UI
@@ -84,54 +85,113 @@ function farmstead(g) {
   g.line([[xd, yd - 0.025, 0], [xd, yd - 0.025, 0.1], [xd, yd + 0.025, 0.1], [xd, yd + 0.025, 0]], { facing: [side, 0, 0], round: LOOK.round.windows });
 }
 
-// Family houses: the 70s "cube" with a pyramid roof, village houses
-// with their gable to the street, long farmhouses, villas, and old
-// farmsteads with their gable to the street.
+// A chalupa: a low cottage with its gable to the street, the gable boarded
+// (svislé bednění, as in the north and east Bohemian villages) over a
+// plastered ground floor with two windows; the door from the yard, on the
+// long side, and sometimes a lean-to shed behind.
+function chalupa(g) {
+  const w = g.range(0.26, 0.3), d = g.range(0.4, 0.46), h = g.range(0.14, 0.16), r = g.range(0.22, 0.27);
+  const x0 = -w / 2, x1 = w / 2, y = -d / 2;
+  const line = (pts) => g.line(pts, { facing: FRONT });
+  g.roofed(x0, y, 0, w, d, h, { h: r, ridge: 'y' });
+  g.windows(x0, y, w, d, 0, h, h, 0.1, { h: 0.42, skip: ['front'] });
+  for (const k of [-1, 1]) frontWindow(g, k * w * 0.22, y, h * 0.32, 0.045, 0.06);
+  // the boarded gable: a board along its foot, boards up to the verges
+  line([[x0, y, h], [x1, y, h]]);
+  g.detailed(1, () => {
+    for (let x = x0 + 0.03; x < x1 - 0.02; x += 0.028) {
+      const top = h + r * (1 - Math.abs(x) / (w / 2)) - 0.012;
+      if (top - h > 0.025) line([[x, y, h + 0.008], [x, y, top]]);
+    }
+  });
+  frontWindow(g, 0, y, h + r * 0.35, 0.026, 0.035); // the loft hatch
+  const side = g.pick([-1, 1]), xd = side * w / 2, yd = y + d * g.range(0.55, 0.7);
+  g.line([[xd, yd - 0.025, 0], [xd, yd - 0.025, 0.1], [xd, yd + 0.025, 0.1], [xd, yd + 0.025, 0]], { facing: [side, 0, 0], round: LOOK.round.windows });
+  chimney(g, 0.02, g.range(-0.05, 0.1), h + r * 0.5, r * 0.6);
+  if (g.chance(0.5)) g.gable(-side * w / 2 - (side > 0 ? 0.14 : 0), d / 2 - 0.2, 0, 0.14, 0.18, 0.11, 0.06); // lean-to shed
+}
+
+// A long house with its eaves to the street (okapem do ulice), as in the
+// Haná and the Moravian lowlands: half-hipped, one storey, a row of windows
+// and the entrance in a gabled porch (žudro) on the street front.
+function longHouse(g) {
+  const w = g.range(0.5, 0.58), d = g.range(0.28, 0.32), h = 0.17, r = g.range(0.18, 0.22);
+  const x0 = -w / 2, y = -d / 2;
+  g.roofed(x0, y, 0, w, d, h, { h: r, hip: 0.06 }); // half-hipped
+  g.windows(x0, y, w, d, 0, h, h, 0.11, { h: 0.4, skip: ['front'] });
+  // the porch, off the middle, and two windows each side of it
+  const xp = g.pick([-1, 1]) * g.range(0.04, 0.08), pw = 0.1, pd = 0.07, ph = 0.13;
+  g.roofed(xp - pw / 2, y - pd, 0, pw, pd, ph, { h: 0.06, ridge: 'y' });
+  const arch = [];
+  for (let i = 0; i <= 6; i++) {
+    const t = Math.PI * (1 - i / 6);
+    arch.push([xp + Math.cos(t) * 0.03, y - pd, 0.075 + Math.sin(t) * 0.022]);
+  }
+  g.line([[xp - 0.03, y - pd, 0], ...arch, [xp + 0.03, y - pd, 0]], { facing: FRONT });
+  for (const k of [-1, 1]) for (const f of [0.35, 0.75]) {
+    const cx = xp + k * (pw / 2 + (w / 2 - pw / 2) * f) * (k * xp > 0 ? 0.85 : 1);
+    if (cx > x0 + 0.05 && cx < -x0 - 0.05) frontWindow(g, cx, y, h * 0.35, 0.04, 0.065);
+  }
+  chimney(g, g.range(-0.1, 0.1), 0.02, h + r * 0.5, r * 0.65);
+}
+
+// Village houses (stavení): a chalupa with its gable to the street, a
+// South Bohemian farmstead with its gable to the street, a long house with
+// its eaves to the street.
 export const house = {
   id: 'house',
   name: 'House',
-  blurb: 'A family house',
+  blurb: 'A village house',
   ...HOME,
+  tags: [...HOME.tags, 'houses'],
   footprint: [[0, 0]],
   plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
   stats: { residents: 4 },
   agents: 1,
   yards: ['garden', 'garden', 'trees'],
   tilt: true,
-  kinds: ['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard', 'farmstead', 'farmstead'],
+  // (saves from before version 6 have their kind written in: legacy.js)
+  kinds: ['street', 'street', 'farmstead', 'farmstead', 'farm'],
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
     if (kind === 'farmstead') {
       farmstead(g);
-    } else if (kind === 'cube') {
+    } else if (kind === 'street') {
+      chalupa(g);
+    } else {
+      longHouse(g);
+    }
+  },
+};
+
+// Newer family houses: the 70s "cube" (kostka) with a pyramid roof, and
+// a two-storey villa under a hipped roof.
+export const familyHouse = {
+  id: 'family-house',
+  name: 'Family house',
+  blurb: 'A family house',
+  ...HOME,
+  tags: [...HOME.tags, 'houses'],
+  footprint: [[0, 0]],
+  plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
+  stats: { residents: 4 },
+  agents: 1,
+  yards: ['garden', 'garden', 'trees'],
+  tilt: true,
+  kinds: ['cube', 'cube', 'villa'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    if (kind === 'cube') {
       const s = g.range(0.36, 0.42), h = 0.3, r = g.range(0.07, 0.1);
       g.roofed(-s / 2, -s / 2, 0, s, s, h, { h: r, hip: s / 2 });
       g.windows(-s / 2, -s / 2, s, s, 0, h, h / 2, 0.11, { h: 0.4 });
       chimney(g, g.range(-0.06, 0.06), 0.04, h, r + 0.06);
       door(g, g.range(-0.08, 0.08), -s / 2, 0.06, 0.11);
-    } else if (kind === 'street') {
-      const w = g.range(0.28, 0.34), d = g.range(0.4, 0.46), h = g.range(0.17, 0.2), r = g.range(0.2, 0.26);
-      g.roofed(-w / 2, -d / 2, 0, w, d, h, { h: r, ridge: 'y' });
-      g.windows(-w / 2, -d / 2, w, d, 0, h, h, 0.1, { h: 0.4 });
-      gableWindow(g, 0, -d / 2, h + r * 0.3);
-      chimney(g, 0.02, g.range(-0.05, 0.1), h + r * 0.5, r * 0.6);
-      if (g.chance(0.5)) g.gable(w / 2, d / 2 - 0.2, 0, 0.14, 0.18, 0.12, 0.07); // lean-to barn
-    } else if (kind === 'farm') {
-      const w = g.range(0.5, 0.58), d = g.range(0.28, 0.32), h = 0.17, r = g.range(0.18, 0.22);
-      g.roofed(-w / 2, -d / 2, 0, w, d, h, { h: r, hip: 0.06 }); // half-hipped
-      g.windows(-w / 2, -d / 2, w, d, 0, h, h, 0.11, { h: 0.4 });
-      door(g, g.range(-0.12, 0.12), -d / 2, 0.06, 0.11);
-      chimney(g, g.range(-0.1, 0.1), 0.02, h + r * 0.5, r * 0.65);
-    } else if (kind === 'villa') {
+    } else {
       const w = g.range(0.42, 0.48), d = g.range(0.34, 0.38), h = 0.28, r = g.range(0.13, 0.17);
       g.roofed(-w / 2, -d / 2, 0, w, d, h, { h: r, hip: g.range(0.1, 0.14) });
       g.windows(-w / 2, -d / 2, w, d, 0, h, h / 2, 0.1, { h: 0.45 });
       chimney(g, -w / 4, 0.03, h + r * 0.4, r * 0.8);
-      door(g, 0, -d / 2, 0.07, 0.12);
-    } else {
-      const w = g.range(0.4, 0.46), d = 0.36, h = 0.17;
-      g.roofed(-w / 2, -d / 2, 0, w, d, h, { h: 0.05, hip: 0.08, mansard: { h: 0.11, inset: 0.06 } });
-      g.windows(-w / 2, -d / 2, w, d, 0, h, h, 0.1, { h: 0.45 });
       door(g, 0, -d / 2, 0.07, 0.12);
     }
   },
@@ -258,22 +318,22 @@ function balconies(g, xs, y, z0, z1, fh) {
   });
 }
 
-// Semi-detached houses (dvojdomek) under one roof, a row of 80s terraced
-// houses, and a village house with its eaves to the street and the barn
-// under the same ridge.
+// Semi-detached houses (dvojdomek) under one roof, and a village house
+// with its eaves to the street and the barn under the same ridge.
 export const houseWide = {
   id: 'house-wide',
   name: 'House',
   blurb: 'Houses, two plots',
   size: 'Wide',
   ...HOME,
+  tags: [...HOME.tags, 'houses'],
   footprint: [[0, 0], [1, 0]],
   plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
   stats: { residents: 8 },
   agents: 2,
   yards: ['garden', 'garden', 'trees'],
-  // (the third twin stands where two cube houses were: built ones keep their kind)
-  kinds: ['twin', 'twin', 'twin', 'row', 'longhouse'],
+  // (saves from before version 6 have their kind written in: legacy.js)
+  kinds: ['twin', 'longhouse'],
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
     if (kind === 'twin') {
@@ -285,17 +345,6 @@ export const houseWide = {
       for (const x of [x0 + 0.07, x0 + w - 0.07]) door(g, x, y, 0.06, 0.11);
       for (const x of [0.3, 0.7]) chimney(g, x, 0.04, h, r + 0.05);
       if (g.chance(0.5)) g.box(x0 + w, y + 0.12, 0, 0.16, d - 0.12, 0.11); // garage
-    } else if (kind === 'row') {
-      const n = g.int(3, 4), x0 = -0.3, x1 = 1.3, w = (x1 - x0) / n, d = 0.4;
-      const flat = g.chance(0.4);
-      for (let i = 0; i < n; i++) {
-        const a = x0 + i * w, y = -d / 2 + (i % 2 ? 0.03 : 0), h = 0.26;
-        const skip = [i > 0 && 'left', i < n - 1 && 'right'].filter(Boolean);
-        if (flat) g.box(a, y, 0, w, d, h);
-        else g.roofed(a, y, 0, w, d, h, { h: g.range(0.14, 0.17), ridge: 'y' });
-        g.windows(a, y, w, d, 0, h, h / 2, 0.1, { skip, h: 0.4 });
-        door(g, a + w * 0.3, y, 0.05, 0.1);
-      }
     } else {
       // house on the left, barn on the right, one long ridge
       const d = g.range(0.32, 0.36), y = -d / 2, h = 0.17, r = g.range(0.18, 0.22);
@@ -308,6 +357,36 @@ export const houseWide = {
       g.line([[x1 - 0.32, y, 0], [x1 - 0.32, y, 0.15], [x1 - 0.1, y, 0.15], [x1 - 0.1, y, 0]], { facing: FRONT });
       g.detailed(2, () => g.line([[x1 - 0.32, y, 0], [x1 - 0.1, y, 0.15]], { facing: FRONT }));
       door(g, xm + 0.1, y, 0.06, 0.11);
+    }
+  },
+};
+
+// A row of 80s terraced houses (řadové domky), flat-roofed or each under
+// its own gable. (kinds: one, so the drawing's first pick stays as it was)
+export const familyHouseWide = {
+  id: 'family-house-wide',
+  name: 'Family house',
+  blurb: 'Terraced houses, two plots',
+  size: 'Wide',
+  ...HOME,
+  tags: [...HOME.tags, 'houses'],
+  footprint: [[0, 0], [1, 0]],
+  plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
+  stats: { residents: 8 },
+  agents: 2,
+  yards: ['garden', 'garden', 'trees'],
+  kinds: ['row'],
+  draw(g, s) {
+    kindOf(g, s, this.kinds);
+    const n = g.int(3, 4), x0 = -0.3, x1 = 1.3, w = (x1 - x0) / n, d = 0.4;
+    const flat = g.chance(0.4);
+    for (let i = 0; i < n; i++) {
+      const a = x0 + i * w, y = -d / 2 + (i % 2 ? 0.03 : 0), h = 0.26;
+      const skip = [i > 0 && 'left', i < n - 1 && 'right'].filter(Boolean);
+      if (flat) g.box(a, y, 0, w, d, h);
+      else g.roofed(a, y, 0, w, d, h, { h: g.range(0.14, 0.17), ridge: 'y' });
+      g.windows(a, y, w, d, 0, h, h / 2, 0.1, { skip, h: 0.4 });
+      door(g, a + w * 0.3, y, 0.05, 0.1);
     }
   },
 };

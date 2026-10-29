@@ -154,7 +154,9 @@
     }
     for (const def of STRUCTURES) {
       if (only && def.id !== only && !def.tags?.includes(only)) continue;
-      out.insertAdjacentHTML('beforeend', `<h2>${def.name}${def.size ? ` · ${def.size}` : ''}</h2>`);
+      // ?kinds: a row for each of its kinds (def.kinds), in their order
+      for (const kind of q.has('kinds') && def.kinds ? [...new Set(def.kinds)] : [null]) {
+      out.insertAdjacentHTML('beforeend', `<h2>${def.name}${def.size ? ` · ${def.size}` : ''}${kind ? ` · ${kind}` : ''}</h2>`);
       const row = document.createElement('div');
       row.className = 'row';
       out.appendChild(row);
@@ -174,7 +176,7 @@
           // ways in: a different number for each seed (0–4), the two adjacent on odd seeds
           g.setSitePaths(sampleSitePaths([x0, y0, x1, y1], [2, 1, 3, 4, 0][k % 5], { bend: k % 2 === 1 }));
         }
-        const s = { type: def.id, seed, id: k, node: 0, rotation: 0 };
+        const s = { type: def.id, seed, id: k, node: 0, rotation: 0, ...(kind ? { data: { kind } } : {}) };
         let svg;
         try { def.draw(g, s); svg = g.toGroundSVG() + shade(g) + g.toSVG(); } catch (e) { svg = ''; console.warn(def.id, e.message); }
         const fig = document.createElement('figure');
@@ -183,6 +185,7 @@
         const el = fig.querySelector('svg'), b = el.querySelector('g').getBBox();
         const pad = 8, m = Math.max(b.width, b.height) + pad * 2;
         el.setAttribute('viewBox', `${b.x + b.width / 2 - m / 2} ${b.y + b.height / 2 - m / 2} ${m} ${m}`);
+      }
       }
     }
   </script>
