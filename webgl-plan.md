@@ -242,6 +242,12 @@ uploaded per frame.
   difference 0.1–0.5/255 (contour view 2.6, ink 1.025). Still sheet-turned
   (close on flat ground, off over hills): brows, rock faces, summit marks,
   the painted schemes' water washes, hill shadows, forest, meadow.
+- **Hill shadows raised on the GPU**: the hill shade's rings go to
+  gl/shadows.js laid flat with each point's height (`flatPoint`, the
+  path's `ground`), filled and dashed once (`Pieces.ground`); mid-turn the
+  sheet's matrix turns them flat and the shader raises each point by its
+  height (`rise`), so they stay on their hills. A sun sweep's copy of the
+  mask still reads the path data as before.
 
 ## The plan
 

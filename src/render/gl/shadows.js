@@ -95,9 +95,18 @@ export class GLShadows {
         continue;
       }
       const p = new Pieces();
-      for (const [kind, d, m, alpha, , evenodd] of mine) p.shape(meshOf(kind, d, evenodd), alike ? ID : m, alpha, group);
+      let ground = false;
+      for (const [kind, d, m, alpha, , evenodd] of mine) {
+        // (the hills' shade on the ground, as its rings with their heights:
+        // laid flat and raised on the GPU – only alike, a turn's sheet)
+        if (kind === 'ground' && alike) {
+          p.ground(d.rings, alpha, group);
+          ground = true;
+        } else p.shape(meshOf(kind === 'ground' ? 'shape' : kind, kind === 'ground' ? d.d : d, evenodd), alike ? ID : m, alpha, group);
+      }
       this.h.load(buf, p);
       buf.pre = alike ? m0 : null;
+      buf.rise = ground ? [0, -1] : null;
       buf.sig = alike ? sig : null;
       buf.ds = alike ? mine.map((s) => s[1]) : null;
     }
@@ -245,6 +254,8 @@ function collect(el, m, alpha, cut, out) {
   }
   const d = el.getAttribute('d');
   if (!d) return;
+  // (laid on the ground with its heights: Renderer.renderHillshade)
+  if (el.ground) return out.push(['ground', { rings: el.ground, d }, [m.a, m.b, m.c, m.d, m.e, m.f], alpha, cut, el.getAttribute('fill-rule') === 'evenodd']);
   out.push([el.classList.contains('shade-line') ? 'line' : 'shape', d, [m.a, m.b, m.c, m.d, m.e, m.f], alpha, cut, el.getAttribute('fill-rule') === 'evenodd']);
 }
 

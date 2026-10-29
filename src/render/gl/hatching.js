@@ -47,7 +47,7 @@ layout(location = 1) in vec4 ab;      // a fill: its first two points; a stroke:
 layout(location = 2) in vec4 cp;      // a fill: its third point; a stroke: the point before a, after b
 layout(location = 3) in vec4 kind;    // fill (0) or stroke (1), the stroke's half width (scene px), its ends at a and b (0 a join, 1 round, 2 butt)
 layout(location = 4) in vec4 paint;   // alpha, group (its alpha a uniform), the value it writes to a mask
-layout(location = 5) in vec4 lift;    // cast (below): the heights a, b, c (a fill) or a, b, before, after (a stroke)
+layout(location = 5) in vec4 lift;    // cast (below), or on the ground (rise): the heights a, b, c (a fill) or a, b, before, after (a stroke)
 layout(location = 6) in vec4 casting; // cast: a wall's outward normal (world), how (1 cast, 2 a wall's, 3 4 a crown's: gl/shadows.js castPieces), where its dashes start (scene px; < 0 none)
 uniform vec3 base;                    // scene px -> device px: scale, x, y
 uniform mat3 pre;                     // the pieces' own px -> scene px (all of them alike: a turn's sheet)
@@ -55,6 +55,7 @@ uniform vec2 size;                    // the canvas, device px
 uniform vec4 alphas;                  // per group
 uniform vec2 sun;                     // the ground shift per unit of height (world; 0 0 no sun)
 uniform mat2 iso;                     // a shift on the ground (world) -> the pieces' px
+uniform vec2 rise;                    // on the ground (Pieces.ground): scene px per unit of height, after pre (0 0 none)
 out vec2 local;
 out vec2 joins;
 out float len;
@@ -64,7 +65,7 @@ flat out float alpha;
 flat out float value;
 flat out float dash;
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
-vec2 dev(vec2 p) { return (pre * vec3(p, 1.0)).xy * base.x + base.yz; }
+vec2 dev(vec2 p, float z) { return ((pre * vec3(p, 1.0)).xy + rise * z) * base.x + base.yz; }
 // a crown's shadow (how 3, 4): the ring point i round its middle m
 vec2 ring(vec2 m, float i) {
   float L = length(sun), t = i / 12.0 * 6.2831853;
@@ -78,6 +79,8 @@ void main() {
   dash = -1.0;
   vec2 A = ab.xy, B = ab.zw, C = cp.xy, D = cp.zw;
   int how = int(casting.z + 0.5);
+  // (heights raise the pieces on the ground; a cast's are along the sun)
+  vec4 up = how > 0 ? vec4(0.0) : lift;
   if (how > 0) {
     // cast along the sun: each point by its height; a wall turned to the
     // sun casts nothing, nor anything with no sun
@@ -94,10 +97,10 @@ void main() {
   vec2 p;
   if (kind.x < 0.5) {
     int c = int(corner.x + 0.5) + 2 * int(corner.y > 0.0);
-    p = dev(c == 0 ? A : c == 1 ? B : C);
+    p = c == 0 ? dev(A, up.x) : c == 1 ? dev(B, up.y) : dev(C, up.z);
     local = vec2(0.0); joins = vec2(1e6); len = 0.0;
   } else {
-    vec2 pa = dev(A), pb = dev(B), pp = dev(C), pn = dev(D);
+    vec2 pa = dev(A, up.x), pb = dev(B, up.y), pp = dev(C, up.z), pn = dev(D, up.w);
     float r = kindF.y + 1.0;
     len = length(pb - pa);
     vec2 dir = unit(pb - pa, vec2(1.0, 0.0)), nrm = vec2(-dir.y, dir.x);
@@ -312,8 +315,9 @@ export function dashed(subs, pattern) {
         let k = 0, rest = at % total;
         while (k < pattern.length - 1 && rest >= pattern[k]) rest -= pattern[k++];
         const step = Math.max(1e-6, Math.min(pattern[k] - rest, len - s));
-        const p = [ax + ((bx - ax) * s) / len, ay + ((by - ay) * s) / len];
-        const q = [ax + ((bx - ax) * (s + step)) / len, ay + ((by - ay) * (s + step)) / len];
+        // (any coordinates past x and y – a height – along too)
+        const p = ring[i - 1].map((v, j) => v + ((ring[i][j] - v) * s) / len);
+        const q = ring[i - 1].map((v, j) => v + ((ring[i][j] - v) * (s + step)) / len);
         if (k % 2 === 0) {
           if (!cur) out.push((cur = { pts: [p], closed: false, cap: 2 }));
           cur.pts.push(q);
@@ -388,6 +392,44 @@ export class Pieces {
   }
 }
 
+// Shapes on the ground (the hills' shadows): rings of [x, y, z] – x, y in
+// the ground's px as it lies flat, z its height there – filled and their
+// edge dashed (EDGE) as a 'shape' is, each point keeping its height, so a
+// turn of the view moves them as a matrix (pre) and raises each by its
+// height (rise) on the GPU: exact over the hills, nothing built anew.
+Pieces.prototype.ground = function (rings, alpha = 1, group = 0, value = 1) {
+  const subs = rings.filter((r) => r.length > 2).map((pts) => ({ pts, closed: true }));
+  const height = new Map();
+  for (const { pts } of subs) for (const [x, y, z] of pts) height.set(`${Math.fround(x)},${Math.fround(y)}`, z);
+  const { positions, indices } = triangulate(subs, 'evenodd');
+  const zOf = (i) => height.get(`${positions[i * 2]},${positions[i * 2 + 1]}`) ?? 0;
+  this.room(indices.length / 3);
+  let D = this.data;
+  for (let i = 0; i < indices.length; i += 3) {
+    const o = this.n++ * STRIDE;
+    for (let k = 0; k < 3; k++) {
+      D[o + k * 2] = positions[indices[i + k] * 2];
+      D[o + k * 2 + 1] = positions[indices[i + k] * 2 + 1];
+      D[o + 16 + k] = zOf(indices[i + k]);
+    }
+    D.fill(0, o + 6, o + 12);
+    D[o + 12] = alpha; D[o + 13] = group; D[o + 14] = value; D[o + 15] = 0;
+    D.fill(0, o + 19, o + 24);
+  }
+  for (const { pts } of dashed(subs, EDGE.dash)) {
+    this.room(pts.length);
+    D = this.data;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], prev = pts[Math.max(0, i - 2)], next = pts[Math.min(pts.length - 1, i + 1)];
+      // (a sharp turn: a round join, as shape's)
+      const t1 = Math.atan2(a[1] - prev[1], a[0] - prev[0]), t2 = Math.atan2(b[1] - a[1], b[0] - a[0]);
+      const sharp = i > 1 && Math.abs(Math.atan2(Math.sin(t2 - t1), Math.cos(t2 - t1))) > 0.35;
+      const o = this.n++ * STRIDE;
+      D.set([a[0], a[1], b[0], b[1], prev[0], prev[1], next[0], next[1], 1, EDGE.width / 2, i === 1 ? 2 : sharp ? 1 : 0, i === pts.length - 1 ? 2 : 0, alpha, group, value, 0, a[2], b[2], prev[2], next[2], 0, 0, 0, 0], o);
+    }
+  }
+};
+
 // ------------------------------------------------------------------- the GPU
 
 export class Hatching {
@@ -399,7 +441,7 @@ export class Hatching {
   constructor(canvas, gl) {
     this.canvas = canvas;
     this.gl = gl;
-    this.prog = program(gl, VS, FS, ['base', 'pre', 'size', 'alphas', 'mode', 'tile', 'tileAt', 'colour', 'sun', 'iso']);
+    this.prog = program(gl, VS, FS, ['base', 'pre', 'size', 'alphas', 'mode', 'tile', 'tileAt', 'colour', 'sun', 'iso', 'rise']);
     this.sheetProg = program(gl, SHEET_VS, SHEET_FS, ['base', 'size', 'tile', 'mask', 'masked', 'tileSize', 'grey', 'colour', 'sets', 'reveal', 'band']);
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
@@ -509,13 +551,15 @@ export class Hatching {
   // Pieces drawn: `base` [scale, x, y] scene px -> device px; with the
   // tile's strokes in `colour` ([r, g, b]) where they lie, the groups'
   // `alphas`; or (`stencil`: { ref, write, test }) into the stencil only.
-  pieces(b, { base, pre = b?.pre, tile = null, colour = [0, 0, 0], alphas = [1, 1, 1, 1], stencil = null, test = null, sun = null, wash = false }) {
+  // (`rise`: pieces on the ground, Pieces.ground, raised by their heights)
+  pieces(b, { base, pre = b?.pre, rise = b?.rise, tile = null, colour = [0, 0, 0], alphas = [1, 1, 1, 1], stencil = null, test = null, sun = null, wash = false }) {
     if (!b?.n) return;
     const { gl } = this, { p, u } = this.prog;
     gl.useProgram(p);
     // (cast pieces: the sun's shift on the ground, and a ground shift in the pieces' px)
     gl.uniform2f(u.sun, sun?.cast[0] ?? 0, sun?.cast[1] ?? 0);
     gl.uniformMatrix2fv(u.iso, false, sun?.iso ?? [1, 0, 0, 1]);
+    gl.uniform2f(u.rise, rise?.[0] ?? 0, rise?.[1] ?? 0);
     gl.uniform3fv(u.base, base);
     const m = pre ?? [1, 0, 0, 1, 0, 0];
     gl.uniformMatrix3fv(u.pre, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);

@@ -975,11 +975,25 @@ export class Renderer {
     let view = this.hills.views.get(camera.angle);
     if (view == null) {
       const d = this.hills.rings.length ? this.pathData(this.hills.rings, false) : '';
-      view = d ? `<path class="shade" fill-rule="evenodd" d="${d}"/>` : '';
+      // (and its rings laid flat with their heights, for the GPU: so mid-turn
+      // it is raised over the hills as they are – gl/shadows.js)
+      view = { svg: d ? `<path class="shade" fill-rule="evenodd" d="${d}"/>` : '', ground: this.hills.rings.map((ring) => ring.map(([x, y]) => this.flatPoint(x, y))) };
       if (this.hills.views.size >= 6) this.hills.views.delete(this.hills.views.keys().next().value);
       this.hills.views.set(camera.angle, view);
     }
-    el.innerHTML = view;
+    el.innerHTML = view.svg;
+    if (el.firstElementChild) el.firstElementChild.ground = view.ground;
+  }
+
+  // A world point on the ground as the view lies flat (scene px, the warp
+  // in), and its height there in scene px (the relief and the ground's own):
+  // [x, y, z], Renderer.project being [x, y - z].
+  flatPoint(x, y) {
+    const cam = this.camera;
+    const z = (this.world.terrain.heightAt(x, y) + (cam.lift ? cam.lift(x, y) : 0)) * cam.zScale * cam.tile;
+    const [wx, wy] = cam.warp ? cam.warp(x, y) : [x, y];
+    const [rx, ry] = cam.toView(wx - cam.cx, wy - cam.cy);
+    return [(rx - ry) * COS30 * cam.tile, (rx + ry) * 0.5 * cam.tile, z];
   }
 
   // What the camera sees of the ground, the brows (brows.js) and the rock
