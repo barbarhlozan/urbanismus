@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dědina – slope lab</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--fg); font: 12px system-ui; margin: 16px; }
+    h2 { font-weight: 500; margin: 24px 0 2px; }
+    p { margin: 0 0 6px; color: #777; max-width: 60em; }
+    .row { display: flex; flex-wrap: wrap; gap: 4px; }
+    figure { margin: 0; border: 1px solid #222; }
+    figcaption { padding: 2px 4px; color: #777; }
+    svg { display: block; }
+    .grd { fill: none; stroke: currentColor; stroke-width: 0.6; opacity: 0.25; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+  <script type="module">
+    // Dev page: buildings and yard walls on sloping ground. A plane slope
+    // stands in for Camera.lift; the ways of meeting it are tried in a
+    // Painter subclass here, painter.js is untouched.
+    // slope-lab.html?scheme=2 (&size=520&rise=0.2&tile=120&prints=0)
+    import { applyTheme } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter } from './src/render/painter.js';
+    import { STRUCTURE_TYPES } from './structures/index.js';
+    import { drawCourt } from './structures/courts.js';
+    const q = new URLSearchParams(location.search);
+    applyTheme(q.has('scheme') ? +q.get('scheme') : undefined);
+    const size = +(q.get('size') ?? 520), rise = +(q.get('rise') ?? 0.2), tile = +(q.get('tile') ?? 120);
+    const out = document.getElementById('out');
+
+    // modes
+    //   level   'one': the whole drawing at one level; 'solid': each big
+    //           solid at the ground under its own footprint (small ones –
+    //           chimneys, doors, gates – keep the last one's)
+    //   at      'mid' (as now: the ground at the building's middle) or
+    //           'top' (the highest ground under it: nothing sinks in)
+    //   plinth  walls standing on the floor run on down to the ground, a
+    //           line at the floor (the top of the podezdívka)
+    //   walls   'step': long thin walls cut into pieces, each at its own
+    //           ground; 'bend': their foot and top follow the ground
+    class Slope extends Painter {
+      constructor(cam, origin, rot, seed, mode) {
+        super(cam, origin, rot, seed);
+        this.mode = mode;
+        this.dz = 0;
+      }
+      // ground under a local point, as local z from the rigid point's
+      gnd(x, y) {
+        const [wx, wy] = super._world(x, y, 0);
+        return this.camera.lift(wx, wy) - this.camera.lift(...this.rigid);
+      }
+      highest(pts) {
+        if (pts.length === 2) pts = [pts[0], [pts[1][0], pts[0][1]], pts[1], [pts[0][0], pts[1][1]]];
+        let hi = -Infinity;
+        for (let i = 0; i < pts.length; i++) {
+          const a = pts[i], b = pts[(i + 1) % pts.length];
+          for (const t of [0, 0.5]) hi = Math.max(hi, this.gnd(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t));
+        }
+        return hi;
+      }
+      _world(x, y, z) {
+        return super._world(x, y, z + this.dz);
+      }
+      solid(x, y, z, o = {}) {
+        const f = this._footprint;
+        if (this.bendNext) { this.dz = 0; o = { ...o, bend: true }; }
+        else if ((this.mode.level === 'solid' || this.inCourt) && f) {
+          const pts = f.length === 2 ? [f[0], [f[1][0], f[0][1]], f[1], [f[0][0], f[1][1]]] : f;
+          let a = 0;
+          for (let i = 0; i < pts.length; i++) { const p = pts[i], r = pts[(i + 1) % pts.length]; a += p[0] * r[1] - r[0] * p[1]; }
+          if (Math.abs(a) / 2 > 0.012) this.dz = this.highest(f);
+        }
+        return super.solid(x, y, z, o);
+      }
+      _liftAt() {
+        return this.current?.bend ? null : super._liftAt();
+      }
+      prism(base, z0, z1, opts = {}) {
+        const w = this.mode.walls;
+        if (!this.inCourt || !w || z0 !== 0 || base.length !== 4) return super.prism(base, z0, z1, opts);
+        const xs = base.map((p) => p[0]), ys = base.map((p) => p[1]);
+        const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        const along = x1 - x0 > y1 - y0, len = Math.max(x1 - x0, y1 - y0);
+        if (Math.min(x1 - x0, y1 - y0) > 0.06) return super.prism(base, z0, z1, opts);
+        if (w === 'bend') {
+          // in short pieces, so the top bends with the ground
+          const n = Math.max(1, Math.ceil(len / 0.05));
+          for (let k = 0; k < n; k++) {
+            const a = k / n, b = (k + 1) / n;
+            const p = along ? [[x0 + (x1 - x0) * a, y0], [x0 + (x1 - x0) * b, y0], [x0 + (x1 - x0) * b, y1], [x0 + (x1 - x0) * a, y1]]
+              : [[x0, y0 + (y1 - y0) * a], [x1, y0 + (y1 - y0) * a], [x1, y0 + (y1 - y0) * b], [x0, y0 + (y1 - y0) * b]];
+            this.bendNext = true;
+            super.prism(p, z0, z1, opts);
+            this.bendNext = false;
+          }
+          return this;
+        }
+        const n = Math.max(1, Math.round(len / 0.12));
+        for (let k = 0; k < n; k++) {
+          const a = k / n, b = (k + 1) / n;
+          const p = along ? [[x0 + (x1 - x0) * a, y0], [x0 + (x1 - x0) * b, y0], [x0 + (x1 - x0) * b, y1], [x0 + (x1 - x0) * a, y1]]
+            : [[x0, y0 + (y1 - y0) * a], [x1, y0 + (y1 - y0) * a], [x1, y0 + (y1 - y0) * b], [x0, y0 + (y1 - y0) * b]];
+          this.dz = this.highest(p);
+          super.prism(p, z0, z1, opts);
+        }
+        return this;
+      }
+      face(points, opts = {}) {
+        if (!this.mode.plinth || this.current?.bend || points.every((p) => p[2] === 0) || !points.some((p) => p[2] === 0)) return super.face(points, opts);
+        const low = points.map(([x, y, z]) => [x, y, z === 0 ? Math.min(0, this.gnd(x, y) - this.dz) : z]);
+        const parts = this.current?.parts, from = parts?.length ?? 0;
+        super.face(low, opts);
+        // the painted stone plinth (watercolour, Painter._washDetail) sits
+        // on the ground, not at the floor
+        if (parts && low.some((p) => p[2] < -0.005)) {
+          for (let k = parts.length - 1; k >= from; k--) {
+            if (!/\bwplinth\b/.test(parts[k])) continue;
+            const i = low.findIndex((p, m) => points[m][2] === 0 && points[(m + 1) % points.length][2] === 0), j = (i + 1) % low.length;
+            const [a, b] = [low[i], low[j]];
+            parts[k] = parts[k].replace(/ d="[^"]*"/, ` d="${this._sketch([a, b, [b[0], b[1], b[2] + 0.022], [a[0], a[1], a[2] + 0.022]], true, 0.08).d}"`);
+          }
+        }
+        // the wall runs on down unbroken; where it shows a cellar storey
+        // below the floor, small windows in it and a door at its deepest
+        const top = Math.max(...points.map((p) => p[2]));
+        for (let i = 0; i < points.length; i++) {
+          const j = (i + 1) % points.length, a = points[i], b = points[j];
+          if (a[2] !== 0 || b[2] !== 0 || top < 0.13 || this.inCourt) continue;
+          this.cellar(a, b, -low[i][2], -low[j][2]);
+        }
+        return this;
+      }
+      // openings in the part of a wall from a to b (local, z = 0 the floor)
+      // showing below the floor, da and db deep at its ends
+      cellar(a, b, da, db) {
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len < 0.15 || Math.max(da, db) < 0.06) return;
+        const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len, n = [uy, -ux, 0];
+        const at = (t, z) => [a[0] + ux * t, a[1] + uy * t, z];
+        const depth = (t) => da + (db - da) * (t / len);
+        const cls = 'ink';
+        // the door where it is deepest, if a person fits
+        const tDoor = da > db ? 0.07 : len - 0.07;
+        let door = null;
+        if (!this.doorDone && depth(tDoor) >= 0.1) {
+          const w = 0.055, h = Math.min(0.11, depth(tDoor) - 0.02), zb = -depth(tDoor);
+          door = [tDoor - w / 2 - 0.03, tDoor + w / 2 + 0.03];
+          this.line([at(tDoor - w / 2, zb), at(tDoor - w / 2, zb + h), at(tDoor + w / 2, zb + h), at(tDoor + w / 2, zb)], { facing: n, round: 0.02 });
+          this.doorDone = true;
+        }
+        // small square windows, high under the floor, where there is room
+        const ww = 0.03, wh = 0.026, step = 0.13;
+        const cols = Math.floor((len - 0.08) / step);
+        for (let c = 0; c < cols; c++) {
+          const t0 = 0.04 + (len - 0.08 - cols * step) / 2 + c * step + (step - ww) / 2, t1 = t0 + ww;
+          if (door && t1 > door[0] && t0 < door[1]) continue;
+          if (Math.min(depth(t0), depth(t1)) < wh + 0.035) continue;
+          const zt = -0.018, zb = zt - wh;
+          this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n, cls });
+        }
+      }
+      _foot(base, z0, h) {
+        if (!this.mode.plinth) return super._foot(base, z0, h);
+      }
+    }
+
+    // the ground: a light grid over it, following the slope
+    function groundSVG(cam, [x0, y0, x1, y1]) {
+      let d = '';
+      const P = (x, y) => cam.project(x, y, 0).map((v) => v.toFixed(1)).join(' ');
+      for (let x = x0; x <= x1 + 1e-6; x += 0.25) d += `M${P(x, y0)}L${P(x, y1)}`;
+      for (let y = y0; y <= y1 + 1e-6; y += 0.25) d += `M${P(x0, y)}L${P(x1, y)}`;
+      return `<path class="grd" d="${d}"/>`;
+    }
+
+    // where the ground really is round each building: its bounds laid on
+    // the slope, dashed, over the drawing (?prints=0 leaves it out)
+    function printsSVG(cam, prints) {
+      let d = '';
+      for (const [x0, y0, x1, y1] of prints) {
+        const pts = [];
+        for (const [ax, ay, bx, by] of [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]]) {
+          for (let t = 0; t < 1; t += 0.1) pts.push(cam.project(ax + (bx - ax) * t, ay + (by - ay) * t, 0));
+        }
+        d += 'M' + pts.map((p) => p.map((v) => v.toFixed(1)).join(' ')).join('L') + 'Z';
+      }
+      return `<path d="${d}" fill="none" stroke="#c03020" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+    }
+
+    // things: [{ def, kind, x, y?, court? }] on dots along x; `row`: houses
+    // sharing walls stand as one piece today (Renderer.paintStructure)
+    function draw(cam, mode, things, [sx, sy]) {
+      cam.lift = (x, y) => sx * x + sy * y;
+      const g = new Slope(cam, { x: 0, y: 0, z: 0 }, 0, 7, mode);
+      const xs = things.map((t) => t.x);
+      const rowMid = (Math.min(...xs) + Math.max(...xs)) / 2;
+      things.forEach((t, i) => {
+        const seed = (t.seed ?? i + 1) * 2654435761 >>> 0;
+        g.ox = t.x; g.oy = t.y ?? 0;
+        g.random = new Painter(cam, { x: 0, y: 0 }, 0, seed).random;
+        g.rigid = [mode.row ? rowMid : t.x + (t.cx ?? 0), (t.y ?? 0) + (t.cy ?? 0)];
+        g.court = { left: null, right: null, ...t.court };
+        g.doorDone = false;
+        g.body = null;
+        const s = { type: t.def.id, seed, id: i, node: 0, rotation: 0, data: { kind: t.kind } };
+        if (mode.at === 'top' && mode.level === 'one') {
+          const probe = new Slope(cam, { x: t.x, y: t.y ?? 0, z: 0 }, 0, seed, { level: 'one' });
+          probe.rigid = g.rigid; probe.court = g.court;
+          t.def.draw(probe, s);
+          const [bx0, by0, bx1, by1] = probe.bounds;
+          g.dz = g.highest([[bx0, by0], [bx1, by1]]);
+        } else g.dz = 0;
+        g.bounds = null;
+        t.def.draw(g, s);
+        const core = g.bounds;
+        (g.prints ??= []).push(core.map((v, k) => v + (k % 2 ? g.oy : g.ox)));
+        if (t.court) {
+          g.inCourt = true;
+          const level = g.dz;
+          drawCourt(g, g.court, g.body ?? { x0: core[0], y0: core[1], x1: core[2], y1: core[3] });
+          g.inCourt = false;
+          g.dz = level;
+        }
+      });
+      return g;
+    }
+
+    function scene(title, note, things, slope, variants, area) {
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2><p>${note}</p>`);
+      const row = document.createElement('div');
+      row.className = 'row';
+      out.appendChild(row);
+      for (const [label, mode] of variants) for (const rot of [2, 3]) {
+        const cam = new Camera({ width: 1, height: 1 }, { tile });
+        cam.rotation = rot;
+        const g = draw(cam, mode, things, slope);
+        const body = groundSVG(cam, area) + `<g class="things">${g.toGroundSVG() + g.toSVG()}</g>` + (q.get('prints') !== '0' ? printsSVG(cam, g.prints) : '');
+        const fig = document.createElement('figure');
+        fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><g class="scene layer-objects lod-0">${body}</g></svg><figcaption>${label} · ${['from behind', '', 'from the street', 'from the side'][rot]}</figcaption>`;
+        row.appendChild(fig);
+        const el = fig.querySelector('svg'), b = el.querySelector('.things').getBBox();
+        const m = Math.max(b.width, b.height) * 1.15 + 16;
+        el.setAttribute('viewBox', `${b.x + b.width / 2 - m / 2} ${b.y + b.height / 2 - m / 2} ${m} ${m}`);
+      }
+    }
+
+    const house = STRUCTURE_TYPES['house'], farm = STRUCTURE_TYPES['farmstead'];
+    const TODAY = { level: 'one', at: 'mid' };
+    const PLINTH = { level: 'one', at: 'top', plinth: true, walls: 'step' };
+    const BEND = { level: 'one', at: 'top', plinth: true, walls: 'bend' };
+    const PER = { level: 'solid', plinth: true, walls: 'step' };
+    const pct = Math.round(rise / (3 / 160));
+
+    scene(`1 · a house with its own court, ground falling ${pct} m a step along the street`, 'Dashed red: where its ground really is. Today the house is level at its middle: the hill runs into its uphill wall and the downhill corner floats. A: level at its highest ground, its walls run on down to the ground, a cellar storey with small windows and a door where it shows; the court wall steps down in pieces. B: the same, the court wall bending with the ground.',
+      [{ def: house, kind: 'farmstead', x: 0, court: { right: 'own' } }], [-rise, 0],
+      [['today', TODAY], ['A · plinth + stepped wall', PLINTH], ['B · plinth + sloping wall', BEND]], [-0.6, -0.8, 0.6, 0.6]);
+
+    scene(`1b · the same house, ground falling ${pct} m a step towards the street`, 'Its street gable stands on a cellar storey: the wall runs on down unbroken, small windows high in it and a door at the bottom.',
+      [{ def: house, kind: 'farmstead', x: 0, court: { right: 'own' } }, { def: house, kind: 'street', x: 1.2, seed: 5 }], [0, rise],
+      [['today', TODAY], ['A · cellar storey', PLINTH]], [-0.6, -0.8, 1.8, 0.6]);
+
+    scene(`2 · two houses sharing a court, falling ${pct} m a step along the street`, 'Today a joined pair stands as one piece at one level. Per house: each at its own highest ground, the lower one a step down, the shared wall and kůlna stepping between.',
+      [{ def: house, kind: 'farmstead', x: 0, court: { right: 'shared' } }, { def: house, kind: 'street', x: 1, court: { left: 'shared' } }], [-rise, 0],
+      [['today', { ...TODAY, row: true }], ['per house + plinth', PLINTH], ['per piece + plinth', PER]], [-0.6, -0.8, 1.6, 0.6]);
+
+    scene(`3 · courtyard farmstead, falling ${pct} m a step towards the street`, 'Today one level for the whole statek (3×2). A: one level at the top, the front range on a tall plinth. Per range: each range, wall piece and gateway at its own ground, so the farm steps down the hill.',
+      [{ def: farm, kind: 'three-sided', x: 0, cx: 1, cy: 0.5 }], [0, rise],
+      [['today', TODAY], ['A · one level + plinth', PLINTH], ['per range + plinth', PER]], [-0.6, -0.6, 2.6, 1.6]);
+
+    scene(`4 · courtyard farmstead, falling ${pct} m a step along the street`, '',
+      [{ def: farm, kind: 'walled', x: 0, cx: 1, cy: 0.5 }], [-rise, 0],
+      [['today', TODAY], ['A · one level + plinth', PLINTH], ['per range + plinth', PER]], [-0.6, -0.6, 2.6, 1.6]);
+
+    // The game's own painter (Painter.relief / stand, structures/courts.js),
+    // as Renderer.paintStructure sets it up: each thing level at the highest
+    // ground under its dot, its court beside it.
+    function game(title, things, [sx, sy]) {
+      out.insertAdjacentHTML('beforeend', `<h2>${title}</h2><p>The game's painter (Painter.relief, Painter.stand), not this page's.</p>`);
+      const row = document.createElement('div');
+      row.className = 'row';
+      out.appendChild(row);
+      for (const rot of [2, 3, 0]) {
+        const cam = new Camera({ width: 1, height: 1 }, { tile });
+        cam.rotation = rot;
+        cam.lift = (x, y) => sx * x + sy * y;
+        let body = '';
+        const prints = [];
+        things.forEach((t, i) => {
+          const seed = (t.seed ?? i + 1) * 2654435761 >>> 0;
+          const rigid = [t.x + (t.cx ?? 0), (t.y ?? 0) + (t.cy ?? 0)];
+          const relief = (wx, wy) => cam.lift(wx, wy) - cam.lift(...rigid);
+          const g = new Painter(cam, { x: t.x, y: t.y ?? 0, z: 0 }, 0, seed);
+          g.rigid = rigid;
+          g.relief = relief;
+          const [w, d] = t.size ?? [1, 1];
+          let hi = -Infinity;
+          for (let v = -0.35; v <= d - 1 + 0.35 + 1e-9; v += 0.35) for (let u = -0.35; u <= w - 1 + 0.35 + 1e-9; u += 0.35) hi = Math.max(hi, relief(t.x + u, (t.y ?? 0) + v));
+          g.level = hi;
+          g.court = { left: null, right: null, ...t.court };
+          t.def.draw(g, { type: t.def.id, seed, id: i, node: 0, rotation: 0, data: { kind: t.kind } });
+          const core = g.bounds;
+          if (t.court) {
+            const cp = new Painter(cam, { x: t.x, y: t.y ?? 0, z: 0 }, 0, seed ^ 0x3c6ef372);
+            cp.rigid = rigid; cp.relief = relief; cp.level = g.level;
+            drawCourt(cp, g.court, g.body ?? { x0: core[0], y0: core[1], x1: core[2], y1: core[3] });
+            g.merge(cp, { aside: true });
+          }
+          prints.push(core.map((v, k) => v + (k % 2 ? t.y ?? 0 : t.x)));
+          body += g.toGroundSVG() + g.toSVG();
+        });
+        const fig = document.createElement('figure');
+        fig.innerHTML = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">${groundSVG(cam, [-0.8, -0.8, things.length + 1, 2])}<g class="scene layer-objects lod-0 things">${body}</g>${q.get('prints') !== '0' ? printsSVG(cam, prints) : ''}</svg><figcaption>${['from behind', '', 'from the street', 'from the side'][rot]}</figcaption>`;
+        row.appendChild(fig);
+        const el = fig.querySelector('svg'), b = el.querySelector('.things').getBBox();
+        const m = Math.max(b.width, b.height) * 1.1 + 16;
+        el.setAttribute('viewBox', `${b.x + b.width / 2 - m / 2} ${b.y + b.height / 2 - m / 2} ${m} ${m}`);
+      }
+    }
+    game(`5 · in the game · houses with courts, falling ${pct} m a step towards the street`,
+      [{ def: house, kind: 'farmstead', x: 0, court: { right: 'own' } }, { def: house, kind: 'street', x: 1.2, seed: 5, court: { left: 'own' } }], [-rise * 0.5, rise]);
+    game(`6 · in the game · courtyard farmstead, falling ${pct} m a step towards the street`,
+      [{ def: farm, kind: 'three-sided', x: 0, cx: 1, cy: 0.5, size: [3, 2] }], [-rise * 0.3, rise]);
+  </script>
+</body>
+</html>

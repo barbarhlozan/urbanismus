@@ -28,6 +28,8 @@
 //   g.strokes(x, y, z, [[[u,v]…]…], opts)    screen-facing polylines (one <path>), e.g. tree glyphs
 //   g.strokeGroups([{x, y, z, lines}…], opts) the same for several anchors, still one <path>
 //   g.solid(x, y, z)                         start a new depth-sorted group manually
+//   g.stand([[x,y]…])                        what follows stands at the highest ground under
+//                                            these points (on uneven ground, see `relief`)
 //   g.cylinder(x, y, z, r, h, sides, opts)   upright polygonal cylinder (chimneys, silos)
 //
 // Shadows – a wall turned away from the sun gets hatched, and from where
@@ -125,6 +127,12 @@ export const ROOF_OF = [0, 2, 0, 1, 2, 0, 3, 0, 2, 1, 0, 2];
 
 // how near the ground (local z) a wall's foot is taken to stand on it
 const ON_GROUND = 0.03;
+
+// A cellar storey showing where the ground falls away under a building
+// (Painter._cellar): only in walls at least `wall` high and `len` long;
+// windows `window` [w, h] every `bay`, their tops `under` the floor; a door
+// `door` [w, h], `corner` in from the end where the wall is deepest.
+const CELLAR = { wall: 0.13, len: 0.15, window: [0.03, 0.026], bay: 0.13, under: 0.018, door: [0.055, 0.09], corner: 0.07 };
 
 // Global look knobs (gallery.html toggles them to compare):
 //   eave    how far pitched roofs overhang the walls (0 = flush)
@@ -325,6 +333,14 @@ export class Painter {
     this.casting = true;  // false: draw no shadows (icons)
     this.wood = false;    // watercolour: what is drawn now is of wood (boards, a shingle roof; _wash)
     this.stone = false;   // …or whitewashed masonry under slate, whatever its building (_wash)
+    // Uneven ground (set by the renderer for buildings): world (x, y) ->
+    // the ground's lift there above that at `rigid`. The building's floor
+    // stands `level` above it (stand()), and walls standing on the floor run
+    // on down to the ground, showing a cellar storey where it falls away
+    // (_settle). Null: the ground taken as flat (icons, the gallery).
+    this.relief = null;
+    this.level = 0;
+    this._cellarDoor = false; // (one door into the cellar a drawing)
   }
 
   // The watercolour scheme is on (drawings that paint differently in it)
@@ -370,6 +386,7 @@ export class Painter {
   }
 
   _world(x, y, z) {
+    if (!this._onGround) z += this.level;
     if (z > this.top) this.top = z;
     const [lx, ly] = this._turn(x, y);
     return [this.ox + lx, this.oy + ly, this.oz + z];
@@ -776,6 +793,7 @@ export class Painter {
   }
 
   face(points, opts = {}) {
+    if (this.relief && !this.current?.bend && !this._settling) return this._settle(points, opts);
     this._ensure(...points[0]);
     this._spread(points);
     const n = newellNormal(points);
@@ -869,8 +887,10 @@ export class Painter {
     const lod = Math.max(1, this.lod);
     // (no detail on what is barely a wall: a kerb, a fence's foot)
     if (lod > this.keep || !(level < Infinity) || level < 0.04) return;
-    const band = (z0, z1, cls) => this.current.parts.push(this._outline(
-      [[a[0], a[1], z0], [b[0], b[1], z0], [b[0], b[1], z1], [a[0], a[1], z1]], true, { cls: cls + dark, wobble: 0.08 }, lod));
+    // (`za`, `zb`: from the foot at each end instead of the floor – on
+    // uneven ground below it, _settle)
+    const band = (z0, z1, cls, za = 0, zb = 0) => this.current.parts.push(this._outline(
+      [[a[0], a[1], za + z0], [b[0], b[1], zb + z0], [b[0], b[1], zb + z1], [a[0], a[1], za + z1]], true, { cls: cls + dark, wobble: 0.08 }, lod));
     const PLINTH = 0.022;
     if (/\bwlogs\b/.test(paint)) {
       for (let z = PLINTH + 0.006; z + 0.01 < level; z += 0.021) band(z, Math.min(z + 0.012, level), 'wlog');
@@ -882,7 +902,7 @@ export class Painter {
         this.line([[x, y, PLINTH], [x, y, level - 0.004]], { facing: n, cls: `wboard${dark}`, wobble: 0.3, lod });
       }
     }
-    band(0, PLINTH, 'wplinth');
+    band(0, PLINTH, 'wplinth', Math.min(a[2], 0), Math.min(b[2], 0)); // (the stone plinth on the ground)
     const top = points.reduce((m, p) => (p[2] > m[2] ? p : m));
     if (top[2] >= level + 0.04) this._washGable([a[0], a[1], level], [b[0], b[1], level], top, n, /\bwtimber\b/.test(paint), dark);
   }
@@ -996,6 +1016,72 @@ export class Painter {
   _castFace(points) {
     if (!this.casting || Math.max(...points.map((p) => p[2])) < SUN.low) return;
     this.casts.push({ kind: 'face', pts: points.map(([x, y, z]) => [...this.toWorld(x, y), z]) });
+  }
+
+  // A face on uneven ground (relief): its corners on the floor (z = 0)
+  // taken down to the ground under them, so a wall runs on down unbroken
+  // where the ground falls away – no line where the floor is – and shows a
+  // cellar storey there (_cellar).
+  _settle(points, opts) {
+    const on = points.map((p) => p[2] === 0);
+    this._settling = true;
+    if (on.every(Boolean) || !on.some(Boolean)) {
+      this.face(points, opts);
+    } else {
+      const low = points.map(([x, y, z], i) => [x, y, on[i] ? Math.min(0, this.relief(...this.toWorld(x, y)) - this.level) : z]);
+      this.face(low, opts);
+      const top = Math.max(...points.map((p) => p[2]));
+      for (let i = 0; i < points.length; i++) {
+        const j = (i + 1) % points.length;
+        if (on[i] && on[j] && top >= CELLAR.wall) this._cellar(points[i], points[j], -low[i][2], -low[j][2]);
+      }
+    }
+    this._settling = false;
+    return this;
+  }
+
+  // The openings in a wall's part below the floor, from a to b (local, on
+  // the floor), da and db deep at its ends: small windows high under the
+  // floor where there is room, and – once a drawing – a door at its deepest
+  // where a person fits.
+  _cellar(a, b, da, db) {
+    const C = CELLAR, len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < C.len || Math.max(da, db) < C.window[1] + C.under + 0.01) return;
+    const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len, n = [uy, -ux, 0];
+    const at = (t, z) => [a[0] + ux * t, a[1] + uy * t, z];
+    const depth = (t) => da + ((db - da) * t) / len;
+    let door = null;
+    const td = da > db ? C.corner : len - C.corner;
+    if (!this._cellarDoor && depth(td) >= C.door[1] + 0.02) {
+      const [w, h] = C.door, zb = -depth(td);
+      this.line([at(td - w / 2, zb), at(td - w / 2, zb + h), at(td + w / 2, zb + h), at(td + w / 2, zb)], { facing: n, round: LOOK.round.windows });
+      door = [td - w / 2 - 0.03, td + w / 2 + 0.03];
+      this._cellarDoor = true;
+    }
+    const [ww, wh] = C.window, cols = Math.floor((len - 0.08) / C.bay);
+    const cls = LOOK.ink ? 'ink' : undefined;
+    for (let c = 0; c < cols; c++) {
+      const t0 = 0.04 + (len - 0.08 - cols * C.bay) / 2 + c * C.bay + (C.bay - ww) / 2, t1 = t0 + ww;
+      if (door && t1 > door[0] && t0 < door[1]) continue;
+      if (Math.min(depth(t0), depth(t1)) < wh + C.under + 0.017) continue;
+      const zt = -C.under, zb = zt - wh;
+      this.line([at(t0, zb), at(t1, zb), at(t1, zt), at(t0, zt), at(t0, zb)], { facing: n, cls });
+    }
+  }
+
+  // What follows stands at the highest ground under `points` (local; two
+  // points: a rectangle's corners) – a building, a piece of a yard wall.
+  // Only on uneven ground (relief).
+  stand(points) {
+    if (!this.relief) return this;
+    const pts = points.length === 2 ? [points[0], [points[1][0], points[0][1]], points[1], [points[0][0], points[1][1]]] : points;
+    let hi = -Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      for (const t of [0, 0.5]) hi = Math.max(hi, this.relief(...this.toWorld(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)));
+    }
+    this.level = hi;
+    return this;
   }
 
   // A pitched roof plane: a face whose first edge is the eave, hatched with
@@ -1511,7 +1597,7 @@ export class Painter {
   // the chimney, so it moves with it on the relief.
   vent(x, y, z, kind = 'house', k = 1) {
     const [lx, ly] = this._turn(x, y);
-    const at = [this.ox + lx, this.oy + ly, this.oz + z];
+    const at = [this.ox + lx, this.oy + ly, this.oz + this.level + z];
     const [x0, y0] = this._project(...at);
     const seed = Math.imul(Math.round(at[0] * 997), 2654435761) ^ Math.imul(Math.round(at[1] * 991), 40503) ^ Math.round(z * 1013);
     this.vents.push({ x: x0, y: y0, at, kind, k, seed: seed >>> 0 });

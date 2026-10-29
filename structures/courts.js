@@ -14,7 +14,9 @@
 // A type opts in with `court: { own }` (the chance of an own court) and a
 // `join` group for the shared ones. Its draw reads g.court (what courtOf
 // gives) to put its yard door that side, and leaves g.body = { x0, y0, x1,
-// y1 } – its walls, local – for the court to meet.
+// y1 } – its walls, local – for the court to meet. On uneven ground each
+// piece of wall, the gates and the shed stand at their own ground
+// (Painter.stand), so the walls step down a slope.
 
 import { mulberry32 } from '../src/core/random.js';
 import { wooden } from './kit.js';
@@ -24,6 +26,24 @@ const GATE_H = 0.1;
 // a shared court's front wall and shed, the same for both halves so they meet
 const SHARED_FRONT = -0.14, SHED_D = 0.13, SHED_H = 0.08, SHED_ROOF = 0.055;
 const OWN_TO = 0.44; // how far out an own court reaches (inside the dot)
+// on uneven ground a wall steps with it, in pieces about this long
+const STEP = 0.12;
+
+// The pieces from a to b along a wall that each stand at their own ground
+// (Painter.stand, `rect(u0, u1)` a piece's footprint): [u0, u1] each with
+// its `level`. Neighbours at nearly one height are one piece, so on flat
+// ground (or without relief) the wall is one.
+function steps(g, a, b, rect) {
+  if (!g.relief) return [Object.assign([a, b], { level: g.level })];
+  const n = Math.max(1, Math.round((b - a) / STEP)), out = [];
+  for (let k = 0; k < n; k++) {
+    const u0 = a + ((b - a) * k) / n, u1 = a + ((b - a) * (k + 1)) / n;
+    const level = g.stand(rect(u0, u1)).level, last = out[out.length - 1];
+    if (last && Math.abs(last.level - level) < 0.006) last[1] = u1;
+    else out.push(Object.assign([u0, u1], { level }));
+  }
+  return out;
+}
 
 // What courts a structure has: { left, right }, each 'shared', 'own' or null.
 // `join` is joinSides(world, s); `others` (dir) is true where a house of
@@ -52,19 +72,26 @@ export function courtSide(court) {
 function wallX(g, xa, xb, y) {
   if (Math.abs(xb - xa) < 0.005) return;
   const [a, b] = xa < xb ? [xa, xb] : [xb, xa];
-  g.prism([[a, y], [b, y], [b, y + WALL_D], [a, y + WALL_D]], 0, WALL_H);
+  for (const p of steps(g, a, b, (u0, u1) => [[u0, y], [u1, y + WALL_D]])) {
+    g.level = p.level;
+    g.prism([[p[0], y], [p[1], y], [p[1], y + WALL_D], [p[0], y + WALL_D]], 0, WALL_H);
+  }
 }
 
 // The same along y, at x, its thickness inwards (towards -dir).
 function wallY(g, x, ya, yb, dir) {
   if (yb - ya < 0.005) return;
   const [a, b] = dir > 0 ? [x - WALL_D, x] : [x, x + WALL_D];
-  g.prism([[a, ya], [b, ya], [b, yb], [a, yb]], 0, WALL_H);
+  for (const p of steps(g, ya, yb, (u0, u1) => [[a, u0], [b, u1]])) {
+    g.level = p.level;
+    g.prism([[a, p[0]], [b, p[0]], [b, p[1]], [a, p[1]]], 0, WALL_H);
+  }
 }
 
 // A plank gate (or a branka, narrower) between xa and xb in the wall on y.
 function gate(g, xa, xb, y, h = GATE_H) {
   const [a, b] = xa < xb ? [xa, xb] : [xb, xa];
+  g.stand([[a, y], [b, y + 0.02]]);
   g.box(a, y + 0.005, 0, b - a, 0.015, h);
   g.detailed(2, () => {
     for (let x = a + 0.022; x < b - 0.01; x += 0.022) g.line([[x, y + 0.005, 0.008], [x, y + 0.005, h - 0.008]], { facing: [0, -1, 0] });
@@ -74,6 +101,7 @@ function gate(g, xa, xb, y, h = GATE_H) {
 // The kůlna across the back, from xa to xb, its back on y1.
 function shed(g, xa, xb, y1) {
   const [a, b] = xa < xb ? [xa, xb] : [xb, xa];
+  g.stand([[a, y1 - SHED_D], [b, y1]]);
   wooden(g, () => g.gable(a, y1 - SHED_D, 0, b - a, SHED_D, SHED_H, SHED_ROOF));
 }
 

@@ -3065,9 +3065,17 @@ export class Renderer {
     // slopes (see Camera.project) – and so does a whole street front of
     // buildings sharing walls, so the walls still meet. Its yard and plot (and
     // parks and squares) keep its warp but follow the ground (Painter.follow).
-    const row = joinedRow(world, s).map((o) => world.centerOf(o));
+    const joined = joinedRow(world, s), row = joined.map((o) => world.centerOf(o));
     const rigid = [row.reduce((a, p) => a + p[0], 0) / row.length, row.reduce((a, p) => a + p[1], 0) / row.length];
     painter.rigid = rigid;
+    // On uneven ground it stands level at the highest ground under it –
+    // the whole row, so shared walls still meet – and its walls run on down
+    // to the ground (Painter.relief). Not parks and squares (they follow it).
+    const relief = camera.lift && !def.site ? (wx, wy) => camera.lift(wx, wy) - camera.lift(...rigid) : null;
+    if (relief) {
+      painter.relief = relief;
+      painter.level = standLevel(world, joined, relief);
+    }
     painter.sways = live;
     // windows close up (Painter._window): as the band it is drawn with
     if (live) painter.near = !!(this.bandFor(`s${s.id}`) & NEAR);
@@ -3103,6 +3111,8 @@ export class Renderer {
       const cp = this.attachFree(new Painter(camera, { x, y, z }, world.drawnRotation(s), drawSeed(s) ^ 0x3c6ef372));
       cp.setTilt(painter.tilt);
       cp.rigid = rigid;
+      cp.relief = relief;
+      cp.level = painter.level;
       cp.sways = live;
       keep(cp);
       const body = painter.body ?? { x0: core[0], y0: core[1], x1: core[2], y1: core[3] };
@@ -4192,4 +4202,19 @@ function agentEl(kind, born) {
     model: undefined, brolly: undefined, at: undefined, heading: undefined, walked: undefined, left: undefined,
     squash: undefined, mirror: undefined, shear: undefined, sx: 0, sy: 0, dot: undefined, path: undefined,
   };
+}
+
+// The highest ground (relief, world -> lift) under the dots of the
+// structures `row`, a little in from each dot's edge: where a building on
+// uneven ground stands (Renderer.paintStructure).
+const STAND_REACH = 0.35;
+function standLevel(world, row, relief) {
+  let hi = -Infinity;
+  for (const o of row) {
+    for (const n of world.nodesOf(o)) {
+      const [x, y] = world.grid.xy(n);
+      for (const dy of [-STAND_REACH, 0, STAND_REACH]) for (const dx of [-STAND_REACH, 0, STAND_REACH]) hi = Math.max(hi, relief(x + dx, y + dy));
+    }
+  }
+  return hi;
 }
