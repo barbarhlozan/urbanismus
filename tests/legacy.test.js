@@ -3,7 +3,7 @@
 // keeps the kind it was drawn as.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { unretire, upgrade, regroup, rehouse, refarm, repark } from '../src/core/legacy.js';
+import { unretire, upgrade, regroup, rehouse, refarm, repub, reshop, repark } from '../src/core/legacy.js';
 import { STRUCTURE_TYPES, kindShown } from '../structures/index.js';
 
 const OLD = { 'service-centre': 4, tuzex: 1, workshop: 1, works: 1, 'plant-small': 1, 'workshop-medium': 2, 'works-medium': 2, 'plant-medium': 2, 'workshop-large': 6, factory: 6, plant: 6 };
@@ -89,6 +89,19 @@ test('farmsteads of before version 7 keep the layout they had', () => {
   assert.deepEqual(refarm({ type: 'jzd', seed: 3, data: {} }), { type: 'jzd', seed: 3, data: {} });
 });
 
+test('pubs of before version 8 keep their beer garden, town pubs become village pubs', () => {
+  const seen = new Set();
+  for (let seed = 1; seed < 200; seed++) {
+    const s = repub({ type: 'hospoda', seed, data: {} });
+    assert.ok(STRUCTURE_TYPES.hospoda.kinds.includes(s.data.kind));
+    assert.equal(kindShown(STRUCTURE_TYPES.hospoda, s), s.data.kind);
+    seen.add(s.data.kind);
+  }
+  assert.equal(seen.size, 2);
+  assert.deepEqual(repub({ type: 'hospoda', seed: 1, data: { kind: 'garden' } }), { type: 'hospoda', seed: 1, data: { kind: 'garden' } });
+  assert.deepEqual(repub({ type: 'hospoda-wide', seed: 1, data: {} }), { type: 'hospoda-wide', seed: 1, data: {} });
+});
+
 test('parks and squares of before version 9 keep their size, each look to the kind nearest it', () => {
   const OLD = { meadow: 4, 'garden-park': 1, 'garden-park-large': 4, 'pond-park': 4, plaza: 1, 'fountain-square': 1,
     'monument-square': 1, precinct: 1, 'market-square': 4, 'fountain-square-large': 4, 'grand-square': 4, 'parade-square': 4 };
@@ -106,4 +119,16 @@ test('parks and squares of before version 9 keep their size, each look to the ki
   assert.deepEqual(repark({ type: 'pond-park', seed: 1, data: { kind: 'bridge' } }), { type: 'pond-park', seed: 1, data: { kind: 'fire-pond' } });
   assert.deepEqual(repark({ type: 'grand-square', seed: 1, data: { kind: 'pair' } }), { type: 'market-square', seed: 1, data: { kind: 'column' } });
   assert.deepEqual(repark({ type: 'green', seed: 1, data: {} }), { type: 'green', seed: 1, data: {} });
+});
+
+test('Jednota shops of before version 10 keep their kind, pavilions and townhouses go to the two left', () => {
+  const OLD = ['jednota', 'jednota', 'pavilion', 'village', 'townhouse'];
+  const NOW = { jednota: 'jednota', pavilion: 'jednota', village: 'village', townhouse: 'village' };
+  for (let seed = 1; seed < 200; seed++) {
+    const was = kindShown({ kinds: OLD }, { seed, data: {} });
+    const s = reshop({ type: 'jednota', seed, data: {} });
+    assert.equal(s.data.kind, NOW[was]);
+    assert.equal(kindShown(STRUCTURE_TYPES.jednota, s), NOW[was]);
+  }
+  assert.deepEqual(reshop({ type: 'jednota-wide', seed: 1, data: {} }), { type: 'jednota-wide', seed: 1, data: {} });
 });

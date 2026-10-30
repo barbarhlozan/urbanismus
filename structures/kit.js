@@ -97,19 +97,16 @@ function carBody(g, x, y, alongX) {
   g.box(x - w * 0.35, y - d * 0.3, 0.04, w * 0.7, d * 0.55, 0.03);
 }
 
-// Bench with a backrest. alongX: the seat runs along x; back: which side the
-// backrest is on (+1 / -1 along the other axis), so it can face a path.
-export function bench(g, x, y, alongX = true, back = 1) {
+// Bench: a plank seat on two legs, no back (a lavička by a chapel or in a
+// park). alongX: the seat runs along x. (Callers may still pass which side
+// a backrest was on; there is none.)
+export function bench(g, x, y, alongX = true) {
   if (!g.isFree(x, y, 0.07)) return;
-  const len = 0.14, depth = 0.045, t = 0.012;
+  const len = 0.14, depth = 0.04, seat = 0.035, t = 0.01, leg = 0.012;
+  const box = (u, v, z, du, dv, h) => (alongX ? g.box(x + u, y + v, z, du, dv, h) : g.box(x + v, y + u, z, dv, du, h));
   g.detailed(2, () => {
-    if (alongX) {
-      g.box(x - len / 2, y - depth / 2, 0, len, depth, 0.03);
-      g.box(x - len / 2, back > 0 ? y + depth / 2 : y - depth / 2 - t, 0, len, t, 0.07);
-    } else {
-      g.box(x - depth / 2, y - len / 2, 0, depth, len, 0.03);
-      g.box(back > 0 ? x + depth / 2 : x - depth / 2 - t, y - len / 2, 0, t, len, 0.07);
-    }
+    for (const u of [-len / 2 + 0.015, len / 2 - 0.015 - leg]) box(u, -depth / 2 + 0.006, 0, leg, depth - 0.012, seat);
+    box(-len / 2, -depth / 2, seat, len, depth, t);
   });
 }
 

@@ -28,11 +28,18 @@ function spire(g, x, y, z, t, h) {
   cross(g, x, y, z + h);
 }
 
-function cross(g, x, y, z, s = 0.035) {
+// A cross on a gable's peak (y a hair before the gable, or the roof hides
+// it): bigger and in a heavier pen than one on a spire, or it is lost
+// against the roof.
+function gableCross(g, x, y, z, s = 0.06) {
+  cross(g, x, y, z, s, { width: 2, stroke: 'main' });
+}
+
+function cross(g, x, y, z, s = 0.035, pen = {}) {
   g.detailed(1, () => {
     g.solid(x, y, z + s);
-    g.line([[x, y, z], [x, y, z + s * 2.2]]);
-    g.line([[x - s * 0.6, y, z + s * 1.5], [x + s * 0.6, y, z + s * 1.5]]);
+    g.line([[x, y, z], [x, y, z + s * 2.2]], pen);
+    g.line([[x - s * 0.6, y, z + s * 1.5], [x + s * 0.6, y, z + s * 1.5]], pen);
   });
 }
 
@@ -77,21 +84,95 @@ export const chapel = {
   footprint: [[0, 0]],
   stats: {},
   agents: 0,
-  // the chapel on the village green (návesní kaple, as at Holašovice): a
-  // lime tree beside it, no fence
+  // A lime tree beside it, no fence. Space steps through its kinds, in
+  // this order (one built before there were kinds is the first):
+  //   green   the chapel on the village green (návesní kaple, as at
+  //           Holašovice): a little nave, a bell turret on its ridge
+  //   niche   a wayside niche chapel (výklenková kaple): a shallow block
+  //           with a gable, an arched opening barred by a grille, a cross
+  //   belfry  the chapel with its bell storey above it (kaple se
+  //           zvoničkou): a square room, a skirt roof, the belfry on top
+  //   gable   the bigger chapel with a gable front, its window up in the
+  //           gable, an arched door, an open bell turret at the back
   plot: { props: 'green', boundary: 0, density: 0.15 },
   yards: [],
-  draw(g) {
-    const w = 0.26, d = 0.38, y = -0.2, h = 0.22, r = 0.17;
+  kinds: ['green', 'niche', 'belfry', 'gable'],
+  draw(g, s) {
+    const kind = this.kinds.includes(s?.data?.kind) ? s.data.kind : 'green';
     tree(g, 0.3, 0.05, 1.05, 'spreading');
-    g.roofed(-w / 2, y, 0, w, d, h, { h: r, ridge: 'y' });
-    door(g, 0, y, 0.07, 0.13);
-    naveWindows(g, -w / 2, y, w, d, h);
-    // bell turret on the front of the ridge
-    g.box(-0.035, y + 0.04, h + r * 0.75, 0.07, 0.07, 0.08);
-    onion(g, 0, y + 0.075, h + r * 0.75 + 0.08, 0.04);
+    const paint = g.paint;
+    g.paint = 2; // plastered walls, red tiles (as the churches)
+    ({ green: greenChapel, niche: nicheChapel, belfry: belfryChapel, gable: gableChapel })[kind](g);
+    g.paint = paint;
   },
 };
+
+function greenChapel(g) {
+  const w = 0.26, d = 0.38, y = -0.2, h = 0.22, r = 0.17;
+  g.roofed(-w / 2, y, 0, w, d, h, { h: r, ridge: 'y' });
+  door(g, 0, y, 0.07, 0.13);
+  naveWindows(g, -w / 2, y, w, d, h);
+  // bell turret on the front of the ridge
+  g.box(-0.035, y + 0.04, h + r * 0.75, 0.07, 0.07, 0.08);
+  onion(g, 0, y + 0.075, h + r * 0.75 + 0.08, 0.04);
+}
+
+// The front face of a block whose front is at y: P(u, z), its normal.
+const frontAt = (y) => [(u, z) => [u, y, z], [0, -1, 0]];
+
+function nicheChapel(g) {
+  const w = 0.2, d = 0.14, y = -0.16, h = 0.25, r = 0.07;
+  g.roofed(-w / 2, y, 0, w, d, h, { h: r, ridge: 'y' });
+  const [P, n] = frontAt(y);
+  g.detailed(1, () => {
+    g.line([P(-w / 2, h - 0.025), P(w / 2, h - 0.025)], { facing: n }); // the cornice
+    archWindow(g, P, n, 0.11, 0.03, 0.2);
+    // the grille's bars
+    for (const u of [-0.033, -0.011, 0.011, 0.033]) g.line([P(u, 0.03), P(u, 0.19 - Math.abs(u) * 0.6)], { facing: n });
+  });
+  standing(g, [[-w / 2 - 0.01, y - 0.05], [w / 2 + 0.01, y]], () => g.box(-w / 2 - 0.01, y - 0.05, 0, w + 0.02, 0.05, 0.012)); // the step
+  gableCross(g, 0, y - 0.012, h + r);
+}
+
+function belfryChapel(g) {
+  const t = 0.11, h = 0.28, t2 = 0.065, h2 = 0.17, y = -0.04;
+  g.box(-t, y - t, 0, 2 * t, 2 * t, h);
+  // a skirt roof round the top of the room, the belfry standing out of it
+  g.roofed(-t - 0.015, y - t - 0.015, h, 2 * t + 0.03, 2 * t + 0.03, 0, { h: 0.06, hip: t + 0.015 });
+  g.box(-t2, y - t2, h + 0.02, 2 * t2, 2 * t2, h2);
+  g.roofed(-t2 - 0.01, y - t2 - 0.01, h + 0.02 + h2, 2 * t2 + 0.02, 2 * t2 + 0.02, 0, { h: 0.05, hip: t2 + 0.01 });
+  const zt = h + 0.02 + h2 + 0.05;
+  g.detailed(1, () => {
+    for (const [P, n] of towerFaces(0, y, t)) {
+      if (n[1] === -1) archWindow(g, P, n, 0.08, 0, 0.19); // the door
+      for (const u of [-t + 0.02, t - 0.02]) g.line([P(u, 0.01), P(u, h - 0.01)], { facing: n }); // pilasters
+    }
+    for (const [P, n] of towerFaces(0, y, t2)) archWindow(g, P, n, 0.045, h + 0.06, h + h2 - 0.02);
+  });
+  g.lathe(0, y, zt, [[0.012, 0], [0.012, 0.03], [0, 0.07]], 6);
+  cross(g, 0, y, zt + 0.07, 0.025);
+}
+
+function gableChapel(g) {
+  const w = 0.3, d = 0.46, y = -0.26, h = 0.24, r = 0.2;
+  g.box(-w / 2 - 0.008, y - 0.008, 0, w + 0.016, d + 0.016, 0.04); // stone plinth
+  g.roofed(-w / 2, y, 0, w, d, h, { h: r, ridge: 'y' });
+  const [P, n] = frontAt(y);
+  g.detailed(1, () => {
+    archWindow(g, P, n, 0.09, 0.04, 0.2); // the door
+    archWindow(g, P, n, 0.05, h + 0.04, h + 0.12); // up in the gable
+    g.line([P(-w / 2, h - 0.01), P(w / 2, h - 0.01)], { facing: n }); // the cornice under it
+    for (const u of [-w / 2 + 0.025, w / 2 - 0.025]) g.line([P(u, 0.04), P(u, h - 0.01)], { facing: n }); // pilasters
+  });
+  sideWindows(g, -w / 2, w / 2, y + 0.06, y + d, 2, 0.045, 0.08, 0.2);
+  gableCross(g, 0, y - 0.012, h + r);
+  // the open bell turret on the back of the ridge
+  // (its base rises from the roof a little below the ridge; open on four posts)
+  const ty = y + d - 0.1, k = 0.04, zb = h + r * 0.8, zp = zb + 0.06, zr = zp + 0.08;
+  g.box(-k, ty - k, zb, 2 * k, 2 * k, zp - zb);
+  for (const [px, py] of [[-k, -k], [k - 0.012, -k], [k - 0.012, k - 0.012], [-k, k - 0.012]]) g.box(px, ty + py, zp, 0.012, 0.012, zr - zp);
+  g.roofed(-k - 0.01, ty - k - 0.01, zr, 2 * k + 0.02, 2 * k + 0.02, 0, { h: 0.11, hip: k + 0.01 });
+}
 
 export const church = {
   ...common,

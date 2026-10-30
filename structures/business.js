@@ -35,6 +35,55 @@ function frontWindow(g, cx, y, z, w, h) {
   g.line([[cx - w / 2, y, z], [cx + w / 2, y, z], [cx + w / 2, y, z + h], [cx - w / 2, y, z + h], [cx - w / 2, y, z]], { facing: FRONT });
 }
 
+// A plank top at height h, len along x and w across, on a folding trestle
+// at each end: two legs splayed out from under its middle. In a finer pen
+// than the buildings', or the planks run together.
+const FINE = { width: 0.6 };
+function trestle(g, x, y, len, w, h) {
+  const t = 0.006, splay = w * 0.8;
+  g.box(x - len / 2, y - w / 2, h - t, len, w, t, FINE);
+  for (const u of [-len / 2 + 0.014, len / 2 - 0.014]) {
+    for (const k of [-1, 1]) g.line([[x + u, y, h - t], [x + u, y + k * splay / 2, 0]], FINE);
+  }
+}
+
+// A beer set in the zahrádka: the long table with a bench either side, all
+// on folding legs, along x.
+function beerSet(g, x, y) {
+  if (!g.isFree(x, y, 0.09)) return;
+  const len = 0.15, tw = 0.034, bw = 0.014, gap = 0.022;
+  g.detailed(2, () => {
+    g.solid(x, y, 0.03);
+    trestle(g, x, y, len, tw, 0.06);
+    for (const k of [-1, 1]) trestle(g, x, y + k * (tw / 2 + gap + bw / 2), len, bw, 0.036);
+  });
+}
+
+// The bench by the pub's door, against its wall, along x.
+function doorBench(g, x, y) {
+  if (!g.isFree(x, y, 0.07)) return;
+  g.detailed(2, () => {
+    g.solid(x, y, 0.014);
+    trestle(g, x, y, 0.12, 0.016, 0.036);
+  });
+}
+
+// A name board over a door, w wide from x0, bottom at z, h tall, on the
+// front wall at depth y: a long board in the fine pen, its name in
+// capitals as strokes, one a letter, a gap between the words. words: the
+// letters in each (the pub's HOSTINEC U LÍPY: [8, 1, 4]).
+function nameBoard(g, x0, y, z, w, h, words = [8, 1, 4]) {
+  g.box(x0, y - 0.01, z, w, 0.01, h, FINE);
+  const slots = words.reduce((a, n) => a + n + 1, -1), step = (w - 0.05) / (slots - 1);
+  g.detailed(2, () => {
+    let x = x0 + 0.025;
+    for (const n of words) {
+      for (let i = 0; i < n; i++, x += step) g.line([[x, y - 0.011, z + h * 0.28], [x, y - 0.011, z + h * 0.72]], { ...FINE, facing: FRONT });
+      x += step;
+    }
+  });
+}
+
 // What every one of them shares.
 const COMMON = {
   category: 'amenities',
@@ -45,9 +94,12 @@ const COMMON = {
 
 // ----- 1×1 -----
 
-// Jednota, the consumer co-op that ran the village shops: its 70s shop
-// under a flat roof, a self-service shop with a sign on the roof, a village
-// shop with its gable to the street, a shop under a townhouse.
+// Jednota, the consumer co-op that ran the village shops, stepped with
+// Space: the village's smíšené zboží (mixed goods) in an old house with its
+// gable to the street, a shop window and a canopy over the door; or the
+// 70s standard Jednota shop, one storey under a flat roof, a deep fascia
+// with the co-op's name, shop windows, the store room beside it, crates at
+// the side, a bench and a bike rack by the door.
 export const jednota = {
   ...COMMON,
   id: 'jednota',
@@ -59,54 +111,36 @@ export const jednota = {
   stats: { jobs: 3 },
   agents: 1,
   yards: ['parking', 'plaza', 'trees'],
-  join: { group: 'street', chance: 0.6 },
-  draw(g) {
-    const joined = g.join.left || g.join.right;
-    const kind = joined ? 'townhouse' : g.pick(['jednota', 'jednota', 'pavilion', 'village', 'townhouse']);
-    if (kind === 'jednota') {
-      // Jednota village shop, 70s: one storey under a flat roof, a deep
-      // fascia with the co-op's sign board, shop windows, the store room
-      // beside it, crates at the side and a bench by the door
-      const w = g.range(0.42, 0.48), d = 0.34, x = -0.3, y = -0.18, h = 0.16;
-      g.box(x, y, 0, w, d, h);
+  kinds: ['village', 'jednota'],
+  draw(g, s) {
+    if (kindOf(g, s, this.kinds) === 'jednota') {
+      const w = g.range(0.42, 0.48), d = 0.34, x = -0.3, y = -0.18, h = 0.16, f = 0.045;
+      g.box(x, y, 0, w, d, h + f);                                     // the shop under its fascia
       g.windows(x, y, w, d, 0, h, h, 0.1, { ribbon: true, h: 0.55, skip: ['back', 'left'] });
-      g.box(x - 0.015, y - 0.02, h, w + 0.03, d + 0.035, 0.045); // fascia
-      g.box(x + w * 0.2, y - 0.025, h + 0.008, w * 0.6, 0.006, 0.03); // sign board
+      nameBoard(g, x + w * 0.2, y, h + 0.008, w * 0.6, 0.03, [7]);     // JEDNOTA
       door(g, x + w * 0.78, y, 0.06, 0.11);
       g.box(x + w, y + 0.06, 0, 0.16, d - 0.06, 0.12);                 // store room
       g.windows(x + w, y + 0.06, 0.16, d - 0.06, 0, 0.12, 0.12, 0.1, { skip: ['left'], h: 0.4 });
       crates(g, 0.34, 0.26);
-      bench(g, x + w * 0.35, y - 0.1, true, -1);
+      doorBench(g, x + w * 0.35, y - 0.03);
       bikeRack(g, 0.2, 0.32, -0.3);
-    } else if (kind === 'townhouse') {
-      // two storeys over a shop front
-      const [x0, x1] = frontage(g, g.range(0.5, 0.58));
-      const w = x1 - x0, d = 0.38, y = -d / 2, fh = 0.15, h = fh * 2;
-      g.roofed(x0, y, 0, w, d, h, { h: g.range(0.12, 0.15), hip: hips(g, 0.12) });
-      g.windows(x0, y, w, d, 0, h, fh, 0.09, { skip: shared(g), from: 1 });
-      panel(g, x0 + 0.04, x1 - 0.04, y, 0.02, fh * 0.75);
-    } else if (kind === 'pavilion') {
-      // self-service shop: flat roof, glass front, sign on the roof
-      const w = g.range(0.5, 0.58), d = g.range(0.36, 0.42), h = 0.17;
-      const x = -w / 2, y = -d / 2;
-      g.box(x, y, 0, w, d, h);
-      g.box(x - 0.02, y - 0.03, h, w + 0.04, d + 0.05, 0.02); // thin roof slab
-      g.windows(x, y, w, d, 0, h, h, 0.1, { ribbon: true, h: 0.6, skip: ['back'] });
-      roofSign(g, 0, y + 0.03, h + 0.02, w * 0.6);
-    } else {
-      // village shop: gable to the street
-      const w = g.range(0.32, 0.38), d = g.range(0.4, 0.46), h = 0.19;
-      g.roofed(-w / 2, -d / 2, 0, w, d, h, { h: g.range(0.18, 0.22), ridge: 'y' });
-      panel(g, -w / 2 + 0.04, w / 2 - 0.04, -d / 2, 0.03, 0.13);
-      g.box(-w / 2 + 0.02, -d / 2 - 0.06, 0.14, w - 0.04, 0.06, 0.02); // canopy
+      return;
     }
+    const w = g.range(0.32, 0.38), d = g.range(0.4, 0.46), h = 0.19, y = -d / 2;
+    g.roofed(-w / 2, y, 0, w, d, h, { h: g.range(0.18, 0.22), ridge: 'y' });
+    g.windows(-w / 2, y, w, d, 0, h, h, 0.1, { h: 0.4, skip: ['front'] });
+    door(g, 0, y, 0.06, 0.11);
+    for (const k of [-1, 1]) frontWindow(g, k * w * 0.27, y, 0.035, w * 0.26, 0.075);
+    nameBoard(g, -w / 2 + 0.03, y, 0.125, w - 0.06, 0.03, [7, 5]); // SMÍŠENÉ ZBOŽÍ
+    doorBench(g, -w * 0.27, y - 0.03);
   },
 };
 
-// Hospoda: the village pub – one storey with its eaves to the street, the
-// door in the middle under the brewery's sign board, a bench outside and
-// barrels by the side wall, sometimes a beer garden under a tree; or, in
-// town, the pub on the ground floor of a two-storey house.
+// Hospoda: the village pub on the náves – one storey with its eaves to the
+// street, the door in the middle under the brewery's sign board, a bench
+// outside and barrels by the side wall; or the same pub with its summer
+// zahrádka in front, tables and benches under a linden. (The restaurace in
+// a town house on the square is the old hotel's.)
 export const hospoda = {
   ...COMMON,
   id: 'hospoda',
@@ -118,39 +152,23 @@ export const hospoda = {
   stats: { jobs: 2 },
   agents: 1,
   yards: ['trees', 'garden', 'parking'],
-  join: { group: 'street', chance: 0.5 },
-  draw(g) {
-    const joined = g.join.left || g.join.right;
-    const kind = joined ? 'town' : g.pick(['village', 'village', 'town']);
-    if (kind === 'town') {
-      const [x0, x1] = frontage(g, g.range(0.5, 0.58));
-      const w = x1 - x0, d = 0.4, y = -d / 2, fh = 0.15, h = fh * 2, cx = (x0 + x1) / 2;
-      g.roofed(x0, y, 0, w, d, h, { h: g.range(0.13, 0.16), hip: hips(g, 0.12) });
-      g.windows(x0, y, w, d, 0, h, fh, 0.09, { skip: shared(g), from: 1 });
-      for (const k of [-1, 1]) frontWindow(g, cx + k * w * 0.27, y, fh * 0.25, w * 0.26, fh * 0.55);
-      door(g, cx, y, 0.07, fh * 0.8);
-      g.box(cx - 0.1, y - 0.012, fh * 0.85, 0.2, 0.012, 0.035);       // sign board
-      if (!g.join.right) g.box(x1 - 0.04, y - 0.06, fh * 1.15, 0.008, 0.06, 0.05); // hanging sign
-      return;
-    }
-    const garden = g.chance(0.5);
+  kinds: ['village', 'garden'],
+  draw(g, s) {
+    const garden = kindOf(g, s, this.kinds) === 'garden';
     const w = g.range(0.5, 0.56), d = g.range(0.3, 0.34), h = 0.16, r = g.range(0.15, 0.19);
     const x = -w / 2, y = garden ? -0.06 : -d / 2;
     g.roofed(x, y, 0, w, d, h, { h: r, hip: g.range(0.06, 0.1) });
     g.windows(x, y, w, d, 0, h, h, 0.1, { h: 0.45 });
     door(g, 0, y, 0.07, 0.12);
-    g.box(-0.11, y - 0.012, h * 0.8, 0.22, 0.012, 0.03);              // sign board
+    nameBoard(g, -0.16, y, 0.124, 0.32, 0.034);
     chimney(g, x + w * 0.25, y + d / 2, h + r * 0.4, r * 0.7);
     barrels(g, x + w + 0.04, y + d - 0.06);
     if (garden) {
-      // the beer garden in front: benches either side of a linden
-      tree(g, -0.24, -0.3, 0.9);
-      for (const bx of [0.02, 0.22]) {
-        bench(g, bx, -0.36, true, -1);
-        bench(g, bx, -0.26, true, 1);
-      }
+      // the beer garden in front: tables and benches beside a linden
+      tree(g, -0.24, -0.3, 0.9, 'spreading');
+      for (const bx of [0.03, 0.21]) beerSet(g, bx, -0.32);
     } else {
-      bench(g, -0.18, y - 0.1, true, -1);
+      doorBench(g, -0.16, y - 0.03);
     }
   },
 };
@@ -378,8 +396,8 @@ export const jednotaWide = {
   },
 };
 
-// The village inn: gable to the street, the dance hall behind a row of
-// tall windows.
+// The village inn: gable to the street, the brewery's sign board over its
+// door, the dance hall (sál) behind a row of tall windows.
 export const hospodaWide = {
   ...COMMON,
   id: 'hospoda-wide',
@@ -397,13 +415,14 @@ export const hospodaWide = {
     g.roofed(-0.32, y, 0, w, d, h, { h: g.range(0.2, 0.24), ridge: 'y' });
     g.windows(-0.32, y, w, d, 0, h, h, 0.1, { h: 0.4, skip: ['right'] });
     door(g, -0.14, y, 0.07, 0.12);
+    nameBoard(g, -0.29, y, 0.13, 0.3, 0.045);
     chimney(g, -0.2, 0.05, h + 0.1, 0.14);
     const hx = 0.04, hw = 1.26, hh = 0.24;
     g.roofed(hx, y + 0.02, 0, hw, d - 0.04, hh, { h: 0.13, hip: [0, 0.1] });
     g.windows(hx, y + 0.02, hw, d - 0.04, 0.03, hh - 0.02, hh - 0.05, 0.16, { w: 0.35, h: 0.85, skip: ['left'] });
     door(g, 1.0, y + 0.02, 0.07, 0.12);
     barrels(g, 1.3, 0.32);
-    bench(g, -0.14, y - 0.12, true, -1);
+    doorBench(g, -0.25, y - 0.03);
   },
 };
 

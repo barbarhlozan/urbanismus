@@ -137,6 +137,17 @@ export function refarm(s) {
   return s;
 }
 
+// Pubs before version 8 drew their kind by seed: the town pub (a third of
+// them) is gone, a village pub now; the rest kept a beer garden on the
+// second number of their drawing. The kind is written into s.data.
+export function repub(s) {
+  if (s.type !== 'hospoda' || s.data?.kind) return s;
+  const r = mulberry32(drawSeed(s));
+  const town = Math.floor(r() * 3) === 2;
+  s.data = { ...s.data, kind: !town && r() < 0.5 ? 'garden' : 'village' };
+  return s;
+}
+
 // Parks and squares before version 9 (structures/park.js, square.js): old
 // type -> its kinds then, in order (none: []), and kind -> what it is now
 // ([type, kind]; a kind of null leaves it to the seed). The woods are a
@@ -170,6 +181,18 @@ export function repark(s) {
   s.data = { ...s.data };
   if (look) s.data.kind = look;
   else delete s.data.kind;
+  return s;
+}
+
+// Jednota shops before version 10 drew their kind by seed: the pavilion
+// is the 70s Jednota now, the shop under a townhouse the village shop.
+const RESHOPPED = [['jednota', 'jednota', 'pavilion', 'village', 'townhouse'],
+  { jednota: 'jednota', pavilion: 'jednota', village: 'village', townhouse: 'village' }];
+export function reshop(s) {
+  if (s.type !== 'jednota') return s;
+  const [kinds, to] = RESHOPPED;
+  const kind = kinds.includes(s.data?.kind) ? s.data.kind : kinds[Math.floor(mulberry32(drawSeed(s))() * kinds.length)];
+  s.data = { ...s.data, kind: to[kind] };
   return s;
 }
 
