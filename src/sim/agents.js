@@ -69,6 +69,18 @@
 // Weather (config.weather.people): in rain and storms more people stay in
 // and fewer go for a walk, fewer cycle, fewer visitors come (see weather()).
 //
+// The day (config.rhythm, by the sun's clock): nobody sets off at night,
+// early in the morning they go to work and stay till the shift ends,
+// mornings are for the shop and the doctor, evenings for the bench in
+// front of the house and the pub (see rhythm()).
+//
+// A village (config.village): people of houses and farms work round the
+// house with a hoe (garden: startYard), and where the town has no jobs for
+// them most do that rather than go off the map; and they go to the woods
+// for mushrooms with a basket (forest: a walk to the nearest wood, a while
+// about among its trees, home again). a.carry is what they hold
+// (render/people.js), as at a fire.
+//
 // The renderer only reads visible() and x / y / trip.mode.
 
 import { STRUCTURE_TYPES, matches, codeOf, statsOf } from '../../structures/index.js';
@@ -77,6 +89,7 @@ import { findPath } from '../roads/pathfinding.js';
 import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, roadway } from '../roads/geometry.js';
 import { siteWalks, hubRadius } from '../roads/siteWalks.js';
 import { UNLOCKS } from '../story/unlocks.js';
+import { DAY, hourAt } from '../render/shadows.js';
 
 const can = (kind) => UNLOCKS.allowsVehicle(kind); // 'cars' | 'trucks' | 'buses'
 import { WalkNetwork } from './walking.js';
@@ -233,7 +246,12 @@ export class AgentSystem {
     if (trip.commuter) return between(this.config.commute.shiftMin, this.config.commute.shiftMax);
     if (trip.outside || trip.transit) return between(this.config.sim.outsideMin, this.config.sim.outsideMax);
     if (trip.visitor) return between(this.config.visitors.dwellMin, this.config.visitors.dwellMax);
-    const d = this.config.dwell;
+    const d = this.config.dwell, r = this.config.rhythm;
+    if (r && trip.purpose === 'work') { // early: till the shift ends
+      const { hour } = this.rhythm();
+      if (hour < r.shiftBefore) return ((between(...r.shiftEnd) - hour) / 24) * DAY.day;
+    }
+    if (r && trip.purpose === 'errand' && matches(STRUCTURE_TYPES[this.world.structures.get(trip.dest)?.type] ?? {}, 'pub')) return between(...r.pub);
     return between(...(trip.purpose === 'work' ? d.work : trip.purpose === 'stroll' ? d.turn : trip.purpose === 'visit' ? d.visit : d.errand));
   }
 
@@ -355,6 +373,9 @@ export class AgentSystem {
       a.state = 'wait';
       a.timer = trip.transit.inbound ? this.config.transit.commuterWait : this.config.transit.maxWait;
       this.startWander(a, Infinity, around(a.x, a.y, 0.08), 0.2);
+    } else if (trip.linger && trip.purpose === 'forest') {
+      a.state = 'linger';
+      this.startWander(a, between(...this.config.village.forest), this.woodSpots([a.x, a.y]), 0.6);
     } else if (trip.linger) {
       a.state = 'linger';
       const place = this.world.structures.get(trip.dest);
@@ -370,6 +391,7 @@ export class AgentSystem {
     a.state = 'home';
     a.trip = null;
     a.wander = null;
+    a.carry = null;
     if (a.truck) a.timer = this.dwell({ truck: true });
     else if (a.retry) a.timer = between(1, 3);
     else a.timer = this.homeDwell(this.world.structures.get(a.home));
@@ -529,6 +551,48 @@ export class AgentSystem {
       let s = Math.random() * total;
       const w = walks.find((p) => (s -= p.total) < 0) ?? walks[walks.length - 1];
       return around(...pointAt(w, Math.random() * w.total), 0.1)();
+    };
+  }
+
+  // The trees deep enough in a wood to go mushrooming among (a tree with
+  // village.deep trees round it), as main dots; worked out again when the
+  // trees change.
+  woods() {
+    const { world } = this;
+    if (this._woods?.n === world.features.size) return this._woods.set;
+    const tree = (n) => world.featureAt(n)?.type === 'tree';
+    const set = new Set();
+    for (const f of world.features.values()) {
+      if (f.type === 'tree' && world.grid.neighbors(f.node).filter(tree).length >= this.config.village.deep) set.add(f.node);
+    }
+    this._woods = { n: world.features.size, set };
+    return set;
+  }
+
+  // A walkable (fine) dot with a wood within a step of it.
+  byWood(n) {
+    const woods = this.woods();
+    if (!woods.size) return false;
+    const [fx, fy] = this.world.fine.xy(n);
+    const [x, y] = [Math.round(fx / 2), Math.round(fy / 2)];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!this.world.grid.inBounds(x + dx, y + dy)) continue;
+        if (woods.has(this.world.grid.index(x + dx, y + dy))) return true;
+      }
+    }
+    return false;
+  }
+
+  // Where to look for mushrooms: among the wood's trees near `anchor`,
+  // between and round them.
+  woodSpots(anchor) {
+    const { grid } = this.world, [ax, ay] = anchor;
+    const near = [...this.woods()].map((n) => grid.xy(n)).filter(([x, y]) => Math.hypot(x - ax, y - ay) < 2.5);
+    if (!near.length) return around(ax, ay, 0.3);
+    return () => {
+      const [x, y] = near[Math.floor(Math.random() * near.length)];
+      return [x + (Math.random() - 0.5) * 0.8, y + (Math.random() - 0.5) * 0.8];
     };
   }
 
@@ -992,6 +1056,7 @@ export class AgentSystem {
     }
     const weights = { ...this.config.activities[this.profile(home)] };
     for (const [k, f] of Object.entries(this.weather().activities ?? {})) if (k in weights) weights[k] *= f;
+    for (const [k, f] of Object.entries(this.rhythm().activities ?? {})) if (k in weights) weights[k] *= f;
     for (;;) {
       const pick = pickWeighted(weights);
       if (!pick) return false;
@@ -1034,15 +1099,33 @@ export class AgentSystem {
       }
       case 'lunch':
         return this.activity('park', a, home) || this.activity('stroll', a, home);
+      case 'garden': {
+        const def = STRUCTURE_TYPES[home.type] ?? {};
+        if (!matches(def, 'houses') && !matches(def, 'farm')) return null;
+        const yard = this.startYard(a, home);
+        if (!yard) return null;
+        a.wander.time = between(...this.config.village.garden);
+        a.carry = 'hoe';
+        return yard;
+      }
+      case 'forest': {
+        const { forestReach } = this.config.village;
+        const route = this.walk.toward(home, (n) => this.byWood(n), 1, forestReach);
+        if (!route) return null;
+        const next = this.begin(a, { mode: 'stroll', purpose: 'forest', linger: true, ...route }, null);
+        if (next) a.carry = 'basket';
+        return next;
+      }
       case 'errand':
-        return this.goTo(a, home, this.config.activities.errands, 'errand');
+        return this.goTo(a, home, this.rhythm().errands ?? this.config.activities.errands, 'errand');
       case 'work': {
         const lives = statsOf(home).residents;
         if (lives && Math.random() < this.outboundShare()) { // not enough jobs in town
+          if (Math.random() < this.config.village.homeWork) return this.activity('garden', a, home); // works at home
           const leave = this.planLeave(home, 'goes to work outside', true);
           if (leave) return this.begin(a, leave.plan, leave.dest);
         }
-        return this.goTo(a, home, sim.destinations, 'work');
+        return this.goTo(a, home, sim.destinations, 'work') ?? this.activity('garden', a, home);
       }
       case 'leave': {
         const leave = this.planLeave(home);
@@ -1094,15 +1177,24 @@ export class AgentSystem {
     const places = this.candidates(home, names);
     for (let attempt = 0; attempt < 4 && places.length; attempt++) {
       const dest = places.splice(Math.floor(Math.random() * places.length), 1)[0];
-      const plan = this.planCommute(home, dest);
+      // to the pub on foot, or by bike if it's far: never by car
+      const pub = matches(STRUCTURE_TYPES[dest.type] ?? {}, 'pub');
+      const plan = this.planCommute(home, dest, pub);
       if (plan) return this.begin(a, { ...plan, purpose }, dest.id);
     }
     return null;
   }
 
-  planCommute(home, dest) {
+  // How to get from home to dest: walk, cycle or drive (`onFoot`: walk if
+  // there's a way within walking range, else cycle, never drive).
+  planCommute(home, dest, onFoot = false) {
     const { comfortDistance, maxDistance, longWalkChance } = this.config.walk;
     const walk = this.walk.route(home, dest, maxDistance);
+    if (onFoot) {
+      if (walk) return { mode: 'walk', ...walk };
+      const ride = this.ride.route(home, dest, this.config.bike.maxDistance);
+      return ride && { mode: 'cycle', ...ride };
+    }
     if (walk && (walk.cost <= comfortDistance || Math.random() < longWalkChance)) return { mode: 'walk', ...walk };
     const ride = this.ride.route(home, dest, this.config.bike.maxDistance);
     if (ride && Math.random() < this.bikeChance(ride.cost)) return { mode: 'cycle', ...(walk ?? ride) };
@@ -1120,6 +1212,13 @@ export class AgentSystem {
     if (d <= near) return nearShare * f;
     if (d <= far) return (nearShare + ((d - near) / (far - near)) * (farShare - nearShare)) * f;
     return share * f;
+  }
+
+  // The hour now (the sun's clock; where the Debug panel holds it) and
+  // its band of config.rhythm: { hour, activities?, errands? }.
+  rhythm() {
+    const hour = !DAY.on && DAY.held != null ? DAY.held : hourAt(this.world.time);
+    return { hour, ...this.config.rhythm?.bands.find((b) => hour < b.to) };
   }
 
   // How the weather now changes what people do (config.weather.people; {}

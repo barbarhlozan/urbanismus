@@ -90,8 +90,8 @@ export function bodyFor(id) {
 // head (its build makes it taller or shorter), as [class, d] parts – with
 // `.shoulder` (the front of its shoulders: [x, y, half width]) and
 // `.shoulders` ([left, right] points, for an arm). Seeded by `variant`.
-// `seated`: no legs, nothing carried.
-function figure(variant, height, bottom = 0, seated = false, ox = 0) {
+// `seated`: no legs, nothing carried; `bag`: false with the hands full.
+function figure(variant, height, bottom = 0, seated = false, ox = 0, bag = true) {
   const rnd = mulberry32(variant * 2654435761 + 23);
   const range = (a, b) => a + rnd() * (b - a);
   const name = buildOf(variant), b = BUILDS[name];
@@ -135,7 +135,7 @@ function figure(variant, height, bottom = 0, seated = false, ox = 0) {
     }
     parts.push(['fig-line', d]);
     // some carry a bag at one side
-    if (name !== 'child' && rnd() < 0.3) {
+    if (name !== 'child' && rnd() < 0.3 && bag) { // (not with a hand full)
       const side = rnd() < 0.5 ? -1 : 1;
       const [bx, by] = at([side * (foot + h * 0.05), base - h * 0.14]);
       parts.push(['fig-ink', lumpyRound(rnd, bx, by, h * 0.055, h * 0.075, 0.2, 5)]);
@@ -164,7 +164,8 @@ function umbrella(variant, height, parts) {
   parts.push([rnd() < 0.5 ? 'fig-ink' : 'fig-body', `${d}Z`]);
 }
 
-// What a figure at a fire holds, out on its right (+x): 'bucket' hanging
+// What a figure holds, out on its right (+x): in the village a 'hoe'
+// leant on, or a 'basket' for mushrooms on the arm; at a fire a 'bucket' hanging
 // from the hand, 'throw' swung up in front with the water flying out of
 // it, 'hose' the branch pipe held level in both hands and its jet arcing
 // out and down.
@@ -191,6 +192,22 @@ function carried(variant, height, parts, what) {
     const mx = hx + bw * 1.3, my = hy - bh * 0.9, k = 0.8 + rnd() * 0.4;
     parts.push(['fig-line', `M${pt(mx, my)}Q${pt(mx + height * 0.25 * k, my - height * 0.12)} ${pt(mx + height * 0.42 * k, my + height * 0.2)}`
       + `M${pt(mx + height * 0.08, my + height * 0.05)}Q${pt(mx + height * 0.24 * k, my - height * 0.02)} ${pt(mx + height * 0.33 * k, my + height * 0.25)}`]);
+  } else if (what === 'hoe') {
+    // a hoe (motyka) held out in front, its blade down on the ground, the
+    // handle up past the shoulder: leant on between strokes
+    const gx = sx + w + height * 0.3, top = [sx + w * 0.5, sy - height * 0.16];
+    parts.push(['fig-line', `M${pt(sx + w * 0.8, sy + height * 0.02)}L${pt(sx + w + height * 0.07, sy + height * 0.1)}`]); // the arm to it
+    parts.push(['fig-line', `M${pt(...top)}Q${pt((top[0] + gx) / 2 + height * 0.02, (top[1] - height * 0.02) / 2)} ${pt(gx, -height * 0.04)}`]);
+    parts.push(['fig-ink', `M${pt(gx + height * 0.02, -height * 0.07)}L${pt(gx - height * 0.1, -height * 0.03)}L${pt(gx - height * 0.09, height * 0.01)}L${pt(gx + height * 0.01, -height * 0.02)}Z`]); // the blade, turned back towards them
+  } else if (what === 'basket') {
+    // a wicker basket (košík) on the arm: a deep round body, a band of
+    // weave, the handle arched over it
+    const hx = sx + w * 1.05, hy = sy + height * 0.2, bw2 = height * 0.12, bh2 = height * 0.13;
+    parts.push(['fig-line', `M${pt(sx + w * 0.9, sy)}L${pt(hx, hy - height * 0.02)}`]); // the arm down
+    const body = [[hx - bw2, hy], [hx + bw2, hy - height * 0.005], [hx + bw2 * 0.8, hy + bh2], [hx - bw2 * 0.75, hy + bh2 * 1.02]];
+    parts.push(['fig-body', `M${body.map((p) => pt(...p)).join('L')}Z`]);
+    parts.push(['fig-line', `M${pt(hx - bw2 * 0.9, hy + bh2 * 0.45)}L${pt(hx + bw2 * 0.9, hy + bh2 * 0.42)}`
+      + `M${pt(hx - bw2 * 0.85, hy)}Q${pt(hx, hy - height * 0.17)} ${pt(hx + bw2 * 0.85, hy)}`]);
   } else if (what === 'hose') {
     const hy = sy + height * 0.08, nx = sx + w + height * 0.28;
     parts.push(['fig-line', `M${pt(sx + w * 0.8, sy + height * 0.02)}L${pt(nx - height * 0.08, hy)}M${pt(sx + w * 0.4, sy + height * 0.12)}L${pt(nx - height * 0.16, hy + height * 0.02)}`]);
@@ -213,7 +230,7 @@ const cache = new Map();
 export function walkerSVG(variant, rain = false, carry = null) {
   const key = `w${variant}${rain ? 'u' : ''}${carry ?? ''}`;
   if (!cache.has(key)) {
-    const parts = figure(variant, PEOPLE.height);
+    const parts = figure(variant, PEOPLE.height, 0, false, 0, !carry);
     if (carry) carried(variant, PEOPLE.height, parts, carry);
     else if (rain) umbrella(variant, PEOPLE.height, parts);
     cache.set(key, svgOf(parts));

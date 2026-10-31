@@ -173,6 +173,21 @@ export class WalkNetwork {
     return { nodes, cost: dist.get(target), fromDoor: starts.get(nodes[0]).door, toDoor: null, backNodes, backDoor };
   }
 
+  // A walk from a structure out to a spot where `test(node)` holds – one of
+  // the `nearest` such spots, at least minCost and at most maxCost away
+  // (to the edge of the nearest wood, not across the map to a far one).
+  // { nodes, cost, fromDoor, toDoor: null } or null.
+  toward(from, test, minCost, maxCost, nearest = 5) {
+    const starts = this.entries(from);
+    if (!starts.size) return null;
+    const { dist, came, order } = this.explore(starts, maxCost);
+    const spots = order.filter((n) => dist.get(n) >= minCost && test(n)).slice(0, nearest);
+    if (!spots.length) return null;
+    const target = spots[Math.floor(Math.random() * spots.length)];
+    const nodes = reconstruct(came, target);
+    return { nodes, cost: dist.get(target), fromDoor: starts.get(nodes[0]).door, toDoor: null };
+  }
+
   // Dijkstra from several start nodes, up to maxCost. `weight(a, b)`
   // optionally scales the cost of stepping from a to b.
   explore(starts, maxCost, weight = null) {
