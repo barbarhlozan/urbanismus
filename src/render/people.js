@@ -56,8 +56,9 @@ const r2 = (n) => Math.round(n * 100) / 100;
 const COS30 = Math.cos(Math.PI / 6);
 const P = ([x, y]) => `${r2(x)} ${r2(y)}`;
 
-// A smooth curve through points (Catmull-Rom as cubic Béziers), closed or open.
-function smooth(pts, closed) {
+// A smooth curve through points (Catmull-Rom as cubic Béziers), closed or
+// open – the figures' hand, shared with the animals (deer.js, livestock.js).
+export function smooth(pts, closed) {
   const n = pts.length;
   const at = (i) => closed ? pts[(i + n) % n] : pts[Math.max(0, Math.min(n - 1, i))];
   let d = `M${P(pts[0])}`;
@@ -69,7 +70,7 @@ function smooth(pts, closed) {
 }
 
 // A rough round of `n` points about (cx, cy), each off by up to `lump`.
-function lumpyRound(rnd, cx, cy, rx, ry, lump, n) {
+export function lumpyRound(rnd, cx, cy, rx, ry, lump, n) {
   const a0 = rnd() * Math.PI * 2, pts = [];
   for (let i = 0; i < n; i++) {
     const a = a0 + (i / n) * Math.PI * 2 + (rnd() - 0.5) * 0.5, k = 1 + (rnd() * 2 - 1) * lump;
