@@ -271,6 +271,11 @@ export class AgentSystem {
         }
         case 'away':
           if ((a.timer -= dt) > 0) break;
+          if (a.trip.transit?.inbound) { // a commuter's shift is over: to the stop
+            this.beginLeg(a, a.trip.out);
+            a.state = 'out';
+            break;
+          }
           if (a.trip.transit) { // time to come back: wait for a ride
             a.state = 'abroad';
             a.timer = this.config.transit.returnWait;
@@ -294,6 +299,10 @@ export class AgentSystem {
         case 'wait':
           this.wander(a, dt);
           if ((a.timer -= dt) > 0) break;
+          if (a.trip.transit.inbound) { // a commuter: gone some other way
+            this.agents.delete(id);
+            break;
+          }
           // nothing came: walk home and drive off instead
           a.retry = { commute: a.trip.commute };
           this.beginLeg(a, a.trip.back);
@@ -326,7 +335,10 @@ export class AgentSystem {
             this.parking?.park(this.world.structures.get(a.state === 'out' ? a.trip.dest : a.home));
           }
           if (a.state === 'out' && arrived) this.arrive(a);
-          else if (a.visitor) this.agents.delete(id); // left the map (or lost its destination)
+          else if (a.trip.transit?.inbound && this.world.structures.has(a.trip.transit.work)) { // off the bus, at work
+            a.state = 'away';
+            a.timer = this.dwell(a.trip);
+          } else if (a.visitor) this.agents.delete(id); // left the map (or lost its destination)
           else this.arriveHome(a);
           break;
         }
@@ -341,7 +353,7 @@ export class AgentSystem {
     if (trip.purpose === 'refuge') return this.agents.delete(a.id); // taken in by the neighbours
     if (trip.transit) {
       a.state = 'wait';
-      a.timer = this.config.transit.maxWait;
+      a.timer = trip.transit.inbound ? this.config.transit.commuterWait : this.config.transit.maxWait;
       this.startWander(a, Infinity, around(a.x, a.y, 0.08), 0.2);
     } else if (trip.linger) {
       a.state = 'linger';
@@ -528,7 +540,10 @@ export class AgentSystem {
     let on = 0, off = 0;
     for (const a of this.agents.values()) {
       if (a.trip?.transit?.stop !== id) continue;
-      if (a.state === 'wait') {
+      if (a.state === 'wait' && a.trip.transit.inbound) { // a commuter going home
+        this.agents.delete(a.id);
+        on++;
+      } else if (a.state === 'wait') {
         a.state = 'away';
         a.wander = null;
         a.timer = this.dwell(a.trip);
@@ -546,7 +561,9 @@ export class AgentSystem {
   }
 
   alight(a) {
-    if (!this.world.structures.has(a.trip.dest)) return this.arriveHome(a); // the stop is gone
+    if (!this.world.structures.has(a.trip.dest)) { // the stop is gone
+      return a.trip.transit.inbound ? this.agents.delete(a.id) : this.arriveHome(a);
+    }
     this.beginLeg(a, a.trip.back);
     a.state = 'back';
   }
@@ -650,14 +667,41 @@ export class AgentSystem {
   }
 
   // More jobs than residents: people from outside fill the gap, arriving
-  // every commute.interval / (missing workers) seconds on average.
+  // every commute.interval / (missing workers) seconds on average – most by
+  // bus / train where a stop is in walking range of work (commute.transit),
+  // the rest by car.
   updateCommuters(dt) {
     const { residents, jobs } = this.balance();
     const missing = jobs - residents;
-    if (missing <= 0 || !this.world.roadExits().length || !can('cars')) return;
+    const cars = this.world.roadExits().length && can('cars');
+    if (missing <= 0) return;
     if ((this.commuteTimer -= dt) > 0) return;
     this.commuteTimer = (this.config.commute.interval / missing) * (0.5 + Math.random());
-    if (this.commuterCount().inbound < Math.min(missing, this.config.commute.max)) this.spawnVisitor({ commuter: true });
+    if (this.commuterCount().inbound >= Math.min(missing, this.config.commute.max)) return;
+    if ((Math.random() < this.config.commute.transit || !cars) && this.spawnRider()) return;
+    if (cars) this.spawnVisitor({ commuter: true });
+  }
+
+  // A commuter off a bus / train: due at a stop in walking range of a
+  // workplace, walks there, works a shift, walks back and rides off.
+  spawnRider() {
+    const places = this.balance().workplaces.slice();
+    for (let attempt = 0; attempt < 4 && places.length; attempt++) {
+      const work = places.splice(Math.floor(Math.random() * places.length), 1)[0];
+      const ride = this.transitRoute(work);
+      if (!ride) continue;
+      const id = `v${++this.visitorSeq}`;
+      const a = newAgent({ id, visitor: true, commuter: true, state: 'abroad' });
+      a.trip = this.buildTrip({ mode: 'walk', ...ride.route, transit: { stop: ride.stop.id, inbound: true, work: work.id } }, ride.stop.id);
+      a.trip.visitor = true;
+      a.trip.commuter = true;
+      a.timer = this.config.transit.returnWait;
+      const how = STRUCTURE_TYPES[ride.stop.type].railStop ? 'train' : 'bus';
+      this.log(`Commuter-${String(this.visitorSeq).padStart(3, '0')} due by ${how} at ${codeOf(ride.stop)} → ${codeOf(work)}`, this.world.centerOf(ride.stop));
+      this.agents.set(id, a);
+      return true;
+    }
+    return false;
   }
 
   // Delivery trucks from outside, more often in a bigger city (like visitors).

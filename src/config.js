@@ -383,12 +383,14 @@ export const CONFIG = {
     share: 0.75,        // off-map trips that go this way when a stop is in reach
     maxWait: 100,       // seconds; then they give up, walk home and drive instead
     returnWait: 120,    // seconds away waiting for a ride back; then they turn up anyway
+    commuterWait: 200,  // seconds a commuter from outside waits for a ride home; then gone
   },
 
   // Jobs vs residents. More residents than jobs: that share of residents'
   // trips (times outShare) go to work off the map. More jobs than residents:
-  // commuters drive in through map exits to buildings with jobs.
+  // commuters come in to buildings with jobs, by bus / train or by car.
   commute: {
+    transit: 0.75,        // commuters who come by bus / train when a stop is in walking range of work
     outShare: 0.8,        // how strongly a job shortage sends residents out
     interval: 115,        // seconds between commuter arrivals, divided by the missing workers
     max: 15,              // commuters in the city at once
