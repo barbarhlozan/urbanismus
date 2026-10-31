@@ -134,7 +134,7 @@ export const CONFIG = {
     accel: 0.15,        // grid steps per second² (braking too)
     dwell: 17,          // seconds stopped at a station
     maxStops: 3,        // stations visited per run
-    length: 0.4,        // grid steps: a train is one railcar (lokálka), M 152.0
+    length: 0.57,       // grid steps: a train is one railcar (lokálka), M 152.0, 14 m
     lookAhead: 0.3,     // keep this far behind another train
   },
 
@@ -351,7 +351,7 @@ export const CONFIG = {
   //   delivery workers: a drive to one of def.sim.destinations and back
   activities: {
     resident: { stay: 20, porch: 15, stroll: 25, park: 15, errand: 15, work: 10, leave: 3 },
-    worker: { stay: 60, lunch: 25, delivery: 15 },
+    worker: { stay: 60, lunch: 25, delivery: 6 },
     errands: ['business', 'services'],
     leisure: ['park', 'square', 'heritage', 'cemetery'], // when def.sim.leisure isn't given
   },
@@ -380,7 +380,7 @@ export const CONFIG = {
   // that buses (road exits) or trains (rail exits) call at, wait, board. On the
   // way back they get off a bus / train calling there and walk home.
   transit: {
-    share: 0.5,         // off-map trips that go this way when a stop is in reach
+    share: 0.75,        // off-map trips that go this way when a stop is in reach
     maxWait: 100,       // seconds; then they give up, walk home and drive instead
     returnWait: 120,    // seconds away waiting for a ride back; then they turn up anyway
   },
@@ -391,15 +391,15 @@ export const CONFIG = {
   commute: {
     outShare: 0.8,        // how strongly a job shortage sends residents out
     interval: 115,        // seconds between commuter arrivals, divided by the missing workers
-    max: 30,              // commuters in the city at once
+    max: 15,              // commuters in the city at once
     shiftMin: 70,         // seconds a commuter stays at work…
     shiftMax: 170,        // …at most
   },
 
   visitors: {
-    interval: 28,         // seconds between arrivals through one exit, in a full-size city
+    interval: 60,         // seconds between arrivals through one exit, in a full-size city
     fullCity: 40,         // buildings for the full arrival rate (fewer = rarer visitors)
-    max: 25,              // visitors in the city at once
+    max: 12,              // visitors in the city at once
     destinations: ['business', 'industrial', 'park', 'square', 'services', 'heritage'],
     dwellMin: 11,
     dwellMax: 43,
@@ -421,7 +421,7 @@ export const CONFIG = {
     outsideMax: 170,                // …at most
     deliveryInterval: 85,           // seconds between delivery trucks from outside, full-size city
     deliveryMax: 4,                 // delivery trucks in the city at once
-    trailer: 0.2,                   // grid steps from the truck's front to its back
+    trailer: 0.34,                  // grid steps from the truck's front to its back (a Škoda 706 RT, 8.2 m)
   },
 
   // A fire (src/sim/fire.js): the house burns until the story puts it out
@@ -465,15 +465,15 @@ export const CONFIG = {
     speed: 0.8,       // share of a car's speed
     dwellMin: 9,      // seconds at a stop
     dwellMax: 17,
-    length: 0.24,     // grid steps from front to back
+    length: 0.45,     // grid steps from front to back (a Karosa ŠM 11, 11 m)
   },
 
   walk: {
     reach: 1.5,           // how far from a building people step onto a path / pavement
     sidewalkCost: 1.4,    // walking along a road counts as this much longer than a footpath
-    comfortDistance: 8,   // walk (rather than ride / drive) when the walk is at most this long
+    comfortDistance: 10,  // walk (rather than ride / drive) when the walk is at most this long
     maxDistance: 14,      // never walk further than this
-    longWalkChance: 0.15, // chance of walking anyway when it's between the two
+    longWalkChance: 0.35, // chance of walking anyway when it's between the two (few families had a car)
     strollMin: 1.5,       // strolls turn round this far along footpaths…
     strollMax: 5,         // …at most this far (at walking pace, a couple of minutes there and back)
     sideOffset: 0.15,     // pedestrians keep this far right of the line on a street (its sidewalk)…
@@ -487,9 +487,9 @@ export const CONFIG = {
     // to `near`, falling to farShare at `far`, then `share` up to maxDistance.
     near: 8,
     far: 16,
-    nearShare: 0.8,
-    farShare: 0.5,
-    share: 0.15,
+    nearShare: 0.9,
+    farShare: 0.65,
+    share: 0.3,
     maxDistance: 30,      // never cycle further than this
     sideOffset: 0.1,      // cyclists keep this far right of the line on a road, by its edge, clear of the cars…
     laneOffset: 0.025,    // …this far on a lane…

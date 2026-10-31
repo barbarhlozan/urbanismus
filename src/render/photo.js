@@ -638,7 +638,7 @@ function vehicles(renderer, cam, seen) {
       const [wx, wy] = wobble(a.x, a.y), [vx, vy] = wobble(a.tx, a.ty);
       const fx = a.x + wx, fy = a.y + wy, bx = a.tx + vx, by = a.ty + vy;
       const angle = Math.hypot(fx - bx, fy - by) > 1e-4 ? Math.atan2(fy - by, fx - bx) : ((renderer.agentEls.get(a.id)?.heading ?? 0) / VEHICLES.headings) * Math.PI * 2;
-      add((fx + bx) / 2, (fy + by) / 2, angle, a.bus ? 'bus' : truckFor(a.id), modelFor(a.id).hand, '', 0.2);
+      add((fx + bx) / 2, (fy + by) / 2, angle, a.bus ? 'bus' : a.engine ?? truckFor(a.id), modelFor(a.id).hand, '', 0.2); // (a fire engine: its own)
       continue;
     }
     if (a.trip?.mode !== 'drive') continue;

@@ -125,18 +125,18 @@
       const z = +(q.get('zoom') ?? 3);
       const mapCam = new Camera({ width: 1, height: 1 }, { tile: 32 });
       mapCam.rotation = cam.rotation;
-      for (const name of [...MODEL_NAMES, 'railcar:0.4', 'loco:0.24', 'coach:0.24']) {
+      for (const name of [...MODEL_NAMES, 'railcar:0.57']) {
         out.insertAdjacentHTML('beforeend', `<h2>Vehicle · ${name}</h2>`);
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('viewBox', '-8 -10 128 16');
-        svg.style.cssText = `position:static;width:${128 * z}px;height:${16 * z}px;border:1px solid #8884`;
+        svg.setAttribute('viewBox', '-12 -14 192 24');
+        svg.style.cssText = `position:static;width:${192 * z}px;height:${24 * z}px;border:1px solid #8884`;
         const scene = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         scene.setAttribute('class', 'scene');
         svg.appendChild(scene);
         for (let i = 0; i < 8; i++) {
           const el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           el.setAttribute('class', 'agent car');
-          el.setAttribute('transform', `translate(${i * 16} 0)`);
+          el.setAttribute('transform', `translate(${i * 24} 0)`);
           el.innerHTML = vehicleSVG(mapCam, name, (i * VEHICLES.headings) / 8, i % VEHICLES.hands);
           scene.appendChild(el);
         }

@@ -55,7 +55,7 @@ test('a house set to burn two minutes: the town turns out, then it is a ruin and
   assert.ok(watching > 0, 'some stood watching');
   assert.ok(carrying > 0, 'some carried water');
   assert.ok(engine, 'the engine came');
-  assert.equal(engine.engine, 'dvs'); // (a village fire house's)
+  assert.equal(engine.engine, 'fire');
   assert.equal(engine.home, station.id);
   assert.ok(hose > 0, 'the crew got the hose on it');
   assert.ok(!s.ruin); // still burning

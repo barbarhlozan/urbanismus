@@ -1044,45 +1044,37 @@ assets.vehicles
   cs: Vozidla
   en: Vehicles
 
-vehicle.saloon
+vehicle.car
   cs: Osobní auto
-  en: Passenger car
+  en: Car
 
-vehicle.saloon.blurb
-  cs: jako Škoda 120
-  en: like a Škoda 120
-
-vehicle.hatchback
-  cs: Malé auto
-  en: Small car
-
-vehicle.hatchback.blurb
-  cs: něco mezi Favoritem a Trabantem
-  en: somewhere between a Favorit and a Trabant
-
-vehicle.van
-  cs: Dodávka
-  en: Van
-
-vehicle.van.blurb
-  cs: skříň jako Avia nebo Barkas
-  en: a box like an Avia or a Barkas
+vehicle.car.blurb
+  cs: Škoda 105 / 120
+  en: a Škoda 105 / 120
 
 vehicle.truck
   cs: Nákladní auto
-  en: Truck
+  en: Lorry
 
 vehicle.truck.blurb
-  cs: kabina a skříňový návěs
-  en: a cab and a box trailer
+  cs: valník Škoda 706 RT
+  en: a Škoda 706 RT dropside
+
+vehicle.fire
+  cs: Hasičské auto
+  en: Fire engine
+
+vehicle.fire.blurb
+  cs: cisterna Škoda 706 RTHP CAS 25
+  en: a Škoda 706 RTHP CAS 25 tender
 
 vehicle.bus
   cs: Autobus
   en: Bus
 
 vehicle.bus.blurb
-  cs: městská Karosa
-  en: a town Karosa
+  cs: Karosa ŠM 11
+  en: a Karosa ŠM 11
 
 vehicle.train
   cs: Vlak

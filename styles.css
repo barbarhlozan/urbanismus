@@ -357,9 +357,14 @@ mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3
 .agent { fill: var(--fg); }
 .agent.truck { stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
 /* vehicles close up (src/render/vehicles.js): paper bodies in the outline
-   pen, inked wheels and windows; parked cars sit back in the detail color */
+   pen, inked wheels and lamps, windows drawn round in a line; parked cars sit back in the detail color */
 .vb { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
 .vi { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
+.vw { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
+/* doodled vehicles: a part's outline (a fat line under its paper faces) and paper wheel rings */
+.vo { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-4) * 2 * var(--stroke, 1)); stroke-linejoin: round; }
+.vf { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
+.vr { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linejoin: round; }
 /* level crossing signs in photos (on the map: agentCanvas.js) */
 .sgl { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 .flash { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
@@ -369,6 +374,7 @@ mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3
 .fig-ink { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 .parked-car .vb { stroke: var(--detail); }
 .parked-car .vi { fill: var(--detail); stroke: var(--detail); }
+.parked-car .vw, .parked-car .vo, .parked-car .vr { stroke: var(--detail); }
 .agent.cyclist { stroke: var(--fg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 .train { fill: var(--fg); stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
 .parked { fill: var(--bg); stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }

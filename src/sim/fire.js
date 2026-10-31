@@ -275,7 +275,7 @@ export class FireSystem {
     }
     f.crew = crew;
     if (drive) {
-      const e = agents.spawn({ id: `fire:${s.id}:${f.seq}:e`, home: st.id, state: 'out', truck: true, engine: f.station.kind === 'fire-house' ? 'dvs' : 'cas' });
+      const e = agents.spawn({ id: `fire:${s.id}:${f.seq}:e`, home: st.id, state: 'out', truck: true, engine: 'fire' }); // (a Škoda 706 RTHP CAS 25, render/vehicles.js)
       agents.begin(e, { ...drive, truck: true, purpose: 'fire' }, s.id);
       // (pulls up on the road short of the door, and turns back from there)
       const out = cut(e.trip.out, 0.3);
