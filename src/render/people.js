@@ -1,35 +1,82 @@
-// People close up: little blocky pen figures after the figure sheet – a
-// box of a body on two stub legs, topped by something round: a round head
-// (open or inked in), or a knob on a smaller box, or a bobble on a pointed
-// hood; maybe a line across the coat, and some carry an inked-in bag; in
-// the rain an umbrella over the head (umbrella()), open or inked in. They
-// face the viewer like the map's other glyphs; the renderer mirrors them to
-// face the way they walk. A cyclist is the same kind of figure, shorter,
-// seated and empty-handed, on a sketched bike set along the way it rides;
-// in a canoe (canoeSVG), one or two of them seated, paddling. At a fire
+// People close up: little pen figures drawn freehand – a coat (or a skirt,
+// a short jacket over trousers) as a lumpy rounded shape, a head as a rough
+// round, open or inked in, legs as two strokes of their own lengths, and
+// some carry an inked-in bag; in the rain an umbrella over the head
+// (umbrella()), open or inked in. Each body is a build (BUILDS): tall and
+// thin, stout, a long coat to the calves, a wide skirt, stooped, a short
+// jacket with long legs, a child – what they wear decides how much leg
+// shows. They face the viewer like the map's other glyphs; the renderer
+// mirrors them to face the way they walk. A cyclist is the same figure sat
+// upright on an old village bike (a Ukrajina: a man's diamond frame with a
+// carrier, or a woman's step-through), legs down to the pedals, an arm out
+// to the swept-back bars; the bike is set along the way it rides, its
+// wheels upright discs that narrow to a line seen end on. In a canoe
+// (canoeSVG), one or two of them seated, paddling. At a fire
 // (src/sim/fire.js) they carry a bucket, throw it, or hold the hose
 // (carried()), always out on their right: the renderer mirrors them to
 // face the fire.
 //
 // Drawn in scene px around the figure's ground point. PEOPLE.bodies
-// variants per kind, picked by the agent's id; the cyclists' wheels come in
+// variants per kind, picked by the agent's id; the cyclists' bikes come in
 // VEHICLES.headings directions. Everything is cached.
 
 import { mulberry32 } from '../core/random.js';
 import { VEHICLES, headingIndex } from './vehicles.js';
 
 export const PEOPLE = {
-  bodies: 12,    // body shapes to pick from
+  bodies: 24,    // body shapes to pick from (BUILD_ORDER round twice, each its own hand)
   height: 2.5,   // a walker's height to the top of the head, scene px
-  wheel: 0.065,  // grid units between a bike's wheel centres
+  legs: 0.22,    // share of the height that is legs, for a plain build
+  wobble: 0.02,  // how far each point of an outline strays, a share of the height
+  lumpy: 0.18,   // how far a head strays from round
+  wheel: 0.07,   // grid units between a bike's wheel centres
   // A walker bobs as it goes: squashed towards its feet a little every step.
   stride: 0.02,  // grid units walked per step (one dip)
   bob: 0.2,     // how much shorter at the bottom of a step
   bobZoom: 2,    // only this close or closer
 };
 
+// The builds: height (× PEOPLE.height), half width at the shoulders and
+// the hem (× that) as shares of the height, legs (× PEOPLE.legs), how
+// round the shoulders, a belly, a stoop.
+const BUILDS = {
+  thin:    { h: 1.08, w: 0.13, hem: 1,    legs: 1.25, up: 0.5 },
+  stout:   { h: 0.9,  w: 0.27, hem: 0.95, legs: 0.8,  up: 0.9, belly: 0.06 },
+  coat:    { h: 1,    w: 0.19, hem: 1.15, legs: 0.6,  up: 0.5 },  // a long coat to the calves
+  skirt:   { h: 0.95, w: 0.16, hem: 1.6,  legs: 1,    up: 0.5 },
+  stooped: { h: 0.92, w: 0.2,  hem: 1,    legs: 0.85, up: 1, lean: 0.09, stoop: 0.05 },
+  jacket:  { h: 1,    w: 0.19, hem: 0.9,  legs: 1.6,  up: 0.5 },  // a short jacket, trousers
+  plain:   { h: 1,    w: 0.19, hem: 1,    legs: 1,    up: 0.5 },
+  child:   { h: 0.62, w: 0.2,  hem: 1,    legs: 1.1,  up: 0.4, head: 1.35 },
+};
+const BUILD_ORDER = ['thin', 'stout', 'coat', 'skirt', 'stooped', 'plain', 'jacket', 'skirt', 'coat', 'thin', 'stout', 'child'];
+const buildOf = (variant) => BUILD_ORDER[variant % BUILD_ORDER.length];
+
 const r2 = (n) => Math.round(n * 100) / 100;
 const COS30 = Math.cos(Math.PI / 6);
+const P = ([x, y]) => `${r2(x)} ${r2(y)}`;
+
+// A smooth curve through points (Catmull-Rom as cubic Béziers), closed or open.
+function smooth(pts, closed) {
+  const n = pts.length;
+  const at = (i) => closed ? pts[(i + n) % n] : pts[Math.max(0, Math.min(n - 1, i))];
+  let d = `M${P(pts[0])}`;
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    d += `C${P([p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6])} ${P([p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6])} ${P(p2)}`;
+  }
+  return closed ? `${d}Z` : d;
+}
+
+// A rough round of `n` points about (cx, cy), each off by up to `lump`.
+function lumpyRound(rnd, cx, cy, rx, ry, lump, n) {
+  const a0 = rnd() * Math.PI * 2, pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = a0 + (i / n) * Math.PI * 2 + (rnd() - 0.5) * 0.5, k = 1 + (rnd() * 2 - 1) * lump;
+    pts.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]);
+  }
+  return smooth(pts, true);
+}
 
 // Which body an agent gets (by its id).
 export function bodyFor(id) {
@@ -38,69 +85,63 @@ export function bodyFor(id) {
   return (h >>> 5) % PEOPLE.bodies;
 }
 
-// A figure standing on (ox, bottom), `height` tall to the top of its head,
-// as [class, d] parts (and `.shoulder`, the front of its shoulders).
-// Seeded by `variant`. `seated`: no legs, nothing carried.
+// A figure standing on (ox, bottom), about `height` tall to the top of its
+// head (its build makes it taller or shorter), as [class, d] parts – with
+// `.shoulder` (the front of its shoulders: [x, y, half width]) and
+// `.shoulders` ([left, right] points, for an arm). Seeded by `variant`.
+// `seated`: no legs, nothing carried.
 function figure(variant, height, bottom = 0, seated = false, ox = 0) {
-  const rnd = mulberry32(variant * 2654435761 + 11);
+  const rnd = mulberry32(variant * 2654435761 + 23);
   const range = (a, b) => a + rnd() * (b - a);
-  const jit = () => height * range(-0.015, 0.015); // a hand's wobble
-  const pt = (x, y) => `${r2(x + ox)} ${r2(y)}`;
-  const ball = (cx, cy, r) => `M${pt(cx - r, cy)}a${r2(r)} ${r2(r)} 0 1 0 ${r2(2 * r)} 0a${r2(r)} ${r2(r)} 0 1 0 ${r2(-2 * r)} 0`;
+  const name = buildOf(variant), b = BUILDS[name];
+  const h = height * b.h;
+  const jit = () => h * PEOPLE.wobble * range(-1, 1); // a hand's wobble
+  const at = ([x, y]) => [x + ox, y + bottom];
   const parts = [];
 
-  const leg = seated ? 0 : height * range(0.1, 0.14);
-  const base = bottom - leg;                     // the body's bottom edge
-  const w = height * range(0.18, 0.23) * (seated ? 0.8 : 1); // half the body's width
-  const foot = w * range(0.85, 1.05);            // a little narrower or wider at the hem
-  const lean = height * range(-0.03, 0.03);      // the top a touch off the base
-  const head = rnd(), top = bottom - height;
-  const hood = head >= 0.4 && head < 0.65;
+  const leg = seated ? 0 : h * PEOPLE.legs * b.legs * range(0.9, 1.1);
+  const base = -leg;                                     // the coat's hem
+  const w = h * b.w * range(0.9, 1.1) * (seated ? 0.85 : 1); // half the shoulders' width
+  const foot = w * b.hem * range(0.88, 1.12);            // half the hem's
+  const lean = h * (b.lean ?? range(-0.04, 0.04));       // the top a touch off the base
+  const r = h * range(0.095, 0.12) * (b.head ?? 1);
+  const top = -h + h * (b.stoop ?? 0), hx = lean + h * (b.stoop ?? 0);
+  const sh = top + 2 * r + h * (b.stoop ? -0.02 : range(0.01, 0.04)); // the shoulders' line
 
-  // the body's top edge, and what sits on it – always something round on top
-  let shoulders;
-  if (head < 0.4) {                              // a box on the box, a knob on that
-    const r = height * 0.075, crown = top + 2 * r;
-    shoulders = crown + height * range(0.16, 0.2);
-    const hw = w * range(0.7, 0.95);
-    parts.push(['fig-body', `M${pt(lean - hw + jit(), crown)}L${pt(lean + hw + jit(), crown + jit())}L${pt(lean + hw, shoulders)}L${pt(lean - hw, shoulders)}Z`]);
-    parts.push([rnd() < 0.6 ? 'fig-ink' : 'fig-head', ball(lean, top + r, r)]);
-  } else if (hood) {                             // a pointed hood with a bobble
-    const r = height * 0.06;
-    shoulders = top + 2 * r + height * range(0.26, 0.32);
-    parts.push(['fig-ink', ball(lean, top + r, r)]);
-  } else {                                       // a round head, open or inked in
-    const r = height * 0.12;
-    shoulders = top + 2 * r + height * 0.02;
-    parts.push([rnd() < 0.5 ? 'fig-ink' : 'fig-head', ball(lean, top + r, r)]);
-  }
-
-  // the body: a box, or the hood's peak over one
-  const corners = [[lean + w + jit(), shoulders + jit()], [foot + jit(), base], [-foot + jit(), base], [lean - w + jit(), shoulders + jit()]];
-  if (hood) corners.push([lean + jit(), top + height * 0.11]);
-  parts.unshift(['fig-body', `M${corners.map(([x, y]) => pt(x, y)).join('L')}Z`]);
-
-  // a line across: the hood's brim, or where a coat ends
-  const across = hood ? shoulders : rnd() < 0.5 ? shoulders + (base - shoulders) * range(0.45, 0.6) : null;
-  if (across !== null) {
-    const t = (across - shoulders) / (base - shoulders); // how far down, for the box's width there
-    const hw = w + (foot - w) * t, x0 = lean * (1 - t);
-    parts.push(['fig-line', `M${pt(x0 - hw, across + jit())}L${pt(x0 + hw, across + jit())}`]);
-  }
+  // the coat, round from the left shoulder: rounded shoulders, sides a
+  // little out (a belly), the hem
+  const wl = w * range(0.82, 1.05), wr = w * range(0.82, 1.05), up = h * 0.06 * b.up;
+  const mid = (sh + base) / 2, belly = h * (b.belly ?? 0);
+  const coat = [
+    [lean - wl + jit(), sh + up * range(0.5, 1) + jit()], [lean - wl * 0.45 + jit(), sh - up * 0.2 + jit()],
+    [lean + wr * 0.45 + jit(), sh - up * 0.2 + jit()], [lean + wr + jit(), sh + up * range(0.5, 1) + jit()],
+    [(lean + wr + foot) / 2 + belly + jit(), mid + jit()], [foot + jit(), base + jit() * 0.5], [jit(), base + jit() * 0.4],
+    [-foot * range(0.92, 1.08) + jit(), base + jit() * 0.5], [(lean - wl - foot) / 2 - belly + jit(), mid + jit()],
+  ];
+  parts.push(['fig-body', smooth(coat.map(at), true)]);
+  // the head, open or inked in
+  const [cx, cy] = at([hx, top + r]);
+  parts.push([rnd() < 0.5 ? 'fig-ink' : 'fig-body', lumpyRound(rnd, cx, cy, r * 0.95, r * 1.05, PEOPLE.lumpy, 7)]);
 
   if (!seated) {
-    // two stub legs
-    const lx = foot * range(0.35, 0.55);
-    parts.push(['fig-line', `M${pt(-lx, base)}L${pt(-lx + jit(), bottom)}M${pt(lx, base)}L${pt(lx + jit(), bottom)}`]);
+    // two legs, a little bowed and splayed, not the same: closer under a
+    // skirt or a coat, apart in trousers
+    const gap = Math.min(foot, w) * (name === 'jacket' ? 0.55 : 0.4);
+    let d = '';
+    for (const s of [-1, 1]) {
+      const x0 = s * gap * range(0.7, 1.3), x1 = x0 + s * leg * range(0, 0.18);
+      d += smooth([[x0, base - h * 0.01], [(x0 + x1) / 2 + jit() * 0.6, base / 2], [x1, h * range(-0.02, 0.01)]].map(at), false);
+    }
+    parts.push(['fig-line', d]);
     // some carry a bag at one side
-    if (rnd() < 0.3) {
+    if (name !== 'child' && rnd() < 0.3) {
       const side = rnd() < 0.5 ? -1 : 1;
-      const x = side * (foot + height * 0.01), bw = side * height * range(0.1, 0.14);
-      const y = shoulders + (base - shoulders) * 0.4 + height * 0.05, bh = height * range(0.14, 0.2);
-      parts.push(['fig-ink', `M${pt(x, y)}L${pt(x + bw, y + jit())}L${pt(x + bw, y + bh)}L${pt(x, y + bh)}Z`]);
+      const [bx, by] = at([side * (foot + h * 0.05), base - h * 0.14]);
+      parts.push(['fig-ink', lumpyRound(rnd, bx, by, h * 0.055, h * 0.075, 0.2, 5)]);
     }
   }
-  parts.shoulder = [ox + lean, shoulders + (base - shoulders) * 0.15, w];
+  parts.shoulder = [ox + lean, bottom + sh + (base - sh) * 0.15, w];
+  parts.shoulders = [at([lean - wl, sh + up]), at([lean + wr, sh + up])];
   return parts;
 }
 
@@ -180,40 +221,85 @@ export function walkerSVG(variant, rain = false, carry = null) {
 }
 
 // Inner SVG of a cyclist riding towards `heading` (a VEHICLES.headings
-// index) for `camera`: a bike after the pen sketch – two wheel rings along
-// the way, a diamond frame between them (chainstay, seat tube, top and down
-// tube, fork), a saddle and curled bars – with the figure sat on the saddle,
-// one arm out to the bars.
+// index) for `camera`: an old upright bike after the pen sketch – two
+// wheels, upright discs along the way (round seen side on, a line seen end
+// on), mudguards over them, the frame (a man's diamond, or a woman's
+// step-through for a skirt or a coat), a carrier at the back, bars swept
+// back – and the figure sat upright on the saddle, its legs down to the
+// pedals (each rider's pedals somewhere else round), an arm to the bars.
+// Every line a hair off true, as the figures.
 export function cyclistSVG(camera, heading, variant) {
   // (by the heading on screen: on the ground plus the view's turn)
   const seen = headingIndex((heading / VEHICLES.headings) * Math.PI * 2 + camera.angle);
   const key = `c${variant}|${seen}|${camera.tile}`;
-  if (!cache.has(key)) {
-    const a = (seen / VEHICLES.headings) * Math.PI * 2;
-    const half = PEOPLE.wheel / 2;
-    const [rx, ry] = [Math.cos(a) * half, Math.sin(a) * half];
-    const [dx, dy] = [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile];
-    const wr = PEOPLE.height * 0.17;
-    // a point `t` of the way from the middle to the front hub (-1 the back
-    // one), `h` above the ground
-    const at = (t, h) => [t * dx, t * dy - h];
-    const P = ([x, y]) => `${r2(x)} ${r2(y)}`;
-    const line = (...pts) => `M${pts.map((p) => P(at(...p))).join('L')}`;
-    const ring = ([cx, cy]) => `M${r2(cx - wr)} ${r2(cy)}a${r2(wr)} ${r2(wr)} 0 1 0 ${r2(2 * wr)} 0a${r2(wr)} ${r2(wr)} 0 1 0 ${r2(-2 * wr)} 0`;
-    const back = [-1, wr], front = [1, wr];
-    const crank = [-0.15, wr * 0.9], seat = [-0.4, wr * 2.5], head = [0.62, wr * 2.5], low = [0.7, wr * 2];
-    const saddle = [-0.45, wr * 2.9], bars = [0.58, wr * 3.1];
-    const frame = line(back, crank, seat, back) + line(seat, head, low, crank) + line(low, front)
-      + line(seat, saddle) + line(head, bars, [0.8, wr * 3.1], [0.8, wr * 2.75]);
-    const seatBar = `${line([-0.62, wr * 2.85], [-0.3, wr * 2.85], [-0.3, wr * 3.1], [-0.62, wr * 3])}Z`; // an inked saddle
-    const [sx, sy] = at(...saddle);
-    const f = figure(variant, PEOPLE.height * 0.65, sy, true, sx);
-    const [bx, by] = at(...bars);
-    const [hx, hy, hw] = f.shoulder, side = Math.sign(bx - hx); // from the side facing the bars
-    const arm = Math.abs(bx - hx) > hw ? `M${r2(hx + side * hw)} ${r2(hy)}L${r2(bx)} ${r2(by)}` : '';
-    cache.set(key, `<path class="fig-wheel" d="${ring(at(...back)) + ring(at(...front)) + frame}"/><path class="fig-ink" d="${seatBar}"/>${svgOf(f)}${arm && `<path class="fig-line" d="${arm}"/>`}`);
+  if (cache.has(key)) return cache.get(key);
+  const rnd = mulberry32(variant * 911 + seen * 7 + 3);
+  const range = (a, b) => a + rnd() * (b - a);
+  const H = PEOPLE.height, jit = (s = 1) => H * 0.012 * s * range(-1, 1);
+  const a = (seen / VEHICLES.headings) * Math.PI * 2, half = PEOPLE.wheel / 2;
+  const [rx, ry] = [Math.cos(a) * half, Math.sin(a) * half];
+  const [dx, dy] = [(rx - ry) * COS30 * camera.tile, (rx + ry) * 0.5 * camera.tile];
+  const wr = H * 0.19;
+  // a wheel's round in its own plane: `ex, ey` along the bike (at full
+  // length side on, nothing end on), up the screen across it
+  const side = half * COS30 * camera.tile * Math.SQRT2;
+  const [ex, ey] = [dx / side, dy / side];
+  // a point `t` of the way from the middle to the front hub (-1 the back
+  // one), `h` above the ground
+  const at = (t, h) => [t * dx, t * dy - h];
+  // a frame line through points, each a hair off, bowed a little between
+  const line = (...pts) => {
+    const q = pts.map(([t, h]) => { const [x, y] = at(t, h); return [x + jit(), y + jit()]; });
+    const all = [];
+    q.forEach((p, i) => { if (i) all.push([(q[i - 1][0] + p[0]) / 2 + jit(0.7), (q[i - 1][1] + p[1]) / 2 + jit(0.7)]); all.push(p); });
+    return smooth(all, false);
+  };
+  // part of a wheel's round about (cx, cy), radius r, angles up from the front
+  const round = ([cx, cy], r, from = 0, to = Math.PI * 2, n = 8) => {
+    const closed = to - from >= Math.PI * 2 - 1e-6, a0 = closed ? rnd() * Math.PI * 2 : 0, pts = [];
+    for (let i = 0; i < (closed ? n : n + 1); i++) {
+      const t = a0 + from + ((to - from) * i) / n, k = r * (1 + range(-0.05, 0.05));
+      pts.push([cx + Math.cos(t) * k * ex, cy + Math.cos(t) * k * ey - Math.sin(t) * k]);
+    }
+    return smooth(pts, closed);
+  };
+  const name = buildOf(variant), woman = name === 'skirt' || name === 'coat';
+  const back = [-1, wr], front = [1, wr], crank = [-0.12, wr * 0.9];
+  const seat = [-0.42, wr * 2.45], head = [0.6, wr * 2.45], low = [0.66, wr * 2];
+  const saddle = [-0.42, wr * 2.75], bars = [0.36, wr * 3.35];
+  const B = at(...back), F = at(...front);
+  const parts = [['fig-wheel', round(B, wr) + round(F, wr) + round(B, wr * 1.18, 0.12 * Math.PI, 0.88 * Math.PI, 5) + round(F, wr * 1.18, 0.12 * Math.PI, 0.88 * Math.PI, 5)]];
+  let frame = line(back, crank, seat, back) + line(low, front) + line(seat, saddle);
+  frame += woman ? line(head, [0.15, wr * 1.2], crank) + line(head, low) : line(seat, head, low, crank);
+  frame += line(head, [0.58, wr * 3.2], [0.5, wr * 3.38], bars);  // the stem, the bars swept back
+  frame += line(seat, [-0.95, wr * 2.25], [-1.1, wr * 2.2]);      // the carrier
+  parts.push(['fig-line', frame]);
+  const [sx, sy] = at(...saddle), fwd = Math.sign(dx) || 1;
+  parts.push(['fig-ink', smooth([[sx - fwd * 0.35, sy - 0.02], [sx + fwd * 0.12, sy - 0.07], [sx + fwd * 0.22, sy + 0.04], [sx - fwd * 0.3, sy + 0.08]], true)]);
+  // the rider, sat a touch forward
+  const ox = sx + fwd * 0.05, oy = sy - 0.05;
+  const f = figure(variant, H * (name === 'child' ? 0.75 : 0.62), oy, true, ox);
+  // legs from the hip down to the pedals (round the crank in the wheels'
+  // plane), the knee bent forward: the far one under the body
+  const [cx, cy] = at(...crank), pr = wr * 0.42, phase = range(0, Math.PI * 2);
+  const leg = (ang) => {
+    const pedal = [cx + Math.cos(ang) * pr * ex, cy + Math.cos(ang) * pr * ey - Math.sin(ang) * pr * 0.6];
+    const hip = [ox + fwd * 0.05, oy - 0.05];
+    const len = Math.hypot(pedal[0] - hip[0], pedal[1] - hip[1]), bend = Math.max(0, H * 0.42 - len) * 0.9 + H * 0.04;
+    const knee = [(hip[0] + pedal[0]) / 2 + ex * bend + jit(0.5), (hip[1] + pedal[1]) / 2 + ey * bend - bend * 0.4];
+    return smooth([hip, knee, pedal], false);
+  };
+  parts.push(['fig-line', leg(phase + Math.PI)], ...f, ['fig-line', leg(phase)]);
+  // the arm, from the shoulder on the bars' side
+  const [bx, by] = at(...bars);
+  const [shx, shy] = f.shoulders[bx < ox ? 0 : 1];
+  parts.push(['fig-line', smooth([[shx, shy + 0.18], [(shx + bx) / 2 + jit(), (shy + 0.18 + by) / 2 + 0.12], [bx, by]], false)]);
+  if (woman && rnd() < 0.6) { // a bag hung on the bars
+    parts.push(['fig-ink', smooth([[bx - 0.1, by + 0.05], [bx + 0.12, by + 0.04], [bx + 0.14, by + 0.36], [bx - 0.12, by + 0.38]].map(([x, y]) => [x + jit(0.5), y + jit(0.5)]), true)]);
   }
-  return cache.get(key);
+  const svg = svgOf(parts);
+  cache.set(key, svg);
+  return svg;
 }
 
 // A canoe as the figures' pen draws it, heading along `angle` (snapped to

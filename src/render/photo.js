@@ -730,6 +730,9 @@ function smoke(renderer, cam, vents) {
 // goes across the picture; a cyclist's bike is the one of the map's
 // directions that runs most like its way does on the picture. In the rain
 // the same walkers as on the map are under umbrellas.
+// a figure's coat (--pen-3, 1 px) drawn as heavy as a wall's outline (--pen-4)
+const FIGURE_PEN = 1.4;
+
 function people(renderer, cam, seen) {
   const { world, agents, agentEls } = renderer;
   const { terrain } = world;
@@ -770,7 +773,10 @@ function people(renderer, cam, seen) {
     }
     out.push({
       depth: -cam.ahead(x, y),
-      svg: `<g class="photo-figure" transform="translate(${r2(sx)} ${r2(sy)}) scale(${flip ? -r2(k) : r2(k)} ${r2(k)})">${svg}</g>`,
+      // lines in the picture's pen for its distance (penAt), as the
+      // buildings' round it – not the map's widths: a coat's outline as
+      // heavy as a wall's (the .fig-* pens times --stroke, undone by `k`)
+      svg: `<g class="photo-person" style="--stroke:${(FIGURE_PEN * penAt(cam.ahead(x, y)) / k).toFixed(4)}" transform="translate(${r2(sx)} ${r2(sy)}) scale(${flip ? -r2(k) : r2(k)} ${r2(k)})">${svg}</g>`,
     });
   }
   return out;
