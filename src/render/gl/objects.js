@@ -25,6 +25,7 @@ import { flattenPath, triangulate } from './geometry.js';
 import { penWatch, penLength } from '../draw.js';
 import { hatchTileLines } from '../hatch.js';
 import { brushWidths, brushPath2D, BRUSH_GLSL } from '../brush.js';
+import { canvasDpr } from '../dpr.js';
 
 // Curves flattened to within this of the true line (scene px).
 const TOLERANCE = 0.08;
@@ -265,7 +266,7 @@ const mul = (p, q) => [p[0] * q[0] + p[2] * q[1], p[1] * q[0] + p[3] * q[1], p[0
 
 export class GLObjects {
   static make(canvas, layer, svg, sunCss) {
-    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false, alpha: true });
+    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false, alpha: true, depth: false });
     return gl ? new GLObjects(canvas, gl, layer, svg, sunCss) : null;
   }
 
@@ -417,6 +418,7 @@ export class GLObjects {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
+    off.width = off.height = 0; // (its pixels let go now, not at the next collection)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -802,7 +804,7 @@ export class GLObjects {
   // with g, shown) – after the groups of the layer under them (watch).
   draw(view, order) {
     const { gl, canvas } = this;
-    const dpr = devicePixelRatio || 1;
+    const dpr = canvasDpr();
     const w = Math.round((view.W + 2 * view.ox) * dpr), h = Math.round((view.H + 2 * view.oy) * dpr);
     const key = `${view.zoom}|${view.panX}|${view.panY}|${view.ox}|${view.oy}|${w}|${h}`;
     if (order !== this.lastOrder) this.changed = true;

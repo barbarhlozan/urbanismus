@@ -19,6 +19,7 @@
 import { THEME } from '../../theme.js';
 import { hatchFrame } from '../hatch.js';
 import { Hatching, Pieces, meshOf, rgb } from './hatching.js';
+import { canvasDpr } from '../dpr.js';
 
 // The night's grey in steps (each a new picture); how far the third set of
 // strokes is turned from the first (degrees); the sweep's bands (css px).
@@ -50,12 +51,14 @@ export class GLNight {
   // [[light?, d]…] from the furthest to the nearest.
   draw(view, { grey = 0, colour, tier = -1, reveal = [1, 0, 0], hatch, px, stroke, lights = null, sheet = null, beams = [], cover = null }) {
     const { h } = this;
-    const dpr = devicePixelRatio || 1;
+    const dpr = canvasDpr();
     const w = Math.round((view.W + 2 * view.ox) * dpr), hgt = Math.round((view.H + 2 * view.oy) * dpr);
     const on = grey > 0.002 || (tier >= 0 && reveal.some((r) => r > 0));
     if (!on) {
       if (!this.empty) {
-        h.size(w, hgt);
+        // (by day a pixel's canvas: two of these, each the window and its
+        // overscan, are a lot of memory on a phone)
+        h.size(1, 1);
         h.clear();
         this.empty = true;
       }

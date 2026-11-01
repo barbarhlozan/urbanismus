@@ -18,6 +18,7 @@
 import { THEME } from '../../theme.js';
 import { Hatching, Pieces, meshOf, rgb, STRIDE, EDGE } from './hatching.js';
 import { SUN } from '../shadows.js';
+import { canvasDpr } from '../dpr.js';
 
 // Where each part's shapes are in the mask (and the lamps' pools, cut out
 // of both, read with the hills').
@@ -175,7 +176,7 @@ export class GLShadows {
   // the `sun` they are cast by ({ cast, iso }, castPieces).
   draw({ view, hatch, tier, px, stroke, hold = false, shown = 1, sun = null }) {
     const { h } = this;
-    const dpr = devicePixelRatio || 1;
+    const dpr = canvasDpr();
     const w = Math.round((view.W + 2 * view.ox) * dpr), hgt = Math.round((view.H + 2 * view.oy) * dpr);
     let changed = false;
     if (this.dirty.hills || (this.dirty.objects && !hold)) {

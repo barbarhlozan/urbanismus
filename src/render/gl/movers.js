@@ -18,9 +18,11 @@
 import { THEME } from '../../theme.js';
 import { flattenPath, triangulate } from './geometry.js';
 import { brushWidths, BRUSH_GLSL } from '../brush.js';
+import { canvasDpr, LIGHT } from '../dpr.js';
 
 // How far (css px) past the window edge something may stand and still show.
 const MARGIN = 60;
+const IDLE_MS = 2000; // ms with nothing drawn before the canvas shrinks to a pixel (end)
 // Curves flattened to within this of the true line, in a shape's own units
 // (drawn up to a few device px per unit close up).
 const TOLERANCE = 0.03;
@@ -140,7 +142,7 @@ function meshOf(shape) {
 
 export class GLMovers {
   static make(canvas, { antialias = true } = {}) {
-    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias, alpha: true });
+    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: antialias && !LIGHT, alpha: true, depth: false });
     return gl ? new GLMovers(canvas, gl) : null;
   }
 
@@ -175,7 +177,7 @@ export class GLMovers {
 
   // Start a frame at the camera's current view; `stroke` the map's --stroke.
   begin(camera, stroke) {
-    const dpr = devicePixelRatio || 1;
+    const dpr = canvasDpr();
     this.dpr = dpr;
     this.W = innerWidth;
     this.H = innerHeight;
@@ -248,7 +250,13 @@ export class GLMovers {
   // The frame drawn: every note's shapes as pieces where they show, in order.
   end() {
     const { gl, canvas, dpr } = this;
-    const w = Math.round((this.W ?? innerWidth) * dpr), h = Math.round((this.H ?? innerHeight) * dpr);
+    // (nothing to draw for a while – no rain, no smoke: a pixel's canvas,
+    // its memory let go)
+    const t = performance.now();
+    if (this.notes.length) this.idleSince = null;
+    else this.idleSince ??= t;
+    const idle = this.idleSince != null && t - this.idleSince > IDLE_MS;
+    const w = idle ? 1 : Math.round((this.W ?? innerWidth) * dpr), h = idle ? 1 : Math.round((this.H ?? innerHeight) * dpr);
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;

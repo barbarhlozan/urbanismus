@@ -432,9 +432,11 @@ Pieces.prototype.ground = function (rings, alpha = 1, group = 0, value = 1) {
 
 // ------------------------------------------------------------------- the GPU
 
+const TILE_BYTES = 32 * 2 ** 20; // the strokes' tiles kept on a canvas's GPU (tile)
+
 export class Hatching {
   static make(canvas) {
-    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false, alpha: true, stencil: true });
+    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false, alpha: true, depth: false, stencil: true });
     return gl ? new Hatching(canvas, gl) : null;
   }
 
@@ -516,7 +518,12 @@ export class Hatching {
   tile(tier, hatch, px, width, q) {
     const key = `${tier}|${JSON.stringify(hatch)}|${px}|${width}|${q}`;
     let t = this.tiles.get(key);
-    if (t) return t;
+    if (t) {
+      // (the latest used last: what is drawn now is kept)
+      this.tiles.delete(key);
+      this.tiles.set(key, t);
+      return t;
+    }
     const { d, size } = hatchTileLines(tier, hatch, px);
     const n = Math.max(1, Math.min(4096, Math.round(size * q)));
     const off = new OffscreenCanvas(n, n), c = off.getContext('2d');
@@ -533,17 +540,23 @@ export class Hatching {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, off);
+    off.width = off.height = 0; // (its pixels let go now, not at the next collection)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    t = { tex, size, angle: hatch.angle };
+    t = { tex, size, angle: hatch.angle, bytes: 4 * n * n };
     this.tiles.set(key, t);
-    // (a few kept: the shadows', the night's, the clouds' at a zoom or two)
-    if (this.tiles.size > 8) {
-      const [k0, t0] = this.tiles.entries().next().value;
+    // (a few kept: the shadows', the night's, the clouds' at a zoom or two –
+    // a new one for every quarter of a doubling zoomed, up to 2048² px, 16 MB
+    // each: the oldest let go past TILE_BYTES, but never the latest three)
+    let bytes = 0;
+    for (const v of this.tiles.values()) bytes += v.bytes;
+    for (const [k0, t0] of this.tiles) {
+      if (this.tiles.size <= 3 || (this.tiles.size <= 8 && bytes <= TILE_BYTES)) break;
       gl.deleteTexture(t0.tex);
       this.tiles.delete(k0);
+      bytes -= t0.bytes;
     }
     return t;
   }

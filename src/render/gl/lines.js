@@ -23,6 +23,7 @@
 // browser's own for those classes, asked once (look.styles).
 
 import { brushWidths, BRUSH_GLSL } from '../brush.js';
+import { canvasDpr } from '../dpr.js';
 
 // Line styles: the classes the ink layers draw (styles.css), their pen
 // (css px before --stroke), colour, ends and dashes (css px before --stroke).
@@ -222,7 +223,7 @@ export function cssColour(css) {
 
 export class GLLines {
   static make(canvas) {
-    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false, alpha: true, preserveDrawingBuffer: false });
+    const gl = canvas.getContext('webgl2', { premultipliedAlpha: true, antialias: false, alpha: true, depth: false, preserveDrawingBuffer: false });
     return gl ? new GLLines(canvas, gl) : null;
   }
 
@@ -436,7 +437,7 @@ export class GLLines {
     const { gl, canvas } = this;
     // (lines being erased come and go with the pen: built again with them)
     if (this.dirty || this.countLeaving() !== this.leavingCount) this.build();
-    const dpr = devicePixelRatio || 1;
+    const dpr = canvasDpr();
     const w = Math.round(view.W * dpr), h = Math.round(view.H * dpr);
     const animating = [...this.layers.values()].some((l) => l.ink?.busy);
     const key = `${w}|${h}|${view.zoom}|${view.panX}|${view.panY}|${view.angle}|${look.stroke}|${look.near}|${look.far}|${look.fg}|${look.palette.detail}|${look.palette.bg}|${JSON.stringify(look.wash ?? null)}|${look.stylesKey ?? ''}|${this.count}`;

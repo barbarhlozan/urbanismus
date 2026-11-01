@@ -18,6 +18,7 @@
 import { THEME } from '../theme.js';
 import { hatchFrame } from './hatch.js';
 import { Hatching, Pieces, meshOf, rgb } from './gl/hatching.js';
+import { canvasDpr } from './dpr.js';
 
 export const CLOUD_SHADOWS = {
   // grid units² of map per cloud under a cloudy sky (cover 1; config
@@ -153,7 +154,7 @@ export class CloudShadows {
   draw(camera) {
     const h = this.gl, H = CLOUD_SHADOWS.hatch;
     const { hatch, stroke = 1 } = this.paper;
-    const dpr = devicePixelRatio || 1, z = dpr * camera.zoom, px = camera.tile;
+    const dpr = canvasDpr(), z = dpr * camera.zoom, px = camera.tile;
     if (!(z > 0 && px > 0)) return;
     const W = innerWidth, Hh = innerHeight;
     const w = Math.round(W * dpr), hh = Math.round(Hh * dpr);

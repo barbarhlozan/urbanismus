@@ -23,6 +23,7 @@
 import { THEME } from '../theme.js';
 import { CONFIG } from '../config.js';
 import { CLOUD_SHADOWS } from './cloudShadows.js';
+import { canvasDpr } from './dpr.js';
 
 export const CLOUDS_ABOVE = {
   zoom: 0.72,          // shown at this zoom and further out (config.camera.minZoom is 0.55)
@@ -80,7 +81,7 @@ export class CloudsAbove {
       if (next) this.up.set(next, { canvas: null, b: 0, leaving: false, drawn: null });
     }
     // each fades in or out by itself, slid along with the map every frame
-    const z = camera.zoom, dpr = devicePixelRatio || 1;
+    const z = camera.zoom, dpr = canvasDpr();
     for (const [c, u] of this.up) {
       u.b = u.leaving ? u.b - dt / C.fade : Math.min(1, u.b + dt / C.fade);
       if (u.b <= 0) {
@@ -115,7 +116,7 @@ export class CloudsAbove {
     const ctx = canvas.getContext('2d');
     ctx.setTransform(scale, 0, 0, scale, pad - box[0] * scale, pad - box[1] * scale);
     const css = getComputedStyle(document.documentElement);
-    const pen = ((parseFloat(css.getPropertyValue(`--pen-${C.pen}`)) || 1) * stroke * (CONFIG.render.lineWeight ?? 1) * (devicePixelRatio || 1)) / scale;
+    const pen = ((parseFloat(css.getPropertyValue(`--pen-${C.pen}`)) || 1) * stroke * (CONFIG.render.lineWeight ?? 1) * canvasDpr()) / scale;
     const { bg, main } = THEME.palette;
     ctx.lineJoin = ctx.lineCap = 'round';
     ctx.strokeStyle = main;

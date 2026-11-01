@@ -69,7 +69,11 @@ await Promise.all([loadText(), loadIcons()]);
 
 // The map is drawn with WebGL 2 (src/render/gl/): without it there is no
 // map – the opening cover says so, and stays.
-if (!document.createElement('canvas').getContext('webgl2')) {
+// (the context asked for only to see, let go at once: a page may hold only
+// so many, and the map takes a dozen)
+const probe = document.createElement('canvas').getContext('webgl2');
+probe?.getExtension('WEBGL_lose_context')?.loseContext();
+if (!probe) {
   const card = document.querySelector('.intro-card');
   const note = card?.appendChild(document.createElement('p'));
   if (note) {

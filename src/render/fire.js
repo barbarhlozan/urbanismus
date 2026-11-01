@@ -31,6 +31,7 @@
 import { THEME } from '../theme.js';
 import { PEN } from './agentCanvas.js';
 import { PARTICLES, eachParticle, drawn, hash } from './particles.js';
+import { canvasDpr } from './dpr.js';
 
 const FPS = 10;     // drawn on tens
 const RAMP = 110;   // seconds a fire with no time of its own takes to be ablaze
@@ -437,7 +438,7 @@ export class FireCanvas {
       if (this.drawn) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); this.drawn = false; }
       return;
     }
-    const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+    const dpr = canvasDpr(), W = innerWidth, H = innerHeight;
     if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
