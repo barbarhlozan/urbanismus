@@ -397,6 +397,8 @@ export const CONFIG = {
   village: {
     homeWork: 0.8,      // of the work trips there are no jobs in town for, this share stay to work at home
     garden: [60, 150],  // seconds working round the house
+    fieldShare: 0.7,    // where the house has a field (structures' fields), this share of that work is out on it…
+    hoe: [0.04, 0.09],  // …along a furrow this far between strokes
     forest: [40, 100],  // seconds about among the trees
     forestReach: 12,    // the wood at most this far (walking, as walk.maxDistance)
     deep: 4,            // a tree with this many trees round it is in a wood (not a lone one)

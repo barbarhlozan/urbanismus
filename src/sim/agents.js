@@ -83,13 +83,14 @@
 //
 // The renderer only reads visible() and x / y / trip.mode.
 
-import { STRUCTURE_TYPES, matches, codeOf, statsOf } from '../../structures/index.js';
+import { STRUCTURE_TYPES, matches, codeOf, statsOf, fieldsOf } from '../../structures/index.js';
 import { compass } from '../ui/annotations.js';
 import { findPath } from '../roads/pathfinding.js';
 import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, roadway } from '../roads/geometry.js';
 import { siteWalks, hubRadius } from '../roads/siteWalks.js';
 import { UNLOCKS } from '../story/unlocks.js';
 import { DAY, hourAt } from '../render/shadows.js';
+import { rotateQuarter } from '../core/grid.js';
 
 const can = (kind) => UNLOCKS.allowsVehicle(kind); // 'cars' | 'trucks' | 'buses'
 import { WalkNetwork } from './walking.js';
@@ -504,6 +505,42 @@ export class AgentSystem {
     [a.x, a.y] = at(0);
     [a.tx, a.ty] = [a.x, a.y];
     a.wander = { loop: { at, lo, hi }, u: 0, goal: null, time: between(...this.config.linger.porch), pause: between(0.5, 2), back: false };
+    return 'linger';
+  }
+
+  // Out to the house's field (STRUCTURE_TYPES fields, fieldsOf) with a hoe:
+  // along a furrow a step at a time, stopping to hoe, then over to the next
+  // one; when the time's up back to the house and in. 'linger', or null
+  // with no field.
+  startField(a, home) {
+    const { world } = this;
+    const fields = fieldsOf(STRUCTURE_TYPES[home.type] ?? {}, home);
+    if (!fields.length) return null;
+    const [x0, x1, y0, y1, step] = fields[Math.floor(Math.random() * fields.length)];
+    const [ox, oy] = world.grid.xy(home.node), r = world.drawnRotation(home);
+    const at = (lx, ly) => { const [dx, dy] = rotateQuarter(lx, ly, r); return [ox + dx, oy + dy]; };
+    const rows = [];
+    for (let x = x0 + step; x < x1 - step / 2; x += step) rows.push(x);
+    if (!rows.length) return null;
+    // from the house's side facing the field, a step out
+    const [cx, cy] = world.centerOf(home), [fx, fy] = at((x0 + x1) / 2, (y0 + y1) / 2);
+    const d = Math.hypot(fx - cx, fy - cy) || 1, out = Math.min(0.45, d / 2);
+    a.trip = { mode: 'linger', nodes: [], dest: null, back: null };
+    [a.x, a.y] = [cx + ((fx - cx) / d) * out, cy + ((fy - cy) / d) * out];
+    [a.tx, a.ty] = [a.x, a.y];
+    a.carry = 'hoe';
+    let row = Math.floor(Math.random() * rows.length), dir = Math.random() < 0.5 ? 1 : -1;
+    let ly = dir > 0 ? y0 + 0.03 : y1 - 0.03;
+    const { hoe } = this.config.village;
+    this.startWander(a, between(...this.config.village.garden), () => {
+      ly += dir * between(...hoe);
+      if (ly > y1 - 0.03 || ly < y0 + 0.03) { // the end of the furrow: over to the next
+        ly = Math.min(y1 - 0.03, Math.max(y0 + 0.03, ly));
+        dir = -dir;
+        row = (row + 1) % rows.length;
+      }
+      return at(rows[row] + between(-0.008, 0.008), ly);
+    }, 0.5);
     return 'linger';
   }
 
@@ -1102,6 +1139,8 @@ export class AgentSystem {
       case 'garden': {
         const def = STRUCTURE_TYPES[home.type] ?? {};
         if (!matches(def, 'houses') && !matches(def, 'farm')) return null;
+        const field = Math.random() < this.config.village.fieldShare && this.startField(a, home);
+        if (field) return field;
         const yard = this.startYard(a, home);
         if (!yard) return null;
         a.wander.time = between(...this.config.village.garden);

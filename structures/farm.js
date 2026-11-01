@@ -310,6 +310,9 @@ function statek(g, kind, x0, x1, y1) {
   g.paint = paint;
 }
 
+// The farmstead's field strip (field()): x0, x1, y0, y1, the furrows' step.
+const FARM_FIELD = [1.75, 2.36, -0.32, 0.7, 0.07];
+
 export const farmstead = {
   id: 'farmstead',
   name: 'Farmstead',
@@ -318,6 +321,7 @@ export const farmstead = {
   tags: ['farm'],
   code: 'F',
   footprint: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
+  fields: { '*': [FARM_FIELD] }, // where its people hoe (sim/agents.js, fieldsOf)
   plot: { props: 'garden', boundary: 0.6, kinds: ['fence'], density: 0.35 },
   sim: { destinations: ['residential'] },
   stats: { jobs: 4 },
@@ -329,7 +333,7 @@ export const farmstead = {
   draw(g, s) {
     // the courtyard, a field and an orchard beside it
     statek(g, kindOf(g, s, this.kinds), -0.32, 1.59, 1.36);
-    field(g, 1.75, 2.36, -0.32, 0.7);
+    field(g, ...FARM_FIELD);
     for (const [x, y] of [[1.85, 1.0], [2.1, 0.95], [2.3, 1.2], [1.95, 1.28]]) {
       on(g, x, y);
       tree(g, x, y, 0.8, 'spreading');

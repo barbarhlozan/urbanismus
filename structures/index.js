@@ -180,6 +180,13 @@ export function kindShown(def, s) {
   return def.kinds[Math.floor(mulberry32(drawSeed(s))() * def.kinds.length)];
 }
 
+// The fields an instance has, where its people work (def.fields by kind,
+// '*' for any): [x0, x1, y0, y1, step] in its drawing's own units, the
+// rows (furrows) running along y, `step` apart in x.
+export function fieldsOf(def, s) {
+  return def.fields?.[kindShown(def, s)] ?? def.fields?.['*'] ?? [];
+}
+
 // Surroundings style for an instance: the player's choice (s.data.yard),
 // or one of its type's `yards` picked by seed. null = none. Without a road
 // (cars: false) styles for cars (parking, garages) are left out.

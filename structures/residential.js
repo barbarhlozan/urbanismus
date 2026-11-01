@@ -406,6 +406,7 @@ export const houseWide = {
   yards: ['garden', 'garden', 'trees'],
   // (saves from before version 6 have their kind written in: legacy.js)
   kinds: ['twin', 'longhouse', 'barn', 'field'],
+  fields: { field: [[0.68, 1.1, -0.08, 0.28, 0.05]] }, // the patch behind the chalupa, where they hoe (sim/agents.js, fieldsOf)
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
     const line = (pts) => g.line(pts, { facing: FRONT });
@@ -428,7 +429,7 @@ export const houseWide = {
       // the chalupa, and behind it on the next plot a small patch dug in
       // rows, a fruit tree at its corner
       chalupa(g);
-      const x0 = 0.68, x1 = 1.1, y0 = -0.08, y1 = 0.28;
+      const [x0, x1, y0, y1] = this.fields.field[0];
       g.groundPoly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], { lod: 1 });
       for (let x = x0 + 0.05; x < x1 - 0.025; x += 0.05) g.groundLine([[x, y0 + 0.025], [x, y1 - 0.025]], { dash: '3 2', lod: 2 });
       tree(g, g.pick([x0 - 0.06, x1 + 0.08]), g.range(-0.3, -0.2), 0.8, 'spreading');
