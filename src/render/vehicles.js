@@ -42,7 +42,19 @@ export const VEHICLES = {
   // turning vehicle keeps its strokes and faces meeting share them
   bow: 0.05,
   nudge: 0.0014,
+  // A vehicle jolts as it goes, as a walker bobs (people.js PEOPLE.bob):
+  // squashed down on its springs a little, by the way it has driven, never
+  // quite in a beat (two bumps of different lengths)
+  bump: 0.14,    // grid units driven per bump, about
+  bob: 0.1,      // how much lower at the bottom of one
 };
+
+// How squashed a vehicle is `driven` grid units along (each its own
+// `seed`, so a queue doesn't jolt in step), for the pen.
+export function jolt(driven, seed = 0) {
+  const t = (driven / VEHICLES.bump) * Math.PI;
+  return 1 - VEHICLES.bob * (0.65 * Math.abs(Math.sin(t + seed)) + 0.35 * Math.abs(Math.sin(t * 2.37 + seed * 3)));
+}
 
 // Models are measured in metres, from photos and drawings of the real
 // thing, and put on the map at the scale of a grid step (24.5 m, see
@@ -213,7 +225,7 @@ function model(name) {
 export function modelFor(id) {
   let h = 0;
   for (const c of String(id)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
-  return { name: 'car', hand: (h >>> 7) % VEHICLES.hands };
+  return { name: 'car', hand: (h >>> 7) % VEHICLES.hands, seed: ((h >>> 11) % 997) / 997 * Math.PI };
 }
 
 // The model a truck is drawn as.

@@ -48,7 +48,8 @@ import { THEME, mixColour } from '../theme.js';
 import { STYLE } from './style.js';
 import { MIST, mistLevel, mistSurface, mistSVG, mistHatch, coverSVG, mistIn, mistOut } from './mist.js';
 import { Painter, LOOK, wobble } from './painter.js';
-import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex } from './vehicles.js';
+import { VEHICLES, vehicleSVG, modelFor, truckFor, headingIndex, jolt } from './vehicles.js';
+import { EXHAUST, puffShapes } from './exhaust.js';
 import { PEOPLE, bodyFor, walkerSVG, cyclistSVG, canoeSVG, canoeMarkSVG } from './people.js';
 import { DEER, deerSVG, deerMark } from './deer.js';
 import { LIVESTOCK, livestockSVG, livestockMark } from './livestock.js';
@@ -4161,7 +4162,12 @@ export class Renderer {
         if (close) {
           const t = ((el.heading ?? 0) / VEHICLES.headings) * Math.PI * 2, ux = Math.cos(t) * 0.08, uy = Math.sin(t) * 0.08;
           el.shear = this.slopeShear([a.x + wx - ux, a.y + wy - uy], [a.x + wx + ux, a.y + wy + uy]);
-        } else el.shear = 0;
+          this.joltVehicle(el);
+          this.exhaust(el, a.x + wx - ux, a.y + wy - uy, now);
+        } else {
+          el.shear = 0;
+          el.squash = 1;
+        }
       }
       // facing left: mirrored
       el.mirror = kind !== 'car' && this.placePerson(el, a, kind, sx);
@@ -4198,7 +4204,35 @@ export class Renderer {
       if (el.path && pen.onScreen(el.dot[0], el.dot[1])) pen.drawScene(AGENT_STYLES.truck, el.path, k < 1 ? Math.max(0, k) : 1);
       return;
     }
-    for (const p of el.parts) pen.draw(p.shapes, p.sx, p.sy, k, false, el.shear ?? 0);
+    for (const p of el.parts) pen.draw(p.shapes, p.sx, p.sy, k, false, el.shear ?? 0, el.squash ?? 1);
+  }
+
+  // A car, bus or truck close up jolting on the road as it drives (VEHICLES
+  // bump): squashed down a little by the way it has driven, so one standing
+  // still is still.
+  joltVehicle(el) {
+    el.squash = jolt(el.walked ?? 0, el.model.seed);
+  }
+
+  // Its exhaust (exhaust.js): a puff given off at its back (x, y) every so
+  // far driven, and those still going drawn, under it, carried after it.
+  exhaust(el, x, y, now) {
+    const puffs = (el.puffs ??= []);
+    const driven = el.walked ?? 0;
+    // (never quite evenly: each gap between ½ and 1½ of `every`)
+    if (el.puffAt === undefined || driven - el.puffAt > EXHAUST.every * (0.5 + ((el.puffN ?? 0) * 0.618) % 1)) {
+      if (el.puffAt !== undefined) {
+        if (puffs.length >= EXHAUST.most) puffs.shift();
+        puffs.push({ x, y, born: now, v: (el.puffN = (el.puffN ?? el.model.hand) + 1) % EXHAUST.variants });
+      }
+      el.puffAt = driven;
+    }
+    while (puffs.length && now - puffs[0].born > EXHAUST.life * 1000) puffs.shift();
+    for (const p of puffs) {
+      const u = (now - p.born) / (EXHAUST.life * 1000), c = EXHAUST.carry;
+      const [sx, sy] = this.projectDeck(p.x + (x - p.x) * c, p.y + (y - p.y) * c, EXHAUST.low + EXHAUST.rise * u);
+      this.pen.draw(puffShapes(p.v, u), sx, sy);
+    }
   }
 
   // Vehicles are drawn level; on a slope this leans one from `back` to
@@ -4298,9 +4332,12 @@ export class Renderer {
     const cam = this.camera;
     const [wx, wy] = wobble(a.x, a.y), [vx, vy] = wobble(a.tx, a.ty); // on the swaying road
     const front = [a.x + wx, a.y + wy], back = [a.tx + vx, a.ty + vy];
+    if (el.at) el.walked = (el.walked ?? 0) + Math.hypot(a.x - el.at[0], a.y - el.at[1]); // (driven: it jolts by it)
+    el.at = [a.x, a.y];
     if (Math.hypot(front[0] - back[0], front[1] - back[1]) > 1e-4) el.heading = headingIndex(Math.atan2(front[1] - back[1], front[0] - back[0]));
     const [sx, sy] = this.projectDeck((front[0] + back[0]) / 2, (front[1] + back[1]) / 2, 0.04);
     el.shear = this.slopeShear(back, front);
+    el.squash = 1;
     if (cam.zoom < VEHICLES.minZoom) {
       el.key = 'dot';
       el.dot = [sx, sy];
@@ -4320,6 +4357,8 @@ export class Renderer {
     }
     Object.assign(el.body, { sx, sy });
     el.parts = [el.body];
+    this.joltVehicle(el);
+    this.exhaust(el, back[0], back[1], performance.now());
   }
 
   // A walker's or cyclist's shapes: close up a pen figure
@@ -4365,6 +4404,7 @@ export class Renderer {
     if (el.at) {
       const dx = a.x - el.at[0], dy = a.y - el.at[1];
       if (dx * dx + dy * dy > 1e-8) el.heading = headingIndex(Math.atan2(dy, dx));
+      el.walked = (el.walked ?? 0) + Math.hypot(dx, dy); // (driven: it jolts by it)
     }
     el.at = [a.x, a.y];
     const close = this.camera.zoom >= VEHICLES.minZoom;
@@ -4389,6 +4429,7 @@ function agentEl(kind, born) {
     kind, born, seen: 0, gone: undefined, key: undefined, shapes: undefined, parts: undefined, body: undefined,
     model: undefined, brolly: undefined, at: undefined, heading: undefined, walked: undefined, left: undefined,
     squash: undefined, mirror: undefined, shear: undefined, sx: 0, sy: 0, dot: undefined, path: undefined,
+    puffs: undefined, puffAt: undefined, puffN: undefined,
   };
 }
 
