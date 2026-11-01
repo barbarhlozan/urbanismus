@@ -90,8 +90,10 @@ export function bodyFor(id) {
 // head (its build makes it taller or shorter), as [class, d] parts – with
 // `.shoulder` (the front of its shoulders: [x, y, half width]) and
 // `.shoulders` ([left, right] points, for an arm). Seeded by `variant`.
-// `seated`: no legs, nothing carried; `bag`: false with the hands full.
-function figure(variant, height, bottom = 0, seated = false, ox = 0, bag = true) {
+// `seated`: no legs, nothing carried; `bag`: false with the hands full;
+// `wide`: shoulders and head this much bigger for the height (one sat
+// down: as broad as stood up, only shorter).
+function figure(variant, height, bottom = 0, seated = false, ox = 0, bag = true, wide = 1) {
   const rnd = mulberry32(variant * 2654435761 + 23);
   const range = (a, b) => a + rnd() * (b - a);
   const name = buildOf(variant), b = BUILDS[name];
@@ -102,10 +104,10 @@ function figure(variant, height, bottom = 0, seated = false, ox = 0, bag = true)
 
   const leg = seated ? 0 : h * PEOPLE.legs * b.legs * range(0.9, 1.1);
   const base = -leg;                                     // the coat's hem
-  const w = h * b.w * range(0.9, 1.1) * (seated ? 0.85 : 1); // half the shoulders' width
+  const w = h * b.w * range(0.9, 1.1) * (seated ? 0.85 : 1) * wide; // half the shoulders' width
   const foot = w * b.hem * range(0.88, 1.12);            // half the hem's
   const lean = h * (b.lean ?? range(-0.04, 0.04));       // the top a touch off the base
-  const r = h * range(0.095, 0.12) * (b.head ?? 1);
+  const r = h * range(0.095, 0.12) * (b.head ?? 1) * wide;
   const top = -h + h * (b.stoop ?? 0), hx = lean + h * (b.stoop ?? 0);
   const sh = top + 2 * r + h * (b.stoop ? -0.02 : range(0.01, 0.04)); // the shoulders' line
 
@@ -165,7 +167,7 @@ function umbrella(variant, height, parts) {
 }
 
 // What a figure holds, out on its right (+x): in the village a 'hoe'
-// leant on, or a 'basket' for mushrooms on the arm; at a fire a 'bucket' hanging
+// leant on, a 'basket' for mushrooms on the arm, or a 'chair' to sit out on; at a fire a 'bucket' hanging
 // from the hand, 'throw' swung up in front with the water flying out of
 // it, 'hose' the branch pipe held level in both hands and its jet arcing
 // out and down.
@@ -199,6 +201,11 @@ function carried(variant, height, parts, what) {
     parts.push(['fig-line', `M${pt(sx + w * 0.8, sy + height * 0.02)}L${pt(sx + w + height * 0.07, sy + height * 0.1)}`]); // the arm to it
     parts.push(['fig-line', `M${pt(...top)}Q${pt((top[0] + gx) / 2 + height * 0.02, (top[1] - height * 0.02) / 2)} ${pt(gx, -height * 0.04)}`]);
     parts.push(['fig-ink', `M${pt(gx + height * 0.02, -height * 0.07)}L${pt(gx - height * 0.1, -height * 0.03)}L${pt(gx - height * 0.09, height * 0.01)}L${pt(gx + height * 0.01, -height * 0.02)}Z`]); // the blade, turned back towards them
+  } else if (what === 'chair') {
+    // a chair (židle) carried out to sit on: hung from the hand by its back
+    const hx = sx + w * 1.1, hy = sy + height * 0.2;
+    parts.push(['fig-line', `M${pt(sx + w * 0.9, sy)}L${pt(hx, hy)}`]); // the arm down
+    parts.push(['fig-line', chair(rnd, hx - height * 0.02, hy - height * 0.03, height * 0.16)]);
   } else if (what === 'basket') {
     // a wicker basket (košík) on the arm: a deep round body, a band of
     // weave, the handle arched over it
@@ -221,17 +228,57 @@ function carried(variant, height, parts, what) {
   }
 }
 
+// A kitchen chair (židle) side on, its seat towards +x, as one line: the
+// back from its top (x, y) down to the back leg, the seat out `s` long
+// and the front leg down; each a hair off true (`rnd`).
+function chair(rnd, x, y, s) {
+  const j = () => s * 0.06 * (rnd() * 2 - 1);
+  const back = s * 1.55, leg = s * 1.1;
+  const st = [x + s * 0.12, y + back]; // the seat's back corner: the back leans a touch
+  const ft = [st[0] + s, st[1] + j()];
+  return smooth([[x + j(), y], [(x + st[0]) / 2 + j(), (y + st[1]) / 2], st, [st[0] + j() * 0.5, st[1] + leg]], false)
+    + smooth([[st[0], st[1]], [(st[0] + ft[0]) / 2, (st[1] + ft[1]) / 2 + j()], ft, [ft[0] + j() * 0.5, ft[1] + leg]], false)
+    + smooth([[x + j(), y + back * 0.3], [x + s * 0.5, y + back * 0.3 + j()]], false); // a rail across the back
+}
+
+// Sat out on a chair carried from the house (sim: AgentSystem.startSit),
+// facing us as every figure: the chair's back and legs behind, the figure
+// on its seat without its legs, and its legs down from the hem, knees a
+// little apart. Each line a hair off true.
+function sitting(variant, height) {
+  const rnd = mulberry32(variant * 1597334677 + 11);
+  const range = (a, b) => a + rnd() * (b - a);
+  const jit = () => height * PEOPLE.wobble * range(-1, 1);
+  const seat = height * 0.2, cw = height * range(0.15, 0.18), back = height * range(0.3, 0.36);
+  const line = (pts) => smooth(pts.map(([x, y]) => [x + jit() * 0.5, y + jit() * 0.5]), false);
+  // the back: two posts up and a rail across; the legs, the far ones shorter
+  let d = '';
+  for (const s of [-1, 1]) d += line([[s * cw * 0.8, -seat], [s * cw * 0.82, -seat - back * 0.5], [s * cw * 0.84, -seat - back]])
+    + line([[s * cw * 0.72, -seat], [s * cw * 0.72, -height * 0.04]]) + line([[s * cw, -seat], [s * cw * 1.02, 0]]);
+  d += line([[-cw * 0.86, -seat - back * 0.95], [0, -seat - back * 1.02], [cw * 0.86, -seat - back * 0.95]]);
+  const parts = [['fig-line', d]];
+  parts.push(...figure(variant, height * 0.6, -seat, true, 0, true, 1.4));
+  // the seat's front edge, under the coat's hem
+  d = line([[-cw, -seat], [0, -seat + height * 0.005], [cw, -seat]]);
+  // the legs
+  const gap = height * range(0.04, 0.06);
+  for (const s of [-1, 1]) d += line([[s * gap, -seat], [s * gap * range(1.3, 1.7), -seat * 0.5], [s * gap * range(1.1, 1.4), 0]]);
+  parts.push(['fig-line', d]);
+  return parts;
+}
+
 const svgOf = (parts) => parts.map(([cls, d]) => `<path class="${cls}" d="${d}"/>`).join('');
 
 const cache = new Map();
 
 // Inner SVG of a walker (body variant `variant`).
-// `rain`: under an umbrella; `carry`: what it holds at a fire (carried()).
+// `rain`: under an umbrella; `carry`: what it holds (carried()), or 'sit':
+// sat on a chair (sitting()).
 export function walkerSVG(variant, rain = false, carry = null) {
   const key = `w${variant}${rain ? 'u' : ''}${carry ?? ''}`;
   if (!cache.has(key)) {
-    const parts = figure(variant, PEOPLE.height, 0, false, 0, !carry);
-    if (carry) carried(variant, PEOPLE.height, parts, carry);
+    const parts = carry === 'sit' ? sitting(variant, PEOPLE.height) : figure(variant, PEOPLE.height, 0, false, 0, !carry);
+    if (carry && carry !== 'sit') carried(variant, PEOPLE.height, parts, carry);
     else if (rain) umbrella(variant, PEOPLE.height, parts);
     cache.set(key, svgOf(parts));
   }

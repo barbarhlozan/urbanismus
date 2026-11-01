@@ -303,8 +303,8 @@ export const CONFIG = {
     // for a walk), the share still cycling, how often visitors come, and the
     // share of walkers under an umbrella
     people: {
-      rain: { activities: { stay: 2.5, porch: 0.3, stroll: 0.3, park: 0.2, lunch: 0.5 }, bike: 0.4, visitors: 0.7, umbrellas: 0.8 },
-      storm: { activities: { stay: 8, porch: 0, stroll: 0, park: 0, errand: 0.3, lunch: 0, leave: 0.3 }, bike: 0.1, visitors: 0.3, umbrellas: 1 },
+      rain: { activities: { stay: 2.5, porch: 0.3, sit: 0.05, stroll: 0.3, park: 0.2, lunch: 0.5 }, bike: 0.4, visitors: 0.7, umbrellas: 0.8 },
+      storm: { activities: { stay: 8, porch: 0, sit: 0, stroll: 0, park: 0, errand: 0.3, lunch: 0, leave: 0.3 }, bike: 0.1, visitors: 0.3, umbrellas: 1 },
     },
   },
 
@@ -350,10 +350,12 @@ export const CONFIG = {
   //   lunch    workers: a park if one is in reach, else a stroll
   //   delivery workers: a drive to one of def.sim.destinations and back
   //   garden   work round the house, a hoe in hand (village.garden)
+  //   sit      a chair carried out of the house and sat on a while: by the
+  //            front wall towards evening, else out in the garden (village.sit)
   //   forest   to the nearest wood for mushrooms, a basket on the arm: about
   //            among the trees a while (village.forest), then home
   activities: {
-    resident: { stay: 20, porch: 15, stroll: 25, park: 15, errand: 15, work: 10, leave: 3, garden: 12, forest: 5 },
+    resident: { stay: 20, porch: 15, stroll: 25, park: 15, errand: 15, work: 10, leave: 3, garden: 12, forest: 5, sit: 10 },
     worker: { stay: 60, lunch: 25, delivery: 6, garden: 15 }, // (garden: on a farm only)
     errands: ['business', 'services'],
     leisure: ['park', 'square', 'heritage', 'cemetery'], // when def.sim.leisure isn't given
@@ -375,16 +377,16 @@ export const CONFIG = {
   // not named stays as it is) and may say where errands go then (tags).
   rhythm: {
     bands: [
-      { to: 4.5, activities: { garden: 0, forest: 0, porch: 0, stroll: 0, park: 0, errand: 0, work: 0, leave: 0, lunch: 0, delivery: 0 } },  // night: everyone in
-      { to: 6.5, activities: { garden: 0.3, forest: 1.5, work: 6, porch: 0.2, stroll: 0, park: 0, errand: 0, leave: 0.5, lunch: 0, delivery: 0.3 } }, // to the JZD, the works: the shift starts at six
-      { to: 8, activities: { garden: 1.5, forest: 3, work: 2, stroll: 0.3, park: 0.2, errand: 0.6, lunch: 0 }, errands: ['shop'] },           // bread and milk
-      { to: 11.5, activities: { garden: 2, forest: 2, errand: 2.5, work: 0.4, lunch: 0 }, errands: ['shop', 'health', 'office'] },          // the Jednota, the doctor, the post office
-      { to: 13.5, activities: { garden: 0.3, forest: 0.3, stay: 2, errand: 0.5, work: 0.2, lunch: 3 }, errands: ['shop', 'pub'] },              // dinner at home at noon
-      { to: 16, activities: { garden: 1, forest: 0.6, work: 0.2, lunch: 0 } },
-      { to: 19, activities: { garden: 2, forest: 0.3, work: 0, porch: 2, stroll: 1.5, errand: 1.2, lunch: 0 }, errands: ['shop', 'pub'] },    // home from the shift, the shop before it shuts
-      { to: 21.5, activities: { garden: 0.3, forest: 0, stay: 2.5, work: 0, porch: 1.5, stroll: 0.5, park: 0.3, errand: 0.5, leave: 0.2, lunch: 0, delivery: 0 }, errands: ['pub'] }, // the bench in front of the house; the pub
-      { to: 23, activities: { garden: 0, forest: 0, stay: 8, work: 0, porch: 0.3, stroll: 0.1, park: 0, errand: 0.15, leave: 0, lunch: 0, delivery: 0 }, errands: ['pub'] },
-      { to: 24, activities: { garden: 0, forest: 0, porch: 0, stroll: 0, park: 0, errand: 0, work: 0, leave: 0, lunch: 0, delivery: 0 } },
+      { to: 4.5, activities: { sit: 0, garden: 0, forest: 0, porch: 0, stroll: 0, park: 0, errand: 0, work: 0, leave: 0, lunch: 0, delivery: 0 } },  // night: everyone in
+      { to: 6.5, activities: { sit: 0, garden: 0.3, forest: 1.5, work: 6, porch: 0.2, stroll: 0, park: 0, errand: 0, leave: 0.5, lunch: 0, delivery: 0.3 } }, // to the JZD, the works: the shift starts at six
+      { to: 8, activities: { sit: 0.1, garden: 1.5, forest: 3, work: 2, stroll: 0.3, park: 0.2, errand: 0.6, lunch: 0 }, errands: ['shop'] },           // bread and milk
+      { to: 11.5, activities: { sit: 0.3, garden: 2, forest: 2, errand: 2.5, work: 0.4, lunch: 0 }, errands: ['shop', 'health', 'office'] },          // the Jednota, the doctor, the post office
+      { to: 13.5, activities: { sit: 0.6, garden: 0.3, forest: 0.3, stay: 2, errand: 0.5, work: 0.2, lunch: 3 }, errands: ['shop', 'pub'] },              // dinner at home at noon
+      { to: 16, activities: { sit: 1.2, garden: 1, forest: 0.6, work: 0.2, lunch: 0 } },
+      { to: 19, activities: { sit: 1.5, garden: 2, forest: 0.3, work: 0, porch: 2, stroll: 1.5, errand: 1.2, lunch: 0 }, errands: ['shop', 'pub'] },    // home from the shift, the shop before it shuts
+      { to: 21.5, activities: { sit: 2.5, garden: 0.3, forest: 0, stay: 2.5, work: 0, porch: 1.5, stroll: 0.5, park: 0.3, errand: 0.5, leave: 0.2, lunch: 0, delivery: 0 }, errands: ['pub'] }, // the bench in front of the house; the pub
+      { to: 23, activities: { sit: 0.3, garden: 0, forest: 0, stay: 8, work: 0, porch: 0.3, stroll: 0.1, park: 0, errand: 0.15, leave: 0, lunch: 0, delivery: 0 }, errands: ['pub'] },
+      { to: 24, activities: { sit: 0, garden: 0, forest: 0, porch: 0, stroll: 0, park: 0, errand: 0, work: 0, leave: 0, lunch: 0, delivery: 0 } },
     ],
     shiftBefore: 9,       // at work by this hour: there till the shift ends…
     shiftEnd: [14.5, 16], // …at an hour between these (the early shift, 6 till half past two)
@@ -399,6 +401,8 @@ export const CONFIG = {
     garden: [60, 150],  // seconds working round the house
     fieldShare: 0.7,    // where the house has a field (structures' fields), this share of that work is out on it…
     hoe: [0.04, 0.09],  // …along a furrow this far between strokes
+    sit: [90, 200],     // seconds sat out on a chair…
+    sitFront: 17,       // …by the front wall from this hour, in the garden before it
     forest: [40, 100],  // seconds about among the trees
     forestReach: 12,    // the wood at most this far (walking, as walk.maxDistance)
     deep: 4,            // a tree with this many trees round it is in a wood (not a lone one)

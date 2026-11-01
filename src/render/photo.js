@@ -768,7 +768,7 @@ function people(renderer, cam, seen) {
       svg = cyclistSVG(iso, best, body);
     } else {
       const brolly = umbrellas > 0 && (bodyFor(`${a.id}u`) + 0.5) / PEOPLE.bodies <= umbrellas;
-      svg = walkerSVG(body, brolly);
+      svg = walkerSVG(body, brolly, a.carry ?? null);
       flip = fx < sx;
     }
     out.push({

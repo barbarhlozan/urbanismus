@@ -411,6 +411,7 @@ export class AgentSystem {
   wander(a, dt) {
     const w = a.wander;
     if (w.loop) return this.roundYard(a, dt);
+    if (w.route) return this.sitWalk(a, dt);
     w.time -= dt;
     if (w.pause > 0) {
       w.pause -= dt;
@@ -506,6 +507,65 @@ export class AgentSystem {
     [a.tx, a.ty] = [a.x, a.y];
     a.wander = { loop: { at, lo, hi }, u: 0, goal: null, time: between(...this.config.linger.porch), pause: between(0.5, 2), back: false };
     return 'linger';
+  }
+
+  // A chair carried out and sat on (a.carry 'chair', then 'sit'): towards
+  // evening against the front wall beside the door, watching the street;
+  // before it out in the garden behind the house. Then up and back in with
+  // it. 'linger', or null where the spot is water or off the map.
+  startSit(a, home) {
+    const { world } = this;
+    const { sit, sitFront } = this.config.village;
+    const m = this.config.sim.doorPad;
+    const pts = world.nodesOf(home).map((n) => world.grid.xy(n));
+    const x0 = Math.min(...pts.map((p) => p[0])), x1 = Math.max(...pts.map((p) => p[0]));
+    const y0 = Math.min(...pts.map((p) => p[1])), y1 = Math.max(...pts.map((p) => p[1]));
+    const [cx, cy] = [(x0 + x1) / 2, (y0 + y1) / 2], [hw, hh] = [(x1 - x0) / 2, (y1 - y0) / 2];
+    const [fx, fy] = FACING[world.drawnRotation(home)];
+    const half = Math.abs(fx) * hw + Math.abs(fy) * hh, wide = Math.abs(fy) * hw + Math.abs(fx) * hh;
+    const door = [cx + fx * (half + m), cy + fy * (half + m)];
+    const front = this.rhythm().hour >= sitFront;
+    // along the wall from the door, or out behind the house
+    const u = (Math.random() < 0.5 ? -1 : 1) * between(0.18, 0.3 + wide * 0.5);
+    const out = front ? half + m * 0.55 : -(half + m + between(0.1, 0.3));
+    const seat = [cx + fx * out - fy * u, cy + fy * out + fx * u];
+    const n = world.grid.nodeAt(...seat);
+    if (n < 0 || world.terrain.isWater(n)) return null;
+    a.trip = { mode: 'linger', nodes: [], dest: null, back: null };
+    [a.x, a.y] = door;
+    [a.tx, a.ty] = door;
+    a.carry = 'chair';
+    // (behind the house round it by a corner, and back the same way)
+    const side = Math.sign(u), corner = [door[0] - fy * (wide + m) * side, door[1] + fx * (wide + m) * side];
+    const route = front ? [door, seat] : [door, corner, seat];
+    a.wander = { route, i: 1, dir: 1, time: between(...sit), pause: between(0.5, 1.5) };
+    return 'linger';
+  }
+
+  // Moves one carrying a chair out (startSit) along its route to the seat,
+  // sits it out, and back; true once back at the door.
+  sitWalk(a, dt) {
+    const w = a.wander;
+    if (w.pause > 0) {
+      w.pause -= dt;
+      return false;
+    }
+    if (a.carry === 'sit') a.carry = 'chair'; // up, the chair back in
+    const [tx, ty] = w.route[w.i];
+    const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
+    const step = this.config.sim.walkSpeed * this.config.linger.speed * 0.7 * dt;
+    if (d > step) {
+      a.x += (dx / d) * step;
+      a.y += (dy / d) * step;
+      return false;
+    }
+    [a.x, a.y] = [tx, ty];
+    if (w.dir > 0 && w.i === w.route.length - 1) { // there: down on it
+      a.carry = 'sit';
+      [w.pause, w.dir] = [w.time, -1];
+    }
+    w.i += w.dir;
+    return w.i < 0;
   }
 
   // Out to the house's field (STRUCTURE_TYPES fields, fieldsOf) with a hoe:
@@ -1136,6 +1196,11 @@ export class AgentSystem {
       }
       case 'lunch':
         return this.activity('park', a, home) || this.activity('stroll', a, home);
+      case 'sit': {
+        const def = STRUCTURE_TYPES[home.type] ?? {};
+        if (!matches(def, 'houses') && !matches(def, 'farm')) return null;
+        return this.startSit(a, home);
+      }
       case 'garden': {
         const def = STRUCTURE_TYPES[home.type] ?? {};
         if (!matches(def, 'houses') && !matches(def, 'farm')) return null;
