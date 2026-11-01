@@ -277,6 +277,7 @@ export class AgentSystem {
     this.updateDeliveries(dt);
     this.updateBuses(dt);
     this.follow(dt);
+    this.meet();
     const closed = this.trains?.closed;
     for (const k of this.queues.keys()) if (!closed?.has(k.split('|')[0])) this.queues.delete(k);
     for (const [id, a] of this.agents) {
@@ -344,6 +345,7 @@ export class AgentSystem {
         // falls through
         case 'back': {
           const leg = a.state === 'out' ? a.trip.out : a.trip.back;
+          if (a.chat && !this.chatting(a, leg, dt)) break; // stopped for a word (meet)
           const step = this.speedOf(a.trip.mode) * paceAt(leg, a.s) * a.followK * this.doorEase(a, leg) * (a.engine ? this.config.fire.engineSpeed : a.truck ? this.config.trucks.speed : 1) * dt;
           a.s = Math.min(a.s + Math.min(step, a.room), Math.max(a.s, this.crossingStop(a, leg)));
           [a.x, a.y] = pointAt(leg, a.s);
@@ -363,6 +365,93 @@ export class AgentSystem {
         }
       }
     }
+  }
+
+  // Two on foot meeting on the way stop for a word (village.chat), turned
+  // to each other; one passing a group already talking may join it
+  // (chatJoin), up to chatMost. Each stops once a trip.
+  meet() {
+    const v = this.config.village, reach = v.chatReach, f = this.weather().chat ?? 1;
+    if (!f) return;
+    const cells = new Map(), key = (x, y) => `${Math.floor(x / reach)},${Math.floor(y / reach)}`;
+    const free = (a) => (a.state === 'out' || a.state === 'back') && !a.visitor && !a.carry && !a.watch
+      && (a.trip.mode === 'walk' || a.trip.mode === 'stroll') && !a.trip.transit && a.trip.purpose !== 'fire' && a.trip.purpose !== 'refuge';
+    for (const a of this.agents.values()) {
+      if (!a.chat && !free(a)) continue;
+      const k = key(a.x, a.y);
+      if (!cells.has(k)) cells.set(k, []);
+      cells.get(k).push(a);
+    }
+    for (const list of cells.values()) {
+      for (const a of list) {
+        if (a.chat || a.chatted === a.trip) continue;
+        const cx = Math.floor(a.x / reach), cy = Math.floor(a.y / reach);
+        for (let i = -1; i <= 1 && a.chatted !== a.trip; i++) {
+          for (let j = -1; j <= 1 && a.chatted !== a.trip; j++) {
+            for (const b of cells.get(`${cx + i},${cy + j}`) ?? []) {
+              const d = Math.hypot(b.x - a.x, b.y - a.y);
+              if (b === a || b.home === a.home || d > reach || d < reach * 0.4) continue; // (not with their own family, nor on top of each other)
+              if (b.chat) { // a group talking: join it, or walk on by
+                a.chatted = a.trip;
+                const g = b.chat.group;
+                if (g.people.length < v.chatMost && Math.random() < v.chatJoin * f) {
+                  g.people.push(a);
+                  a.chat = { group: g, time: Math.max(b.chat.time, between(...v.chatTime) / 2), at: this.chatSpot(g, a.x, a.y) };
+                  for (const c of g.people) c.watch = g.people.length > 2 ? g.centre : null;
+                  a.watch = g.centre;
+                }
+                break;
+              }
+              if (b.chatted === b.trip) continue;
+              a.chatted = a.trip;
+              b.chatted = b.trip;
+              if (Math.random() >= v.chat * f) break;
+              // they step up to each other, either side of where they met
+              const g = { people: [a, b], centre: [(a.x + b.x) / 2, (a.y + b.y) / 2] }, time = between(...v.chatTime);
+              a.chat = { group: g, time, at: this.chatSpot(g, a.x, a.y, true) };
+              b.chat = { group: g, time: time + between(-2, 2), at: this.chatSpot(g, b.x, b.y, true) };
+              if (a.chat.at[0] === b.chat.at[0]) b.chat.at = [2 * g.centre[0] - a.chat.at[0], 2 * g.centre[1] - a.chat.at[1]]; // (level: one each side)
+              a.watch = b.chat.at;
+              b.watch = a.chat.at;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Where one stands in a group talking: a step from its middle, on the
+  // side they came from – a pair side by side across the screen (along
+  // x − y), not one behind the other.
+  chatSpot(g, x, y, pair = false) {
+    const [cx, cy] = g.centre, r = this.config.village.chatReach * 0.42;
+    if (pair) {
+      const s = Math.sign(x - y - (cx - cy)) || 1;
+      return [cx + s * r * Math.SQRT1_2, cy - s * r * Math.SQRT1_2];
+    }
+    const d = Math.hypot(x - cx, y - cy) || 1;
+    return [cx + ((x - cx) / d) * r, cy + ((y - cy) / d) * r];
+  }
+
+  // One stopped for a word (meet): steps to its place in the group, stands
+  // there its time, then back onto its way. True once it walks on.
+  chatting(a, leg, dt) {
+    const c = a.chat;
+    c.time -= dt;
+    const to = c.time > 0 ? c.at : pointAt(leg, a.s);
+    const dx = to[0] - a.x, dy = to[1] - a.y, d = Math.hypot(dx, dy);
+    const step = this.config.sim.walkSpeed * 0.6 * dt;
+    if (d > step) {
+      a.x += (dx / d) * step;
+      a.y += (dy / d) * step;
+      return false;
+    }
+    [a.x, a.y] = to;
+    if (c.time > 0) return false;
+    c.group.people.splice(c.group.people.indexOf(a), 1);
+    a.chat = a.watch = null;
+    return true;
   }
 
   // At the end of the way out.
@@ -1746,6 +1835,10 @@ export class AgentSystem {
   }
 
   beginLeg(a, leg) {
+    if (a.chat) { // (a fire took them from a chat: meet)
+      a.chat.group.people.splice(a.chat.group.people.indexOf(a), 1);
+      a.chat = null;
+    }
     a.s = 0;
     a.followK = 1;
     a.room = Infinity;

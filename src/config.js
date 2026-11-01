@@ -303,8 +303,8 @@ export const CONFIG = {
     // for a walk), the share still cycling, how often visitors come, and the
     // share of walkers under an umbrella
     people: {
-      rain: { activities: { stay: 2.5, porch: 0.3, sit: 0.05, stroll: 0.3, park: 0.2, lunch: 0.5 }, bike: 0.4, visitors: 0.7, umbrellas: 0.8 },
-      storm: { activities: { stay: 8, porch: 0, sit: 0, stroll: 0, park: 0, errand: 0.3, lunch: 0, leave: 0.3 }, bike: 0.1, visitors: 0.3, umbrellas: 1 },
+      rain: { activities: { stay: 2.5, porch: 0.3, sit: 0.05, stroll: 0.3, park: 0.2, lunch: 0.5 }, bike: 0.4, visitors: 0.7, umbrellas: 0.8, chat: 0.2 },
+      storm: { activities: { stay: 8, porch: 0, sit: 0, stroll: 0, park: 0, errand: 0.3, lunch: 0, leave: 0.3 }, bike: 0.1, visitors: 0.3, umbrellas: 1, chat: 0 },
     },
   },
 
@@ -406,6 +406,13 @@ export const CONFIG = {
     forest: [40, 100],  // seconds about among the trees
     forestReach: 12,    // the wood at most this far (walking, as walk.maxDistance)
     deep: 4,            // a tree with this many trees round it is in a wood (not a lone one)
+    // two on foot meeting on the way stop for a word, facing each other;
+    // one passing a pair already talking may stop with them
+    chat: 0.5,          // the chance they stop (weather `chat` scales it)…
+    chatJoin: 0.25,     // …that one passing joins in…
+    chatReach: 0.12,    // …when this close
+    chatTime: [8, 25],  // seconds talking
+    chatMost: 4,        // no more in one group
   },
 
   // Lingering: people standing about in view, stepping between spots.
