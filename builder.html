@@ -9,12 +9,18 @@
   <style>
     html, body { overflow: hidden; height: 100%; position: static; margin: 0; }
     body { background: var(--bg); color: var(--main); font-family: var(--ui-font); display: flex; flex-direction: column; }
-    #stage { flex: 1; min-height: 0; position: relative; }
+    #main { flex: 1; min-height: 0; display: flex; }
+    #stage { flex: 1; min-width: 0; position: relative; }
     #stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
     #caption { position: absolute; left: 32px; top: 28px; pointer-events: none; }
     #caption .step { color: var(--detail); font-size: 15px; letter-spacing: 0.04em; }
-    #caption h1 { font-weight: normal; font-size: clamp(26px, 4vw, 42px); margin: 2px 0 0; animation: line-in 0.35s both; }
-    @keyframes line-in { from { opacity: 0; transform: translateY(4px); } }
+    #caption h1 { font-weight: normal; font-size: clamp(26px, 4vw, 42px); margin: 2px 0 0; }
+    #notes { display: none; width: min(420px, 38vw); box-sizing: border-box; padding: 92px 36px 24px 8px; overflow-y: auto; }
+    body.notes #notes { display: block; }
+    #notes p { font-size: 18px; line-height: 1.5; margin: 0 0 22px; max-width: 34ch; }
+    #notes pre { font: 13px/1.6 ui-monospace, Menlo, monospace; margin: 0; padding: 4px 0 4px 14px; border-left: 1.4px solid var(--detail); white-space: pre-wrap; color: var(--main); }
+    #notes pre .c { color: var(--detail); }
+    #notes .src { color: var(--detail); font-size: 13px; margin: 0 0 6px; }
     #bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 14px 16px 18px; }
     #bar button { font: inherit; font-size: 15px; color: var(--main); background: var(--bg); border: 1.4px solid var(--main); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
     #bar button:hover { background: color-mix(in srgb, var(--main) 10%, var(--bg)); }
@@ -23,19 +29,33 @@
     #bar .sep { width: 1px; height: 24px; background: var(--detail); margin: 0 6px; }
     #bar .group { color: var(--detail); font-size: 14px; margin-right: 2px; }
     body.clean #bar { visibility: hidden; }
+    @media (max-width: 760px) {
+      #main { flex-direction: column; }
+      #notes { width: auto; max-height: 40%; padding: 8px 16px; }
+    }
     .pt { fill: var(--main); }
     .pt-label { fill: color-mix(in srgb, var(--main) 55%, var(--detail)); font-family: ui-monospace, Menlo, monospace; }
     .grid-dot { fill: var(--detail); }
+    #guides * { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    #guides .guide { stroke: var(--main); stroke-width: calc(1.3px * var(--stroke)); }
+    #guides .away { stroke: var(--detail); stroke-width: calc(1.2px * var(--stroke)); stroke-dasharray: calc(4px * var(--stroke)) calc(4px * var(--stroke)); }
+    #guides .faint { stroke: var(--detail); stroke-width: calc(1px * var(--stroke)); stroke-dasharray: calc(3px * var(--stroke)) calc(5px * var(--stroke)); }
+    #guides .spot { fill: var(--main); stroke: none; }
+    #guides .off { stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke)); }
   </style>
 </head>
-<body>
-  <div id="stage">
-    <svg id="view" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
-      <g id="grid"></g>
-      <g class="scene layer-objects" id="scene"><g id="ground"></g><g id="shadows"></g><g id="solids"></g></g>
-      <g id="points"></g>
-    </svg>
-    <div id="caption"><div class="step"></div><h1></h1></div>
+<body class="notes">
+  <div id="main">
+    <div id="stage">
+      <svg id="view" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+        <g id="grid"></g>
+        <g class="scene layer-objects" id="scene"><g id="ground"></g><g id="shadows"></g><g id="solids"></g></g>
+        <g id="guides"></g>
+        <g id="points"></g>
+      </svg>
+      <div id="caption"><div class="step"></div><h1></h1></div>
+    </div>
+    <div id="notes"><p></p><div class="src"></div><pre></pre></div>
   </div>
   <div id="bar">
     <button id="prev" title="Previous step (←)">◀</button>
@@ -45,28 +65,34 @@
     <button id="play" title="Play all steps (space)">Play</button>
     <button id="turn" title="Turn the camera (R)">Turn ↻</button>
     <button id="labels" title="Point coordinates (L)">Coordinates</button>
+    <button id="notesBtn" title="Explanation and code beside the drawing (N)">Notes</button>
     <button id="colors" title="Colour scheme (C)">Colours</button>
     <button id="clean" title="Hide this bar for recording (H)">Hide bar</button>
   </div>
   <script type="module">
     // Dev page for showing how things get drawn, made to be recorded: a
     // small village house put together step by step through the real
-    // painter (src/render/painter.js) – its points, the walls, the roof,
-    // the windows and doors, then its yard and garden – and a tree, from
-    // the point it stands on to its trunk, crown and shading. Each step is
-    // the whole drawing again; what is new since the step before is
-    // sketched in with the pen. Points are labelled in hundredths of a grid
-    // step, so they come out as whole numbers.
-    //   builder.html?scene=1&step=2&rot=2&scheme=1
+    // painter (src/render/painter.js) – its points, how they are joined
+    // into walls and which walls get drawn, the roof, the windows and
+    // doors, then its yard and how its garden is filled – and a tree, from
+    // the point it stands on through the oval and lobes its crown is
+    // measured on to the pen line and the shading. Each step is the whole
+    // drawing again; what is new since the step before is sketched in with
+    // the pen. Beside it (Notes) a few plain words on the step and the code
+    // that does it, shortened from the real thing. Points are labelled in
+    // hundredths of a grid step, so they come out as whole numbers.
+    //   builder.html?scene=1&step=2&rot=2&scheme=1&notes=0
     // Keys: ← → steps, ↑ ↓ house / tree, space play, R turn, L coordinates,
-    // C colours, H hide the bar.
+    // N notes, C colours, H hide the bar.
     import { SCHEMES, THEME } from './src/theme.js';
     import { Camera } from './src/render/camera.js';
     import { Painter } from './src/render/painter.js';
     import { sunFor, shadowSVG } from './src/render/shadows.js';
     import { mulberry32 } from './src/core/random.js';
-    import { door, chimney, tree, bush, fenceAlong, woodpile, dryingFrame, flowerBed } from './structures/kit.js';
+    import { pointInPolygon } from './src/core/geom2d.js';
+    import { door, chimney, fenceAlong } from './structures/kit.js';
     import { drawCourt } from './structures/courts.js';
+    import { drawPlot } from './structures/plots.js';
     import { drawTree } from './features/trees.js';
 
     const q = new URLSearchParams(location.search);
@@ -77,6 +103,7 @@
       for (const n of ['bg', 'main', 'detail']) document.documentElement.style.setProperty(`--${n}`, SCHEMES[scheme][n]);
     };
     colors();
+    if (q.get('notes') === '0') document.body.classList.remove('notes');
     const NS = 'http://www.w3.org/2000/svg';
     const $ = (id) => document.getElementById(id);
     const cam = new Camera({ width: 1, height: 1 }, { tile: 64 });
@@ -104,26 +131,35 @@
 
     // Its yard, as the game draws a house standing on its own: the walled
     // court beside it (structures/courts.js), a fence round the garden
-    // behind and a picket fence along the street.
+    // behind and along the street.
+    const COURT = { left: null, right: 'own' }, BODY = { x0: X0, y0: Y0, x1: X1, y1: Y1 };
+    const CELL = [-0.5, -0.5, 0.5, 0.5]; // the plot: halfway to the next dots
     const yard = (g) => {
-      drawCourt(g, { left: null, right: 'own' }, { x0: X0, y0: Y0, x1: X1, y1: Y1 });
-      fenceAlong(g, [[0.44, Y1], [0.48, 0.5], [-0.48, 0.5], [-0.48, -0.42], [-0.04, -0.42]]);
+      drawCourt(g, COURT, BODY);
+      fenceAlong(g, [[0.44, Y1], [0.48, 0.48], [-0.48, 0.48], [-0.48, -0.42], [-0.04, -0.42]]);
     };
-    // The garden: fruit trees, bushes by the house, a flower bed, wood for
-    // the winter and the washing (props of structures/kit.js), each from
-    // its own seed so it stays put whatever came before.
-    const garden = (g) => {
-      g.random = mulberry32(17);
-      tree(g, -0.32, 0.3, 0.95, 'spreading');
-      tree(g, 0.3, 0.38, 0.85, 'sapling');
-      tree(g, -0.4, -0.3, 0.8, 'spreading');
-      bush(g, -0.24, -0.12, 0.035);
-      bush(g, -0.24, 0.08, 0.03);
-      bush(g, 0.06, 0.4, 0.035);
-      flowerBed(g, -0.28, -0.3, 0.06);
-      woodpile(g, -0.32, 0.12, false);
-      dryingFrame(g, 0.16, 0.42, true);
+    const courtArea = drawCourt(new Painter(cam, { x: 0, y: 0 }, 0, 1), COURT, BODY);
+
+    // The garden, filled by the game's own drawPlot (structures/plots.js)
+    // with a house's plot settings (residential.js). Its spots are worked
+    // out here the same way, from the same seed, to show them first.
+    const GARDEN = +(q.get('garden') ?? 125); // (a seed whose garden has a few things in it)
+    const onBuilding = (x, y, r) => x > X0 - r - 0.03 && x < X1 + r + 0.03 && y > Y0 - r - 0.03 && y < Y1 + r + 0.03;
+    const plot = {
+      style: 'garden', density: 0.4, cell: CELL, sides: [],
+      // in the plot, off the house, out of the court and the front yard
+      inside: (x, y, r) => x - r > CELL[0] && x + r < CELL[2] && y - r > CELL[1] && y + r < CELL[3]
+        && y > Y0 && !onBuilding(x, y, r) && !courtArea.some((o) => pointInPolygon([x, y], o)),
     };
+    const SPOTS = (() => {
+      const rnd = mulberry32(GARDEN), range = (a, b) => a + rnd() * (b - a);
+      const out = [], step = 0.14;
+      for (let y = CELL[1] + step / 2; y < CELL[3]; y += step) {
+        for (let x = CELL[0] + step / 2; x < CELL[2]; x += step) out.push([x + range(-0.03, 0.03), y + range(-0.03, 0.03)]);
+      }
+      return out;
+    })();
+    const garden = (g) => { g.random = mulberry32(GARDEN); drawPlot(g, plot); };
 
     // The points: the footprint, lifted to the wall tops, and the ridge.
     const corners = [[X0, Y0], [X1, Y0], [X1, Y1], [X0, Y1]];
@@ -133,38 +169,255 @@
       ...[Y0, Y1].map((y) => [0, y, H + R]),
     ];
 
+    // ----- guides: what the builder draws over the painter's drawing -----
+
+    // [{ line: [[sx, sy]…] | dot: [sx, sy] | cross: [sx, sy], cls }]
+    const S = (g, p) => toScreen(g, p);
+    const edges = (g, cls = 'guide') => [
+      ...corners.map((c, i) => ({ line: [[...c, 0], [...corners[(i + 1) % 4], 0]].map((p) => S(g, p)), cls })),
+      ...corners.map((c) => ({ line: [[...c, 0], [...c, H]].map((p) => S(g, p)), cls })),
+      ...corners.map((c, i) => ({ line: [[...c, H], [...corners[(i + 1) % 4], H]].map((p) => S(g, p)), cls })),
+    ];
+    // an arrow out of each wall (its normal): drawn on if the wall faces us
+    const normals = (g) => corners.map((a, i) => {
+      const b = corners[(i + 1) % 4], n = [b[1] - a[1], a[0] - b[0]], l = Math.hypot(...n);
+      const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, H / 2], tip = [m[0] + (n[0] / l) * 0.14, m[1] + (n[1] / l) * 0.14, H / 2];
+      const [s0, s1] = [S(g, m), S(g, tip)], d = [s1[0] - s0[0], s1[1] - s0[1]], dl = Math.hypot(...d), k = 7 / dl;
+      const head = [[s1[0] - d[0] * k + d[1] * k * 0.6, s1[1] - d[1] * k - d[0] * k * 0.6], s1, [s1[0] - d[0] * k - d[1] * k * 0.6, s1[1] - d[1] * k + d[0] * k * 0.6]];
+      const cls = g.facing([n[0] / l, n[1] / l, 0]) ? 'guide' : 'away';
+      return [{ line: [s0, s1], cls }, { line: head, cls }];
+    }).flat();
+    const square = (g, cls = 'faint') => [{ line: [[CELL[0], CELL[1]], [CELL[2], CELL[1]], [CELL[2], CELL[3]], [CELL[0], CELL[3]], [CELL[0], CELL[1]]].map(([x, y]) => S(g, [x, y, 0])), cls }];
+    const spots = (g, faint) => SPOTS.map(([x, y]) => plot.inside(x, y, 0.03)
+      ? { dot: S(g, [x, y, 0]), cls: 'spot', r: faint ? 1.6 : 2.6 }
+      : faint ? null : { cross: S(g, [x, y, 0]), cls: 'off' }).filter(Boolean);
+
     // ----- the tree -----
 
     // One broadleaf (features/trees.js), drawn whole each step and shown
-    // part by part, by the classes its lines carry.
+    // part by part, by the classes its lines carry. drawTree tells
+    // g.trace how its crown was measured out (loopCrown).
     const TH = 0.9;
-    const oak = (g) => { g.random = mulberry32(5); drawTree(g, 0, 0, 'spreading', TH); };
+    let crownTrace = null;
+    const oak = (g) => {
+      g.random = mulberry32(5);
+      g.trace = (t) => { crownTrace = t; };
+      drawTree(g, 0, 0, 'spreading', TH);
+    };
     const TREE_POINTS = [[0, 0, 0], [0, 0, TH]];
+    const glyph = (g, pts) => {
+      const [sx, sy, t] = g._anchor(0, 0, 0);
+      return pts.map(([u, v]) => [sx + u * t, sy - v * t]);
+    };
+    const oval = (g, cls) => [{ line: glyph(g, crownTrace.oval), cls }];
+    const cuts = (g, cls) => crownTrace.cuts.map((c) => ({ line: glyph(g, [crownTrace.centre, c]), cls }));
+    const TRUNK = ['tree-foot', 'trunk', 'limb', 'twig'];
+
+    // ----- the notes: what each step does, and the code that does it -----
+    // (`code`: shortened from the file named in `src`; // lines are dimmed)
+
+    const NOTES = {
+      points: {
+        say: 'A house starts as ten points: four corners on the ground, the same four lifted to the top of the walls, and two at the ends of the ridge. One step of the map’s grid is 100.',
+        src: 'structures/residential.js',
+        code: `const W = 0.32, D = 0.44;   // width, depth
+const H = 0.19, R = 0.24;   // walls, roof
+
+// four corners round the middle
+[-W/2, -D/2]  [W/2, -D/2]
+[ W/2,  D/2]  [-W/2, D/2]
+// at z = 0 and z = H,
+// the ridge at z = H + R`,
+      },
+      join: {
+        say: 'Next corners are joined. On the ground they make the footprint, each goes straight up to its twin, and the four on top close the wall heads. Every wall is one of these four-sided faces.',
+        src: 'src/render/painter.js · _walls',
+        code: `for (let i = 0; i < base.length; i++) {
+  const [ax, ay] = base[i];
+  const [bx, by] = base[(i + 1) % base.length];
+  // a wall from corner a to corner b
+  this.face([[ax, ay, z0], [bx, by, z0],
+             [bx, by, z1], [ax, ay, z1]]);
+}`,
+      },
+      facing: {
+        say: 'Each wall gets an arrow pointing out of it. If the arrow points towards us, the wall is drawn; if it points away, the wall is at the back and is skipped. From above you only ever see two walls of a box.',
+        src: 'src/render/painter.js · face',
+        code: `// the arrow out of the face
+const n = newellNormal(points);
+// turned away from us: nothing to draw
+if (!this._facing(n, points[0])) return this;
+this.current.parts.push(this._outline(points));
+// hatching on the side away from the sun
+this._shade(points, n);`,
+      },
+      walls: {
+        say: 'The two walls that face us are drawn with a slightly unsteady pen, corners a little round, so it looks drawn by hand. The wall turned from the sun is hatched, and the house throws its shadow on the ground.',
+        src: 'src/render/painter.js · LOOK',
+        code: `// set by hand in house-lab.html
+export const LOOK = {
+  round: { walls: 1, roofs: 1 }, // corners
+  hatch: 0.0225,  // a hatch line every
+  sketch: 2.5,    // how much the pen wobbles
+  ...
+};`,
+      },
+      roof: {
+        say: 'The roof runs from the wall heads up to the ridge, reaching a little past the walls at the eaves. Its slopes are filled with hatching, and the chimney comes up through it.',
+        src: 'structures/residential.js',
+        code: `g.roofed(x, y, 0, W, D, H,
+  { h: R, ridge: 'y' }); // ridge along the depth
+chimney(g, 0.03, 0.06, H + R * 0.5, R * 0.6);
+
+// LOOK.eave = 0.03 past the walls`,
+      },
+      openings: {
+        say: 'Windows are spaced along each wall, as many as fit at one every twelve. The street front gets the door and a window placed by hand, and a little window up in the gable.',
+        src: 'src/render/painter.js · windows',
+        code: `const bay = 0.1 * LOOK.thin;     // 0.12
+const n = Math.floor(length / bay);
+for (let i = 0; i < n; i++) {
+  // centred in its bay, 0.4 of the wall high
+  const u = (i + 0.5) * length / n;
+  ...
+}
+door(g, 0.075, Y0, 0.055, 0.11);`,
+      },
+      yard: {
+        say: 'The house owns the ground halfway to the next dots of the grid. A village house standing on its own gets a walled yard four times in ten, on a side with no neighbour. It is picked from the house’s own seed, so the same house always gets the same yard.',
+        src: 'structures/courts.js · courtOf',
+        code: `const rnd = mulberry32(seed ^ 0xc0a7);
+// 4 houses in 10 get a yard
+if (rnd() >= def.court.own) return none;
+// only on a side with nobody next door
+const sides = [-1, 1].filter((d) => !others(d));
+const dir = sides[Math.floor(rnd() * sides.length)];
+return dir < 0 ? { left: 'own' } : { right: 'own' };`,
+      },
+      spots: {
+        say: 'To fill the garden, the plot is covered with a loose grid of spots, each nudged a little at random, then shuffled. Spots on the house, in the yard or in front of it are crossed out.',
+        src: 'structures/plots.js · drawPlot',
+        code: `const step = 0.14;
+for (let y = y0 + step / 2; y < y1; y += step)
+  for (let x = x0 + step / 2; x < x1; x += step)
+    spots.push([x + g.range(-0.03, 0.03),
+                y + g.range(-0.03, 0.03)]);
+shuffle(spots);`,
+      },
+      garden: {
+        say: 'Then spot by spot: most stay lawn. Otherwise a tree, a bush or a shed is picked, by weight, and kept only if there is room. Fruit trees are rare, so a house has the odd tree, not an orchard.',
+        src: 'structures/plots.js',
+        code: `garden: [ // weight, room, draw
+  [5, 0.07,  () => chance(0.15) && tree()],
+  [4, 0.045, () => chance(0.25) && bush()],
+  [1, 0.09,  () => shed(), 1],  // one at most
+],
+for (const [x, y] of spots) {
+  if (!g.chance(density)) continue; // lawn
+  const prop = pickByWeight(style);
+  if (!plot.inside(x, y, r)) continue;
+  if (tooClose(x, y, r)) continue;
+  prop.draw(g, x, y);
+}`,
+      },
+      tree: {
+        say: 'A tree is just one point on the map and a height. Everything else grows from the tree’s own random numbers: the same point always gives the same tree.',
+        src: 'structures/kit.js · tree',
+        code: `export function tree(g, x, y, size = 1) {
+  if (!g.isFree(x, y, 0.07 * size)) return;
+  const kind = pickKind(g); // spruce, sapling, spreading
+  drawTree(g, x, y, kind, 0.5 * size);
+}`,
+      },
+      trunk: {
+        say: 'The trunk goes up from the point to where the crown begins, a quarter to a third of the way up. A big tree gets two lines tapering in; some split into two or three branches.',
+        src: 'features/trees.js · sketchTrunk',
+        code: `const vb = H * g.range(0.22, 0.32); // crown bottom
+const w0 = H * g.range(0.022, 0.032);
+// two lines, bending, narrowing to the top
+[-1, 1].map((s) => [[s * w0 * 1.3, 0],
+  [bend + s * w0 * 0.8, vb * 0.55],
+  [top + s * w0 * 0.4, vb + H * 0.08]]);`,
+      },
+      oval: {
+        say: 'The crown is measured on an oval above the trunk, pushed a little to one side so the tree is lopsided. The pen will go round it from one side of the trunk to the other, leaving the bottom open, and the way round is cut into four to six pieces of uneven size.',
+        src: 'features/trees.js · drawLeafy',
+        code: `const ry = (H - vb) / 2, cy = vb + ry;
+const rx = Math.min(H * g.range(0.34, 0.48), ry * 1.5);
+// heavier on one side
+const ox = lean + heavy * rx * g.range(0.08, 0.28);
+// open underneath, round the trunk
+const a0 = -Math.PI + gap, a1 = Math.PI - gap;
+const at = (a, k) => [ox + Math.sin(a) * rx * k,
+                      cy + Math.cos(a) * ry * k];`,
+      },
+      lobes: {
+        say: 'Each piece bulges out into a lobe. How far it reaches, how much it bulges and which way it leans are picked for each lobe, which gives the bumpy, uneven outline of a crown.',
+        src: 'features/trees.js · loopCrown',
+        code: `const reach = g.range(0.84, 1.1);
+const bump = g.range(0.1, 0.36);
+const skew = g.range(0.6, 1.6);
+for (let j = 0; j <= 9; j++) {
+  const t = j / 9;
+  // out from the oval, most in the middle
+  const k = 0.86 + bump * Math.sin(Math.PI * t ** skew);
+  lobe.push(at(b0 + (b1 - b0) * t, reach * k));
+}`,
+      },
+      crown: {
+        say: 'One pen line runs through all the lobes, sometimes looping back on itself between two of them like joined-up writing, sometimes ending in a curl. Under it, a fill the colour of the paper hides whatever stands behind the tree.',
+        src: 'features/trees.js · penLoop',
+        code: `// a loop where two lobes meet
+for (let j = 1; j <= 10; j++) {
+  const f = (j / 10) * Math.PI * 2;
+  const a = Math.sin(f) * r * long;
+  const b = (1 - Math.cos(f)) * r;
+  out.push([from[0] + tu * a + nu * b,
+            from[1] + tv * a + nv * b]);
+}`,
+      },
+      shading: {
+        say: 'Last, two or three short arcs inside the crown on the side away from the sun give it volume, and the crown throws a round shadow on the ground, the same way the house does.',
+        src: 'features/trees.js · innerCurls',
+        code: `// the side away from the light
+const shadeAt = Math.atan2(-light[0], -light[1]);
+const mid = shadeAt + g.range(-0.7, 0.7);
+// a short arc a little inside the outline
+line.push(at(from + (to - from) * t,
+             g.range(0.6, 0.8)));`,
+      },
+    };
 
     // Scenes: their steps, the points over them and how strongly each step
-    // shows them (`pts`), and for the tree which of its lines a step shows
-    // (`only`, classes) and whether it casts its shadow yet.
+    // shows them (`pts`), the guides drawn over it, and for the tree which
+    // of its lines a step shows (`only`, classes) and whether it casts its
+    // shadow yet.
     const SCENES = [
       {
         name: 'House',
         points: HOUSE_POINTS,
         steps: [
-          { name: 'Points', draw: () => {}, pts: 1 },
-          { name: 'Walls', draw: walls, pts: 0.55 },
-          { name: 'Roof', draw: (g) => { roof(g); stack(g); }, pts: 0.55 },
-          { name: 'Windows & doors', draw: house },
-          { name: 'Yard', draw: (g) => { house(g); yard(g); } },
-          { name: 'Garden', draw: (g) => { house(g); yard(g); garden(g); } },
+          { name: 'Points', note: 'points', draw: () => {}, pts: 1 },
+          { name: 'Joining', note: 'join', draw: () => {}, pts: 0.55, guides: (g) => edges(g) },
+          { name: 'Facing', note: 'facing', draw: () => {}, pts: 0.3, guides: (g) => [...edges(g, 'faint'), ...normals(g)] },
+          { name: 'Walls', note: 'walls', draw: walls, pts: 0.3 },
+          { name: 'Roof', note: 'roof', draw: (g) => { roof(g); stack(g); } },
+          { name: 'Windows & doors', note: 'openings', draw: house },
+          { name: 'Yard', note: 'yard', draw: (g) => { house(g); yard(g); }, guides: (g) => square(g) },
+          { name: 'Spots', note: 'spots', draw: (g) => { house(g); yard(g); }, guides: (g) => [...square(g), ...spots(g)] },
+          { name: 'Garden', note: 'garden', draw: (g) => { house(g); yard(g); garden(g); }, guides: (g) => [...square(g), ...spots(g, true)] },
         ],
       },
       {
         name: 'Tree',
         points: TREE_POINTS,
         steps: [
-          { name: 'Point', draw: oak, only: [], pts: 1 },
-          { name: 'Trunk', draw: oak, only: ['tree-foot', 'trunk', 'limb', 'twig'], shade: false, pts: 0.55 },
-          { name: 'Crown', draw: oak, only: ['tree-foot', 'trunk', 'limb', 'twig', 'crown', 'crown-line'] },
-          { name: 'Shading', draw: oak },
+          { name: 'Point', note: 'tree', draw: oak, only: [], pts: 1 },
+          { name: 'Trunk', note: 'trunk', draw: oak, only: TRUNK, shade: false, pts: 0.55 },
+          { name: 'Oval', note: 'oval', draw: oak, only: TRUNK, shade: false, guides: (g) => [...oval(g, 'away'), ...cuts(g, 'faint')] },
+          { name: 'Lobes', note: 'lobes', draw: oak, only: TRUNK, shade: false, guides: (g) => [...oval(g, 'faint'), ...cuts(g, 'faint'), ...crownTrace.lobes.map((l) => ({ line: glyph(g, l), cls: 'guide' }))] },
+          { name: 'Crown', note: 'crown', draw: oak, only: [...TRUNK, 'crown', 'crown-line'] },
+          { name: 'Shading', note: 'shading', draw: oak },
         ],
       },
     ];
@@ -201,17 +454,18 @@
       return box.innerHTML;
     }
 
-    // The step's drawing as markup: its ground marks, shadows and solids.
+    // The step's drawing as markup: its ground marks, shadows and solids,
+    // and its guides.
     function render(i) {
       const s = STEPS[i], g = painter();
       s.draw(g);
       const shadows = s.shade === false || s.only?.length === 0 ? '' : shadowSVG({ feet: g.feet, casts: g.casts, project: g.groundProjector() }, sunFor(cam));
       const solids = s.only ? keep(g.toSVG(), s.only) : g.toSVG();
-      return { ground: s.only ? '' : g.toGroundSVG(), shadows, solids };
+      return { ground: s.only ? '' : g.toGroundSVG(), shadows, solids, guides: s.guides?.(g) ?? [] };
     }
 
-    // Frame the finished drawing (and its points) for this camera turn, so
-    // nothing jumps while stepping.
+    // Frame the finished drawing, its points and every step's guides for
+    // this camera turn, so nothing jumps while stepping.
     function frameView() {
       const svg = $('view'), solids = $('solids');
       const last = render(STEPS.length - 1);
@@ -219,15 +473,14 @@
       const b = solids.getBBox();
       const g = painter();
       let [x0, y0, x1, y1] = [b.x, b.y, b.x + b.width, b.y + b.height];
-      for (const p of scene.points) {
-        const [sx, sy] = toScreen(g, p);
-        x0 = Math.min(x0, sx); y0 = Math.min(y0, sy); x1 = Math.max(x1, sx); y1 = Math.max(y1, sy);
-      }
+      const take = ([sx, sy]) => { x0 = Math.min(x0, sx); y0 = Math.min(y0, sy); x1 = Math.max(x1, sx); y1 = Math.max(y1, sy); };
+      for (const p of scene.points) take(toScreen(g, p));
+      STEPS.forEach((s, i) => s.guides && render(i).guides.forEach((it) => (it.line ?? [it.dot ?? it.cross]).forEach(take)));
       const box = svg.getBoundingClientRect();
       if (!box.width || !box.height) return; // not laid out yet (hidden tab)
       // room at the top for the caption
       const top = Math.min(0.3, 110 / box.height);
-      const h = (y1 - y0) * 1.25 / (1 - top), w = Math.max((x1 - x0) * 1.3, h * box.width / box.height);
+      const h = (y1 - y0) * 1.2 / (1 - top), w = Math.max((x1 - x0) * 1.25, h * box.width / box.height);
       const hh = w * box.height / box.width;
       const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2 - (top / 2) * hh;
       frame = [cx - w / 2, cy - hh / 2, w, hh];
@@ -237,9 +490,7 @@
       svg.style.setProperty('--sun', 1);
       $('scene').setAttribute('class', 'scene layer-objects lod-0');
       drawGrid(g, scale);
-      solids.innerHTML = '';
-      $('ground').innerHTML = '';
-      $('shadows').innerHTML = '';
+      for (const id of ['solids', 'ground', 'shadows', 'guides']) $(id).innerHTML = '';
       shown = [];
     }
 
@@ -281,6 +532,35 @@
     }
     const fadeOf = (i) => STEPS[i].pts ?? 0;
 
+    // The step's guides: lines drawn in with the pen, one after another,
+    // dashed ones and marks fading in; ones the step before had stay put.
+    let guidesShown = '';
+    function drawGuides(items, animate) {
+      const layer = $('guides'), scale = frame && $('view').getBoundingClientRect().width / frame[2];
+      const key = JSON.stringify(items);
+      if (key === guidesShown && animate) return;
+      guidesShown = key;
+      layer.innerHTML = '';
+      if (!scale) return;
+      const els = items.map((it) => {
+        if (it.dot) return mk('circle', { cx: it.dot[0], cy: it.dot[1], r: (it.r ?? 2.4) / scale, class: it.cls }, layer);
+        if (it.cross) {
+          const [x, y] = it.cross, k = 2.6 / scale;
+          return mk('path', { d: `M${x - k} ${y - k}L${x + k} ${y + k}M${x + k} ${y - k}L${x - k} ${y + k}`, class: it.cls }, layer);
+        }
+        return mk('polyline', { points: it.line.map((p) => p.join(',')).join(' '), class: it.cls }, layer);
+      });
+      if (!animate) return;
+      els.forEach((el, k) => {
+        const delay = 200 + (k / Math.max(1, els.length)) * 1400;
+        if (el.getAttribute('class') === 'guide' && el.tagName === 'polyline') {
+          const len = Math.max(el.getTotalLength(), 1);
+          el.animate([{ strokeDasharray: `${len} ${len}`, strokeDashoffset: len }, { strokeDasharray: `${len} ${len}`, strokeDashoffset: 0 }],
+            { duration: Math.min(700, 200 + len * scale * 2), delay, easing: 'ease-in-out', fill: 'backwards' });
+        } else el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay, fill: 'backwards' });
+      });
+    }
+
     // ----- the pen -----
 
     // Sketch elements in, one after another (outlines drawn along their
@@ -317,7 +597,7 @@
     // in, ones that are gone fade away.
     function show(i, animate = true) {
       step = i;
-      const { ground, shadows, solids } = render(i);
+      const { ground, shadows, solids, guides } = render(i);
       const host = $('solids'), old = new Map();
       shown.forEach((html) => old.set(html, (old.get(html) ?? 0) + 1));
       host.innerHTML = solids;
@@ -334,8 +614,23 @@
       sh.innerHTML = shadows;
       if (animate && changed) sh.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700, delay: 600, fill: 'backwards' });
       if (animate) penIn(fresh, Math.min(2600, 1300 + fresh.length * 8));
+      drawGuides(guides, animate);
       drawPoints(animate && fadeOf(i) === 1, fadeOf(i));
       caption(animate);
+      notes(animate);
+    }
+
+    // The step's words and code beside the drawing.
+    function notes(animate) {
+      const n = NOTES[STEPS[step].note], box = $('notes');
+      box.querySelector('p').textContent = n.say;
+      box.querySelector('.src').textContent = n.src;
+      const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      box.querySelector('pre').innerHTML = n.code.split('\n').map((l) => {
+        const at = l.indexOf('//');
+        return at < 0 ? esc(l) : `${esc(l.slice(0, at))}<span class="c">${esc(l.slice(at))}</span>`;
+      }).join('\n');
+      if (animate) [...box.children].forEach((el, k) => el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 150 + k * 200, fill: 'backwards' }));
     }
 
     function caption(animate = false) {
@@ -349,6 +644,7 @@
       $('next').disabled = step === STEPS.length - 1;
       $('tabs').querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.scene === sceneAt && +b.dataset.step === step));
       $('labels').classList.toggle('on', labels);
+      $('notesBtn').classList.toggle('on', document.body.classList.contains('notes'));
       $('play').textContent = playing ? 'Stop' : 'Play';
     }
 
@@ -368,12 +664,14 @@
       if (playing) return stop();
       const next = (i) => {
         show(i);
-        playing = i < STEPS.length - 1 ? setTimeout(() => next(i + 1), i === 0 ? 2800 : 2600) : null;
+        // (longer with the notes up, to read them)
+        const wait = document.body.classList.contains('notes') ? 6000 : i === 0 ? 2800 : 2600;
+        playing = i < STEPS.length - 1 ? setTimeout(() => next(i + 1), wait) : null;
         caption();
       };
       // from the start, on a blank sheet
-      for (const id of ['solids', 'ground', 'shadows']) $(id).innerHTML = '';
-      shown = [];
+      for (const id of ['solids', 'ground', 'shadows', 'guides']) $(id).innerHTML = '';
+      shown = []; guidesShown = '';
       playing = setTimeout(() => next(0), 400);
       caption();
     }
@@ -382,6 +680,7 @@
       frameView();
       show(step, false);
     }
+    function reframe() { frameView(); show(step, false); }
 
     SCENES.forEach((sc, k) => {
       if (k) $('tabs').append(Object.assign(document.createElement('span'), { className: 'sep' }), ' ');
@@ -400,6 +699,7 @@
     $('play').onclick = play;
     $('turn').onclick = turn;
     $('labels').onclick = () => { labels = !labels; drawPoints(false, fadeOf(step)); caption(); };
+    $('notesBtn').onclick = () => { document.body.classList.toggle('notes'); reframe(); };
     $('colors').onclick = () => { scheme = (scheme + 1) % SCHEMES.length; colors(); };
     $('clean').onclick = () => document.body.classList.toggle('clean');
     addEventListener('keydown', (e) => {
@@ -411,11 +711,12 @@
       else if (k === ' ') { e.preventDefault(); play(); }
       else if (k === 'r') turn();
       else if (k === 'l') $('labels').click();
+      else if (k === 'n') $('notesBtn').click();
       else if (k === 'c') $('colors').click();
       else if (k === 'h') $('clean').click();
       else return;
     });
-    addEventListener('resize', () => { frameView(); show(step, false); });
+    addEventListener('resize', reframe);
 
     frameView();
     show(step);

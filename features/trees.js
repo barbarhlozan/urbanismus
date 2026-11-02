@@ -251,7 +251,7 @@ function loopCrown(g, at, a0, a1, rx, p, simple) {
   const sum = shares.reduce((a, b) => a + b, 0);
   const cuts = [a0];
   for (const sh of shares) cuts.push(cuts[cuts.length - 1] + (a1 - a0) * sh / sum);
-  const pen = [], fill = [], m = simple ? 6 : 9;
+  const pen = [], fill = [], lobes = [], m = simple ? 6 : 9;
   const loops = g.pick([0, 0.3, 0.5]); // some trees loop, some don't
   const inward = (pt, k) => { const c = at(0, 0); return [c[0] + (pt[0] - c[0]) * k, c[1] + (pt[1] - c[1]) * k]; };
   // a hook into the start
@@ -270,7 +270,11 @@ function loopCrown(g, at, a0, a1, rx, p, simple) {
     if (i > 0 && !simple && g.chance(loops)) pen.push(...penLoop(g, lobe[0], lobe[1], at(0, 0), rx * g.range(0.1, 0.2)));
     pen.push(...lobe);
     fill.push(...lobe);
+    lobes.push(lobe);
   }
+  // (builder.html shows how the crown is made: the oval it is measured on,
+  // where it is cut into lobes, and the lobes)
+  g.trace?.({ oval: Array.from({ length: 49 }, (_, k) => at(-Math.PI + (k * Math.PI) / 24, 1)), centre: at(0, 0), cuts: cuts.map((a) => at(a, 1)), lobes });
   const end = pen[pen.length - 1];
   if (!simple && g.chance(0.35)) {
     // a curl to finish: spiralling in from the end
