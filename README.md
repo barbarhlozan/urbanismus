@@ -219,6 +219,8 @@ bridges, the chronicle and its ledger, numbers in words, on small made-up towns 
 - `src/config.js` – most of the numbers worth tweaking
 - `src/theme.js` – colours
 - `src/render/` – drawing (`painter.js` has the drawing API at the top)
+  - `renderer.js` – the map's set-up and frame loop; its methods by topic in `renderer/`
+    (terrain, networks, objects, plots, light, nature, movers, view)
 - `src/sim/` – people, parking, the chronicle, the church that builds itself
 - `src/story/`, `story/` – the storyteller, and the story it tells
 - `tests/` – see Tests above
