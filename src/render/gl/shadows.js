@@ -15,8 +15,9 @@
 //   s.draw({ view, hatch, tier, px, stroke, hold, shown })   each frame
 //   s.current                                   drawn as last asked
 
+import { rgb } from './common.js';
 import { THEME } from '../../theme.js';
-import { Hatching, Pieces, meshOf, rgb, STRIDE, EDGE } from './hatching.js';
+import { Hatching, Pieces, meshOf, STRIDE, EDGE } from './hatching.js';
 import { SUN } from '../shadows.js';
 import { canvasDpr } from '../dpr.js';
 

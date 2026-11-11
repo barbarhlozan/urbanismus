@@ -10,6 +10,7 @@
 //   view.setHouse(mesh, textureCanvas)           textureCanvas: bleed(sheet image)
 //   view.draw({ mode: 'map', angle, zoom }) or ({ mode: 'photo', yaw, dist })
 
+import { program } from '../render/gl/common.js';
 import { SUN } from '../render/shadows.js';
 
 const COS30 = Math.cos(Math.PI / 6);
@@ -53,7 +54,7 @@ export class PaintedView {
     if (!gl) throw new Error('This page needs WebGL 2.');
     this.gl = gl;
     this.canvas = canvas;
-    this.prog = program(gl, VS, FS);
+    this.prog = program(gl, VS, FS).p;
     this.loc = Object.fromEntries(['uMat', 'uLight', 'uMode', 'uTex', 'uPaper', 'uShadow'].map((n) => [n, gl.getUniformLocation(this.prog, n)]));
     this.house = null;
     this.ground = this._mesh({ positions: quad(8), normals: new Float32Array(18).fill(0).map((_, i) => (i % 3 === 2 ? 1 : 0)), uvs: new Float32Array(12), tex: new Float32Array(6) });
@@ -192,20 +193,6 @@ function mul4(a, b) {
 
 function quad(r) {
   return new Float32Array([-r, -r, 0, r, -r, 0, r, r, 0, -r, -r, 0, r, r, 0, -r, r, 0]);
-}
-
-function program(gl, vs, fs) {
-  const p = gl.createProgram();
-  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-    gl.attachShader(p, s);
-  }
-  gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-  return p;
 }
 
 // The sheet's image with its paint run on a few px into the empty around

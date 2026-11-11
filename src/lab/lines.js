@@ -29,6 +29,7 @@
 // photos). Strokes outside every panel are notes and are left out.
 
 import { LOOK } from '../render/painter.js';
+import { pointInPolygon, simplify } from '../core/geom2d.js';
 
 // The cottage drawn on drawings/chalupa.svg.
 export const CHALUPA = { id: 'chalupa', file: 'drawings/chalupa.svg', w: 0.3, d: 0.44, h: 0.17, roof: 0.24, eave: 0.03 };
@@ -279,37 +280,8 @@ export function sheetStrokes(svg) {
   return out;
 }
 
-// Ramer–Douglas–Peucker.
-function simplify(pts, tol) {
-  if (pts.length < 3) return pts;
-  const keep = new Uint8Array(pts.length);
-  keep[0] = keep[pts.length - 1] = 1;
-  const stack = [[0, pts.length - 1]];
-  while (stack.length) {
-    const [i, j] = stack.pop();
-    const [ax, ay] = pts[i], [bx, by] = pts[j], len = Math.hypot(bx - ax, by - ay);
-    let far = -1, best = tol;
-    for (let k = i + 1; k < j; k++) {
-      const [px, py] = pts[k];
-      const dist = len < 1e-9 ? Math.hypot(px - ax, py - ay) : Math.abs((bx - ax) * (ay - py) - (ax - px) * (by - ay)) / len;
-      if (dist > best) { best = dist; far = k; }
-    }
-    if (far >= 0) { keep[far] = 1; stack.push([i, far], [far, j]); }
-  }
-  return pts.filter((_, k) => keep[k]);
-}
-
-function inside([x, y], poly) {
-  let ins = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i], [xj, yj] = poly[j];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ins = !ins;
-  }
-  return ins;
-}
-
 function distToPoly(p, poly) {
-  if (inside(p, poly)) return 0;
+  if (pointInPolygon(p, poly)) return 0;
   let best = Infinity;
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i], b = poly[(i + 1) % poly.length];

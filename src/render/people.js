@@ -21,6 +21,7 @@
 // VEHICLES.headings directions. Everything is cached.
 
 import { mulberry32 } from '../core/random.js';
+import { convexHull } from '../core/geom2d.js';
 import { VEHICLES, headingIndex } from './vehicles.js';
 
 export const PEOPLE = {
@@ -399,7 +400,7 @@ export function canoeSVG(camera, heading, crew, stroke) {
 
   const parts = [];
   // the hull: everything from the waterline up to the gunwale, as one shape
-  parts.push(['fig-body', poly(hull([...gunwale(1), ...gunwale(-1), ...water(1), ...water(-1)]))]);
+  parts.push(['fig-body', poly(convexHull([...gunwale(1), ...gunwale(-1), ...water(1), ...water(-1)]))]);
   parts.push(['fig-line', poly([...gunwale(-near), ...gunwale(near).reverse()])]);
 
   // the crew, the one further back on screen first, and their paddles
@@ -442,18 +443,3 @@ export function canoeMarkSVG(camera, heading) {
   return canoeSVG(camera, heading, [], 0).match(/<path class="fig-body" d="[^"]*"\/>/)[0].replace('fig-body', 'fig-ink');
 }
 
-// The convex hull of points (the hull's outline seen from anywhere).
-function hull(pts) {
-  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const half = (list) => {
-    const out = [];
-    for (const q of list) {
-      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
-      out.push(q);
-    }
-    out.pop();
-    return out;
-  };
-  return [...half(p), ...half(p.reverse())];
-}

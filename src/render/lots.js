@@ -10,7 +10,7 @@
 // stay put where the road bends away.
 
 import { rotateQuarter } from '../core/grid.js';
-import { SegmentIndex } from '../core/geom2d.js';
+import { SegmentIndex, simplify } from '../core/geom2d.js';
 import { networkPolylines, streetKerbs } from '../roads/geometry.js';
 
 const ROAD_GAP = 0.135; // clearance from the road centre line (config.road.edge 0.11, and a little)
@@ -57,32 +57,11 @@ export function freeTest(world, config) {
     roads.distance([x, y], ROAD_GAP + r) === Infinity;
 }
 
-// A polyline with the points that lie within `tol` of the line through
-// their neighbours left out (Douglas–Peucker): a straight stretch of a
+// How far a point may lie off the line through its neighbours before
+// simplify() (geom2d.js) keeps it: a straight stretch of a
 // sampled edge becomes one stroke, a curve keeps enough points to follow.
 // (The hand-drawn pen nudges every point; fewer of them, a calmer line.)
 const SIMPLIFY = 0.006;
-export function simplify(pts, tol = SIMPLIFY) {
-  if (pts.length < 3) return pts;
-  const keep = new Uint8Array(pts.length);
-  keep[0] = keep[pts.length - 1] = 1;
-  const stack = [[0, pts.length - 1]];
-  while (stack.length) {
-    const [i, j] = stack.pop();
-    const [ax, ay] = pts[i], [bx, by] = pts[j];
-    const l = Math.hypot(bx - ax, by - ay);
-    let far = -1, best = tol;
-    for (let k = i + 1; k < j; k++) {
-      const [px, py] = pts[k];
-      const d = l < 1e-9 ? Math.hypot(px - ax, py - ay) : Math.abs((bx - ax) * (py - ay) - (by - ay) * (px - ax)) / l;
-      if (d > best) [far, best] = [k, d];
-    }
-    if (far < 0) continue;
-    keep[far] = 1;
-    stack.push([i, far], [far, j]);
-  }
-  return pts.filter((_, k) => keep[k]);
-}
 
 function samples(a, b) {
   const n = Math.max(2, Math.ceil(Math.abs(b - a) / STEP));
@@ -137,7 +116,7 @@ export function fitYard(world, config, frame) {
     const p = paths.cast(toWorld(x, y1), dir, reach);
     const y = y1 - (p === null ? road[i] : Math.min(road[i], p - PATH_GAP));
     return [x, Math.min(Math.max(y, YARD_MAX), y1 - 0.1)];
-  }));
+  }), SIMPLIFY);
 
   const frontAt = (x) => {
     if (x <= profile[0][0]) return profile[0][1];
@@ -205,7 +184,7 @@ export function fitSite(world, config, site) {
     samples(X1, X0).map((x) => [x, Y1]),
     samples(Y1, Y0).map((y) => [X0, y]),
   ];
-  return sides.flatMap((side) => simplify(side.map(fit)).slice(0, -1));
+  return sides.flatMap((side) => simplify(side.map(fit), SIMPLIFY).slice(0, -1));
 }
 
 // Where each way in from a street or lane (world.sitePaths exits with a

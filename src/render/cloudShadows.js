@@ -15,9 +15,10 @@
 // all shade then, and the walls lose their shading instead
 // (config.weather.sun, cover).
 
+import { rgb } from './gl/common.js';
 import { THEME } from '../theme.js';
 import { hatchFrame } from './hatch.js';
-import { Hatching, Pieces, meshOf, rgb } from './gl/hatching.js';
+import { Hatching, Pieces, meshOf } from './gl/hatching.js';
 import { canvasDpr } from './dpr.js';
 
 export const CLOUD_SHADOWS = {

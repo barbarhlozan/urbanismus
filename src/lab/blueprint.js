@@ -3,6 +3,7 @@
 // out without one of your own. Both draw on a 2D canvas the blueprint's size.
 
 import { BP, WINDOW } from './faces.js';
+import { pointInPolygon } from '../core/geom2d.js';
 
 const INK = '#8f877a', FAINT = '#cfc8bc', GRID = '#ece8e1', GRID2 = '#ddd7cc', MARK = '#3b6fd8';
 const MAGENTA = `rgb(${WINDOW.join(',')})`;
@@ -177,7 +178,7 @@ export function paintSample(ctx, model) {
     const inWin = (x, y) => wins.find(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1);
     const flat = p.flat;
     for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) {
-      if (!flat.some((f) => inside([x + 0.5, y + 0.5], f))) continue;
+      if (!flat.some((f) => pointInPolygon([x + 0.5, y + 0.5], f))) continue;
       const [, , z] = p.to3D(x, y);
       let c;
       const w = inWin(x, y);
@@ -201,11 +202,3 @@ export function paintSample(ctx, model) {
   for (const r of squares) ctx.strokeRect(...r);
 }
 
-function inside([x, y], poly) {
-  let ins = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i], [xj, yj] = poly[j];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ins = !ins;
-  }
-  return ins;
-}

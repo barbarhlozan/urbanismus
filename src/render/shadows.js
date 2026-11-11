@@ -32,6 +32,7 @@
 // building, as it zooms out.
 
 import { tierOf, hash, hatchFrame, hatchStrokes } from './hatch.js';
+import { convexHull } from '../core/geom2d.js';
 
 export { tierOf, hash };
 
@@ -295,30 +296,14 @@ export function castShapes(casts = [], sun) {
     } else if (s.kind === 'cone') {
       const [mx, my] = along(s.at, s.z0), tip = along(s.at, s.z1), n = 10;
       const ring = Array.from({ length: n }, (_, i) => [mx + Math.cos((i / n) * 2 * Math.PI) * s.r, my + Math.sin((i / n) * 2 * Math.PI) * s.r]);
-      polys.push(hull([...ring, tip]));
+      polys.push(convexHull([...ring, tip]));
     } else if (s.kind === 'face') {
-      polys.push(hull(s.pts.map(([x, y, z]) => along([x, y], z))));
+      polys.push(convexHull(s.pts.map(([x, y, z]) => along([x, y], z))));
     } else if (s.kind === 'stem' && s.z > 0) {
       lines.push([s.at, along(s.at, s.z)]);
     }
   }
   return { polys, lines };
-}
-
-// The convex hull of points, anticlockwise (monotone chain).
-function hull(pts) {
-  pts = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const half = (list) => {
-    const out = [];
-    for (const p of list) {
-      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], p) <= 0) out.pop();
-      out.push(p);
-    }
-    out.pop();
-    return out;
-  };
-  return [...half(pts), ...half([...pts].reverse())];
 }
 
 // Where line c of the hatching (the points p with p·v = c) crosses a

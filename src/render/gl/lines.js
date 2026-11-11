@@ -22,6 +22,7 @@
 // layers (Renderer.renderGlTerrain): their pens and colours are the
 // browser's own for those classes, asked once (look.styles).
 
+import { program, rgb } from './common.js';
 import { brushWidths, BRUSH_GLSL } from '../brush.js';
 import { canvasDpr } from '../dpr.js';
 
@@ -194,20 +195,6 @@ void main() {
   outColour = colour[styleId] * cover;
 }`;
 
-function compile(gl, type, src) {
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-  return s;
-}
-
-const rgb = (hex) => {
-  const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex.trim());
-  if (m) return [1, 2, 3].map((i) => parseInt(m[i], 16) / 255);
-  const n = /rgba?\(([^)]+)\)/.exec(hex)?.[1].split(',').map(Number);
-  return n ? n.slice(0, 3).map((v) => v / 255) : [0, 0, 0];
-};
 // A computed colour as [r, g, b, a] (0–1): rgb(), rgba(), or color(srgb …)
 // as browsers give a color-mix().
 function cssColour(css) {
@@ -235,12 +222,7 @@ export class GLLines {
     this.layers = new Map(); // name -> { items, classes }
     this.order = [];         // layer names, back to front
     this.dirty = true;       // the geometry to build again
-    const p = (this.program = gl.createProgram());
-    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, VS));
-    gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = Object.fromEntries(['rot', 'centre', 'iso', 'place', 'size', 'dpr', 'width', 'colour', 'dashes', 'items', 'washPass'].map((n) => [n, gl.getUniformLocation(p, n)]));
+    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['rot', 'centre', 'iso', 'place', 'size', 'dpr', 'width', 'colour', 'dashes', 'items', 'washPass']));
     this.vao = gl.createVertexArray();
     gl.bindVertexArray(this.vao);
     const quad = gl.createBuffer();
