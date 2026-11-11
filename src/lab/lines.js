@@ -361,7 +361,7 @@ export async function loadSheets(specs) {
   }));
 }
 
-export const sheetFor = (spec) => SHEETS.get(spec.file) ?? null;
+const sheetFor = (spec) => SHEETS.get(spec.file) ?? null;
 
 // Where a wall's (u, v) is on the house, and which way the wall faces:
 // left and right as seen from the street, which is at -y (a single-dot

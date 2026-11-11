@@ -233,7 +233,8 @@ export function fountain(g, x, y, r = 0.1) {
 }
 
 // A statue on a stone pedestal: a bronze figure drawn as a solid ink
-// silhouette (see figure() below). kind: one of STATUES, or null for any
+// silhouette (see figure() below). kind: 'standing', 'worker', 'flag',
+// 'soldier', 'mother', 'pair', 'bust' or 'equestrian', or null for any
 // of the single figures. Pedestals are stepped, with a plaque on the front.
 export function statue(g, x, y, kind = null, size = 1) {
   if (!g.isFree(x, y, 0.07 * size)) return;
@@ -246,8 +247,6 @@ export function statue(g, x, y, kind = null, size = 1) {
   g.detailed(2, () => g.line([[x - w * 0.3, y - d / 2, 0.02 + ph * 0.3], [x + w * 0.3, y - d / 2, 0.02 + ph * 0.3], [x + w * 0.3, y - d / 2, 0.02 + ph * 0.7], [x - w * 0.3, y - d / 2, 0.02 + ph * 0.7], [x - w * 0.3, y - d / 2, 0.02 + ph * 0.3]], { facing: [0, -1, 0] }));
   figure(g, x, y, 0.02 + ph, (kind === 'bust' ? 0.12 : kind === 'equestrian' ? 0.2 : 0.16) * size, kind);
 }
-
-export const STATUES = ['standing', 'worker', 'flag', 'soldier', 'mother', 'pair', 'bust', 'equestrian'];
 
 // Outlines of the figures, in units of the figure's height (u right, v up
 // from its feet). Drawn facing the screen, like trees and people – and
@@ -723,7 +722,7 @@ export function slide(g, x, y, alongX = g.chance(0.5)) {
 }
 
 // Seesaw.
-export function seesaw(g, x, y, alongX = g.chance(0.5)) {
+function seesaw(g, x, y, alongX = g.chance(0.5)) {
   if (!g.isFree(x, y, 0.08)) return;
   const [dx, dy] = alongX ? [0.08, 0] : [0, 0.08];
   g.detailed(2, () => {
@@ -767,12 +766,6 @@ export function flowerBed(g, x, y, r = 0.08) {
   bush(g, x, y, 0.025);
 }
 
-// Obelisk / war memorial on a stepped base.
-export function obelisk(g, x, y, h = 0.3) {
-  if (!g.isFree(x, y, 0.07)) return;
-  g.box(x - 0.06, y - 0.06, 0, 0.12, 0.12, 0.03);
-  g.lathe(x, y, 0.03, [[0.042, 0], [0.028, h], [0, h + 0.04]], 4, { phase: 0.5 });
-}
 
 // Abstract concrete sculpture: stacked slabs at angles.
 export function sculpture(g, x, y) {
@@ -798,27 +791,7 @@ export function kiosk(g, x, y) {
   g.detailed(2, () => g.line([[x - 0.035, y - 0.04, 0.035], [x + 0.035, y - 0.04, 0.035], [x + 0.035, y - 0.04, 0.07], [x - 0.035, y - 0.04, 0.07], [x - 0.035, y - 0.04, 0.035]], { facing: [0, -1, 0] }));
 }
 
-// Outdoor chess / table with two stools.
-export function chessTable(g, x, y) {
-  if (!g.isFree(x, y, 0.06)) return;
-  g.detailed(2, () => {
-    g.box(x - 0.025, y - 0.025, 0, 0.05, 0.05, 0.04);
-    for (const k of [-1, 1]) g.cylinder(x + k * 0.05, y, 0, 0.012, 0.025, 5);
-  });
-}
 
-// Spa colonnade: a row of columns under a flat roof, from a to b along x at depth y.
-export function colonnade(g, x0, x1, y, d = 0.14, h = 0.16) {
-  g.box(x0, y - d / 2, h, x1 - x0, d, 0.025);
-  g.detailed(1, () => {
-    g.solid((x0 + x1) / 2, y, h / 2);
-    const n = Math.max(2, Math.round((x1 - x0) / 0.08));
-    for (let i = 0; i <= n; i++) {
-      const x = x0 + ((x1 - x0) * i) / n;
-      for (const k of [-0.4, 0.4]) g.line([[x, y + d * k, 0], [x, y + d * k, h]]);
-    }
-  });
-}
 
 // Wooden footbridge (ground drawing) from a to b.
 export function footbridge(g, a, b, w = 0.05) {

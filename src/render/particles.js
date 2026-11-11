@@ -48,7 +48,7 @@ export const PARTICLES = {
 // The weather's say: `wind` as config.weather.wind (a storm 0.14), `rain`
 // as config.weather.rain (rain 1, storm 2.4), `mist` how far it has risen
 // (0–1, mistRisen).
-export const CALM = { wind: 0.02, rain: 0, mist: 0 };
+const CALM = { wind: 0.02, rain: 0, mist: 0 };
 const STORM_WIND = 0.14;
 
 // Integer hash -> [0, 1).
@@ -314,7 +314,7 @@ const MARGIN = 40;
 //   minZoom   per kind: further out than this, none
 //   fps       found again this often (smoke moves slowly); laid out for
 //             the camera every frame it moves
-export const SMOKE_DRAW = {
+const SMOKE_DRAW = {
   style: { house: 'curl', stack: 'puff' },
   most: 1500,
   minZoom: { house: 1, stack: 0 },

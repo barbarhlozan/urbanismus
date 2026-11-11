@@ -210,7 +210,7 @@ const rgb = (hex) => {
 };
 // A computed colour as [r, g, b, a] (0–1): rgb(), rgba(), or color(srgb …)
 // as browsers give a color-mix().
-export function cssColour(css) {
+function cssColour(css) {
   const srgb = /color\(srgb\s+([^)/]+)(?:\/\s*([^)]+))?\)/.exec(css);
   if (srgb) {
     const [r, g, b] = srgb[1].trim().split(/\s+/).map(Number);

@@ -43,13 +43,6 @@ function cross(g, x, y, z, s = 0.035, pen = {}) {
   });
 }
 
-// Square tower from z = 0 with belfry openings at the top; returns its height.
-function tower(g, x, y, t, h) {
-  g.box(x - t, y - t, 0, 2 * t, 2 * t, h);
-  g.windows(x - t, y - t, 2 * t, 2 * t, h - 0.12, h - 0.02, 0.1, t, { w: 0.4, h: 0.7 });
-  g.floors(x - t, y - t, 2 * t, 2 * t, 0, h, h * 0.4, { inset: 0 });
-  return h;
-}
 
 // Tall arched-looking windows along the long walls.
 function naveWindows(g, x, y, w, d, h) {

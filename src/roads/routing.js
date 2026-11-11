@@ -38,7 +38,7 @@ export function planRoute(grid, from, to, bend = BEND.DIAGONAL_FIRST) {
 }
 
 // A diagonal edge may not cross the other diagonal of the same grid square.
-export function crossesDiagonal(layer, a, b) {
+function crossesDiagonal(layer, a, b) {
   const { grid, graph } = layer;
   const [ax, ay] = grid.xy(a);
   const [bx, by] = grid.xy(b);

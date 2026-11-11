@@ -35,7 +35,7 @@ function networkIndex(world, config, kind) {
   return index;
 }
 
-export function roadIndex(world, config) {
+function roadIndex(world, config) {
   return networkIndex(world, config, 'road');
 }
 

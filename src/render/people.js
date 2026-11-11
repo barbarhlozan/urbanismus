@@ -373,7 +373,7 @@ export function cyclistSVG(camera, heading, variant) {
 // crew sat in it (`crew`: body variants, the back one first; one alone sits
 // at the back), each with a paddle across, its blade in the water on one
 // side (`stroke` 0 / 1: which; two paddle on opposite sides).
-export const CANOE = { length: 0.15, beam: 0.042, rim: 0.27, rise: 0.22, crew: 0.72 };
+const CANOE = { length: 0.15, beam: 0.042, rim: 0.27, rise: 0.22, crew: 0.72 };
 
 export function canoeSVG(camera, heading, crew, stroke) {
   // (by the heading on screen: on the ground plus the view's turn)

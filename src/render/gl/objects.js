@@ -327,7 +327,7 @@ export class GLObjects {
     const restyle = () => {
       this.epoch++;
       let rebuild = false;
-      for (const [chain, st] of this.styles) {
+      for (const st of this.styles.values()) {
         const was = [!!st.fill, !!st.stroke];
         this.probe(st);
         if (was[0] !== !!st.fill || was[1] !== !!st.stroke) rebuild = true;

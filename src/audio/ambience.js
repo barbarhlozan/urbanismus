@@ -16,7 +16,7 @@ import { Bed } from './bed.js';
 import { Effects } from './effects.js';
 import { load } from './sounds.js';
 
-export const SOUND = {
+const SOUND = {
   key: 'urbanismus.sound',
   byDefault: true,
   volume: 0.5,

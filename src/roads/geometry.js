@@ -153,7 +153,7 @@ export function edgeCurve(layer, { cornerRadius, curveSamples }, a, b) {
 }
 
 // Cut `d` off the start of a polyline.
-export function trimStart(points, d) {
+function trimStart(points, d) {
   for (let i = 1; i < points.length; i++) {
     const [ax, ay] = points[i - 1];
     const [bx, by] = points[i];
@@ -461,7 +461,7 @@ export function chainEdges(graph) {
 // as one continuous line (dash patterns don't restart at every dot). Loops
 // with no junction come out as one run starting and ending on the same dot.
 // `breakAt(node)`: also end runs at these dots.
-export function networkChains(graph, breakAt = () => false) {
+function networkChains(graph, breakAt = () => false) {
   const seen = new Set();
   const key = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
   const walk = (a, b) => {

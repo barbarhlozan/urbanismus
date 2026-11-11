@@ -60,7 +60,7 @@ import { GLMovers } from './gl/movers.js';
 import { GLShadows } from './gl/shadows.js';
 import { GLNight } from './gl/night.js';
 import { GLObjects } from './gl/objects.js';
-import { chainEdges, edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../roads/geometry.js';
+import { edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../roads/geometry.js';
 import { edgeKey } from '../roads/network.js';
 import { InkLayer } from './ink.js';
 import { AGENT_STYLES, shapesOf, shape } from './agentCanvas.js';
@@ -867,7 +867,7 @@ export class Renderer {
   // terrain) or just `keys`. A chunk's markup is only swapped when it
   // changed, so rebuilding around a change touches little of the page.
   renderMeadow(keys = null) {
-    const { world, camera } = this;
+    const { world } = this;
     const { width, height } = world.grid;
     const c = MEADOW.chunk;
     if (!keys) {
@@ -1100,7 +1100,6 @@ export class Renderer {
   // centreline instead (terrain/rivers.js), out to the edge of the map. Each
   // body of water is worked out on its own, over just its own box.
   renderWater(lines = null) {
-    const { world } = this;
     const { list: bridges, deck } = this.bridgeState();
     this.waterBridges = this.bridgeKey; // drawn broken under these (see the constructor)
     // The lines in world units, traced once per terrain (the costly part)…

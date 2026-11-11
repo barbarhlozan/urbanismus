@@ -57,7 +57,7 @@ const PLAINNESS = [
 // The tiles' hand: the map's pen (Painter LOOK) as a doodle – the lines
 // bowing a little more, barely running past the corners – set while a
 // tile is drawn, the map's own put back after.
-export const DOODLE = { sketch: 7, overshoot: 0.7 };
+const DOODLE = { sketch: 7, overshoot: 0.7 };
 
 // The structure's drawing (ground + solids) as SVG markup, on its own.
 function paint(def, seed, camera, plain = 0, hand = null) {
@@ -88,7 +88,7 @@ function paint(def, seed, camera, plain = 0, hand = null) {
   }
 }
 
-export function structureIcon(def, { seed = ICON_SEED, fresh = false } = {}) {
+function structureIcon(def, { seed = ICON_SEED, fresh = false } = {}) {
   const key = `${def.id}:${seed}`;
   if (fresh) cache.delete(key);
   if (cache.has(key)) return cache.get(key);

@@ -16,7 +16,7 @@
 import { CONFIG } from '../config.js';
 import { smoothPolyline } from './geometry.js';
 
-export const SITE_WALK = {
+const SITE_WALK = {
   end: 0.25,  // past the end of a lone way in, the middle is free this far (times half)
   bend: 0.2,  // a curving walkway leaves the middle free this far (times half) on its inside
 };

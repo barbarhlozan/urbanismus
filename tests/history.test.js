@@ -3,7 +3,7 @@
 // the chronicle's lines and the save.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { flatWorld, road, path, street, run } from './helpers.js';
+import { flatWorld, road, street, run } from './helpers.js';
 import { World } from '../src/core/world.js';
 import { Chronicle } from '../src/sim/chronicle.js';
 import { CONFIG } from '../src/config.js';

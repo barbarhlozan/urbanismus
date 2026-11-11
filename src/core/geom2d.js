@@ -67,7 +67,7 @@ export function clipSegment(a, b, poly) {
 
 // Distance along a ray (origin o, unit direction d) to the nearest of the
 // given segments, within maxDist; null if none.
-export function castRay(o, d, segments, maxDist) {
+function castRay(o, d, segments, maxDist) {
   let best = null;
   for (const [a, b] of segments) {
     const ex = b[0] - a[0], ey = b[1] - a[1];

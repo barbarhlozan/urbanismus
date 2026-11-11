@@ -34,7 +34,7 @@ import { mulberry32 } from '../src/core/random.js';
 
 export const TREE_KINDS = ['spruce', 'sapling', 'spreading'];
 
-export const LEAFY = true;
+const LEAFY = true;
 
 // A crown's width on the ground for its width in the drawing: a glyph's
 // units are the screen's, where a grid unit across shows a little shorter.

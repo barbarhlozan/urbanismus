@@ -25,7 +25,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 // hamlet (osada) has no such line, a few dozen people is the game's own
 // judgement. The legal titles (statutory town, the městys abolished in 1954)
 // are left alone.
-export const SETTLEMENTS = [
+const SETTLEMENTS = [
   { id: 'hamlet', below: 50 },   // osada
   { id: 'village', below: 2000 }, // ves
   { id: 'town', below: Infinity }, // město

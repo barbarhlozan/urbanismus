@@ -70,7 +70,7 @@ async function run(mode, fn) {
 // get with null, all with [].
 export const putPrint = (id, blob) => run('readwrite', (s) => s.put(blob, id)).then(() => true, () => false);
 export const deletePrint = (id) => run('readwrite', (s) => s.delete(id)).then(() => true, () => false);
-export const getPrint = (id) => run('readonly', (s) => s.get(id)).then((b) => (b instanceof Blob ? b : null), () => null);
+const getPrint = (id) => run('readonly', (s) => s.get(id)).then((b) => (b instanceof Blob ? b : null), () => null);
 export const clearPrints = () => run('readwrite', (s) => s.clear()).then(() => true, () => false);
 
 // The prints with these ids, as [[id, blob]] (those found).

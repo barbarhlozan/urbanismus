@@ -67,7 +67,6 @@ const RIVER = {
 };
 
 const STORE_KEY = 'urbanismus.newMap';
-const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 const randomSeed = () => Math.floor(Math.random() * 1e9);
 
 export class NewMapMenu {

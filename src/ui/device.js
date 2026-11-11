@@ -5,8 +5,6 @@
 let touch = matchMedia('(pointer: coarse)').matches;
 document.body.classList.toggle('touch', touch);
 
-export const isTouch = () => touch;
-
 export function notePointer(e) {
   const t = e.pointerType !== 'mouse';
   if (t === touch) return;

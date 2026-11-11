@@ -6,6 +6,6 @@
 
 import tree from './tree.js';
 
-export const FEATURES = [tree];
+const FEATURES = [tree];
 
 export const FEATURE_TYPES = Object.fromEntries(FEATURES.map((f) => [f.id, f]));

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SUN, sunFor, strokeShare, hash } from '../src/render/shadows.js';
+import { SUN, sunFor, hash } from '../src/render/shadows.js';
 import { SUN_FREE, wallDir, strokeLevel, sectorLight, lightSector, sunStyle } from '../src/render/sunFree.js';
 import { Camera } from '../src/render/camera.js';
 import { Painter } from '../src/render/painter.js';

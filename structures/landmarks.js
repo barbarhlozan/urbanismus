@@ -7,7 +7,6 @@
 
 import { door, panel, flagpole, sculpture, bench, lamp, floodlight, pitch, planter, tree, transformer, FRAME, roundWindows, kindOf } from './kit.js';
 
-const FRONT = [0, -1, 0];
 
 const common = {
   access: 'any', // a footpath will do
@@ -101,7 +100,7 @@ export const cultureHouseSmall = {
 
 // Hilltop: higher than the ground around it (the average `radius` dots
 // away) by at least `rise` metres – a summit or a ridge, not a slope.
-export function onHilltop(world, node, radius = 3, rise = 8) {
+function onHilltop(world, node, radius = 3, rise = 8) {
   const elev = world.elevation;
   const [x, y] = world.grid.xy(node);
   const e = elev(x, y);

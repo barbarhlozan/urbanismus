@@ -20,7 +20,6 @@ import { RoadNetwork, edgeKey } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
 import { validateRoute } from '../roads/routing.js';
 import { STRUCTURE_TYPES, footprintOffsets, newSeed, isNumbered } from '../../structures/index.js';
-import { mulberry32 } from './random.js';
 import { smoothLine } from './geom2d.js';
 import { meanderPaths } from '../roads/meander.js';
 import { upgrade, upgradeMarks, unretire, regroup, rehouse, refarm, repub, repark, reshop } from './legacy.js';
@@ -30,7 +29,7 @@ import { History } from './history.js';
 // grade(): how finely a segment's climb is measured along it (grid units)
 const GRADE_STEP = 0.2;
 
-export const SAVE_VERSION = 10; // 3: railways on the fine grid; 4: no building levels (legacy.js); 5: parks regrouped; 6: houses regrouped; 7: farmstead layouts; 8: pub kinds; 9: parks and squares cut; 10: shop kinds
+const SAVE_VERSION = 10; // 3: railways on the fine grid; 4: no building levels (legacy.js); 5: parks regrouped; 6: houses regrouped; 7: farmstead layouts; 8: pub kinds; 9: parks and squares cut; 10: shop kinds
 
 export class World {
   constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1 }) {
