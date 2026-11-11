@@ -2,7 +2,7 @@
 // trees and lamps (gl/objects.js), the roads, paths, railways and fences
 // (gl/lines.js), what moves (gl/movers.js) and the paper's strokes in the
 // shadows, the night and the clouds (the hatch tiles: gl/hatching.js,
-// gl/objects.js). Set with the user in house-lab.html (pen-sketch.md);
+// gl/objects.js). Set with the user in house-lab.html (docs/pen-sketch.md);
 // change it here and the whole map follows.
 //
 // A line is drawn as strokes, each from corner to corner (a turn sharper

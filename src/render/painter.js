@@ -159,7 +159,7 @@ const CELLAR = { wall: 0.13, len: 0.15, window: [0.03, 0.026], bay: 0.13, under:
 //   round   corners rounded off by up to this much (scene px at tile 32, at
 //           most a third of an edge), for walls, roofs (and other faces) and
 //           windows' frames apart (0 = sharp, as a ruler draws them)
-// (set with the user in house-lab.html, 2026-10-25: see pen-sketch.md)
+// (set with the user in house-lab.html, 2026-10-25: see docs/pen-sketch.md)
 export const LOOK = {
   eave: 0.03, fascia: 0.006, sill: false, tall: false, sketch: 2.5,
   overshoot: 0, ink: true, thin: 1.2, hatch: 0.0225, ground: 0, floors: false, roads: 0.035,

@@ -206,10 +206,10 @@ The Building card writes its numbers in words too (`src/core/numberWords.js`).
 ## Tests
 
 ```
-node --test tests/*.test.js
+npm test
 ```
 
-No installs needed (Node 22 or newer). They cover the story script, park entrances and walkways,
+(the same as `node --test tests/*.test.js`). No installs needed (Node 22 or newer). They cover the story script, park entrances and walkways,
 bridges, the chronicle and its ledger, numbers in words, on small made-up towns (`tests/helpers.js`).
 
 ## Where things live
@@ -222,6 +222,7 @@ bridges, the chronicle and its ledger, numbers in words, on small made-up towns 
 - `src/sim/` – people, parking, the chronicle, the church that builds itself
 - `src/story/`, `story/` – the storyteller, and the story it tells
 - `tests/` – see Tests above
+- `docs/` – design notes and plans (the pen sketch, WebGL, weather, reviews)
 - `src/roads/`, `src/tools/`, `src/ui/` – what they say
 
 **New building:** copy a definition in `structures/residential.js`, change the id/name/hotkey,
