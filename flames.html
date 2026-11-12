@@ -29,7 +29,7 @@
     // over each picture, worked out from the time alone as the smoke is.
     // Like the smoke, nothing fades or glows: every tongue is drawn in by
     // the pen and taken back, on tens (a drawn film's frames).
-    //   flames.html?schemes=5,1,2&only=tongues&tile=64
+    //   flames.html?schemes=0,1&tile=64
     import { applyTheme, SCHEMES } from './src/theme.js';
     import { Camera } from './src/render/camera.js';
     import { Painter } from './src/render/painter.js';
@@ -42,7 +42,8 @@
     import { mulberry32 } from './src/core/random.js';
 
     const q = new URLSearchParams(location.search);
-    const schemes = (q.get('schemes') ?? '5,1,2').split(',').map(Number);
+    // (numbers past the last scheme wrap round, as applyTheme takes them)
+    const schemes = (q.get('schemes') ?? '0,1,2,3').split(',').map((n) => ((Number(n) % SCHEMES.length) + SCHEMES.length) % SCHEMES.length);
     applyTheme(schemes[0]);
     const N = 10;
     const cam = new Camera({ width: N, height: N }, { tile: +(q.get('tile') ?? 96) });
@@ -417,7 +418,7 @@
 
     // ---------- the page ----------
     const out = document.getElementById('out');
-    out.insertAdjacentHTML('beforeend', `<h1>Flame sketches</h1><p>A house on fire in red pencil, as it catches (a window first, then more and one end of the roof), ablaze (the whole roof; every few seconds it flares up and sinks back) and burning out (low flames along the ruin's stumps), in ${schemes.map((s) => SCHEMES[s].name).join(', ')}. The smoke is the game's puffs, bigger and shaded dark, darkest as it leaves the fire and lightening as it rises. Wind leans the flames over, as it does the trees and the smoke. Add <code>?schemes=0,4</code>, <code>?only=light</code>, <code>?tile=140</code>.</p>
+    out.insertAdjacentHTML('beforeend', `<h1>Flame sketches</h1><p>A house on fire in red pencil, as it catches (a window first, then more and one end of the roof), ablaze (the whole roof; every few seconds it flares up and sinks back) and burning out (low flames along the ruin's stumps), in ${schemes.map((s) => SCHEMES[s].name).join(', ')}. The smoke is the game's puffs, bigger and shaded dark, darkest as it leaves the fire and lightening as it rises. Wind leans the flames over, as it does the trees and the smoke. Add <code>?schemes=0,3</code> or <code>?tile=140</code>.</p>
       <div class="bar"><label>wind <input id="wind" type="range" min="0" max="0.14" step="0.01" value="0.02"> <span id="windName"></span></label></div>`);
     const only = q.get('only');
     const panels = [];
