@@ -15,9 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { SCHEMES } from '../src/theme.js';
 import { Camera } from '../src/render/camera.js';
 import { Painter, LOOK } from '../src/render/painter.js';
-import { mulberry32 } from '../src/core/random.js';
 import { STRUCTURE_TYPES } from '../structures/index.js';
-import * as heritage from '../structures/heritage.js';
 import { drawTree } from '../features/trees.js';
 
 const TILE = 64;     // scene px per grid step (the gallery's close-up scale)
@@ -26,26 +24,19 @@ const ROTATION = 2;  // turn the fronts (local -y) towards the viewer
 const FAVICON_TILE = 64;   // bigger tile = thinner lines relative to the house
 const FAVICON_SKETCH = 2;  // less wobble than the map's LOOK.sketch
 
-// A seed whose first g.pick() out of `n` choices lands on `index`, so a
-// drawing that starts by picking its kind draws the one we want.
-function seedFor(n, index, from = 1) {
-  for (let s = from; ; s++) if (Math.floor(mulberry32(s)() * n) === index) return s;
-}
-
-const level = (type, i) => (g) => STRUCTURE_TYPES[type].levels[i].draw(g, {});
-const HOUSE_KINDS = ['cube', 'cube', 'street', 'street', 'farm', 'villa', 'mansard', 'farmstead', 'farmstead']; // as in residential.js
-const house = (kind, from) => ({ seed: seedFor(HOUSE_KINDS.length, HOUSE_KINDS.indexOf(kind), from), draw: level('residential', 0) });
+// A structure's drawing (structures/), as one of its kinds where it has
+// them: kindOf (structures/kit.js) takes a kind given in its data.
+const drawing = (id, kind = null) => (g) => STRUCTURE_TYPES[id].draw(g, kind ? { data: { kind } } : {});
 
 const ICONS = {
-  'house-street': { seed: 12, draw: level('residential', 0) }, // pinned: also the tab icon
-  'house-cube': house('cube'),
-  'house-villa': house('villa'),
-  'house-farm': house('farm'),
-  'house-mansard': house('mansard'),
-  'house-farmstead': house('farmstead'),
-  'apartments': { seed: seedFor(4, 0), draw: level('residential', 1) },
-  'panel-block': { seed: seedFor(3, 0), draw: level('residential', 2) },
-  'church': { seed: 7, draw: (g) => heritage.church.levels[0].draw(g, {}) },
+  'house-street': { seed: 12, draw: drawing('house', 'street') }, // pinned: also the tab icon
+  'house-farm': { seed: 1, draw: drawing('house', 'farm') },
+  'house-farmstead': { seed: 1, draw: drawing('house', 'farmstead') },
+  'house-cube': { seed: 1, draw: drawing('family-house', 'cube') },
+  'house-villa': { seed: 1, draw: drawing('family-house', 'villa') },
+  'apartments': { seed: 1, draw: drawing('apartments') },
+  'panel-block': { seed: 1, draw: drawing('block') },
+  'church': { seed: 7, draw: drawing('church') },
   'tree-spruce': { seed: 1, draw: (g) => drawTree(g, 0, 0, 'spruce', 0.56) },
   'tree-leafy': { seed: 3, draw: (g) => drawTree(g, 0, 0, 'spreading', 0.5) },
 };
