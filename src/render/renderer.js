@@ -68,6 +68,7 @@ import { SPREAD } from '../../structures/plots.js';
 import { densify } from './warp.js';
 import { MEADOW } from './meadow.js';
 import { SUN_FREE } from './sunFree.js';
+import { MAP_PATTERNS } from './patterns.js';
 import { SVGNS, VIEW_SETTLE, GL_LINES, TERRAIN_LINES, NO_COVER, r2 } from './renderer/shared.js';
 import { TerrainDrawing } from './renderer/terrain.js';
 import { NetworkDrawing } from './renderer/networks.js';
@@ -150,11 +151,7 @@ export class Renderer {
 
     ground.innerHTML = '<g class="scene"><g class="layer-terrain"></g></g>';
     svg.innerHTML = `
-      <defs>
-        <pattern id="hatch-water" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(-40)">
-          <line class="hatch" x1="0" y1="2.5" x2="5" y2="2.5"/>
-        </pattern>
-      </defs>
+      <defs>${MAP_PATTERNS}</defs>
       <g class="scene">${LAYERS.filter((l) => !TOP.includes(l) && l !== 'terrain' && l !== 'parked').map((l) => `<g class="layer-${l}"></g>`).join('')}</g>`;
     this.parkedSvg.innerHTML = '<g class="scene"><g class="layer-parked"></g></g>';
     this.top.innerHTML = `<g class="scene">${TOP.map((l) => `<g class="layer-${l}${l === 'overlay' ? ' overlay' : ''}"></g>`).join('')}</g>`;
