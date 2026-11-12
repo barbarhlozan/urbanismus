@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Icons</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <!-- Draws the icon files (icons/make.js opens this in headless Chrome and
+       saves what it puts in window.icons). Each is the Build menu's own tile
+       (src/ui/icons.js structureIcon), set where the menu sets it so all of
+       styles.css applies, in the colour scheme ?scheme= (as the game's
+       Colours menu numbers them, src/theme.js). Then every line has its
+       look written on it – colour, pen, what is hidden left out – so the
+       files need no stylesheet; the pens, drawn in screen px in the menu,
+       are made the same share of the drawing, so a file looks like the
+       menu's tile at any size. Open it in the browser to see them. -->
+  <div id="ui"><div class="bm-tool"><span class="bm-icon" id="tile"></span></div></div>
+  <div id="out"></div>
+  <script type="module">
+    import { applyTheme } from '../src/theme.js';
+    import { STRUCTURE_TYPES } from '../structures/index.js';
+    import { drawTree } from '../features/trees.js';
+    import { structureIcon } from '../src/ui/icons.js';
+
+    applyTheme(new URLSearchParams(location.search).get('scheme') ?? 0);
+
+    const building = (id, kind = null, opts = {}) => structureIcon(STRUCTURE_TYPES[id], { data: kind ? { kind } : {}, ...opts });
+    const tree = (id, kind, size) => structureIcon({ id, draw: (g) => drawTree(g, 0, 0, kind, size) });
+
+    // name -> the tile's <svg> markup
+    const ICONS = {
+      'house-street': building('house', 'street'),
+      'house-farm': building('house', 'farm'),
+      'house-farmstead': building('house', 'farmstead'),
+      'house-cube': building('family-house', 'cube'),
+      'house-villa': building('family-house', 'villa'),
+      'apartments': building('apartments'),
+      'panel-block': building('block'),
+      'church': building('church'),
+      'tree-spruce': tree('tree-spruce', 'spruce', 0.56),
+      'tree-leafy': tree('tree-leafy', 'spreading', 0.5),
+      // the browser tab's (linked from index.html): the street house as
+      // plainly as the menu draws anything, so at 16 px the hatching and
+      // the facade's fine lines don't blur into a blob
+      'favicon': building('house', 'street', { plain: 2 }),
+    };
+
+    const SHAPES = new Set(['path', 'polygon', 'polyline', 'circle', 'ellipse', 'rect', 'line']);
+    const PX = (v) => parseFloat(v) || 0;
+
+    // A computed colour (rgb(), rgba(), or color(srgb …) as color-mix()
+    // gives) as #rrggbb and its alpha: what any SVG reader takes.
+    function hex(c) {
+      let v = null, m;
+      if ((m = /^rgba?\(([^)]+)\)/.exec(c))) v = m[1].split(/[\s,/]+/).filter(Boolean).map(Number).map((n, i) => (i < 3 ? n / 255 : n));
+      else if ((m = /^color\(srgb ([^)]+)\)/.exec(c))) v = m[1].split(/[\s/]+/).filter(Boolean).map(Number);
+      if (!v) return { colour: c, alpha: 1 };
+      const byte = (n) => Math.round(Math.min(1, Math.max(0, n)) * 255).toString(16).padStart(2, '0');
+      return { colour: `#${byte(v[0])}${byte(v[1])}${byte(v[2])}`, alpha: v[3] ?? 1 };
+    }
+
+    // The tile as it shows in the menu, made a standalone file.
+    function bake(markup, square = false) {
+      const tile = document.getElementById('tile');
+      tile.innerHTML = markup;
+      const svg = tile.firstElementChild;
+      const vb = svg.viewBox.baseVal;
+      const unit = vb.width / svg.getBoundingClientRect().width; // drawing units per screen px
+      const copy = svg.cloneNode(true);
+      const live = [...svg.querySelectorAll('*')], els = [...copy.querySelectorAll('*')];
+      const gone = [];
+      live.forEach((el, i) => {
+        const cs = getComputedStyle(el), out = els[i];
+        if (cs.display === 'none' || cs.visibility === 'hidden') return gone.push(out);
+        const scale = cs.vectorEffect === 'non-scaling-stroke' ? unit : 1;
+        const set = (k, v) => v != null && v !== '' && out.setAttribute(k, v);
+        if (SHAPES.has(el.tagName)) {
+          for (const k of ['fill', 'stroke']) {
+            const { colour, alpha } = hex(cs.getPropertyValue(k));
+            set(k, colour);
+            const a = alpha * PX(cs.getPropertyValue(`${k}-opacity`) || 1);
+            if (a !== 1) set(`${k}-opacity`, +a.toFixed(3));
+          }
+          if (cs.stroke !== 'none') {
+            set('stroke-width', +(PX(cs.strokeWidth) * scale).toFixed(3));
+            set('stroke-linecap', cs.strokeLinecap);
+            set('stroke-linejoin', cs.strokeLinejoin);
+            if (cs.strokeDasharray !== 'none') set('stroke-dasharray', cs.strokeDasharray.split(/[\s,]+/).map((d) => +(PX(d) * scale).toFixed(3)).join(' '));
+          }
+        }
+        if (cs.opacity !== '1') set('opacity', cs.opacity);
+        out.removeAttribute('class');
+        out.removeAttribute('style');
+      });
+      for (const el of gone) el.remove();
+      // (groups left with nothing in them)
+      for (const g of [...copy.querySelectorAll('g')].reverse()) if (!g.childElementCount) g.remove();
+      // cropped to the drawing (the tile's margin left out) and its pens'
+      // half widths; square for the browser tab
+      tile.replaceChildren(copy);
+      const pen = Math.max(0, ...[...copy.querySelectorAll('[stroke-width]')].map((el) => +el.getAttribute('stroke-width'))) / 2;
+      const b = copy.getBBox();
+      let [x, y, w, h] = [b.x - pen, b.y - pen, b.width + pen * 2, b.height + pen * 2];
+      if (square) {
+        const s = Math.max(w, h);
+        [x, y, w, h] = [x - (s - w) / 2, y - (s - h) / 2, s, s];
+      }
+      tile.innerHTML = '';
+      const r = (n) => +n.toFixed(2), px = 128 / Math.max(w, h);
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${r(x)} ${r(y)} ${r(w)} ${r(h)}" width="${Math.round(w * px)}" height="${Math.round(h * px)}">${copy.innerHTML}</svg>\n`;
+    }
+
+    window.icons = Object.fromEntries(Object.entries(ICONS).map(([name, markup]) => [name, bake(markup, name === 'favicon')]));
+    // to look at
+    document.getElementById('out').innerHTML = Object.entries(window.icons)
+      .map(([name, svg]) => `<figure style="display:inline-block;margin:8px;width:140px;text-align:center">${svg}<figcaption>${name}</figcaption></figure>`).join('');
+  </script>
+</body>
+</html>
