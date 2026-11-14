@@ -433,7 +433,15 @@ attributes all hold), and its dots are drawn and travelled on the curve
 (`Ways.joinAt`). Left: step 4 – drawing each edge's own line instead of
 the dots' rounded polyline, junctions from the edges – and step 7, which
 needs parks placed freely first: their exits already work through the
-dot view. Known: a way crossing a diagonal dot road can be refused as
+dot view. *Later 2026-11-14:* step 4 done the light way – each dot step a
+curve passes is drawn as its piece of that curve (`layer.stepLines`,
+`geometry.js` `stepLine` in `edgeCurve` / `networkPolylines`), so kerbs,
+roadway, rails and furniture follow it; a dot shared by ways has one
+place (a junction's own), and a way passing a loose end takes it in
+(`Ways.insert`). Step 7: parks and squares placed freely, square to the
+dots (`siteFrame`, `siteAreaOf`, `freeSiteExits` from the path ways);
+footpaths may come up to their edge. Short arms (under ~1.5) at a
+junction still tangle, as dot roads did. Known: a way crossing a diagonal dot road can be refused as
 "Crosses another line" (`validateRoute`'s diagonal check), and a road's
 end snaps onto a footpath's junction as well as a road's.
 
