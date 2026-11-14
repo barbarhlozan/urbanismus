@@ -474,6 +474,26 @@ with the game running and `npm test` passing.
    smoothed and thinned into a gentle curve, laid on release (and on a
    phone: one finger draws, lifting lays).
 
+*2026-11-14:* steps 1–4 done. Roads, kerbs, the roadway test, footpaths
+and rails are drawn from the ways' own curves (`roads/wayOutline.js`
+`wayOutlines`: runs between junctions offset with mitred joins and loops
+cut out, each junction's arms sorted by angle, neighbouring sides cut
+where they meet and the corner rounded by `round` × the narrower width,
+more for sharp corners; lanes taper into roads; dead ends a half circle).
+Kerbs are the same outline at the kerb's width, kept on the sides with a
+sidewalk. `Ways.insert({ refit })` (`REFIT` in `world/networks.js`: road
+0.7, path 0.35): an end meeting a way within `refit` of its end node, or
+near a node, moves that node to the stroke's end and bends the ways at it
+smoothly (`bendEnd`); an end within `snap` bends the stroke into the node.
+Undo brings a moved junction back (history test). Tests:
+`wayOutline.test.js` (no outline point inside a roadway: crossroads, T,
+narrow Y, a crossing 0.9 from a T, tight bend, lane into road, refit).
+Still from the dots: fences, bridges, zebras and lamps, `pathJoins`, rail
+buffers and exits, `curvePos` for whatever still reads `layer.pos`.
+Not checked: whether moved ways are still valid (a bent road may now
+cross a house's corner – `checkWay` only checks the new stroke); outer
+corners of a narrow Y are only lightly rounded. Next: step 5.
+
 - **C3 – Sonnet, after C1.** Drawing from curves: kerbs, joins, street
   furniture, footpaths' wander, park walks (`geometry.js`,
   `furniture.js`, `meander.js`, `siteWalks.js`, `renderer/networks.js`).
