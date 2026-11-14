@@ -65,6 +65,11 @@ export class AgentWays {
     return null;
   }
 
+  // The walkers' or (cycle) the cyclists' graph (sim/walking.js).
+  footGraph(cycle = false) {
+    return (cycle ? this.ride : this.walk).graph;
+  }
+
   // Where structure s meets the drive graph: { place (attached), door
   // (its door's point) } or null.
   drivePlace(s) {

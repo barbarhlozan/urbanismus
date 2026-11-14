@@ -141,7 +141,7 @@ export class WayGraph {
       if (!this.adj.has(n)) this.adj.set(n, []);
       this.adj.get(n).push(piece);
     }
-    if (e) this.bucket(this.cells, pts, piece);
+    this.bucket(this.cells, pts, piece);
     return piece;
   }
 
@@ -207,6 +207,17 @@ export class WayGraph {
       if (at.dist <= r && (!best || at.dist < best.dist)) best = { piece, ...at };
     }
     return best;
+  }
+
+  // The nearest point of every piece within r of (x, y), nearest first:
+  // [{ piece, s, point, dist }].
+  attachAll(x, y, r = 0.5) {
+    const out = [];
+    for (const piece of this.around(this.cells, x, y, r)) {
+      const at = nearestOn({ points: piece.pts, cum: piece.cum }, x, y);
+      if (at.dist <= r) out.push({ piece, ...at });
+    }
+    return out.sort((p, q) => p.dist - q.dist);
   }
 
   // Every node near (x, y), nearest first: [{ node, dist }].
@@ -286,7 +297,7 @@ export class WayGraph {
     const start = found.from.get(n);
     const pts = start ? start.pre.slice() : [this.nodes.get(n)];
     const nodes = [n], ways = [], joints = [pts.length - 1];
-    const origin = start?.place?.piece?.way;
+    const origin = start?.entry?.place?.piece?.way;
     if (origin != null) ways.push(origin);
     for (const { piece, to } of chain) {
       const line = piece.a === to ? piece.pts.slice().reverse() : piece.pts;
@@ -299,29 +310,49 @@ export class WayGraph {
       for (let i = 1; i < post.pts.length; i++) pts.push(post.pts[i]);
       if (post.way != null && ways[ways.length - 1] !== post.way) ways.push(post.way);
     }
-    return { pts: dedupe(pts), cost: (found.dist.get(end) ?? 0) + (post?.cost ?? 0), ways, nodes, joints };
+    return { pts: dedupe(pts), cost: (found.dist.get(end) ?? 0) + (post?.cost ?? 0), ways, nodes, joints, from: start?.entry ?? null };
   }
 
   // The cheapest route from one place to another (nodes or attached
   // places, with extra costs at either end), within maxCost, or null.
   route(fromPlace, toPlace, { maxCost = Infinity, fromCost = 0, toCost = 0, weight = null } = {}) {
-    const starts = this.startsOf(fromPlace, fromCost).map((st) => ({ ...st, place: fromPlace }));
-    const ends = this.endsOf(toPlace, toCost);
-    if (!starts.length || !ends.size) return null;
-    const goalPt = typeof toPlace === 'object' ? toPlace.point : this.nodes.get(toPlace);
-    let best = null;
-    // both on one piece: straight along it
-    if (typeof fromPlace === 'object' && typeof toPlace === 'object' && fromPlace.piece === toPlace.piece) {
-      const { piece } = fromPlace;
-      const poly = { points: piece.pts, cum: piece.cum, total: piece.len };
-      const [s0, s1] = [fromPlace.s, toPlace.s];
-      const pts = s0 <= s1 ? subPolyline(poly, s0, s1) : subPolyline(poly, s1, s0).reverse();
-      const cost = fromCost + toCost + Math.abs(s1 - s0) * piece.factor;
-      if (cost <= maxCost) best = { pts: dedupe(pts), cost, ways: piece.way != null ? [piece.way] : [], nodes: [], joints: [] };
+    return this.routeMany([{ place: fromPlace, cost: fromCost }], [{ place: toPlace, cost: toCost }], { maxCost, weight });
+  }
+
+  // As route, from any of several entries to any of several:
+  // [{ place, cost, … }]. The route also says which it took: from, to.
+  routeMany(froms, tos, { maxCost = Infinity, weight = null } = {}) {
+    const starts = [];
+    for (const f of froms) for (const st of this.startsOf(f.place, f.cost)) starts.push({ ...st, entry: f });
+    const ends = new Map();
+    for (const t of tos) {
+      for (const st of this.startsOf(t.place, t.cost)) {
+        if (st.cost < (ends.get(st.node)?.cost ?? Infinity)) {
+          ends.set(st.node, { cost: st.cost, pts: st.pre.slice().reverse(), way: typeof t.place === 'object' ? t.place.piece.way : null, entry: t });
+        }
+      }
     }
+    if (!starts.length || !ends.size) return null;
+    let best = null;
+    // two on one piece: straight along it
+    for (const f of froms) {
+      for (const t of tos) {
+        if (typeof f.place !== 'object' || typeof t.place !== 'object' || f.place.piece !== t.place.piece) continue;
+        const { piece } = f.place;
+        const poly = { points: piece.pts, cum: piece.cum, total: piece.len };
+        const [s0, s1] = [f.place.s, t.place.s];
+        const cost = f.cost + t.cost + Math.abs(s1 - s0) * piece.factor;
+        if (cost > maxCost || cost >= (best?.cost ?? Infinity)) continue;
+        const pts = s0 <= s1 ? subPolyline(poly, s0, s1) : subPolyline(poly, s1, s0).reverse();
+        best = { pts: dedupe(pts), cost, ways: piece.way != null ? [piece.way] : [], nodes: [], joints: [], from: f, to: t };
+      }
+    }
+    // heading for the nearest end (an underestimate for the others: no
+    // goal unless there's one end place)
+    const goal = tos.length === 1 ? (typeof tos[0].place === 'object' ? tos[0].place.point : this.nodes.get(tos[0].place)) : null;
     let bound = best?.cost ?? Infinity;
     const found = this.explore(starts, {
-      maxCost: Math.min(maxCost, bound), weight, goal: goalPt,
+      maxCost: Math.min(maxCost, bound), weight, goal,
       // (an end is final once taken off the heap; nothing cheaper is left
       // once the heap's best is past the cheapest end so far)
       stop: (n, d, f) => {
@@ -338,7 +369,10 @@ export class WayGraph {
       const total = d + e.cost;
       if (total <= maxCost && total < (best?.cost ?? Infinity) && (!end || total < end.total)) end = { n, e, total };
     }
-    if (end) best = this.trace(found, end.n, end.e);
+    if (end) {
+      const r = this.trace(found, end.n, end.e);
+      best = { ...r, to: end.e.entry };
+    }
     return best;
   }
 

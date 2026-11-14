@@ -160,7 +160,7 @@ export class AgentTrips {
       }
       case 'forest': {
         const { forestReach } = this.config.village;
-        const route = this.walk.toward(home, (n) => this.byWood(n), 1, forestReach);
+        const route = this.walk.toward(home, (p) => this.byWood(p), 1, forestReach);
         if (!route) return null;
         const next = this.begin(a, { mode: 'stroll', purpose: 'forest', linger: true, ...route }, null);
         if (next) a.carry = 'basket';

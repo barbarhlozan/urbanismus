@@ -1,23 +1,27 @@
 // Where people can walk: every footpath, the sidewalks of streets (road
-// segments with sidewalks, world.sidewalks) and single-track lanes
-// (world.lanes, shared with the cars). All are merged into one
-// weighted graph on the dense (fine) grid, so where a footpath meets a road
-// dot or crosses the middle of a road segment, people can switch between
-// them. Sidewalks cost a bit more, so footpaths are preferred when there's
-// a choice.
+// edges with `street`) and single-track lanes (`lane`, shared with the
+// cars) – all on the ways themselves (sim/wayGraph.js), so where a
+// footpath meets a road people can switch between them. Sidewalks cost a
+// bit more, so footpaths are preferred when there's a choice.
 //
 // Cyclists get their own network ({ allRoads: true }): footpaths plus every
 // road, sidewalks or not, at no extra cost.
 //
 // Parks and squares are walkable too: their site paths (world.sitePaths) join
 // the exits on their sides through a hub (with a single exit there's only
-// the way in: it ends at a loop, see roads/siteWalks.js), and exits facing a
-// street or lane step onto it.
+// the way in: it ends at a loop, see roads/siteWalks.js), each exit cut
+// into the footpath or street it meets; neighbouring sites share the exit
+// between them.
 //
-// The graph is rebuilt lazily after roads, paths or buildings change.
+// The graph is rebuilt lazily after the ways or buildings change. Routes
+// are the way graph's: { pts, joints, ways, cost, fromDoor, toDoor } – the
+// doors as points.
 
-import { MinHeap } from '../core/heap.js';
 import { STRUCTURE_TYPES } from '../../structures/index.js';
+import { WayGraph } from './wayGraph.js';
+import { pointAt, subPolyline } from '../roads/geometry.js';
+
+const MEND = 0.45; // a footpath ending this near a street steps onto it
 
 export class WalkNetwork {
   constructor(world, config, { allRoads = false } = {}) {
@@ -25,205 +29,181 @@ export class WalkNetwork {
     this.config = config.walk;
     this.laneCost = config.lane.walkCost;
     this.allRoads = allRoads;
-    this.adj = null;
-    const dirty = () => (this.adj = null);
+    this.g = null;
+    const dirty = () => (this.g = null);
     world.events.on('roads:changed', dirty);
     world.events.on('paths:changed', dirty);
+    world.events.on('rails:changed', dirty);
     world.events.on('structure:added', dirty);
     world.events.on('structure:removed', dirty);
     world.events.on('structure:changed', dirty);
   }
 
   get graph() {
-    if (!this.adj) this.rebuild();
-    return this.adj;
+    if (!this.g || this.version !== this.world.ways.version) this.rebuild();
+    return this.g;
   }
 
   rebuild() {
-    const { world } = this;
-    const adj = new Map();
-    const link = (a, b, cost) => {
-      if (!adj.has(a)) adj.set(a, new Map());
-      if (!adj.has(b)) adj.set(b, new Map());
-      const cur = adj.get(a).get(b);
-      if (cur === undefined || cost < cur) {
-        adj.get(a).set(b, cost);
-        adj.get(b).set(a, cost);
-      }
-    };
-
-    const paths = world.networks.path;
-    for (const [a, b] of world.paths.edges()) link(a, b, paths.distance(a, b));
-
-    // Each street segment becomes two half-segments on the fine grid.
-    const street = [];
-    for (const [a, b] of world.roads.edges()) {
-      const lane = world.isLane(a, b);
-      if (!this.allRoads && !lane && !world.hasSidewalk(a, b)) continue;
-      const k = this.allRoads ? 1 : lane ? this.laneCost : this.config.sidewalkCost;
-      const fa = world.coarseToFine(a);
-      const fb = world.coarseToFine(b);
-      const [ax, ay] = world.fine.xy(fa);
-      const [bx, by] = world.fine.xy(fb);
-      const mid = world.fine.index((ax + bx) / 2, (ay + by) / 2);
-      const half = (world.grid.distance(a, b) / 2) * k;
-      link(fa, mid, half);
-      link(mid, fb, half);
-      street.push(fa, mid, fb);
-    }
-    // Footpaths ending right beside a street (at its kerb) step onto it.
-    const fine = world.fine;
-    for (const n of street) {
-      for (const m of fine.neighbors(n)) {
-        if (world.paths.hasNode(m)) link(n, m, paths.distance(n, m));
-      }
-    }
-    // Through parks and squares.
+    const { world, allRoads } = this;
+    const pass = (e) => e.kind === 'path' || (e.kind === 'road' && (allRoads || e.lane || e.street));
+    const factor = (e) => (e.kind === 'path' || allRoads ? 1 : e.lane ? this.laneCost : this.config.sidewalkCost);
+    // parks' and squares' exits: cut into the way each meets
+    const sites = [], cuts = [];
     for (const s of world.structures.values()) {
       if (!STRUCTURE_TYPES[s.type]?.site) continue;
-      const { hub, hubPos, exits } = world.sitePaths(s);
-      for (const e of exits) {
-        if (exits.length > 1) link(hub, e.node, Math.hypot(e.pos[0] - hubPos[0], e.pos[1] - hubPos[1]) * 0.9);
-        if (e.road >= 0) link(e.node, world.coarseToFine(e.road), 0.5 * (this.allRoads ? 1 : this.config.sidewalkCost));
-      }
+      const paths = world.sitePaths(s);
+      sites.push({ s, paths });
+      paths.exits.forEach((e, k) => {
+        if (e.site < 0) cuts.push({ key: `${s.id}:${k}`, x: e.pos[0], y: e.pos[1], reach: e.road >= 0 ? 1.1 : 0.8 });
+      });
     }
-    this.adj = adj;
+    const g = new WayGraph(world.ways, { pass, factor, cuts, mend: MEND });
+    for (const { s, paths: { hubPos, exits } } of sites) {
+      const hub = `h${s.id}`;
+      exits.forEach((e, k) => {
+        // to a neighbouring site: a spot on the side they share
+        const at = e.site >= 0 ? `x${[s.id, e.site].sort().join('-')}` : g.tapOf(`${s.id}:${k}`);
+        if (at == null) return;
+        const tap = g.nodes.get(at) ?? e.pos;
+        if (exits.length > 1) {
+          g.link(hub, at, Math.hypot(e.pos[0] - hubPos[0], e.pos[1] - hubPos[1]) * 0.9, [hubPos, e.pos, tap]);
+        } else if (e.site < 0) {
+          g.link(`i${s.id}`, at, Math.hypot(tap[0] - e.pos[0], tap[1] - e.pos[1]) || 0.01, [e.pos, tap]); // the way in
+        }
+      });
+    }
+    this.g = g;
+    this.version = world.ways.version;
   }
 
   hasNode(n) {
-    return this.graph.has(n);
+    return this.graph.hasNode(n);
   }
 
-  hasEdge(a, b) {
-    return this.graph.get(a)?.has(b) ?? false;
-  }
-
-  // Walkable nodes a structure's residents can step onto: Map node -> { cost, door }.
+  // Where a structure's people step onto the walkable ways: [{ place,
+  // cost, door }] – from each of its dots, the nearest point of each way
+  // within reach.
   entries(s) {
     const { world } = this;
     const g = this.graph;
     const reach = this.config.reach;
-    const r = Math.ceil(reach * 2);
-    const out = new Map();
-    for (const door of world.nodesOf(s)) {
-      const [x, y] = world.grid.xy(door);
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
-          const d = Math.hypot(dx, dy) / 2;
-          if (d > reach) continue;
-          const fx = 2 * x + dx;
-          const fy = 2 * y + dy;
-          if (!world.fine.inBounds(fx, fy)) continue;
-          const f = world.fine.index(fx, fy);
-          if (!g.has(f) || world.isPathBlocked(f)) continue;
-          const prev = out.get(f);
-          if (!prev || d < prev.cost) out.set(f, { cost: d, door });
+    const out = [];
+    const doors = s.free ? [[s.x, s.y]] : world.nodesOf(s).map((n) => world.grid.xy(n));
+    const info = world.accessInfo(s);
+    if (info?.doorPt && !doors.some((d) => d[0] === info.doorPt[0] && d[1] === info.doorPt[1])) doors.push(info.doorPt);
+    for (const door of doors) {
+      for (const at of g.attachAll(door[0], door[1], reach)) out.push({ place: at, cost: at.dist, door });
+    }
+    return out;
+  }
+
+  plan(r) {
+    return r && { pts: r.pts, joints: r.joints, ways: r.ways, cost: r.cost, fromDoor: r.from?.door ?? null, toDoor: r.to?.door ?? null };
+  }
+
+  // Cheapest walk between two structures within maxCost, or null.
+  route(from, to, maxCost = Infinity) {
+    const starts = this.entries(from), ends = this.entries(to);
+    if (!starts.length || !ends.length) return null;
+    return this.plan(this.graph.routeMany(starts, ends, { maxCost }));
+  }
+
+  // Dijkstra from a structure's entries: the way graph's explore().
+  explore(from, maxCost, weight = null) {
+    const g = this.graph;
+    const starts = [];
+    for (const e of this.entries(from)) for (const st of g.startsOf(e.place, e.cost)) starts.push({ ...st, entry: e });
+    return starts.length ? g.explore(starts, { maxCost, weight }) : null;
+  }
+
+  // Is graph node n on a footpath?
+  onPath(n) {
+    return (this.graph.adj.get(n) ?? []).some((p) => p.kind === 'path');
+  }
+
+  // Spots a walk may end at, from explore(): the nodes it reached and
+  // points every `step` along the pieces from them, between minCost and
+  // maxCost: [{ node, cost, point, piece?, s? }].
+  spots(found, minCost, maxCost, step = 1) {
+    const g = this.graph;
+    const out = [];
+    for (const n of found.order) {
+      const d = found.dist.get(n);
+      if (d >= minCost) out.push({ node: n, cost: d, point: g.nodes.get(n) });
+      for (const piece of g.adj.get(n) ?? []) {
+        if (!piece.way) continue; // (not through a park's own links)
+        const fromA = piece.a === n;
+        for (let k = step; k < piece.len - step / 2; k += step) {
+          const c = d + k * piece.factor;
+          if (c < minCost) continue;
+          if (c > maxCost) break;
+          const s = fromA ? k : piece.len - k;
+          out.push({ node: n, cost: c, piece, s, point: pointOn(piece, s) });
         }
       }
     }
     return out;
   }
 
-  // Cheapest walk between two structures within maxCost:
-  // { nodes, cost, fromDoor, toDoor } or null.
-  route(from, to, maxCost = Infinity) {
-    const starts = this.entries(from);
-    const ends = this.entries(to);
-    if (!starts.size || !ends.size) return null;
-
-    const { dist, came, order } = this.explore(starts, maxCost);
-    let best = null;
-    for (const n of order) {
-      const end = ends.get(n);
-      if (!end) continue;
-      const total = dist.get(n) + end.cost;
-      if (total <= maxCost && (!best || total < best.cost)) best = { node: n, cost: total };
-    }
-    if (!best) return null;
-    const nodes = reconstruct(came, best.node);
-    return { nodes, cost: best.cost, fromDoor: starts.get(nodes[0]).door, toDoor: ends.get(best.node).door };
+  // The route explore() found to a spot (spots()).
+  traceTo(found, spot) {
+    const g = this.graph;
+    if (!spot.piece) return g.trace(found, spot.node);
+    const { piece, s, node } = spot;
+    const poly = { points: piece.pts, cum: piece.cum, total: piece.len };
+    const pts = piece.a === node ? subPolyline(poly, 0, s) : subPolyline(poly, s, piece.len).reverse();
+    return g.trace(found, node, { pts, cost: spot.cost - found.dist.get(node), way: piece.way });
   }
 
   // A loop walk from a structure: out to a random spot between minCost and
   // maxCost away (on a footpath if there is one in reach, else anywhere
   // walkable) and home another way where there is one – the way out counts
   // `detour` times its length on the way back.
-  // { nodes, cost, fromDoor, toDoor: null, backNodes, backDoor } or null.
+  // { pts, joints, ways, cost, fromDoor, toDoor: null, backPts, backJoints,
+  // backWays, backDoor } or null.
   stroll(from, minCost, maxCost, detour = 4) {
-    const starts = this.entries(from);
-    if (!starts.size) return null;
-    const { dist, came, order } = this.explore(starts, maxCost);
-    const far = order.filter((n) => dist.get(n) >= minCost);
-    const onPath = far.filter((n) => this.world.paths.hasNode(n));
+    const g = this.graph;
+    const found = this.explore(from, maxCost);
+    if (!found) return null;
+    const far = this.spots(found, minCost, maxCost);
+    const onPath = far.filter((p) => (p.piece ? p.piece.kind === 'path' : this.onPath(p.node)));
     const spots = onPath.length ? onPath : far;
     if (!spots.length) return null;
     const target = spots[Math.floor(Math.random() * spots.length)];
-    const nodes = reconstruct(came, target);
+    const out = this.traceTo(found, target);
 
     const used = new Set();
-    for (let i = 1; i < nodes.length; i++) used.add(`${nodes[i - 1]}|${nodes[i]}`).add(`${nodes[i]}|${nodes[i - 1]}`);
-    const back = this.explore(new Map([[target, { cost: 0 }]]), maxCost * detour * 2, (a, b) => (used.has(`${a}|${b}`) ? detour : 1));
-    let best = null;
-    for (const [n, { cost }] of starts) {
-      const d = back.dist.get(n);
-      if (d !== undefined && (!best || d + cost < best.cost)) best = { node: n, cost: d + cost };
+    if (target.piece) used.add(target.piece);
+    for (let n = target.node; found.came.has(n);) {
+      const piece = found.came.get(n);
+      used.add(piece);
+      n = g.other(piece, n);
     }
-    const backNodes = best ? reconstruct(back.came, best.node) : nodes.slice().reverse();
-    const backDoor = starts.get(backNodes[backNodes.length - 1]).door;
-    return { nodes, cost: dist.get(target), fromDoor: starts.get(nodes[0]).door, toDoor: null, backNodes, backDoor };
+    const there = target.piece ? { piece: target.piece, s: target.s, point: target.point } : target.node;
+    const back = g.routeMany([{ place: there, cost: 0 }], this.entries(from), { maxCost: maxCost * detour * 2, weight: (p) => (used.has(p) ? detour : 1) });
+    const home = back ?? { pts: out.pts.slice().reverse(), joints: out.joints.map((i) => out.pts.length - 1 - i).reverse(), ways: out.ways.slice().reverse(), to: out.from };
+    return {
+      pts: out.pts, joints: out.joints, ways: out.ways, cost: target.cost,
+      fromDoor: out.from?.door ?? null, toDoor: null,
+      backPts: home.pts, backJoints: home.joints, backWays: home.ways, backDoor: home.to?.door ?? null,
+    };
   }
 
-  // A walk from a structure out to a spot where `test(node)` holds – one of
-  // the `nearest` such spots, at least minCost and at most maxCost away
+  // A walk from a structure out to a spot where `test([x, y])` holds – one
+  // of the `nearest` such spots, at least minCost and at most maxCost away
   // (to the edge of the nearest wood, not across the map to a far one).
-  // { nodes, cost, fromDoor, toDoor: null } or null.
+  // { pts, joints, ways, cost, fromDoor, toDoor: null } or null.
   toward(from, test, minCost, maxCost, nearest = 5) {
-    const starts = this.entries(from);
-    if (!starts.size) return null;
-    const { dist, came, order } = this.explore(starts, maxCost);
-    const spots = order.filter((n) => dist.get(n) >= minCost && test(n)).slice(0, nearest);
+    const found = this.explore(from, maxCost);
+    if (!found) return null;
+    const spots = this.spots(found, minCost, maxCost, 0.5).filter((p) => test(p.point)).sort((p, q) => p.cost - q.cost).slice(0, nearest);
     if (!spots.length) return null;
     const target = spots[Math.floor(Math.random() * spots.length)];
-    const nodes = reconstruct(came, target);
-    return { nodes, cost: dist.get(target), fromDoor: starts.get(nodes[0]).door, toDoor: null };
-  }
-
-  // Dijkstra from several start nodes, up to maxCost. `weight(a, b)`
-  // optionally scales the cost of stepping from a to b.
-  explore(starts, maxCost, weight = null) {
-    const g = this.graph;
-    const dist = new Map();
-    const came = new Map();
-    const done = new Set();
-    const order = [];
-    const heap = new MinHeap();
-    for (const [n, { cost }] of starts) {
-      dist.set(n, cost);
-      heap.push(n, cost);
-    }
-    while (heap.size) {
-      const n = heap.pop();
-      if (done.has(n)) continue;
-      const dn = dist.get(n);
-      if (dn > maxCost) break;
-      done.add(n);
-      order.push(n);
-      for (const [m, c] of g.get(n) ?? []) {
-        const nd = dn + (weight ? c * weight(n, m) : c);
-        if (nd < (dist.get(m) ?? Infinity)) {
-          dist.set(m, nd);
-          came.set(m, n);
-          heap.push(m, nd);
-        }
-      }
-    }
-    return { dist, came, order };
+    return { ...this.plan(this.traceTo(found, target)), cost: target.cost, toDoor: null };
   }
 }
 
-function reconstruct(came, end) {
-  const nodes = [end];
-  let c = end;
-  while (came.has(c)) nodes.push((c = came.get(c)));
-  return nodes.reverse();
+function pointOn(piece, s) {
+  return pointAt({ points: piece.pts, cum: piece.cum, total: piece.len }, s);
 }

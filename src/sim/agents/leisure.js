@@ -440,12 +440,10 @@ export class AgentLeisure {
     return this._woods;
   }
 
-  // A walkable (fine) dot with a wood within a step of it.
-  byWood(n) {
+  // A point (on a walk) with a wood within a step and a half of it.
+  byWood([x, y]) {
     const { list, cells } = this.woodsByCell();
     if (!list.length) return false;
-    const [fx, fy] = this.world.fine.xy(n);
-    const [x, y] = [Math.round(fx / 2), Math.round(fy / 2)];
     // only the cells within 1.5 of it
     for (let cy = Math.floor(y - 1.5); cy <= Math.floor(y + 1.5); cy++) {
       for (let cx = Math.floor(x - 1.5); cx <= Math.floor(x + 1.5); cx++) {
