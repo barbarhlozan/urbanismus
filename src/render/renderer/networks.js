@@ -458,10 +458,12 @@ export class NetworkDrawing {
     // ground (roadLines, groundLines) until a network or the terrain
     // changes.
 
-    // Driveways: from the building edge at its door to the road's edge.
+    // Driveways: from the building edge at its door to the road's edge –
+    // only for a type that asks for one (def.driveway: true). Buildings
+    // stand in the grass; people walk to them however they like.
     for (const s of world.structures.values()) {
       if (this.yardFrame(s) || STRUCTURE_TYPES[s.type]?.site) continue; // these reach the road themselves
-      if (STRUCTURE_TYPES[s.type]?.driveway === false) continue; // houses: no path drawn to the road
+      if (STRUCTURE_TYPES[s.type]?.driveway !== true) continue;
       const access = world.accessInfo(s);
       if (!access) continue;
       const [dx, dy] = world.grid.xy(access.door);
