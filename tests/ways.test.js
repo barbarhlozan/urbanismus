@@ -164,3 +164,34 @@ test('in the world: a way over a building is refused, and says where', async () 
   assert.ok(r.blocked.length > 0);
   assert.equal(w.ways.edges.size, 0);
 });
+
+test('in the world: the eraser takes a way between junctions, and a junction left with two joins them', async () => {
+  const { flatWorld } = await import('./helpers.js');
+  const { eraseTarget } = await import('../src/tools/erase.js');
+  const w = flatWorld();
+  assert.ok(w.layWay('road', curveThrough([[2, 6], [14, 6]])).ok);
+  assert.ok(w.layWay('road', curveThrough([[8, 6], [8, 12]])).ok); // a branch: the first split in two
+  assert.equal(w.ways.edges.size, 3);
+  w.history.commit();
+  eraseTarget(w, [8, 10]).run(); // the branch, whole
+  assert.equal(w.ways.edges.size, 1); // and the two halves one again
+  assert.equal(w.roads.hasNode(w.grid.index(8, 10)), false);
+  assert.ok(w.roads.hasEdge(w.grid.index(7, 6), w.grid.index(8, 6)));
+  w.history.commit();
+  w.history.undo();
+  assert.equal(w.ways.edges.size, 3);
+});
+
+test("in the world: the eraser takes a street's sidewalks before the street", async () => {
+  const { flatWorld } = await import('./helpers.js');
+  const { eraseTarget } = await import('../src/tools/erase.js');
+  const w = flatWorld();
+  assert.ok(w.layWay('road', curveThrough([[2, 6], [12, 6]]), { street: true }).ok);
+  assert.ok(w.sidewalks.size > 0);
+  eraseTarget(w, [6, 6.2]).run();
+  assert.equal(w.sidewalks.size, 0);
+  assert.equal(w.ways.edges.size, 1);
+  eraseTarget(w, [6, 6.2]).run();
+  assert.equal(w.ways.edges.size, 0);
+  assert.equal(w.roads.edgeCount, 0);
+});

@@ -292,6 +292,47 @@ export class WorldNetworks {
     return result;
   }
 
+  // Takes way edge `id` away (the eraser), and its ends if nothing else
+  // meets there; where only two edges of one way are left meeting, they
+  // join again. A bridge it cut goes too.
+  removeWay(id) {
+    const e = this.ways.edges.get(id);
+    if (!e) return false;
+    this.history.touch();
+    this.ways.removeEdge(id);
+    for (const n of [e.a, e.b]) if (this.ways.nodes.has(n)) this.ways.joinAt(n);
+    this.afterWayChange(e);
+    return true;
+  }
+
+  // Changes a way edge's street, lane or kerbs (`attrs`: false or 0 takes
+  // one away) – the eraser taking a street's sidewalks.
+  setWayAttrs(id, attrs) {
+    const e = this.ways.edges.get(id);
+    if (!e) return false;
+    this.history.touch();
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === false || v === 0 || v == null) delete e[k];
+      else e[k] = v;
+    }
+    this.ways.version++;
+    for (const n of [e.a, e.b]) if (this.ways.nodes.has(n)) this.ways.joinAt(n);
+    this.afterWayChange(e, true);
+    return true;
+  }
+
+  // After a way edge changed: its dots again, bridges left hanging gone,
+  // and everyone told.
+  afterWayChange(e, sidewalks = false) {
+    const layer = this.networks[e.kind];
+    if (!layer) return;
+    const dots = traceLine(e.pts, layer.grid, layer.scale).map((d) => d.n);
+    this.refreshNetwork(e.kind);
+    const gone = this.pruneBridges(layer, dots.flatMap((n) => [n, ...layer.graph.neighbors(n)]));
+    if (gone.length) this.syncWays(e.kind);
+    this.events.emit(layer.event, { layer, nodes: [...dots, ...gone], ...(sidewalks ? { sidewalks: true } : {}) });
+  }
+
   // A road step's attributes from the street sets, seen from dot a to b.
   stepAttrs(kind, a, b) {
     if (kind !== 'road') return {};

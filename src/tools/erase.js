@@ -7,26 +7,24 @@
 export function eraseTarget(world, point) {
   if (!point) return null;
   const node = world.grid.nodeAt(...point);
-  const fine = world.networks.path.nodeAt(...point);
   if (node < 0) return null;
 
   const s = world.structureAt(node);
   // `key`: the drawing that turns to the secondary colour (Renderer.erasing)
   if (s) return { key: `s${s.id}`, at: world.centerOf(s), size: 0.3, run: () => world.removeStructure(s.id) };
-  if (fine >= 0 && world.paths.hasNode(fine)) {
-    return { at: world.networks.path.pos(fine), size: 0.12, run: () => world.removeNetworkAt('path', fine) };
-  }
-  const sidewalks = world.hasRoad(node) ? world.sidewalksAt(node) : [];
-  if (sidewalks.length) return { at: world.grid.xy(node), size: 0.2, run: () => world.setSidewalks(sidewalks, false) };
-  if (world.hasRoad(node)) return { at: world.grid.xy(node), size: 0.2, run: () => world.removeRoadAt(node) };
-  const rail = world.networks.rail.nodeAt(...point);
-  if (rail >= 0 && world.rails.hasNode(rail)) {
-    return { at: world.networks.rail.pos(rail), size: 0.16, run: () => world.removeNetworkAt('rail', rail) };
-  }
-  const fence = world.networks.fence.nodeAt(...point);
-  if (fence >= 0 && world.fences.hasNode(fence)) {
-    return { at: world.networks.fence.pos(fence), size: 0.12, run: () => world.removeNetworkAt('fence', fence) };
-  }
+  // ways: the nearest edge of each kind in turn, between its junctions
+  const way = (kind, reach, keep = () => true) => world.ways.edgeNear(...point, reach, (e) => e.kind === kind && keep(e));
+  const path = way('path', 0.25);
+  if (path) return { at: path.point, size: 0.12, run: () => world.removeWay(path.edge.id) };
+  const road = way('road', 0.45);
+  // a street's sidewalks first (a lane's kerbs too), then the road
+  if (road?.edge.street) return { at: road.point, size: 0.2, run: () => world.setWayAttrs(road.edge.id, { street: false }) };
+  if (road?.edge.walks) return { at: road.point, size: 0.2, run: () => world.setWayAttrs(road.edge.id, { walks: 0 }) };
+  if (road) return { at: road.point, size: 0.2, run: () => world.removeWay(road.edge.id) };
+  const rail = way('rail', 0.3);
+  if (rail) return { at: rail.point, size: 0.16, run: () => world.removeWay(rail.edge.id) };
+  const fence = way('fence', 0.2);
+  if (fence) return { at: fence.point, size: 0.12, run: () => world.removeWay(fence.edge.id) };
   const f = world.featureAt(node);
   if (f) return { key: `f${f.id}`, at: [f.x, f.y], size: 0.2, run: () => world.removeFeature(f.id) };
   return null;

@@ -268,6 +268,24 @@ export class Ways {
     return { nodes, edges, cost: best.get(to) };
   }
 
+  // Where only two edges of one way meet (the same kind and attributes,
+  // nothing else there), makes them one again: the edge that remains, or
+  // null if they stay apart.
+  joinAt(nodeId) {
+    const list = this.edgesAt(nodeId);
+    if (list.length !== 2 || list[0].id === list[1].id) return null;
+    const [p, q] = list;
+    const attrs = ({ id, a, b, pts, _m, walks, ...rest }) => JSON.stringify(Object.entries(rest).sort());
+    if (attrs(p) !== attrs(q) || p.walks || q.walks) return null;
+    const from = this.other(p, nodeId), to = this.other(q, nodeId);
+    if (from === to) return null;
+    const into = p.b === nodeId ? p.pts : [...p.pts].reverse();
+    const out = q.a === nodeId ? q.pts : [...q.pts].reverse();
+    const { id: _i, a: _a, b: _b, pts: _p, _m, ...props } = p;
+    this.dropNode(nodeId);
+    return this.addEdge(from, to, [...into, ...out.slice(1)], props);
+  }
+
   // ---------- for undo (core/history.js): put back exactly as recorded ----------
 
   // A node or edge as it was ({ id, x, y } / an edge's record), in place
