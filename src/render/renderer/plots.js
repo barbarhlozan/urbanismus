@@ -42,7 +42,7 @@ export class PlotDrawing {
     if (!def) return null;
     const { world } = this;
     const live = camera === this.camera;
-    const [x, y] = world.grid.xy(s.node);
+    const [x, y] = world.anchorOf(s);
     const z = world.terrain.heightAt(x, y);
     const painter = this.attachFree(new Painter(camera, { x, y, z }, quarterOf(world, s), drawSeed(s)));
     // the building moves with the relief as one piece, so it stays square on
@@ -177,7 +177,7 @@ export class PlotDrawing {
   // (SPREAD) not turned also takes the empty ground round it (claimFor).
   plotFor(s, plotDef, painter, core, yardWorld, courtWorld = []) {
     const { world } = this;
-    const [ax, ay] = world.grid.xy(s.node);
+    const [ax, ay] = world.anchorOf(s);
     const pts = world.nodesOf(s).map((n) => world.grid.xy(n));
     const xs = pts.map((p) => p[0] - ax), ys = pts.map((p) => p[1] - ay);
     const tilt = this.roadTurn(s);

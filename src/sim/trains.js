@@ -41,6 +41,7 @@ import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, networkPolyli
 import { STRUCTURE_TYPES, codeOf } from '../../structures/index.js';
 import { stationStop } from '../../structures/station.js';
 import { compass } from '../ui/annotations.js';
+import { centerOf } from './pose.js';
 
 const OFF_MAP = 1.9; // where the exits fade out (render/renderer.js)
 
@@ -360,7 +361,7 @@ export class TrainSystem {
     t.speed = 0;
     t.timer = st ? cfg.dwell * (0.7 + Math.random() * 0.6) : 1.5;
     if (st) {
-      this.log(`${t.code} calls at ${codeOf(st)}`, this.world.centerOf(st));
+      this.log(`${t.code} calls at ${codeOf(st)}`, centerOf(this.world, st));
       this.onCall(st.id);
     }
   }

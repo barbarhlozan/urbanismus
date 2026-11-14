@@ -3,7 +3,7 @@
 // reaches it.
 
 import { ORTHO, DIAG } from '../grid.js';
-import { STRUCTURE_TYPES } from '../../../structures/index.js';
+import { STRUCTURE_TYPES, footprintCenter } from '../../../structures/index.js';
 
 export class WorldAccess {
   // Middle of a structure in world coordinates.
@@ -14,6 +14,18 @@ export class WorldAccess {
       pts.reduce((a, p) => a + p[0], 0) / pts.length,
       pts.reduce((a, p) => a + p[1], 0) / pts.length,
     ];
+  }
+
+  // The point a structure's own coordinates start from (its footprint's
+  // [0, 0], the anchor), [x, y]: from its position and angle – the middle,
+  // less the footprint's centre turned the way it stands – or its dot for
+  // one not placed yet. (A building wider than a dot faces the way it was
+  // placed, so its angle turns its footprint too; a one-dot one's centre
+  // is its anchor.)
+  anchorOf(s) {
+    if (s.x == null || this.structures.get(s.id) !== s) return this.grid.xy(s.node);
+    const [cx, cy] = footprintCenter(STRUCTURE_TYPES[s.type] ?? {}, Math.round(s.angle / (Math.PI / 2)) & 3);
+    return [s.x - cx, s.y - cy];
   }
 
   // Where a structure meets the road: { door: footprint node, road: road node }.

@@ -307,6 +307,19 @@ How they run:
    (`world/placement.js`, `access.js`) reads `node`; tests pass; the game
    plays as before in the browser.
 
+**Stage A done (2026-11-14).** Buildings and trees are read by `x, y,
+angle` (and `World.anchorOf` for a building's own coordinates). What
+still reads a building's dot or turn, on purpose:
+
+- placing and converting (`world/placement.js`, `canConvert`, the build
+  tool's pick in `main.js`) – stage B
+- facing to the road on a bend and joined walls (`roadFront`, `tiltOf`,
+  `joinedNeighbour` in `structures/index.js`), sites' ground
+  (`siteArea`) – stage B
+- a station's track along its front and the stop dot trains look it up
+  by (`station.js`, `trains.js`), track keys in `renderer/networks.js` –
+  stage C
+
 ### Stage B
 
 - **B1 – Opus.** Outlines (`plot`, `body`), the placement rule, access

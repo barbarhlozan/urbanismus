@@ -341,7 +341,7 @@ export class AgentLeisure {
     const fields = fieldsOf(STRUCTURE_TYPES[home.type] ?? {}, home);
     if (!fields.length) return null;
     const [x0, x1, y0, y1, step] = fields[Math.floor(Math.random() * fields.length)];
-    const [ox, oy] = world.grid.xy(home.node), r = quarterOf(world, home); // (the field is laid out from the anchor dot)
+    const [ox, oy] = world.anchorOf(home), r = quarterOf(world, home); // (the field is laid out from the anchor)
     const at = (lx, ly) => { const [dx, dy] = rotateQuarter(lx, ly, r); return [ox + dx, oy + dy]; };
     const rows = [];
     for (let x = x0 + step; x < x1 - step / 2; x += step) rows.push(x);

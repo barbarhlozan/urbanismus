@@ -7,6 +7,7 @@ import { compass } from '../../ui/annotations.js';
 import { findPath } from '../../roads/pathfinding.js';
 import { pointAt } from '../../roads/geometry.js';
 import { can, backPoint, paceAt, newAgent, between } from './shared.js';
+import { centerOf } from '../pose.js';
 
 export class AgentTransit {
   // ----- bus and train rides -----
@@ -33,7 +34,7 @@ export class AgentTransit {
     const stop = this.world.structures.get(id);
     if (stop && (on || off)) {
       const n = (k, verb) => k && `${k} ${verb}`;
-      this.log(`${codeOf(stop)} · ${[n(on, 'get on'), n(off, 'get off')].filter(Boolean).join(', ')}`, this.world.centerOf(stop));
+      this.log(`${codeOf(stop)} · ${[n(on, 'get on'), n(off, 'get off')].filter(Boolean).join(', ')}`, centerOf(this.world, stop));
     }
   }
 
@@ -83,7 +84,7 @@ export class AgentTransit {
       const ride = this.transitRoute(home);
       if (ride) {
         const how = STRUCTURE_TYPES[ride.stop.type].railStop ? 'train' : 'bus';
-        this.log(`${codeOf(home)} resident ${why} · ${how} from ${codeOf(ride.stop)}`, this.world.grid.xy(home.node));
+        this.log(`${codeOf(home)} resident ${why} · ${how} from ${codeOf(ride.stop)}`, centerOf(this.world, home));
         return { dest: ride.stop.id, plan: { mode: 'walk', ...ride.route, transit: { stop: ride.stop.id }, commute } };
       }
     }
@@ -93,7 +94,7 @@ export class AgentTransit {
     if (!exit || !from) return null;
     const nodes = findPath(this.world.networks.road, from.road, exit.node);
     if (!nodes) return null;
-    this.log(`${codeOf(home)} resident ${why} · exit ${compass(exit.dir)}`, this.world.grid.xy(home.node));
+    this.log(`${codeOf(home)} resident ${why} · exit ${compass(exit.dir)}`, centerOf(this.world, home));
     return { dest: null, plan: { mode: 'drive', nodes, fromDoor: from.door, toPoint: this.offMap(exit), outside: true, exit, commute } };
   }
 
@@ -139,7 +140,7 @@ export class AgentTransit {
       a.trip.commuter = true;
       a.timer = this.config.transit.returnWait;
       const how = STRUCTURE_TYPES[ride.stop.type].railStop ? 'train' : 'bus';
-      this.log(`Commuter-${String(this.visitorSeq).padStart(3, '0')} due by ${how} at ${codeOf(ride.stop)} → ${codeOf(work)}`, this.world.centerOf(ride.stop));
+      this.log(`Commuter-${String(this.visitorSeq).padStart(3, '0')} due by ${how} at ${codeOf(ride.stop)} → ${codeOf(work)}`, centerOf(this.world, ride.stop));
       this.agents.set(id, a);
       return true;
     }
