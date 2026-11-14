@@ -8,6 +8,7 @@ import { siteWalks } from '../../roads/siteWalks.js';
 import { DAY } from '../../render/shadows.js';
 import { rotateQuarter } from '../../core/grid.js';
 import { between } from './shared.js';
+import { quarterOf, centerOf } from '../pose.js';
 
 // The way a building faces, by its drawn rotation (its front is local -y).
 const FACING = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -243,7 +244,7 @@ export class AgentLeisure {
     ring.push(ring[0]);
     const loop = measurePolyline(ring);
     // the door: the middle of the side the house faces
-    const [fx, fy] = FACING[world.drawnRotation(home)];
+    const [fx, fy] = FACING[quarterOf(world, home)];
     const door = [(x0 + x1) / 2 + fx * ((x1 - x0) / 2 + m), (y0 + y1) / 2 + fy * ((y1 - y0) / 2 + m)];
     let s0 = 0, best = Infinity;
     for (let s = 0; s < loop.total; s += 0.02) {
@@ -284,7 +285,7 @@ export class AgentLeisure {
     const x0 = Math.min(...pts.map((p) => p[0])), x1 = Math.max(...pts.map((p) => p[0]));
     const y0 = Math.min(...pts.map((p) => p[1])), y1 = Math.max(...pts.map((p) => p[1]));
     const [cx, cy] = [(x0 + x1) / 2, (y0 + y1) / 2], [hw, hh] = [(x1 - x0) / 2, (y1 - y0) / 2];
-    const [fx, fy] = FACING[world.drawnRotation(home)];
+    const [fx, fy] = FACING[quarterOf(world, home)];
     const half = Math.abs(fx) * hw + Math.abs(fy) * hh, wide = Math.abs(fy) * hw + Math.abs(fx) * hh;
     const door = [cx + fx * (half + m), cy + fy * (half + m)];
     const front = this.rhythm().hour >= sitFront;
@@ -340,13 +341,13 @@ export class AgentLeisure {
     const fields = fieldsOf(STRUCTURE_TYPES[home.type] ?? {}, home);
     if (!fields.length) return null;
     const [x0, x1, y0, y1, step] = fields[Math.floor(Math.random() * fields.length)];
-    const [ox, oy] = world.grid.xy(home.node), r = world.drawnRotation(home);
+    const [ox, oy] = world.grid.xy(home.node), r = quarterOf(world, home); // (the field is laid out from the anchor dot)
     const at = (lx, ly) => { const [dx, dy] = rotateQuarter(lx, ly, r); return [ox + dx, oy + dy]; };
     const rows = [];
     for (let x = x0 + step; x < x1 - step / 2; x += step) rows.push(x);
     if (!rows.length) return null;
     // from the house's side facing the field, a step out
-    const [cx, cy] = world.centerOf(home), [fx, fy] = at((x0 + x1) / 2, (y0 + y1) / 2);
+    const [cx, cy] = centerOf(world, home), [fx, fy] = at((x0 + x1) / 2, (y0 + y1) / 2);
     const d = Math.hypot(fx - cx, fy - cy) || 1, out = Math.min(0.45, d / 2);
     a.trip = { mode: 'linger', nodes: [], dest: null, back: null };
     [a.x, a.y] = [cx + ((fx - cx) / d) * out, cy + ((fy - cy) / d) * out];
@@ -415,40 +416,35 @@ export class AgentLeisure {
   }
 
   // The trees deep enough in a wood to go mushrooming among (a tree with
-  // village.deep trees round it), as main dots; worked out again when the
+  // village.deep trees round it), as [x, y]; worked out again when the
   // trees change.
   woods() {
     const { world } = this;
-    if (this._woods?.n === world.features.size) return this._woods.set;
-    const tree = (n) => world.featureAt(n)?.type === 'tree';
-    const set = new Set();
+    if (this._woods?.n === world.features.size) return this._woods.list;
+    const list = [];
     for (const f of world.features.values()) {
-      if (f.type === 'tree' && world.grid.neighbors(f.node).filter(tree).length >= this.config.village.deep) set.add(f.node);
+      if (f.type !== 'tree') continue;
+      const round = world.featureIndex.near(f.x, f.y, 1.5).filter((id) => id !== f.id && world.features.get(id)?.type === 'tree');
+      if (round.length >= this.config.village.deep) list.push([f.x, f.y]);
     }
-    this._woods = { n: world.features.size, set };
-    return set;
+    this._woods = { n: world.features.size, list };
+    return list;
   }
 
   // A walkable (fine) dot with a wood within a step of it.
   byWood(n) {
     const woods = this.woods();
-    if (!woods.size) return false;
+    if (!woods.length) return false;
     const [fx, fy] = this.world.fine.xy(n);
     const [x, y] = [Math.round(fx / 2), Math.round(fy / 2)];
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (!this.world.grid.inBounds(x + dx, y + dy)) continue;
-        if (woods.has(this.world.grid.index(x + dx, y + dy))) return true;
-      }
-    }
-    return false;
+    return woods.some(([wx, wy]) => Math.abs(wx - x) <= 1.5 && Math.abs(wy - y) <= 1.5);
   }
 
   // Where to look for mushrooms: among the wood's trees near `anchor`,
   // between and round them.
   woodSpots(anchor) {
-    const { grid } = this.world, [ax, ay] = anchor;
-    const near = [...this.woods()].map((n) => grid.xy(n)).filter(([x, y]) => Math.hypot(x - ax, y - ay) < 2.5);
+    const [ax, ay] = anchor;
+    const near = this.woods().filter(([x, y]) => Math.hypot(x - ax, y - ay) < 2.5);
     if (!near.length) return around(ax, ay, 0.3);
     return () => {
       const [x, y] = near[Math.floor(Math.random() * near.length)];

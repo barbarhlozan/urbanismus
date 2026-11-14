@@ -5,6 +5,7 @@ import { STRUCTURE_TYPES, matches, codeOf, statsOf } from '../../../structures/i
 import { compass } from '../../ui/annotations.js';
 import { findPath } from '../../roads/pathfinding.js';
 import { can, between } from './shared.js';
+import { centerOf } from '../pose.js';
 
 // A random key of { key: weight }, or null when none is left.
 function pickWeighted(weights) {
@@ -41,7 +42,7 @@ export class AgentTrips {
       const from = this.world.accessInfo(home);
       const nodes = exit && from && findPath(this.world.networks.road, from.road, exit.node);
       if (nodes) {
-        this.log(`${codeOf(home)} truck exports goods · exit ${compass(exit.dir)}`, this.world.grid.xy(home.node));
+        this.log(`${codeOf(home)} truck exports goods · exit ${compass(exit.dir)}`, centerOf(this.world, home));
         return this.begin(a, { mode: 'drive', nodes, fromDoor: from.door, toPoint: this.offMap(exit), outside: true, exit, truck: true }, null);
       }
     }
@@ -123,9 +124,9 @@ export class AgentTrips {
         return loop && this.begin(a, { mode: 'stroll', purpose: 'stroll', ...loop }, null);
       }
       case 'park': {
-        const [hx, hy] = this.world.grid.xy(home.node);
+        const [hx, hy] = centerOf(this.world, home);
         const near = (s) => {
-          const [x, y] = this.world.grid.xy(s.node);
+          const [x, y] = centerOf(this.world, s);
           return Math.hypot(x - hx, y - hy);
         };
         const places = this.candidates(home, sim.leisure ?? this.config.activities.leisure)
@@ -214,7 +215,7 @@ export class AgentTrips {
         a.timer = between(...this.config.dwell.setOff);
         n++;
       }
-      if (n) this.log(`č. p. ${home.no ?? codeOf(home)} sent to č. p. ${dest.no ?? codeOf(dest)} · ${n}`, this.world.grid.xy(home.node));
+      if (n) this.log(`č. p. ${home.no ?? codeOf(home)} sent to č. p. ${dest.no ?? codeOf(dest)} · ${n}`, centerOf(this.world, home));
       else missed.push({ home, why: 'nobody in' });
       sent += n;
     }

@@ -88,7 +88,7 @@ export class DeerSystem {
   // A herd out of a forest: a tree dot with open grass within reach.
   launch() {
     const { config, world } = this;
-    const trees = [...world.features.values()].filter((f) => f.type === 'tree').map((f) => f.node);
+    const trees = [...world.features.values()].filter((f) => f.type === 'tree').map((f) => world.grid.nodeAt(f.x, f.y)); // (the dot a tree stands by)
     if (trees.length < config.forest) return null;
     for (let tries = 0; tries < 12; tries++) {
       const start = trees[Math.floor(Math.random() * trees.length)];

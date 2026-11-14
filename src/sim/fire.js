@@ -43,6 +43,7 @@ import { STRUCTURE_TYPES, matches } from '../../structures/index.js';
 import { pointAt } from '../roads/geometry.js';
 import { UNLOCKS } from '../story/unlocks.js';
 import { personName } from '../core/surnames.js';
+import { centerOf } from './pose.js';
 
 const between = ([min, max]) => min + Math.random() * (max - min);
 
@@ -106,7 +107,7 @@ export class FireSystem {
   start(s) {
     const { world, agents } = this;
     const cfg = this.config.fire;
-    const centre = world.centerOf(s);
+    const centre = centerOf(world, s);
     const pts = world.nodesOf(s).map((n) => world.grid.xy(n));
     const edge = Math.max(...pts.map(([x, y]) => Math.hypot(x - centre[0], y - centre[1]))) + this.config.sim.doorPad;
     const f = { id: s.id, seq: ++this.seq, centre, edge, out: false, people: new Set(), arrived: new Set(), chain: null, engine: null, crew: [], alarm: null, station: null };
@@ -123,7 +124,7 @@ export class FireSystem {
     const near = [];
     for (const h of world.structures.values()) {
       if (h.ruin) continue;
-      const d = Math.hypot(...world.centerOf(h).map((v, i) => v - centre[i]));
+      const d = Math.hypot(...centerOf(world, h).map((v, i) => v - centre[i]));
       if (h.id === s.id || d <= cfg.reach) near.push({ h, d });
     }
     near.sort((p, q) => p.d - q.d);
@@ -189,7 +190,7 @@ export class FireSystem {
     let best = null;
     for (const h of world.structures.values()) {
       if (h.id === s.id || h.ruin || h.burning) continue;
-      const d = Math.hypot(...world.centerOf(h).map((v, i) => v - f.centre[i]));
+      const d = Math.hypot(...centerOf(world, h).map((v, i) => v - f.centre[i]));
       if (d > cfg.chainSource || best && d >= best.d) continue;
       const route = this.route(h, s, cfg.chainSource * 2);
       if (route) best = { h, d, route };
@@ -247,7 +248,7 @@ export class FireSystem {
     let best = null;
     for (const st of world.structures.values()) {
       if (st.id === s.id || st.ruin || st.burning || !matches(STRUCTURE_TYPES[st.type], 'fire')) continue;
-      const d = Math.hypot(...world.centerOf(st).map((v, i) => v - f.centre[i]));
+      const d = Math.hypot(...centerOf(world, st).map((v, i) => v - f.centre[i]));
       if (!best || d < best.d) best = { st, d };
     }
     if (!best) return;
@@ -268,7 +269,7 @@ export class FireSystem {
     const crew = [];
     for (let k = 0; k < n; k++) {
       const a = agents.spawn({ id: `fire:${s.id}:${f.seq}:c${k}`, home: st.id, state: 'fireWait', drop: true });
-      [a.x, a.y] = world.centerOf(st);
+      [a.x, a.y] = centerOf(world, st);
       a.trip = { mode: 'walk', nodes: [], dest: s.id, purpose: 'fire', out: null, back: null };
       this.take(f, a, { role: 'crew', phase: drive ? 'aboard' : 'notice', timer: k * 0.6, post: k });
       crew.push(a);
@@ -292,7 +293,7 @@ export class FireSystem {
       }
     }
     const who = chief ? `, velitel ${personName(chief)}` : '';
-    agents.log(`${f.station.kind === 'fire-house' ? 'SDH' : 'brigade'} from č. p. ${st.no} to č. p. ${s.no}${who}`, world.centerOf(st));
+    agents.log(`${f.station.kind === 'fire-house' ? 'SDH' : 'brigade'} from č. p. ${st.no} to č. p. ${s.no}${who}`, centerOf(world, st));
   }
 
   // AgentSystem: an engine has pulled up. Its crew get down.
@@ -662,7 +663,7 @@ export class FireSystem {
     if (ruin) {
       for (const h of world.structures.values()) {
         if (h.ruin || h.burning || !STRUCTURE_TYPES[h.type]?.stats?.residents) continue;
-        const d = Math.hypot(...world.centerOf(h).map((v, i) => v - world.centerOf(ruin)[i]));
+        const d = Math.hypot(...centerOf(world, h).map((v, i) => v - centerOf(world, ruin)[i]));
         if (!best || d < best.d) best = { h, d };
       }
     }
