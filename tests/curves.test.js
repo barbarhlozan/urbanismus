@@ -52,3 +52,17 @@ test('resample keeps the ends', () => {
   assert.deepEqual(line[0], [0, 0]);
   assert.deepEqual(line.at(-1), [1, 1]);
 });
+
+test('crossings: where, how far along each, at what angle', async () => {
+  const { crossingsOf } = await import('../src/roads/curves.js');
+  const h = curveThrough([[0, 0], [10, 0]], 0.5), v = curveThrough([[4, -3], [4, 3]], 0.5);
+  const [c] = crossingsOf(h, v);
+  assert.ok(Math.abs(c.point[0] - 4) < 1e-9 && Math.abs(c.point[1]) < 1e-9);
+  assert.ok(Math.abs(c.sa - 4) < 1e-9 && Math.abs(c.sb - 3) < 1e-9);
+  assert.ok(Math.abs(c.angle - Math.PI / 2) < 1e-9);
+  const slant = curveThrough([[0, -1], [10, 1]], 0.5);
+  assert.ok(crossingsOf(h, slant)[0].angle < 0.25);
+  assert.equal(crossingsOf(h, curveThrough([[0, 2], [10, 2]])).length, 0);
+  const wave = curveThrough([[0, -1], [3, 1], [6, -1], [9, 1]], 0.1);
+  assert.equal(crossingsOf(h, wave).length, 3);
+});

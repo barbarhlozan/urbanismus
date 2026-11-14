@@ -73,6 +73,50 @@ export function easeBends(points, radius, { step = 0.1 } = {}) {
   return resample(line, step);
 }
 
+// Where two lines cross: [{ point, sa, sb, angle }] – arc lengths along
+// each, and the angle between them there (0 – π/2, whichever way they
+// run). Lines that only touch at an end count too.
+export function crossingsOf(la, lb) {
+  const out = [];
+  const pa = measurePolyline(la), pb = measurePolyline(lb);
+  for (let i = 1; i < la.length; i++) {
+    const a0 = la[i - 1], a1 = la[i];
+    const ax0 = Math.min(a0[0], a1[0]), ax1 = Math.max(a0[0], a1[0]), ay0 = Math.min(a0[1], a1[1]), ay1 = Math.max(a0[1], a1[1]);
+    for (let j = 1; j < lb.length; j++) {
+      const b0 = lb[j - 1], b1 = lb[j];
+      if (Math.max(b0[0], b1[0]) < ax0 - 1e-9 || Math.min(b0[0], b1[0]) > ax1 + 1e-9) continue;
+      if (Math.max(b0[1], b1[1]) < ay0 - 1e-9 || Math.min(b0[1], b1[1]) > ay1 + 1e-9) continue;
+      const hit = segmentHit(a0, a1, b0, b1);
+      if (!hit) continue;
+      const [u, v] = hit;
+      const point = [a0[0] + (a1[0] - a0[0]) * u, a0[1] + (a1[1] - a0[1]) * u];
+      // (a hit right on a shared sample point is found twice: once is enough)
+      if (out.some((o) => Math.hypot(o.point[0] - point[0], o.point[1] - point[1]) < 1e-6)) continue;
+      const da = [a1[0] - a0[0], a1[1] - a0[1]], db = [b1[0] - b0[0], b1[1] - b0[1]];
+      const cos = Math.abs(da[0] * db[0] + da[1] * db[1]) / (Math.hypot(...da) * Math.hypot(...db));
+      out.push({
+        point,
+        sa: pa.cum[i - 1] + u * Math.hypot(...da),
+        sb: pb.cum[j - 1] + v * Math.hypot(...db),
+        angle: Math.acos(Math.min(1, cos)),
+      });
+    }
+  }
+  return out.sort((p, q) => p.sa - q.sa);
+}
+
+// Where segments a0–a1 and b0–b1 meet: [u, v] along each (0–1), or null
+// (parallel ones never do).
+function segmentHit(a0, a1, b0, b1) {
+  const rx = a1[0] - a0[0], ry = a1[1] - a0[1], sx = b1[0] - b0[0], sy = b1[1] - b0[1];
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-12) return null;
+  const qx = b0[0] - a0[0], qy = b0[1] - a0[1];
+  const u = (qx * sy - qy * sx) / den, v = (qx * ry - qy * rx) / den;
+  const e = 1e-9;
+  return u >= -e && u <= 1 + e && v >= -e && v <= 1 + e ? [Math.max(0, Math.min(1, u)), Math.max(0, Math.min(1, v))] : null;
+}
+
 // A polyline cut into even pieces about `step` long.
 export function resample(line, step) {
   const poly = measurePolyline(line);

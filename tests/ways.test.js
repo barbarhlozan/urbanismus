@@ -79,3 +79,59 @@ test('saved and loaded whole', () => {
   assert.equal(back.edgesAt(a.id).length, 1);
   assert.equal(back.addNode(1, 1).id, w.nextId);
 });
+
+test('insert: a road across another makes a junction; ends snap to nodes and ways', async () => {
+  const w = new Ways();
+  const a = w.insert(curveThrough([[0, 0], [10, 0]]), { kind: 'road' });
+  assert.ok(a.ok);
+  const b = w.insert(curveThrough([[4, -3], [4, 3]]), { kind: 'road' });
+  assert.ok(b.ok);
+  const mid = b.nodes[1];
+  assert.ok(Math.abs(mid.x - 4) < 1e-9 && Math.abs(mid.y) < 1e-9);
+  assert.equal(w.edgesAt(mid.id).length, 4);
+  // an end near a node joins it; near a way, splits it
+  const c = w.insert(curveThrough([[10.2, 0.1], [10, 5]]), { kind: 'road' });
+  assert.equal(c.nodes[0].x, 10);
+  const d = w.insert(curveThrough([[7, 0.2], [7, 4]]), { kind: 'road' });
+  assert.ok(d.ok);
+  assert.ok(Math.abs(d.nodes[0].y) < 1e-9 && w.edgesAt(d.nodes[0].id).length === 3);
+});
+
+test('insert: level crossings join, fences leave a gap, railways refuse each other', () => {
+  const w = new Ways();
+  w.insert(curveThrough([[0, 0], [10, 0]]), { kind: 'rail' });
+  const road = w.insert(curveThrough([[5, -3], [5, 3]]), { kind: 'road' });
+  assert.ok(road.ok);
+  const kinds = w.edgesAt(road.nodes[1].id).map((e) => e.kind).sort();
+  assert.deepEqual(kinds, ['rail', 'rail', 'road', 'road']); // the level crossing
+  const fence = w.insert(curveThrough([[2, -3], [2, 3]]), { kind: 'fence' });
+  assert.ok(fence.ok);
+  assert.equal(fence.edges.length, 1); // across the railway, not joining it
+  const before = w.edges.size;
+  const rail = w.insert(curveThrough([[8, -3], [8, 3]]), { kind: 'rail' });
+  assert.equal(rail.ok, false);
+  assert.equal(rail.reason, 'Crosses another line');
+  assert.equal(w.edges.size, before); // nothing changed
+});
+
+test('insert: too shallow a crossing is refused, and changes nothing', () => {
+  const w = new Ways();
+  w.insert(curveThrough([[0, 0], [10, 0]]), { kind: 'road' });
+  const before = JSON.stringify(w.toJSON());
+  const r = w.insert(curveThrough([[0, -1], [10, 1]]), { kind: 'road' });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'Too shallow a crossing');
+  assert.equal(JSON.stringify(w.toJSON()), before);
+});
+
+test('insert: two crossings on the same way both split it', () => {
+  const w = new Ways();
+  w.insert(curveThrough([[0, 0], [10, 0]]), { kind: 'road' });
+  const u = w.insert(curveThrough([[2, -2], [2, 2], [8, 2], [8, -2]], 0.1), { kind: 'road' });
+  assert.ok(u.ok, u.reason);
+  assert.equal(u.nodes.length, 4);
+  // the first road is now three pieces
+  const pieces = [...w.edges.values()].filter((e) => e.pts.every(([, y]) => Math.abs(y) < 1e-9));
+  assert.equal(pieces.length, 3);
+  assert.ok(Math.abs(pieces.reduce((s, e) => s + w.length(e), 0) - 10) < 1e-6);
+});

@@ -16,6 +16,21 @@
 
 import { measurePolyline, pointAt, subPolyline } from './geometry.js';
 import { MinHeap } from '../core/heap.js';
+import { crossingsOf } from './curves.js';
+
+// What happens where a way of one kind meets one of another (the new
+// one's kind first, either order gives the same): 'join' – a junction,
+// shared by both (two roads; a footpath onto a road; a level crossing,
+// where a road or footpath crosses a railway); 'gap' – they cross
+// without meeting (a fence leaves a gap); 'refuse' – not allowed.
+const FAMILY = { road: 'road', lane: 'road', path: 'path', rail: 'rail', fence: 'fence' };
+export function crossRule(k1, k2) {
+  const [a, b] = [FAMILY[k1] ?? k1, FAMILY[k2] ?? k2].sort();
+  if (a === 'fence' || b === 'fence') return a === b ? 'join' : 'gap';
+  if (a === 'rail' && b === 'rail') return 'refuse';
+  return 'join';
+}
+
 
 export class Ways {
   constructor() {
@@ -132,6 +147,88 @@ export class Ways {
       }
     }
     return best;
+  }
+
+  // Lays a new way along `line` (its centre line, from curves.js) with
+  // attributes `props` (its kind and the rest). Its ends join a node
+  // within `snap`, or else a way within `snap` (split there into a
+  // junction), or else stand on their own. Where it crosses other ways,
+  // crossRule says what happens: a junction (both split there), a gap, or
+  // it can't be laid. A junction must meet at `minAngle` at least.
+  // Nothing changes unless all of it can be laid.
+  // { ok: true, edges, nodes } or { ok: false, reason, at: [x, y] }.
+  insert(line, props = {}, { snap = 0.35, minAngle = Math.PI / 6, rule = crossRule } = {}) {
+    const kind = props.kind ?? 'road';
+    if (line.length < 2) return { ok: false, reason: 'Too short', at: line[0] };
+    // the ends: what each would join (not changing anything yet)
+    const endOf = ([x, y]) => {
+      const node = this.nodeNear(x, y, snap);
+      if (node) return { node, point: [node.x, node.y] };
+      const hit = this.edgeNear(x, y, snap, (e) => rule(kind, e.kind) === 'join');
+      if (hit) return { hit, point: hit.point };
+      return { point: [x, y] };
+    };
+    const ends = [endOf(line[0]), endOf(line[line.length - 1])];
+    if (ends[0].node && ends[0].node === ends[1].node) return { ok: false, reason: 'Too short', at: line[0] };
+    const pts = line.map((p) => [...p]);
+    pts[0] = ends[0].point;
+    pts[pts.length - 1] = ends[1].point;
+    const total = measurePolyline(pts).total;
+    if (total < snap) return { ok: false, reason: 'Too short', at: pts[0] };
+    // crossings along the way (not those at its ends: the ends see to them)
+    const joins = [];
+    for (const e of this.edges.values()) {
+      for (const c of crossingsOf(pts, e.pts)) {
+        if (c.sa < snap || c.sa > total - snap) continue;
+        const what = rule(kind, e.kind);
+        if (what === 'refuse') return { ok: false, reason: 'Crosses another line', at: c.point };
+        if (what === 'gap') continue;
+        if (c.angle < minAngle) return { ok: false, reason: 'Too shallow a crossing', at: c.point };
+        joins.push({ edge: e, t: c.sa, s: c.sb });
+      }
+    }
+    for (const end of ends) {
+      if (!end.hit) continue;
+      // meeting a way end-on: at a sensible angle too
+      const e = end.hit.edge, poly = this.measured(e);
+      const [p0, p1] = [pointAt(poly, Math.max(0, end.hit.s - 0.1)), pointAt(poly, Math.min(poly.total, end.hit.s + 0.1))];
+      const [q0, q1] = end === ends[0] ? [pts[0], pts[Math.min(1, pts.length - 1)]] : [pts[pts.length - 2], pts[pts.length - 1]];
+      const da = [p1[0] - p0[0], p1[1] - p0[1]], db = [q1[0] - q0[0], q1[1] - q0[1]];
+      const cos = Math.abs(da[0] * db[0] + da[1] * db[1]) / ((Math.hypot(...da) * Math.hypot(...db)) || 1);
+      if (Math.acos(Math.min(1, cos)) < minAngle) return { ok: false, reason: 'Too shallow a crossing', at: end.point };
+    }
+
+    // all clear: split what it meets, then lay it piece by piece
+    const nodeAtEnd = (end) => end.node ?? (end.hit ? this.split(end.hit.edge.id, end.hit.s).node : this.addNode(...end.point));
+    const first = nodeAtEnd(ends[0]);
+    // (the far end's way may be split by a crossing first: find it again)
+    const byEdge = new Map();
+    for (const j of joins) {
+      if (!byEdge.has(j.edge.id)) byEdge.set(j.edge.id, []);
+      byEdge.get(j.edge.id).push(j);
+    }
+    const junctions = [];
+    for (const list of byEdge.values()) {
+      // from the far end of the edge back, so each split leaves the part
+      // toward `a` – where the rest are – with the same arc lengths
+      list.sort((p, q) => q.s - p.s);
+      let edgeId = list[0].edge.id;
+      for (const j of list) {
+        const { node, edges } = this.split(edgeId, j.s);
+        junctions.push({ t: j.t, node });
+        edgeId = edges[0].id;
+      }
+    }
+    const last = ends[1].hit
+      ? (() => { const h = this.edgeNear(...ends[1].point, 1e-6, (e) => rule(kind, e.kind) === 'join'); return h ? this.split(h.edge.id, h.s).node : this.addNode(...ends[1].point); })()
+      : nodeAtEnd(ends[1]);
+    const stops = [{ t: 0, node: first }, ...junctions.sort((p, q) => p.t - q.t), { t: total, node: last }];
+    const poly = measurePolyline(pts), edges = [];
+    for (let k = 1; k < stops.length; k++) {
+      if (stops[k].node === stops[k - 1].node) continue;
+      edges.push(this.addEdge(stops[k - 1].node.id, stops[k].node.id, subPolyline(poly, stops[k - 1].t, stops[k].t), props));
+    }
+    return { ok: true, edges, nodes: stops.map((st) => st.node) };
   }
 
   // The cheapest route from node `from` to node `to`: { nodes, edges } or

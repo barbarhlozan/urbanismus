@@ -776,6 +776,10 @@ reason.runs-along-another-line
   cs: Vede po jiné trati
   en: Runs along another line
 
+reason.too-shallow-a-crossing
+  cs: Příliš ostré křížení
+  en: Too shallow a crossing
+
 reason.too-sharp-a-bend-for-trains
   cs: Na vlaky příliš ostrý oblouk
   en: Too sharp a bend for trains
