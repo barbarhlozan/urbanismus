@@ -191,6 +191,7 @@ export function fieldsOf(def, s) {
 // or one of its type's `yards` picked by seed. null = none. Without a road
 // (cars: false) styles for cars (parking, garages) are left out.
 export function yardOf(def, s, { cars = true } = {}) {
+  if (!def.yards?.length) return null; // (a choice kept from when it had some)
   const chosen = s.data?.yard;
   if (chosen === 'none') return null;
   if (chosen && YARDS[chosen] && (cars || !YARDS[chosen].cars)) return chosen;

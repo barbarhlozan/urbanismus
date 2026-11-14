@@ -149,10 +149,11 @@ export const house = {
   ...HOME,
   tags: [...HOME.tags, 'houses'],
   footprint: [[0, 0]],
-  plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
+  plot: { props: 'house', boundary: 0, density: 0.3 }, // a tree, a shed – fences are the player's
   stats: { residents: 4 },
   agents: 1,
-  yards: ['garden', 'garden', 'trees'],
+  yards: [], // no front garden or path to the road: the house stands in the grass
+  driveway: false,
   tilt: true,
   // a walled court beside it: between two neighbours, or its own (courts.js)
   join: { group: 'village', chance: 0.6 },
@@ -252,10 +253,11 @@ export const familyHouse = {
   ...HOME,
   tags: [...HOME.tags, 'houses'],
   footprint: [[0, 0]],
-  plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
+  plot: { props: 'house', boundary: 0, density: 0.3 }, // a tree, a shed – fences are the player's
   stats: { residents: 4 },
   agents: 1,
-  yards: ['garden', 'garden', 'trees'],
+  yards: [], // no front garden or path to the road: the house stands in the grass
+  driveway: false,
   tilt: true,
   kinds: ['cube', 'cube', 'villa'],
   join: { group: 'village', chance: 0.6 },
@@ -399,10 +401,11 @@ export const houseWide = {
   ...HOME,
   tags: [...HOME.tags, 'houses'],
   footprint: [[0, 0], [1, 0]],
-  plot: { props: 'garden', boundary: 0.6, kinds: ['fence', 'hedge'], density: 0.4 },
+  plot: { props: 'house', boundary: 0, density: 0.3 }, // a tree, a shed – fences are the player's
   stats: { residents: 8 },
   agents: 2,
-  yards: ['garden', 'garden', 'trees'],
+  yards: [], // no front garden or path to the road: the house stands in the grass
+  driveway: false,
   kinds: ['twin', 'longhouse', 'barn', 'field'],
   fields: { field: [[0.68, 1.1, -0.08, 0.28, 0.05]] }, // the patch behind the chalupa, where they hoe (sim/agents.js, fieldsOf)
   draw(g, s) {
