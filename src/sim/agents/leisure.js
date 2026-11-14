@@ -417,27 +417,44 @@ export class AgentLeisure {
 
   // The trees deep enough in a wood to go mushrooming among (a tree with
   // village.deep trees round it), as [x, y]; worked out again when the
-  // trees change.
+  // trees change. (cells: the same by unit cell, "cx,cy" -> [[x, y], …],
+  // for byWood.)
   woods() {
+    return this.woodsByCell().list;
+  }
+
+  woodsByCell() {
     const { world } = this;
-    if (this._woods?.n === world.features.size) return this._woods.list;
-    const list = [];
+    if (this._woods?.n === world.features.size) return this._woods;
+    const list = [], cells = new Map();
     for (const f of world.features.values()) {
       if (f.type !== 'tree') continue;
       const round = world.featureIndex.near(f.x, f.y, 1.5).filter((id) => id !== f.id && world.features.get(id)?.type === 'tree');
-      if (round.length >= this.config.village.deep) list.push([f.x, f.y]);
+      if (round.length < this.config.village.deep) continue;
+      list.push([f.x, f.y]);
+      const key = `${Math.floor(f.x)},${Math.floor(f.y)}`;
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push([f.x, f.y]);
     }
-    this._woods = { n: world.features.size, list };
-    return list;
+    this._woods = { n: world.features.size, list, cells };
+    return this._woods;
   }
 
   // A walkable (fine) dot with a wood within a step of it.
   byWood(n) {
-    const woods = this.woods();
-    if (!woods.length) return false;
+    const { list, cells } = this.woodsByCell();
+    if (!list.length) return false;
     const [fx, fy] = this.world.fine.xy(n);
     const [x, y] = [Math.round(fx / 2), Math.round(fy / 2)];
-    return woods.some(([wx, wy]) => Math.abs(wx - x) <= 1.5 && Math.abs(wy - y) <= 1.5);
+    // only the cells within 1.5 of it
+    for (let cy = Math.floor(y - 1.5); cy <= Math.floor(y + 1.5); cy++) {
+      for (let cx = Math.floor(x - 1.5); cx <= Math.floor(x + 1.5); cx++) {
+        for (const [wx, wy] of cells.get(`${cx},${cy}`) ?? []) {
+          if (Math.abs(wx - x) <= 1.5 && Math.abs(wy - y) <= 1.5) return true;
+        }
+      }
+    }
+    return false;
   }
 
   // Where to look for mushrooms: among the wood's trees near `anchor`,
