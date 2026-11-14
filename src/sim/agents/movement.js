@@ -3,8 +3,7 @@
 // crossings – and checked again when the town changes under it.
 
 import { STRUCTURE_TYPES } from '../../../structures/index.js';
-import { findPath } from '../../roads/pathfinding.js';
-import { smoothPolyline, offsetPolyline, measurePolyline, pointAt, roadway } from '../../roads/geometry.js';
+import { smoothPolyline, fillet, offsetPolyline, measurePolyline, pointAt, roadway } from '../../roads/geometry.js';
 import { hubRadius } from '../../roads/siteWalks.js';
 
 const NONE = [];
@@ -268,11 +267,11 @@ export class AgentMovement {
   }
 
   driveRoute(home, dest) {
-    const from = this.world.accessInfo(home);
-    const to = this.world.accessInfo(dest);
+    const from = this.drivePlace(home);
+    const to = this.drivePlace(dest);
     if (!from || !to) return null;
-    const nodes = findPath(this.world.networks.road, from.road, to.road);
-    return nodes && { mode: 'drive', nodes, fromDoor: from.door, toDoor: to.door };
+    const way = this.driveWay(from.place, to.place);
+    return way && { mode: 'drive', ...way, fromDoor: from.door, toDoor: to.door };
   }
 
   begin(a, plan, destId) {
@@ -312,11 +311,31 @@ export class AgentMovement {
       if (toDoor != null) smooth.push(this.doorEdge(toDoor, smooth[smooth.length - 1]));
       return smooth;
     };
+    // a route along the ways (sim/wayGraph.js): already on the curves,
+    // rounded only where it turns at a junction
+    const wayLine = (pts, joints, fromPoint, toPoint, fromDoor, toDoor) => {
+      const at = new Set(joints ?? []);
+      const smooth = [pts[0]];
+      for (let i = 1; i < pts.length - 1; i++) {
+        if (at.has(i)) smooth.push(...fillet(pts[i - 1], pts[i], pts[i + 1], curve.junctionRadius, curve.curveSamples));
+        else smooth.push(pts[i]);
+      }
+      if (pts.length > 1) smooth.push(pts[pts.length - 1]);
+      if (fromPoint) smooth.unshift(fromPoint);
+      if (toPoint) smooth.push(toPoint);
+      if (fromDoor != null) smooth.unshift(this.doorEdge(fromDoor, smooth[0]));
+      if (toDoor != null) smooth.push(this.doorEdge(toDoor, smooth[smooth.length - 1]));
+      return smooth;
+    };
     const atDoor = !plan.toPoint && plan.toDoor != null;
-    const smooth = line(plan.nodes, plan.fromPoint, plan.toPoint, plan.fromDoor, atDoor ? plan.toDoor : null);
+    const smooth = plan.pts
+      ? wayLine(plan.pts, plan.joints, plan.fromPoint, plan.toPoint, plan.fromDoor, atDoor ? plan.toDoor : null)
+      : line(plan.nodes, plan.fromPoint, plan.toPoint, plan.fromDoor, atDoor ? plan.toDoor : null);
     // loop walks come home another way (backNodes, ending at backDoor)
-    const back = plan.backNodes ? line(plan.backNodes, null, null, null, plan.backDoor) : smooth.slice().reverse();
-    const home = plan.backNodes ? plan.backDoor != null : plan.fromDoor != null;
+    const loop = plan.backNodes || plan.backPts;
+    const back = plan.backPts ? wayLine(plan.backPts, plan.backJoints, null, null, null, plan.backDoor)
+      : plan.backNodes ? line(plan.backNodes, null, null, null, plan.backDoor) : smooth.slice().reverse();
+    const home = loop ? plan.backDoor != null : plan.fromDoor != null;
 
     return {
       mode: plan.mode,
@@ -328,10 +347,14 @@ export class AgentMovement {
       linger: !!plan.linger,   // wanders about the destination (a park)
       transit: plan.transit ?? null, // { stop }: waits there for a bus / train
       exit: plan.exit ?? null,
-      nodes: plan.nodes,
+      nodes: plan.nodes ?? null,
       backNodes: plan.backNodes ?? null,
+      ways: plan.ways ?? null,         // the way edges it goes along (sim/wayGraph.js)…
+      wayPts: plan.pts ?? null,        // …and its route on them
+      backWays: plan.backWays ?? null,
+      backPts: plan.backPts ?? null,
       out: this.leg(offsetPolyline(smooth, side), plan.fromDoor != null, atDoor, drive, plan.mode === 'cycle'),
-      back: this.leg(offsetPolyline(back, side), plan.backNodes ? false : atDoor, home, drive, plan.mode === 'cycle'),
+      back: this.leg(offsetPolyline(back, side), loop ? false : atDoor, home, drive, plan.mode === 'cycle'),
     };
   }
 
@@ -380,7 +403,7 @@ export class AgentMovement {
   }
 
   // Where a leg goes through junctions (three roads or more): within
-  // traffic.box of the dot. In order: [{ node, in, out (arc lengths), ix,
+  // traffic.box of the junction's node (AgentSystem.junctionAt). In order: [{ node, in, out (arc lengths), ix,
   // iy (the way it goes in), turn (>0 right, <0 left) }].
   boxes(leg) {
     const { world } = this;
@@ -395,10 +418,12 @@ export class AgentMovement {
     for (let s = 0; s <= leg.total + step; s += step) {
       const at = Math.min(s, leg.total);
       const [x, y] = pointAt(leg, at);
-      const [i, j] = [Math.round(x), Math.round(y)];
-      const n = world.grid.inBounds(i, j) ? world.grid.index(i, j) : -1;
-      const here = n >= 0 && (x - i) ** 2 + (y - j) ** 2 < r * r && world.roads.hasNode(n) && world.roads.degree(n) >= 3;
-      if (here && !box) out.push((box = { node: n, in: at, out: leg.total, ix: 0, iy: 0, turn: 0 }));
+      const here = this.junctionAt(x, y, r);
+      if (here && box && here.node !== box.node) {
+        box.out = at;
+        box = null;
+      }
+      if (here && !box) out.push((box = { node: here.node, in: at, out: leg.total, ix: 0, iy: 0, turn: 0 }));
       else if (!here && box) {
         box.out = at;
         box = null;
@@ -462,7 +487,7 @@ export class AgentMovement {
 
   // Where the line from a building's door dot towards `to` leaves the building.
   doorEdge(door, to) {
-    const [x, y] = this.world.grid.xy(door);
+    const [x, y] = typeof door === 'number' ? this.world.grid.xy(door) : door;
     const dx = to[0] - x, dy = to[1] - y;
     const l = Math.hypot(dx, dy);
     const pad = this.config.sim.doorPad;
@@ -482,6 +507,10 @@ export class AgentMovement {
   }
 
   tripIntact(trip) {
+    if (trip.ways) {
+      const g = trip.mode === 'drive' ? this.driveGraph() : this.footGraph(trip.mode === 'cycle');
+      return this.waysIntact(g, trip.ways, trip.wayPts) && (!trip.backWays || this.waysIntact(g, trip.backWays, trip.backPts));
+    }
     const net = trip.mode === 'drive' ? this.world.roads : trip.mode === 'cycle' ? this.ride : this.walk;
     const ok = (nodes) => nodes.every((n, i) => net.hasNode(n) && (i === 0 || net.hasEdge(nodes[i - 1], n)));
     return ok(trip.nodes) && (!trip.backNodes || ok(trip.backNodes));

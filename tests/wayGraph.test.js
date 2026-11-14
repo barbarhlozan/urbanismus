@@ -72,3 +72,15 @@ test('no route between pieces that never meet, and none past maxCost', () => {
   assert.equal(g.route(g.attach(1, 0), g.attach(11, 10)), null);
   assert.equal(g.route(g.attach(1, 0), g.attach(4, 3), { maxCost: 2 }), null);
 });
+
+test('a loose end just short of another way is mended onto it', () => {
+  const w = new Ways();
+  road(w, [[0, 0], [4, 0]]);
+  road(w, [[2, 3], [2, 0.3]]); // stops short of the first
+  road(w, [[4.2, 0.1], [6, 0]]); // its start near the first's end
+  const g = new WayGraph(w, { mend: 0.45 });
+  const r = g.route(g.attach(2, 3), g.attach(6, 0));
+  assert.ok(r, 'a route across both gaps');
+  assert.ok(Math.abs(r.cost - (2.7 + 0.3 + 2 + Math.hypot(0.2, 0.1) + 1.8)) < 0.01, r.cost);
+  assert.equal(new WayGraph(w).route(g.attach(2, 3), g.attach(6, 0)), null);
+});

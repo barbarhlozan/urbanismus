@@ -8,9 +8,13 @@
 //                streets, lanes…)
 //     factor(e)  cost per unit length (a lane's slowness, a sidewalk's
 //                being less liked than a footpath)
-//     cuts       [{ key, x, y, reach }]: points that cut the edge nearest
-//                them into two (a park's exit, a footpath ending at a
-//                kerb), so something can be linked there: tapOf(key)
+//     cuts       [{ key, x, y, reach, skip }]: points that cut the edge
+//                nearest them (not edge `skip`) into two (a park's exit, a
+//                footpath ending at a kerb), so something can be linked
+//                there: tapOf(key)
+//     mend       a way's loose end this near another way (or its node)
+//                is joined to it, as the dots joined them (ways laid dot
+//                by dot don't always share their node)
 //
 // Graph nodes are the ways' node ids (numbers) and the cuts' ('c' + key);
 // pieces are the stretches of way edges between them:
@@ -44,7 +48,7 @@ export function nearestOn({ points, cum }, x, y) {
 }
 
 export class WayGraph {
-  constructor(ways, { pass = () => true, factor = () => 1, cuts = [] } = {}) {
+  constructor(ways, { pass = () => true, factor = () => 1, cuts = [], mend = 0 } = {}) {
     this.ways = ways;
     this.nodes = new Map(); // id -> [x, y]
     this.adj = new Map();   // id -> [piece]
@@ -54,6 +58,30 @@ export class WayGraph {
     this.minFactor = 1;
 
     const edges = [...ways.edges.values()].filter(pass);
+    // loose ends: joined to a node near, or cut into a way near
+    const mends = [];
+    if (mend > 0) {
+      const count = new Map();
+      for (const e of edges) for (const n of [e.a, e.b]) count.set(n, (count.get(n) ?? 0) + 1);
+      const own = new Map();
+      for (const e of edges) for (const n of [e.a, e.b]) if (count.get(n) === 1) own.set(n, e);
+      const passing = [...count.keys()].map((id) => ways.nodes.get(id));
+      for (const [n, e] of own) {
+        const p = ways.nodes.get(n), far = ways.other(e, n);
+        let best = null, bd = mend;
+        for (const q of passing) {
+          if (q.id === n || q.id === far) continue;
+          const d = Math.hypot(q.x - p.x, q.y - p.y);
+          if (d < bd) [best, bd] = [q, d];
+        }
+        if (best) {
+          if (!mends.some((m) => m.a === best.id && m.b === n)) mends.push({ a: n, b: best.id });
+        } else {
+          cuts = [...cuts, { key: 'mend' + n, x: p.x, y: p.y, reach: mend, skip: e.id }];
+          mends.push({ a: n, tap: 'mend' + n });
+        }
+      }
+    }
     // where the cuts fall: edge id -> [{ s, id }]
     const cutsOn = new Map();
     if (cuts.length) {
@@ -62,6 +90,7 @@ export class WayGraph {
       for (const c of cuts) {
         let best = null;
         for (const e of this.around(index, c.x, c.y, c.reach ?? 0.5)) {
+          if (e.id === c.skip) continue;
           const at = nearestOn(ways.measured(e), c.x, c.y);
           if (at.dist <= (c.reach ?? 0.5) && (!best || at.dist < best.at.dist)) best = { e, at };
         }
@@ -95,6 +124,12 @@ export class WayGraph {
         if (!this.nodes.has(p.id)) this.nodes.set(p.id, pts[0]);
         this.add(p.id, q.id, pts, f, e);
       }
+    }
+    for (const m of mends) {
+      const b = m.tap ? this.tapOf(m.tap) : m.b;
+      if (b == null || !this.nodes.has(m.a) || !this.nodes.has(b)) continue;
+      const [p, q] = [this.nodes.get(m.a), this.nodes.get(b)];
+      this.link(m.a, b, Math.hypot(q[0] - p[0], q[1] - p[1]), [p, q]);
     }
   }
 

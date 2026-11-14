@@ -4,7 +4,6 @@
 
 import { STRUCTURE_TYPES, codeOf } from '../../../structures/index.js';
 import { compass } from '../../ui/annotations.js';
-import { findPath } from '../../roads/pathfinding.js';
 import { pointAt } from '../../roads/geometry.js';
 import { can, backPoint, paceAt, newAgent, between } from './shared.js';
 import { centerOf } from '../pose.js';
@@ -50,7 +49,7 @@ export class AgentTransit {
   // { stop, route } or null.
   transitRoute(home) {
     const { world } = this;
-    const buses = world.roadExits().length > 0, trains = world.railExits().length > 0;
+    const buses = this.driveExits().length > 0, trains = world.railExits().length > 0;
     if (!buses && !trains) return null;
     let best = null;
     for (const s of world.structures.values()) {
@@ -65,13 +64,13 @@ export class AgentTransit {
   // ----- map exits -----
 
   // A point just off the map beyond an exit.
-  offMap({ node, dir }, dist = 1.8) {
-    const [x, y] = this.world.grid.xy(node);
+  offMap({ pos, dir }, dist = 1.8) {
+    const [x, y] = pos;
     return [x + dir[0] * dist, y + dir[1] * dist];
   }
 
   pickExit() {
-    const exits = this.world.roadExits();
+    const exits = this.driveExits();
     return exits.length ? exits[Math.floor(Math.random() * exits.length)] : null;
   }
 
@@ -90,17 +89,17 @@ export class AgentTransit {
     }
     if (!can('cars')) return null;
     const exit = this.pickExit();
-    const from = this.world.accessInfo(home);
+    const from = this.drivePlace(home);
     if (!exit || !from) return null;
-    const nodes = findPath(this.world.networks.road, from.road, exit.node);
-    if (!nodes) return null;
+    const way = this.driveWay(from.place, exit.node);
+    if (!way) return null;
     this.log(`${codeOf(home)} resident ${why} · exit ${compass(exit.dir)}`, centerOf(this.world, home));
-    return { dest: null, plan: { mode: 'drive', nodes, fromDoor: from.door, toPoint: this.offMap(exit), outside: true, exit, commute } };
+    return { dest: null, plan: { mode: 'drive', ...way, fromDoor: from.door, toPoint: this.offMap(exit), outside: true, exit, commute } };
   }
 
   updateVisitors(dt) {
     const cfg = this.config.visitors;
-    const exits = this.world.roadExits();
+    const exits = this.driveExits();
     const size = Math.min(1, this.world.structures.size / cfg.fullCity);
     if (!exits.length || size === 0 || !can('cars')) return;
     if ((this.visitorTimer -= dt) > 0) return;
@@ -116,7 +115,7 @@ export class AgentTransit {
   updateCommuters(dt) {
     const { residents, jobs } = this.balance();
     const missing = jobs - residents;
-    const cars = this.world.roadExits().length && can('cars');
+    const cars = this.driveExits().length && can('cars');
     if (missing <= 0) return;
     if ((this.commuteTimer -= dt) > 0) return;
     this.commuteTimer = (this.config.commute.interval / missing) * (0.5 + Math.random());
@@ -151,7 +150,7 @@ export class AgentTransit {
   updateDeliveries(dt) {
     const cfg = this.config.trucks;
     const size = Math.min(1, this.world.structures.size / this.config.visitors.fullCity);
-    if (!this.world.roadExits().length || size === 0 || !can('trucks')) return;
+    if (!this.driveExits().length || size === 0 || !can('trucks')) return;
     if ((this.deliveryTimer -= dt) > 0) return;
     this.deliveryTimer = (cfg.deliveryInterval / size) * (0.5 + Math.random());
     let n = 0;
@@ -166,18 +165,18 @@ export class AgentTransit {
       : this.candidates({ id: null }, truck ? this.config.trucks.destinations : this.config.visitors.destinations);
     for (let attempt = 0; attempt < 4 && exit && places.length; attempt++) {
       const dest = places.splice(Math.floor(Math.random() * places.length), 1)[0];
-      const to = world.accessInfo(dest);
+      const to = this.drivePlace(dest);
       if (!to) continue;
-      const nodes = findPath(world.networks.road, exit.node, to.road);
-      if (!nodes) continue;
+      const way = this.driveWay(exit.node, to.place);
+      if (!way) continue;
       const id = `v${++this.visitorSeq}`;
       const a = newAgent({ id, visitor: true, commuter, truck, state: 'out' });
-      a.trip = this.buildTrip({ mode: 'drive', nodes, fromPoint: this.offMap(exit), toDoor: to.door }, dest.id);
+      a.trip = this.buildTrip({ mode: 'drive', ...way, fromPoint: this.offMap(exit), toDoor: to.door }, dest.id);
       a.trip.visitor = true;
       a.trip.commuter = commuter;
       a.trip.truck = truck;
       const who = commuter ? 'Commuter' : truck ? 'Delivery truck' : 'V';
-      this.log(`${who}-${String(this.visitorSeq).padStart(3, '0')} arrives · exit ${compass(exit.dir)} → ${codeOf(dest)}`, world.grid.xy(exit.node));
+      this.log(`${who}-${String(this.visitorSeq).padStart(3, '0')} arrives · exit ${compass(exit.dir)} → ${codeOf(dest)}`, exit.pos);
       this.beginLeg(a, a.trip.out);
       this.agents.set(id, a);
       return true;
@@ -187,13 +186,13 @@ export class AgentTransit {
 
   // ----- buses -----
 
-  // Bus stops by a road: [{ s, road }].
+  // Bus stops by a road: [{ s, place (on the drive graph), point }].
   busStops() {
     const out = [];
     for (const s of this.world.structures.values()) {
       if (!STRUCTURE_TYPES[s.type]?.busStop) continue;
-      const at = this.world.accessInfo(s);
-      if (at) out.push({ s, road: at.road });
+      const at = this.drivePlace(s);
+      if (at) out.push({ s, place: at.place, point: at.place.point });
     }
     return out;
   }
@@ -211,7 +210,7 @@ export class AgentTransit {
     if (!can('buses')) return;
     if ((this.busTimer -= dt) > 0) return;
     const stops = this.busStops();
-    if (!stops.length || !this.world.roadExits().length) {
+    if (!stops.length || !this.driveExits().length) {
       this.busTimer = 9;
       return;
     }
@@ -222,9 +221,7 @@ export class AgentTransit {
   // In through a random exit, then up to maxStops stops (a random pick,
   // nearest next), out through an exit it can reach.
   spawnBus(stops) {
-    const { world } = this;
     const cfg = this.config.buses;
-    const layer = world.networks.road;
     const entry = this.pickExit();
     if (!entry) return false;
     const pick = stops.slice();
@@ -234,44 +231,50 @@ export class AgentTransit {
     }
     const left = pick.slice(0, cfg.maxStops);
     const segs = [], calls = [];
-    let at = entry.node;
+    let at = entry.node, [px, py] = entry.pos;
     while (left.length) {
-      const [px, py] = world.grid.xy(at);
-      const far = ({ road }) => {
-        const [x, y] = world.grid.xy(road);
-        return (x - px) ** 2 + (y - py) ** 2;
-      };
+      const far = ({ point: [x, y] }) => (x - px) ** 2 + (y - py) ** 2;
       left.sort((a, b) => far(a) - far(b));
       const stop = left.shift();
-      if (stop.road === at) continue;
-      const nodes = findPath(layer, at, stop.road);
-      if (!nodes) continue;
-      segs.push(nodes);
+      if (far(stop) < 0.01) continue;
+      const way = this.driveWay(at, stop.place);
+      if (!way) continue;
+      segs.push(way);
       calls.push(stop.s);
-      at = stop.road;
+      at = stop.place;
+      [px, py] = stop.point;
     }
     if (!calls.length) return false;
-    const exits = world.roadExits().slice();
+    const exits = this.driveExits().slice();
     let exit = null;
     while (exits.length && !exit) {
       const e = exits.splice(Math.floor(Math.random() * exits.length), 1)[0];
-      const nodes = e.node !== at && findPath(layer, at, e.node);
-      if (nodes) {
-        segs.push(nodes);
+      const way = e.node !== at && this.driveWay(at, e.node);
+      if (way) {
+        segs.push(way);
         exit = e;
       }
     }
     if (!exit) return false;
 
     // one route; call k is where segment k ends
-    const nodes = segs[0].slice();
+    const pts = segs[0].pts.slice(), joints = segs[0].joints.slice(), ways = segs[0].ways.slice();
     const callAt = [];
     for (let k = 1; k < segs.length; k++) {
-      callAt.push(nodes.length - 1);
-      nodes.push(...segs[k].slice(1));
+      callAt.push(pts.length - 1);
+      const off = pts.length - 1;
+      pts.push(...segs[k].pts.slice(1));
+      joints.push(off, ...segs[k].joints.map((i) => i + off));
+      ways.push(...segs[k].ways);
     }
     // legs, split where it turns back at a stop
-    const bounds = [0, ...callAt.filter((i) => nodes[i - 1] === nodes[i + 1]), nodes.length - 1];
+    const back = (i) => {
+      const [a, b, c] = [pts[i - 1], pts[i], pts[i + 1]];
+      if (!a || !c) return false;
+      const [ux, uy] = [b[0] - a[0], b[1] - a[1]], [vx, vy] = [c[0] - b[0], c[1] - b[1]];
+      return ux * vx + uy * vy < -0.3 * Math.hypot(ux, uy) * Math.hypot(vx, vy);
+    };
+    const bounds = [0, ...callAt.filter(back), pts.length - 1];
     const half = cfg.length / 2; // stops with its middle at the stop
     const legs = [];
     for (let j = 0; j + 1 < bounds.length; j++) {
@@ -279,7 +282,8 @@ export class AgentTransit {
       const last = j + 2 === bounds.length;
       const leg = this.buildTrip({
         mode: 'drive',
-        nodes: nodes.slice(b0, b1 + 1),
+        pts: pts.slice(b0, b1 + 1),
+        joints: joints.filter((i) => i > b0 && i < b1).map((i) => i - b0),
         fromPoint: j === 0 ? this.offMap(entry) : undefined,
         toPoint: last ? this.offMap(exit) : undefined,
       }, null).out;
@@ -288,7 +292,7 @@ export class AgentTransit {
       callAt.forEach((i, k) => {
         if (i <= b0 || i > b1) return;
         if (i === b1) return onLeg.push({ id: calls[k].id, at: leg.total });
-        const [x, y] = world.grid.xy(nodes[i]);
+        const [x, y] = pts[i];
         from = this.nearestAlong(leg, x, y, from);
         onLeg.push({ id: calls[k].id, at: Math.min(leg.total, leg.cum[from] + half) });
       });
@@ -297,11 +301,11 @@ export class AgentTransit {
 
     const id = `b${++this.busSeq}`;
     const a = newAgent({ id, visitor: true, bus: true, state: 'out', legs, leg: 0, call: 0, pause: 0, left: -Infinity });
-    a.trip = { mode: 'drive', dest: null, outside: true, visitor: true, exit, nodes, out: legs[0].leg, back: null };
+    a.trip = { mode: 'drive', dest: null, outside: true, visitor: true, exit, ways, wayPts: pts, out: legs[0].leg, back: null };
     this.beginLeg(a, a.trip.out);
     this.placeBus(a);
     this.agents.set(id, a);
-    this.log(`Bus ${String(this.busSeq).padStart(3, '0')} arrives · exit ${compass(entry.dir)} · ${calls.length} ${calls.length === 1 ? 'stop' : 'stops'}`, world.grid.xy(entry.node));
+    this.log(`Bus ${String(this.busSeq).padStart(3, '0')} arrives · exit ${compass(entry.dir)} · ${calls.length} ${calls.length === 1 ? 'stop' : 'stops'}`, entry.pos);
     return true;
   }
 

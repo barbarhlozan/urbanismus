@@ -34,7 +34,8 @@ export class WorldAccess {
     return [s.x - cx, s.y - cy];
   }
 
-  // Where a structure meets the road: { door: footprint node, road: road node }.
+  // Where a structure meets the road: { door: footprint node, road: road
+  // node, point: where on the road, doorPt: the door's own point }.
   // Straight neighbours are preferred over diagonal ones.
   accessInfo(s) {
     if (s.free) return this.freeAccess(s);
@@ -56,7 +57,9 @@ export class WorldAccess {
       if (!ends.length) continue;
       const [px, py] = road.point;
       const end = ends.sort((a, b) => Math.hypot(...this.grid.xy(a).map((v, i) => v - [px, py][i])) - Math.hypot(...this.grid.xy(b).map((v, i) => v - [px, py][i])))[0];
-      return { door: s.node, road: end };
+      // the door: as a one-dot house's middle, behind the middle of that side
+      const l = Math.hypot(dx, dy) || 1, k = Math.max(0, l - 0.5) / l;
+      return { door: s.node, road: end, point: [px, py], doorPt: [s.x + dx * k, s.y + dy * k] };
     }
     return null;
   }
@@ -66,7 +69,7 @@ export class WorldAccess {
       for (const n of nodes) {
         for (const [dx, dy] of dirs) {
           const m = this.grid.offset(n, dx, dy);
-          if (m >= 0 && this.hasRoad(m) && !this.terrain.isWater(m)) return { door: n, road: m }; // not off a bridge
+          if (m >= 0 && this.hasRoad(m) && !this.terrain.isWater(m)) return { door: n, road: m, point: this.networks.road.pos(m), doorPt: this.grid.xy(n) }; // not off a bridge
         }
       }
     }

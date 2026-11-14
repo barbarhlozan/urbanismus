@@ -28,7 +28,7 @@
 //            out their time `away`, then `abroad` wait for one calling there
 //            again to get off and walk home
 //
-// Map exits (roads ending at the map edge, world.roadExits()):
+// Map exits (roads ending at the map edge, AgentSystem.driveExits()):
 //   - residents sometimes leave the map (the 'leave' activity), stay away a
 //     while and come back the same way – by car, or by bus / train
 //   - jobs vs residents (config.commute): when the city has more residents
@@ -100,6 +100,7 @@ import { AgentLeisure } from './agents/leisure.js';
 import { AgentTransit } from './agents/transit.js';
 import { AgentTrips } from './agents/trips.js';
 import { AgentMovement } from './agents/movement.js';
+import { AgentWays } from './agents/ways.js';
 
 export class AgentSystem {
   constructor(world, config, parking = null) {
@@ -282,7 +283,7 @@ export class AgentSystem {
           if (a.trip.mode === 'drive' && !a.truck) this.parking?.take(this.world.structures.get(a.trip.dest));
           if (a.trip.outside && !a.truck) {
             const home = this.world.structures.get(a.home);
-            if (home) this.log(`${codeOf(home)} resident returns · exit ${compass(a.trip.exit.dir)}`, this.world.grid.xy(a.trip.exit.node));
+            if (home) this.log(`${codeOf(home)} resident returns · exit ${compass(a.trip.exit.dir)}`, a.trip.exit.pos);
           }
           break;
         case 'abroad': // no bus / train came back in time: turn up anyway
@@ -355,7 +356,7 @@ export class AgentSystem {
 
 // AgentSystem's methods are kept by topic in ./agents/ – each file a class
 // whose methods are copied onto AgentSystem.prototype here (all share `this`).
-for (const part of [AgentLeisure, AgentTransit, AgentTrips, AgentMovement]) {
+for (const part of [AgentLeisure, AgentTransit, AgentTrips, AgentMovement, AgentWays]) {
   for (const key of Object.getOwnPropertyNames(part.prototype)) {
     if (key !== 'constructor') Object.defineProperty(AgentSystem.prototype, key, Object.getOwnPropertyDescriptor(part.prototype, key));
   }

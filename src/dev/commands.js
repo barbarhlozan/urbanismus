@@ -247,7 +247,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     build,
     road,
     way,
-    world, renderer, // (for poking at from the console)
+    world, renderer, agents, trains, // (for poking at from the console)
     tree,
     erase,
     undo: () => world.history.undo(), // the player's last change (each cmd that builds or erases is one too)
