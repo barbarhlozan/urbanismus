@@ -71,6 +71,10 @@ lookups (`hasRoad`, `roads.hasNode / neighbors / hasEdge`) – most in
 the sim, tools, stations and terrain generation. 47 test files; most touch
 the world model.
 
+*Since this was written, `world.js`, `agents.js` and `renderer.js` have
+been split into topic files (`src/core/world/`, `src/sim/agents/`,
+`src/render/renderer/`); counts above are from before the split.*
+
 ## The new model
 
 ### Positions and the spatial index
@@ -200,7 +204,7 @@ when positions are plain points.
 
 | Module | Change |
 |---|---|
-| `src/core/world.js` | the model above: structures by position, network layers by node/edge ids, placement and access by outline; dot queries go |
+| `src/core/world.js`, `world/structures.js`, `placement.js`, `access.js`, `networks.js` | the model above: structures by position, network layers by node/edge ids, placement and access by outline; dot queries go |
 | `src/core/spatial.js` | **new** – the spatial index |
 | `src/core/grid.js` | stays for the terrain raster only |
 | `src/roads/network.js`, `layer.js` | nodes with positions, edges with curves and attributes |
@@ -211,10 +215,10 @@ when positions are plain points.
 | `src/tools/network.js` | drawing ways with points and snapping |
 | `src/tools/build.js`, `erase.js`, `bulldoze.js`, `inspect.js` | outline placement and snapping; picking by index |
 | `src/render/overlay.js` | no dots: the outline (and why it can't go there), a way's curve as it's drawn |
-| `src/render/renderer.js`, `lots.js` | caches keyed by ids; buildings drawn at `x, y, angle` |
+| `src/render/renderer.js`, `renderer/*`, `lots.js` | caches keyed by ids; buildings drawn at `x, y, angle` |
 | `structures/index.js` | footprint → outline; `tiltOf` / `roadFront` replaced by the snap; `join` by side-by-side test |
 | `structures/courts.js`, `yards.js`, `plots.js`, `station.js` | outlines instead of neighbouring dots |
-| `src/sim/agents.js`, `walking.js`, `parking.js`, `fire.js`, `trains.js` | trips as edge lists along curves; homes and doors by access point |
+| `src/sim/agents.js`, `agents/*`, `walking.js`, `parking.js`, `fire.js`, `trains.js` | trips as edge lists along curves; homes and doors by access point |
 | `src/sim/growth.js`, `src/terrain/generate.js` | placement by position |
 | `src/core/history.js` | diffs by id |
 | `src/core/legacy.js` | **removed** |
@@ -259,6 +263,91 @@ people meeting for a chat, walks in parks.
 **E. The rest and tidying.** Growth and new map generation by position;
 sites fitted to free roads; remove the dot code that's left; README and
 `story/README.md` updated; the help in the Build menu.
+
+## Chunks for parallel chats
+
+The stages run one after another; inside a stage the work splits once
+one chat has laid down what the others build on. **Opus** takes the
+chunks that need judgement (the model, placement and snapping feel,
+networks, agents); **Sonnet** the mechanical ones (moving readers to the
+new fields, drawing from what's there, tidying). Counts are reads of a
+structure's `.node` / `.rotation` or `grid.xy`, taken 2026-11-14.
+
+How they run:
+
+- Each chat that writes code works in a worktree of its own, branched
+  from `free-placement`, and touches only its chunk's files. (An
+  exception to working on main, for this branch only.)
+- The coordinating chat merges finished chunks into `free-placement`,
+  runs the tests and looks in the browser before the next gate.
+- Two chats at a time at most; each starts cold and reads its way in, so
+  parallel isn't cheaper – just sooner.
+- A chunk is done when its files no longer read what it replaces, the
+  tests pass, and it says what it couldn't check.
+
+### Stage A
+
+1. **A1 – Opus, alone, first.** `src/core/spatial.js` and its tests;
+   structures and features get `x, y, angle` from their dots
+   (`world/structures.js`, `world.js`), with the accessors the other
+   chunks use; `SAVE_VERSION` 11, the old-save message and New map
+   (`saveFile.js`, `main.js`); `legacy.js` and its test removed. Writes
+   down the new fields at the top of `world/structures.js` for the rest.
+2. After A1, in parallel:
+
+| Chunk | Model | Files | Reads |
+|---|---|---|---|
+| A2 drawing | Sonnet | `render/renderer/*`, `renderer.js`, `painter.js`, `overlay.js`, `photo.js`, `lots.js`, `forest.js`, `perspective.js` | ~35 |
+| A3 people | Sonnet | `sim/agents/leisure.js`, `movement.js`, `trips.js`, `agents.js`, `walking.js`, `deer.js`, `fire.js`, `pastures.js` | ~30 |
+| A4 trains and stations | Opus | `sim/trains.js`, `sim/agents/transit.js`, `structures/station.js` | ~28 |
+| A5 tools and the rest | Sonnet | `tools/*`, `sim/growth.js`, `core/history.js`, `dev/commands.js`, `structures/index.js`, `landmarks.js` | ~15 |
+| A6 new map | Sonnet | `terrain/generate.js` | ~20 |
+
+3. **Gate – coordinating chat.** Nothing outside the placement rules
+   (`world/placement.js`, `access.js`) reads `node`; tests pass; the game
+   plays as before in the browser.
+
+### Stage B
+
+- **B1 – Opus.** Outlines (`plot`, `body`), the placement rule, access
+  and facing by nearest road point.
+- **B2 – Opus, after B1.** Snapping along a road with seeded setback,
+  quarter turns and free turning; joined walls side by side. Tuned in the
+  browser.
+- **B3 – Sonnet, after B1.** Courts, yards and plots from outlines
+  (`courts.js`, `yards.js`, `plots.js`).
+- **B4 – Sonnet, after B1.** The pointer draws the outline and why it
+  can't go there (`overlay.js`); picking by index in `inspect` / `erase`
+  / `bulldoze`.
+
+### Stage C
+
+- **C1 – Opus.** Nodes and edges with curves, edge attributes, A* over
+  ids (`network.js`, `layer.js`, `pathfinding.js`); validating a drawn
+  curve – bends, angles, water, slope, crossings (`routing.js`).
+- **C2 – Opus, after C1.** Drawing ways with points and snapping, splits
+  and junctions, bridges (`tools/network.js`); undo across a split edge.
+- **C3 – Sonnet, after C1.** Drawing from curves: kerbs, joins, street
+  furniture, footpaths' wander, park walks (`geometry.js`,
+  `furniture.js`, `meander.js`, `siteWalks.js`, `renderer/networks.js`).
+- **C4 – Sonnet, after C2.** Erase for ways; the phone's way of drawing
+  to try.
+
+### Stage D
+
+- **D1 – Opus.** Trips as edge lists along curves; homes and doors by
+  access point (`agents/*`, `walking.js`).
+- **D2 – Opus, after D1.** Parking, buses, trains and level crossings,
+  the brigade (`parking.js`, `transit.js`, `trains.js`, `fire.js`).
+- **D3 – Sonnet, after D2.** Perf runs (`tools/perf/`) against today's
+  numbers; report, don't tune.
+
+### Stage E
+
+- **E1 – Opus.** Growth and new-map generation by position; sites fitted
+  to free roads.
+- **E2 – Sonnet.** Remove the dot code that's left; README,
+  `story/README.md`, the help in the Build menu.
 
 ## Tests
 
