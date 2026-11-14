@@ -105,7 +105,10 @@ export class WorldPlacement {
     // Blocked only if every surrounding dot belongs to the same building,
     // so paths can squeeze between neighbouring buildings.
     const ids = around.map((c) => this.structureAtNode.get(c));
-    return ids[0] !== undefined && ids.every((id) => id === ids[0]);
+    if (ids[0] === undefined || !ids.every((id) => id === ids[0])) return false;
+    // (a park or square placed freely: its outline decides, freeBuildingOn)
+    const s = this.structures.get(ids[0]);
+    return !(s?.free && STRUCTURE_TYPES[s.type]?.site);
   }
 
   // Free ground for the footprint, plus the type's own rule (def.canPlace,
