@@ -394,3 +394,119 @@ function dedupe(pts) {
   }
   return out;
 }
+
+// ----- track: no reversing, no sharp branches -----
+
+// The way a piece leaves node n (unit vector), and the way it arrives at
+// the other end, going from n.
+function leaving(piece, n) {
+  const pts = piece.a === n ? piece.pts : piece.pts.slice().reverse();
+  const k = Math.min(pts.length - 1, Math.max(1, pts.findIndex((p) => Math.hypot(p[0] - pts[0][0], p[1] - pts[0][1]) > 0.15)));
+  return unit(pts[0], pts[k < 0 ? 1 : k]);
+}
+function arriving(piece, n) {
+  const pts = piece.a === n ? piece.pts : piece.pts.slice().reverse();
+  const last = pts[pts.length - 1];
+  let k = pts.length - 2;
+  while (k > 0 && Math.hypot(last[0] - pts[k][0], last[1] - pts[k][1]) < 0.15) k--;
+  return unit(pts[Math.max(0, k)], last);
+}
+function unit(p, q) {
+  const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1;
+  return [dx / l, dy / l];
+}
+
+// A train's route on graph g from `start` – at a node going `heading`
+// ({ node, heading }: off the map at an exit), or on a piece going towards
+// one of its ends ({ piece, s, toward }) – to `goal`, an attached place or
+// a node, bending by at most maxTurn where pieces meet. { pts, cost, ways,
+// end } or null; end ({ piece, s, toward }) is where it got to, going on
+// the same way.
+export function trackRoute(g, start, goal, maxTurn = Math.PI / 4) {
+  const limit = Math.cos(maxTurn + 1e-6);
+  const ok = (h, d) => !h || h[0] * d[0] + h[1] * d[1] >= limit;
+  const key = (n, p) => `${n}|${p ? p.id : '-'}`;
+  const along = (q, from) => (q.a === from ? q.pts : q.pts.slice().reverse());
+  const polyOf = (line) => { const m = measurePolyline(line); return { points: line, cum: m.cum, total: m.total }; };
+  const goalNode = typeof goal === 'object' ? null : goal;
+
+  let first, pre, d0 = 0;
+  if (start.piece) {
+    const { piece, s, toward } = start;
+    const fwd = piece.b === toward; // going a -> b
+    const rest = fwd ? piece.len - s : s;
+    // the goal ahead on this piece
+    if (goalNode == null && goal.piece === piece && (fwd ? goal.s >= s - 1e-9 : goal.s <= s + 1e-9)) {
+      const poly = { points: piece.pts, cum: piece.cum, total: piece.len };
+      const pts = fwd ? subPolyline(poly, s, goal.s) : subPolyline(poly, goal.s, s).reverse();
+      return { pts: dedupe(pts), cost: Math.abs(goal.s - s) * piece.factor, ways: piece.way != null ? [piece.way] : [], end: { piece, s: goal.s, toward } };
+    }
+    const poly = { points: piece.pts, cum: piece.cum, total: piece.len };
+    pre = fwd ? subPolyline(poly, s, piece.len) : subPolyline(poly, 0, s).reverse();
+    first = { n: toward, p: piece, h: arriving(piece, g.other(piece, toward)) };
+    d0 = rest * piece.factor;
+  } else {
+    pre = [g.nodes.get(start.node)];
+    first = { n: start.node, p: null, h: start.heading ?? null };
+  }
+  const best = new Map(), came = new Map(), closed = new Set();
+  const heap = new MinHeap();
+  const startKey = key(first.n, first.p);
+  best.set(startKey, d0);
+  heap.push(startKey, d0);
+  const states = new Map([[startKey, first]]);
+  let done = null;
+  while (heap.size) {
+    const k = heap.pop();
+    if (closed.has(k)) continue;
+    closed.add(k);
+    const { n, p, h } = states.get(k);
+    const d = best.get(k);
+    if (done && d >= done.cost) break;
+    if (goalNode != null && n === goalNode) {
+      done = { k, cost: d, post: null };
+      break;
+    }
+    for (const q of g.adj.get(n) ?? []) {
+      if (q === p) continue;
+      if (!ok(h, leaving(q, n))) continue;
+      const m = g.other(q, n);
+      // the goal on this piece: there, going this way
+      if (goalNode == null && q === goal.piece) {
+        const a = q.a === n ? goal.s : q.len - goal.s;
+        const c = d + a * q.factor;
+        if (!done || c < done.cost) done = { k, cost: c, post: { piece: q, from: n, along: a } };
+      }
+      const mk = key(m, q), c = d + q.cost;
+      if (c < (best.get(mk) ?? Infinity)) {
+        best.set(mk, c);
+        came.set(mk, { k, q });
+        states.set(mk, { n: m, p: q, h: arriving(q, n) });
+        heap.push(mk, c);
+      }
+    }
+  }
+  if (!done) return null;
+  const chain = [];
+  for (let k = done.k; came.has(k);) {
+    const { k: prev, q } = came.get(k);
+    chain.unshift({ q, from: states.get(prev).n });
+    k = prev;
+  }
+  const pts = pre.slice();
+  const ways = start.piece?.way != null ? [start.piece.way] : [];
+  for (const { q, from } of chain) {
+    const line = along(q, from);
+    for (let i = 1; i < line.length; i++) pts.push(line[i]);
+    if (q.way != null && ways[ways.length - 1] !== q.way) ways.push(q.way);
+  }
+  let end = null;
+  if (done.post) {
+    const { piece: q, from, along: a } = done.post;
+    const there = subPolyline(polyOf(along(q, from)), 0, a);
+    for (let i = 1; i < there.length; i++) pts.push(there[i]);
+    if (q.way != null && ways[ways.length - 1] !== q.way) ways.push(q.way);
+    end = { piece: q, s: goal.s, toward: g.other(q, from) };
+  }
+  return { pts: dedupe(pts), cost: done.cost, ways, end };
+}
