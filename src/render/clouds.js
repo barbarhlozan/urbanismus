@@ -7,9 +7,7 @@
 // spread out; one near the horizon is far away, so small, flat and packed
 // closer. Everything is drawn far to near, i.e. from the horizon upwards.
 
-export const CLOUD_KINDS = ['fair', 'mist', 'cloudy', 'rain', 'storm'];
-
-export const CLOUDS = {
+const CLOUDS = {
   // heaps (fair, mist, cloudy): how many, and how wide at the horizon and overhead
   heaps: { fair: [2, 3], mist: [0, 1], cloudy: [8, 12] },
   width: [34, 190],
@@ -32,7 +30,6 @@ export const CLOUDS = {
 const r2 = (n) => Math.round(n * 100) / 100;
 const P = (x, y) => `${r2(x)} ${r2(y)}`;
 const lerp = (a, b, t) => a + (b - a) * t;
-const between = (rnd, [a, b]) => a + rnd() * (b - a);
 const whole = (rnd, [a, b]) => a + Math.floor(rnd() * (b - a + 1));
 
 // A heap of cloud: a flat base at `by` from x0 to x1, a row of bulges over
@@ -107,7 +104,7 @@ function streaks(rnd, n, xc, spread, y0, y1) {
   return d;
 }
 
-// `kind`: one of CLOUD_KINDS. `rain` (only for 'rain'): 'showers' – a few
+// `kind`: 'fair', 'mist', 'cloudy', 'rain' or 'storm'. `rain` (only for 'rain'): 'showers' – a few
 // distant ones under the cloud – or 'whole' – rain all over the sky. A
 // storm is the heaviest cloud with rain all over.
 export function cloudsSVG(rnd, width, height, kind, { rain = 'showers' } = {}) {

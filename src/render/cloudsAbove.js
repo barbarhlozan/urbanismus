@@ -25,7 +25,7 @@ import { CONFIG } from '../config.js';
 import { CLOUD_SHADOWS } from './cloudShadows.js';
 import { canvasDpr } from './dpr.js';
 
-export const CLOUDS_ABOVE = {
+const CLOUDS_ABOVE = {
   zoom: 0.72,          // shown at this zoom and further out (config.camera.minZoom is 0.55)
   fade: 0.9,           // seconds to come or go
   cover: [0.45, 0.95], // the sky's cover (config.weather.cover) from which the first are up, and all of them

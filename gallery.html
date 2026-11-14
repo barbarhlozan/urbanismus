@@ -5,9 +5,8 @@
   <title>Dědina – building gallery</title>
   <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="labs.css">
   <style>
-    html, body { overflow: auto; height: auto; position: static; }
-    body { background: var(--bg); color: var(--fg); font: 12px system-ui; margin: 16px; }
     h2 { font-weight: 500; margin: 24px 0 6px; }
     .row { display: flex; flex-wrap: wrap; gap: 4px; }
     figure { margin: 0; border: 1px solid #222; }
@@ -16,12 +15,6 @@
   </style>
 </head>
 <body>
-  <!-- the map's fill patterns (src/render/renderer.js), for ponds and pools -->
-  <svg width="0" height="0" style="position:absolute"><defs>
-    <pattern id="hatch-water" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(-40)">
-      <line class="hatch" x1="0" y1="2.5" x2="5" y2="2.5"/>
-    </pattern>
-  </defs></svg>
   <div id="out"></div>
   <script type="module">
     // Dev page: every structure drawn with a few seeds, close up.
@@ -39,6 +32,7 @@
     //   &near=0      windows as further out, without their glazing bars (&open=false: ink blocks)
     //   &speed=3     pen animations slowed down (DRAW in src/render/draw.js)
     // Click a drawing to watch it sketched in, shift-click to watch it erased.
+    import { mapPatterns } from './src/lab/page.js';
     import { applyTheme } from './src/theme.js';
     import { Camera } from './src/render/camera.js';
     import { Painter, LOOK } from './src/render/painter.js';
@@ -50,6 +44,8 @@
     import { PEOPLE, walkerSVG, cyclistSVG } from './src/render/people.js';
     import { DRAW, drawIn, eraseOut } from './src/render/draw.js';
     import { drawTree, drawShrub, drawClump, TREE_KINDS } from './features/trees.js';
+
+    mapPatterns(); // (the map's fills: ponds, pools)
     const q = new URLSearchParams(location.search);
     applyTheme(q.has('scheme') ? +q.get('scheme') : undefined);
     const seeds = +(q.get('seeds') ?? 6), size = +(q.get('size') ?? 200), only = q.get('type');

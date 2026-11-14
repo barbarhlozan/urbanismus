@@ -32,7 +32,7 @@ export const BP = { S: 1600, M: 110, GAP: 110, LABEL: 260, KEY: 220, ROW: 3500, 
 
 // The windows' colour, and how near a pixel's has to be to count.
 export const WINDOW = [255, 0, 255];
-export const isWindow = (r, g, b) => r > 170 && b > 170 && g < 110 && r - g > 110 && b - g > 110;
+const isWindow = (r, g, b) => r > 170 && b > 170 && g < 110 && r - g > 110 && b - g > 110;
 // near enough to be a magenta square's soft edge, painted over from around it
 export const nearWindow = (r, g, b) => r > 120 && b > 120 && (r + b) / 2 - g > 22;
 

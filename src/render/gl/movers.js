@@ -15,6 +15,7 @@
 //   const pen = GLMovers.make(canvas)   (null without WebGL2)
 //   pen.begin(camera, stroke); pen.draw(shapes, sx, sy, k, mirror, shear, squash); … pen.end()
 
+import { program, rgb } from './common.js';
 import { THEME } from '../../theme.js';
 import { flattenPath, triangulate } from './geometry.js';
 import { brushWidths, BRUSH_GLSL } from '../brush.js';
@@ -101,20 +102,6 @@ void main() {
   outColour = colour * cover;
 }`;
 
-function compile(gl, type, src) {
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-  return s;
-}
-
-const rgb = (c) => {
-  const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(c.trim());
-  if (m) return [1, 2, 3].map((i) => parseInt(m[i], 16) / 255);
-  const n = /rgba?\(([^)]+)\)/.exec(c)?.[1].split(',').map(Number);
-  return n ? n.slice(0, 3).map((v) => v / 255) : [0, 0, 0];
-};
 const COLOURS = ['bg', 'main', 'detail'];
 
 // A shape's fill (triangles) and stroke (polylines) in its own units, kept.
@@ -151,12 +138,7 @@ export class GLMovers {
     this.gl = gl;
     this.empty = true;
     this.notes = [];
-    const p = (this.program = gl.createProgram());
-    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, VS));
-    gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = { size: gl.getUniformLocation(p, 'size'), colours: gl.getUniformLocation(p, 'colours') };
+    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['size', 'colours']));
     this.vao = gl.createVertexArray();
     gl.bindVertexArray(this.vao);
     const quad = gl.createBuffer();

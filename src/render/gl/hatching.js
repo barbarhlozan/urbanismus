@@ -26,6 +26,7 @@
 //   h.pieces(buffer, { base, tile, colour, alphas, stencil })
 //   h.sheet({ base, tile, grey, colour, sets, reveal, mask })   (the night)
 
+import { program, rgb } from './common.js';
 import { flattenPath, triangulate } from './geometry.js';
 import { hatchTileLines, TILE } from '../hatch.js';
 import { brushPath2D } from '../brush.js';
@@ -240,29 +241,6 @@ void main() {
   outColour = o;
 }`;
 
-function compile(gl, type, src) {
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-  return s;
-}
-function program(gl, vs, fs, names) {
-  const p = gl.createProgram();
-  gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, vs));
-  gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, fs));
-  gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-  return { p, u: Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)])) };
-}
-
-// A colour (#rrggbb or rgb()) as [r, g, b] 0 … 1.
-export const rgb = (c) => {
-  const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(String(c).trim());
-  if (m) return [1, 2, 3].map((i) => parseInt(m[i], 16) / 255);
-  const n = /rgba?\(([^)]+)\)/.exec(c)?.[1].split(',').map(Number);
-  return n ? n.slice(0, 3).map((v) => v / 255) : [0, 0, 0];
-};
 
 // ------------------------------------------------------------------ shapes
 

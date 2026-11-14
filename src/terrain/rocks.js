@@ -29,7 +29,7 @@ import { valueNoise2D } from '../core/random.js';
 //           and the size of that wandering (grid steps)
 //   water   grid steps kept free of rock either side of a river
 //   grid    sampling step of the mask (grid steps)
-export const ROCKS = {
+const ROCKS = {
   share: [0.15, 0.03],
   floor: 10,
   patch: { cell: 5, from: 0.38, to: 0.62 },

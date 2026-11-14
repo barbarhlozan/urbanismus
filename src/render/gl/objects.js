@@ -21,6 +21,7 @@
 //   const objs = GLObjects.make(canvas, layer, svg, sunCss)   (null without WebGL2)
 //   objs.draw(view, order)     each frame: draws when something changed
 
+import { program } from './common.js';
 import { flattenPath, triangulate } from './geometry.js';
 import { penWatch, penLength } from '../draw.js';
 import { hatchTileLines } from '../hatch.js';
@@ -198,14 +199,6 @@ void main() {
   if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene + 40.0), vec3(outColour.a));
 }`;
 
-function compile(gl, type, src) {
-  const s = gl.createShader(type);
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-  return s;
-}
-
 // A computed colour as premultiplied [r, g, b, a] 0 … 1 (null: none).
 function paint(c, alpha) {
   if (!c || c === 'none') return null;
@@ -274,12 +267,7 @@ export class GLObjects {
     this.canvas = canvas;
     this.gl = gl;
     this.layer = layer;
-    const p = (this.program = gl.createProgram());
-    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, VS));
-    gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, FS));
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    this.u = Object.fromEntries(['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'wash'].map((n) => [n, gl.getUniformLocation(p, n)]));
+    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'wash']));
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -327,7 +315,7 @@ export class GLObjects {
     const restyle = () => {
       this.epoch++;
       let rebuild = false;
-      for (const [chain, st] of this.styles) {
+      for (const st of this.styles.values()) {
         const was = [!!st.fill, !!st.stroke];
         this.probe(st);
         if (was[0] !== !!st.fill || was[1] !== !!st.stroke) rebuild = true;

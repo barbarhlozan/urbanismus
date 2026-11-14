@@ -1,0 +1,6 @@
+/* The lab pages' page (the *.html beside index.html: dev pages that each
+   try out one part of the drawing). styles.css lays the game out as one
+   full window; these scroll, on the paper of the colour scheme. A page's
+   own <style>, after this, sets what it does differently. */
+html, body { overflow: auto; height: auto; position: static; }
+body { background: var(--bg); color: var(--main); font: 12px system-ui; margin: 16px; }

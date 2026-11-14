@@ -41,6 +41,46 @@ export function pointInPolygon([x, y], poly) {
   return inside;
 }
 
+// The convex hull of 2D points, anticlockwise (monotone chain).
+export function convexHull(pts) {
+  pts = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list) => {
+    const out = [];
+    for (const p of list) {
+      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], p) <= 0) out.pop();
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return [...half(pts), ...half([...pts].reverse())];
+}
+
+// A polyline with the points that lie within `tol` of the line through
+// their neighbours left out (Ramer–Douglas–Peucker).
+export function simplify(pts, tol) {
+  if (pts.length < 3) return pts;
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [i, j] = stack.pop();
+    const [ax, ay] = pts[i], [bx, by] = pts[j];
+    const l = Math.hypot(bx - ax, by - ay);
+    let far = -1, best = tol;
+    for (let k = i + 1; k < j; k++) {
+      const [px, py] = pts[k];
+      const d = l < 1e-9 ? Math.hypot(px - ax, py - ay) : Math.abs((bx - ax) * (py - ay) - (by - ay) * (px - ax)) / l;
+      if (d > best) [far, best] = [k, d];
+    }
+    if (far < 0) continue;
+    keep[far] = 1;
+    stack.push([i, far], [far, j]);
+  }
+  return pts.filter((_, k) => keep[k]);
+}
+
 // Parts of segment a–b that lie inside `poly`, as a list of [p, q] segments.
 export function clipSegment(a, b, poly) {
   const dx = b[0] - a[0], dy = b[1] - a[1];
@@ -67,7 +107,7 @@ export function clipSegment(a, b, poly) {
 
 // Distance along a ray (origin o, unit direction d) to the nearest of the
 // given segments, within maxDist; null if none.
-export function castRay(o, d, segments, maxDist) {
+function castRay(o, d, segments, maxDist) {
   let best = null;
   for (const [a, b] of segments) {
     const ex = b[0] - a[0], ey = b[1] - a[1];

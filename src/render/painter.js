@@ -91,6 +91,7 @@
 import { rotateQuarter } from './camera.js';
 import { color } from '../theme.js';
 import { mulberry32 } from '../core/random.js';
+import { convexHull } from '../core/geom2d.js';
 import { MinHeap } from '../core/heap.js';
 import { siteWalks } from '../roads/siteWalks.js';
 import { SUN, sunFor, tierOf, tierClass, penClass, awayFrom, strokeShare, wallStrokes, hash } from './shadows.js';
@@ -159,7 +160,7 @@ const CELLAR = { wall: 0.13, len: 0.15, window: [0.03, 0.026], bay: 0.13, under:
 //   round   corners rounded off by up to this much (scene px at tile 32, at
 //           most a third of an edge), for walls, roofs (and other faces) and
 //           windows' frames apart (0 = sharp, as a ruler draws them)
-// (set with the user in house-lab.html, 2026-10-25: see pen-sketch.md)
+// (set with the user in house-lab.html, 2026-10-25: see docs/pen-sketch.md)
 export const LOOK = {
   eave: 0.03, fascia: 0.006, sill: false, tall: false, sketch: 2.5,
   overshoot: 0, ink: true, thin: 1.2, hatch: 0.0225, ground: 0, floors: false, roads: 0.035,
@@ -257,22 +258,6 @@ function attrs(opts, lod = 0, base = '') {
   if (opts.dash) style += `stroke-dasharray:${String(opts.dash).split(/[\s,]+/).map((n) => `calc(${n}px * var(--stroke, 1))`).join(' ')};`;
   const cls = [base, opts.cls, lod > 0 ? `d${lod}` : ''].filter(Boolean).join(' ');
   return (style ? ` style="${style}"` : '') + (cls ? ` class="${cls}"` : '');
-}
-
-// The convex hull of 2D points, anticlockwise (monotone chain).
-function hull2(pts) {
-  pts = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const half = (list) => {
-    const out = [];
-    for (const p of list) {
-      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], p) <= 0) out.pop();
-      out.push(p);
-    }
-    out.pop();
-    return out;
-  };
-  return [...half(pts), ...half([...pts].reverse())];
 }
 
 // The four walls of a box as { n: outward normal, a, b: ends along the wall }.
@@ -658,7 +643,7 @@ export class Painter {
     const out = [];
     for (const s of this.solids) {
       if (!(s.cover?.length >= 3)) continue;
-      const h = hull2(s.cover);
+      const h = convexHull(s.cover);
       if (s.aside) h.aside = true; // (its yard's, not the building's: render/fire.js)
       out.push(h);
     }

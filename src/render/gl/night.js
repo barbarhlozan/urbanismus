@@ -16,9 +16,10 @@
 //   n.draw(view, { grey, colour, tier, reveal, hatch, px, stroke, lights, sheet, beams })   on the ground
 //   n.draw(view, { …, cover })              over the objects
 
+import { rgb } from './common.js';
 import { THEME } from '../../theme.js';
 import { hatchFrame } from '../hatch.js';
-import { Hatching, Pieces, meshOf, rgb } from './hatching.js';
+import { Hatching, Pieces, meshOf } from './hatching.js';
 import { canvasDpr } from '../dpr.js';
 
 // The night's grey in steps (each a new picture); how far the third set of

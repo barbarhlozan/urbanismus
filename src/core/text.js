@@ -23,7 +23,7 @@
 import { numberWords } from './numberWords.js';
 
 export const LANGUAGES = { cs: 'Čeština', en: 'English' };
-export const FALLBACK = 'en';
+const FALLBACK = 'en';
 export const FILES = ['text/ui.txt', 'text/buildings.txt'];
 const STORE_KEY = 'urbanismus.language';
 
@@ -34,7 +34,7 @@ const words = new Map(); // key -> { cs, en, … }
 let lang = FALLBACK;
 const warned = new Set();
 
-export function pickLanguage() {
+function pickLanguage() {
   let saved = null;
   try { saved = localStorage.getItem(STORE_KEY); } catch { /* storage unavailable */ }
   if (saved in LANGUAGES) return saved;

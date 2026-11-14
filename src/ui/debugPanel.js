@@ -11,7 +11,6 @@ import { reveal, isShown } from './motion.js';
 
 // The classes of a tree's parts (features/trees.js), also where a building
 // draws trees in its yard or park.
-const TREE_PARTS = '.tree, .leaf, .trunk, .twig, .limb';
 
 export class DebugPanel {
   constructor(root, { renderer, camera }) {

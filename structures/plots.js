@@ -69,7 +69,7 @@ const WASH_STYLES = {
 };
 
 // Weighted props per style: [weight, radius, draw(g, x, y), most per plot]
-export const PLOT_STYLES = {
+const PLOT_STYLES = {
   garden: [
     [5, 0.07, (g, x, y) => g.chance(GARDEN_TREES) && tree(g, x, y, g.range(0.75, 1.05))],
     [4, 0.045, (g, x, y) => g.chance(GARDEN_BUSHES) && bush(g, x, y, g.range(0.03, 0.045))],

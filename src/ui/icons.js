@@ -57,17 +57,18 @@ const PLAINNESS = [
 // The tiles' hand: the map's pen (Painter LOOK) as a doodle – the lines
 // bowing a little more, barely running past the corners – set while a
 // tile is drawn, the map's own put back after.
-export const DOODLE = { sketch: 7, overshoot: 0.7 };
+const DOODLE = { sketch: 7, overshoot: 0.7 };
 
-// The structure's drawing (ground + solids) as SVG markup, on its own.
-function paint(def, seed, camera, plain = 0, hand = null) {
+// The structure's drawing (ground + solids) as SVG markup, on its own
+// (`data`: the instance's, e.g. { kind } for one of its kinds).
+function paint(def, seed, camera, plain = 0, hand = null, data = {}) {
   const map = Object.fromEntries(Object.keys(hand ?? {}).map((k) => [k, LOOK[k]]));
   Object.assign(LOOK, hand);
   try {
     camera.cx = camera.cy = 0;
     // facing the viewer, as they come when picked up (tools/build.js)
     const rotation = camera.facingViewer();
-    const instance = { id: -1, type: def.id, node: 0, rotation, seed, data: {} };
+    const instance = { id: -1, type: def.id, node: 0, rotation, seed, data: { ...data } };
     const g = new Painter(camera, { x: 0, y: 0, z: 0 }, rotation, drawSeed(instance));
     if (PLAINNESS[plain]) Object.assign(g, PLAINNESS[plain]);
     if (def.site) {
@@ -88,15 +89,20 @@ function paint(def, seed, camera, plain = 0, hand = null) {
   }
 }
 
-export function structureIcon(def, { seed = ICON_SEED, fresh = false } = {}) {
-  const key = `${def.id}:${seed}`;
+// A structure's Build menu tile. `data`: as an instance's (one of its
+// kinds: { kind }); `plain`: how plainly (PLAINNESS), else by its size.
+// (icons/make.html draws the icon files with it too)
+export function structureIcon(def, { seed = ICON_SEED, fresh = false, data = {}, plain = null } = {}) {
+  const key = `${def.id}:${seed}` + (data.kind ? `:${data.kind}` : '') + (plain !== null ? `:p${plain}` : '');
   if (fresh) cache.delete(key);
   if (cache.has(key)) return cache.get(key);
   const camera = new Camera({ width: 1, height: 1 }, { tile: 32, zScale: 0.9 });
-  let body = paint(def, seed, camera, 0, DOODLE);
-  const { width, height } = boxOf(`<g>${body}</g>`);
-  const plain = PLAIN.find(([px]) => Math.max(width, height) > px)?.[1] ?? 0;
-  if (plain) body = paint(def, seed, camera, plain, DOODLE);
+  let body = paint(def, seed, camera, plain ?? 0, DOODLE, data);
+  if (plain === null) {
+    const { width, height } = boxOf(`<g>${body}</g>`);
+    plain = PLAIN.find(([px]) => Math.max(width, height) > px)?.[1] ?? 0;
+    if (plain) body = paint(def, seed, camera, plain, DOODLE, data);
+  }
   const svg = fit(`<g class="icon-art">${body}</g>`, 'icon lod-1 doodle', PAD);
   cache.set(key, svg);
   return svg;

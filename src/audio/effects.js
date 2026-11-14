@@ -9,7 +9,7 @@
 
 import { load } from './sounds.js';
 
-export const EFFECTS = {
+const EFFECTS = {
   // how loud, how far up or down a voice goes (playback rate), how much
   // softer it may be (share), how far to the sides (pan), how bright (Hz
   // its top is cut at, from … to)

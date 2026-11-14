@@ -12,7 +12,7 @@
 import { CONFIG } from '../config.js';
 import { GLMovers } from './gl/movers.js';
 
-export const RAIN = {
+const RAIN = {
   density: 1 / 2600,  // drops on screen at full rain, per screen px²
   fall: [0.35, 0.6],  // seconds a drop takes to fall
   length: [7, 13],    // px, the stroke

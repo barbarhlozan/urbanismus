@@ -11,6 +11,7 @@ import {
   tree, bench, lamp, fountain, paving, sculpture, planter, streetClock, phoneBooth,
   newsKiosk, noticeboard, figure, kindOf,
 } from './kit.js';
+import { pointInPolygon } from '../src/core/geom2d.js';
 
 const common = {
   category: 'spaces',
@@ -24,16 +25,6 @@ const common = {
   agents: 0,
 };
 
-// Is point p inside polygon poly?
-function inside([x, y], poly) {
-  let c = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [ax, ay] = poly[i], [bx, by] = poly[j];
-    if ((ay > y) !== (by > y) && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) c = !c;
-  }
-  return c;
-}
-
 // No border, and no grid over all of it: the paving is hinted the way a
 // hand sketches cobbles – a patch round what stands in the middle (cx, cy,
 // r out) and a few more scattered about, the rest left white.
@@ -42,7 +33,7 @@ function pave(g, step, [cx, cy] = [0, 0], r = 0.22) {
   const patch = (x, y, w, h) => {
     const [a, b, c, d] = [Math.max(x0, x - w), Math.max(y0, y - h), Math.min(x1, x + w), Math.min(y1, y + h)];
     const box = [[a, b], [c, b], [c, d], [a, d]];
-    if (c - a > step && d - b > step && box.every((p) => inside(p, outline))) paving(g, box, step, { dash: null, outline: false, lod: 1 });
+    if (c - a > step && d - b > step && box.every((p) => pointInPolygon(p, outline))) paving(g, box, step, { dash: null, outline: false, lod: 1 });
   };
   patch(cx, cy, r, r);
   const n = Math.round(((x1 - x0) * (y1 - y0)) * 2.5);

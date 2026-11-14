@@ -12,7 +12,7 @@
 
 import { sketchLine, seedOf } from '../render/sketch.js';
 
-export const MOTION = {
+const MOTION = {
   in: 340,     // ms: things arriving (most of it is the settling)
   out: 150,    // ms: leaving is quicker, so closing never feels like waiting
   resize: 300, // ms: folding and unfolding
