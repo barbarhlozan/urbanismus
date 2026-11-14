@@ -366,6 +366,57 @@ still reads a building's dot or turn, on purpose:
   the game (drawing, agents) has to move with it – the big step.
 - **C2 – Opus, after C1.** Drawing ways with points and snapping, splits
   and junctions, bridges (`tools/network.js`); undo across a split edge.
+
+**The switch, step by step (planned 2026-11-14).** Each step ends with
+the game running and `npm test` passing.
+
+*Adapter chosen:* agents, routing and everything else that reads dot ids
+(stage D) stay on a **dot view** of the new graph: each kind's edges are
+traced onto that kind's dots (main for roads and lanes, fine for paths,
+rails, fences) into the `RoadNetwork` the layer already has, and the
+layer's `pos(n)` puts each traced dot back onto its curve (as `pathPos`
+and `railPos` already move dots today). Why: some 40 files read
+`layer.graph`, `hasRoad`, `edgeKey` sets – moving them with the switch
+would make one step of half the game; with the view, every reader keeps
+working and walks the drawn curve to within a dot's rounding, and stage D
+then moves them one by one off the view. The view is derived, never
+saved or edited: `Ways` is the only truth.
+
+1. **Dot view.** `src/roads/dotView.js`: `traceWays(ways, kind, grid,
+   scale)` → `{ graph, pos, edgeOf }` (the dots' graph, where each dot
+   sits on its curve, which way edge each dot step came from), and the
+   street / lane / kerb sets from edge attributes. Standalone, tested.
+2. **World holds `Ways`.** `world.ways` (one graph, all kinds, as
+   `crossRule` expects); `buildNetwork` lays a dot route as a way (its
+   dots' positions through `curveThrough` + `easeBends`, then
+   `Ways.insert`) and rebuilds the layer's graph from the view;
+   `removeNetworkAt` removes the way edge under the dot; `setSidewalks`
+   sets `street` / `lane` on edges. `sidewalks`, `lanes`, `laneWalks`
+   become getters over the view. Railways' and paths' smoothing
+   (`smoothRails`, `meanderPaths`) give way to the view's `pos`. The tool
+   still clicks dots, so the game plays as before.
+3. **Save and undo.** `SAVE_VERSION` 12; the save holds `ways.toJSON()`
+   only. `history.js` diffs ways by node and edge id (an edge split by a
+   new way comes back whole: the two halves go, the old id returns) –
+   with a test of exactly that.
+4. **Drawing from curves.** `renderer/networks.js` and `geometry.js` draw
+   each edge's line (offset for kerbs, the road's width, bridges where
+   `bridge` is set) instead of rounding dot polylines; junctions from the
+   edges meeting at a node. (C3.)
+5. **The drawing tool.** `tools/network.js`: click points, the curve
+   shown as it's drawn, double-click or click the last point to finish;
+   snapping to nodes and ways, light angle snap; a refused point gets a
+   cross as the build tool's do (no callouts). Bridges: the stretch over
+   water checked along the curve. (C2.)
+6. **Erase** by edge (`erase.js`, `bulldoze.js`): the nearest way within
+   reach; a junction left between two edges of one way joins them again.
+   (C4.)
+7. **Parks and squares** off the dots with the footpaths: `siteExits`
+   become the points where footpath edges meet the site's outline.
+
+*2026-11-14:* step 1 done (see below); steps 2–7 not started – the
+session stopped at its usage line.
+
 - **C3 – Sonnet, after C1.** Drawing from curves: kerbs, joins, street
   furniture, footpaths' wander, park walks (`geometry.js`,
   `furniture.js`, `meander.js`, `siteWalks.js`, `renderer/networks.js`).
