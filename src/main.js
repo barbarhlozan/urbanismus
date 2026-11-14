@@ -197,7 +197,7 @@ camera.lift = makeLift(world.elevation, ELEVATION.relief, STYLE.relief,
 camera.setViewport(innerWidth, innerHeight); // (keeps the map in view, see Camera.pan)
 camera.centerOn(camera.cx, camera.cy, innerWidth, innerHeight);
 if (resumed) {
-  camera.angle = resumed.angle;
+  camera.angle = Camera.FIXED ? 0 : resumed.angle;
   camera.zoom = Math.min(camera.maxZoom, Math.max(camera.minZoom, resumed.zoom));
   camera.centerOn(resumed.x, resumed.y, innerWidth, innerHeight);
 }
