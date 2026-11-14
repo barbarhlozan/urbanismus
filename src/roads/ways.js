@@ -32,6 +32,19 @@ export function crossRule(k1, k2) {
 }
 
 
+// The point of a measured polyline nearest (x, y): { s, dist }.
+function nearestOn({ points, cum }, x, y) {
+  let best = { s: 0, dist: Infinity };
+  for (let i = 1; i < points.length; i++) {
+    const [ax, ay] = points[i - 1], [bx, by] = points[i];
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2)) : 0;
+    const d = Math.hypot(x - ax - dx * t, y - ay - dy * t);
+    if (d < best.dist) best = { s: cum[i - 1] + t * Math.sqrt(l2), dist: d };
+  }
+  return best;
+}
+
 export class Ways {
   constructor() {
     this.nodes = new Map();
@@ -187,6 +200,17 @@ export class Ways {
         joins.push({ edge: e, t: c.sa, s: c.sb });
       }
     }
+    // loose ends of other ways it passes close by: it takes them in
+    const taken = new Set(ends.map((e) => e.node?.id ?? e.hit?.edge.a).filter(Boolean));
+    const passing = [];
+    const along = measurePolyline(pts);
+    for (const [id, set] of this.at) {
+      if (set.size !== 1 || taken.has(id)) continue;
+      const [edge] = this.edgesAt(id);
+      if (rule(kind, edge.kind) !== 'join') continue;
+      const n = this.nodes.get(id), near = nearestOn(along, n.x, n.y);
+      if (near.dist <= snap && near.s > snap && near.s < total - snap) passing.push({ t: near.s, node: n });
+    }
     for (const end of ends) {
       if (!end.hit) continue;
       // meeting a way end-on: at a sensible angle too
@@ -222,7 +246,7 @@ export class Ways {
     const last = ends[1].hit
       ? (() => { const h = this.edgeNear(...ends[1].point, 1e-6, (e) => rule(kind, e.kind) === 'join'); return h ? this.split(h.edge.id, h.s).node : this.addNode(...ends[1].point); })()
       : nodeAtEnd(ends[1]);
-    const stops = [{ t: 0, node: first }, ...junctions.sort((p, q) => p.t - q.t), { t: total, node: last }];
+    const stops = [{ t: 0, node: first }, ...[...junctions, ...passing].sort((p, q) => p.t - q.t), { t: total, node: last }];
     const poly = measurePolyline(pts), edges = [];
     for (let k = 1; k < stops.length; k++) {
       if (stops[k].node === stops[k - 1].node) continue;

@@ -195,16 +195,34 @@ export class WorldNetworks {
     // piece of the curve (`stepLines`, geometry.js edgeCurve)
     layer.curvePos = new Map();
     layer.stepLines = new Map();
+    // one place per dot: a junction's own if one lies there, else where the
+    // first curve through it passes; every curve's piece ends there, so
+    // ways sharing a dot meet
+    const curves = [];
+    const nodeAt = new Map();
     for (const e of this.ways.edges.values()) {
-      if (e.kind !== kind || e.pts.length <= 2) continue;
+      if (e.kind !== kind) continue;
+      for (const id of [e.a, e.b]) {
+        const n = this.ways.nodes.get(id), d = layer.nodeAt(n.x, n.y);
+        const [dx, dy] = layer.dot(d), off = Math.hypot(n.x - dx, n.y - dy);
+        if (!nodeAt.has(d) || off < nodeAt.get(d).off) nodeAt.set(d, { p: [n.x, n.y], off });
+      }
+      if (e.pts.length <= 2) continue;
       const poly = this.ways.measured(e);
       const dots = traceLine(e.pts, layer.grid, layer.scale);
-      dots.forEach((d, i) => {
-        const s = i === 0 ? 0 : i === dots.length - 1 ? poly.total : d.s;
-        d.s = s;
-        layer.curvePos.set(d.n, pointAt(poly, s));
-        if (i) layer.stepLines.set(edgeKey(dots[i - 1].n, d.n), { from: dots[i - 1].n, pts: subPolyline(poly, dots[i - 1].s, s) });
-      });
+      dots.forEach((d, i) => { d.s = i === 0 ? 0 : i === dots.length - 1 ? poly.total : d.s; });
+      curves.push({ poly, dots });
+    }
+    for (const { poly, dots } of curves) {
+      for (const d of dots) if (!layer.curvePos.has(d.n)) layer.curvePos.set(d.n, nodeAt.get(d.n)?.p ?? pointAt(poly, d.s));
+    }
+    for (const { poly, dots } of curves) {
+      for (let i = 1; i < dots.length; i++) {
+        const pts = subPolyline(poly, dots[i - 1].s, dots[i].s).map((p) => [...p]);
+        pts[0] = layer.curvePos.get(dots[i - 1].n);
+        pts[pts.length - 1] = layer.curvePos.get(dots[i].n);
+        layer.stepLines.set(edgeKey(dots[i - 1].n, dots[i].n), { from: dots[i - 1].n, pts });
+      }
     }
     layer.version++;
     if (kind === 'road') {
