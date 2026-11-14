@@ -34,7 +34,7 @@ test('a street keeps houses back to its kerb', () => {
 
 test('not on another building; side by side is fine, at any angle', () => {
   const w = flatWorld();
-  const s = w.placeStructureAt('house', 6, 9, 0);
+  const s = w.placeStructureAt('house', 6, 9, 0, { seed: 1 }); // (one look: its walls' size goes with it)
   const [x0, , x1] = w.bodyBox('house');
   assert.equal(fits(w, 6.5, 9).reason, 'Occupied');
   assert.equal(fits(w, 6 + x1 - x0 + 0.01, 9).ok, true); // wall to wall, its margin between
