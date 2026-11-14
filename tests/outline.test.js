@@ -123,3 +123,19 @@ test('far from a neighbour, no snap', () => {
   assert.ok(Math.abs(q.x - 6.8) < 1e-9);
   assert.ok(!!a);
 });
+
+test('a wider building placed freely: its anchor turns with it about its middle', async () => {
+  const { freeAnchor, STRUCTURE_TYPES, footprintCenter } = await import('../structures/index.js');
+  const w = flatWorld(30, 30);
+  road(w, [2, 2], [20, 11]);
+  const p = w.freePlacement('house-wide', 10, 8, { seed: 4 });
+  assert.ok(p.check.ok, p.check.reason);
+  const s = w.placeStructureAt('house-wide', p.x, p.y, p.angle);
+  const [ax, ay] = w.anchorOf(s);
+  // turned back by the angle, the anchor is the footprint centre away from the middle
+  const def = STRUCTURE_TYPES['house-wide'], [cx, cy] = footprintCenter(def, 0);
+  const c = Math.cos(-s.angle), sn = Math.sin(-s.angle), dx = s.x - ax, dy = s.y - ay;
+  assert.ok(Math.abs(dx * c - dy * sn - cx) < 1e-9 && Math.abs(dx * sn + dy * c - cy) < 1e-9);
+  assert.deepEqual(freeAnchor(def, 5, 5, 0), [5 - cx, 5 - cy]);
+  assert.deepEqual(w.structureIndex.at(s.x, s.y), [s.id]);
+});

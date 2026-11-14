@@ -29,9 +29,10 @@ export function createBuildTool(ctx, defs) {
   const single = () => (def().footprint ?? [[0, 0]]).length === 1;
   const turnable = () => !def().facesRoad;
   const turn = () => (single() && turnable() ? rotation : 0);
-  // placed freely (World.freePlacement, docs/free-placement-plan.md): one-dot
-  // buildings without a rule of their own; the rest still on the dots
-  const free = () => single() && !def().canPlace && !def().site;
+  // placed freely (World.freePlacement, docs/free-placement-plan.md):
+  // buildings without a rule of their own; stations, parks and squares
+  // still on the dots
+  const free = () => !def().canPlace && !def().site;
   let point = null; // the pointer's world position (snap)
   const freeAt = () => point && world.freePlacement(def().id, point[0], point[1], { rotation: placed(), turn: turn(), seed });
   const rotate = () => { if (turnable()) rotation = (rotation + 1) % 4; };

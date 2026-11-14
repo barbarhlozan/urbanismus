@@ -4,7 +4,7 @@
 
 import { smoothPolyline } from '../roads/geometry.js';
 import { Painter } from './painter.js';
-import { drawSeed, tiltOf, roadFront, freeTilt } from '../../structures/index.js';
+import { drawSeed, tiltOf, roadFront, freeTilt, freeAnchor } from '../../structures/index.js';
 import { fitSite, siteEdges } from './lots.js';
 import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
@@ -173,13 +173,14 @@ export class OverlayKit {
   // footprint's middle, so the animated one scales about the building's
   // base; data-anim keeps the animation going across overlay redraws
   // (Renderer.keepAnimating) and plays the exit (Renderer.letGo).
-  // A one-dot structure as it would stand placed freely (World.freePlacement):
-  // its middle at (x, y), its front along `angle`.
+  // A structure as it would stand placed freely (World.freePlacement): its
+  // middle at (x, y), its front along `angle`.
   ghostAt(def, x, y, angle, seed = 1, { blocked = false, data = {} } = {}) {
-    const node = this.world.grid.nodeAt(x, y);
+    const [ax, ay] = freeAnchor(def, x, y, angle);
+    const node = this.world.grid.nodeAt(ax, ay);
     const rotation = Math.round(angle / (Math.PI / 2)) & 3;
     const instance = { type: def.id, x, y, angle, free: true, node, rotation, seed, data };
-    const painter = new Painter(this.camera, { x, y, z: this.world.terrain.heightAt(x, y) }, rotation, drawSeed(instance));
+    const painter = new Painter(this.camera, { x: ax, y: ay, z: this.world.terrain.heightAt(ax, ay) }, rotation, drawSeed(instance));
     painter.rigid = [x, y];
     painter.setTilt(freeTilt(instance), true);
     painter.roadGap = 1;

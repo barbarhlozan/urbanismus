@@ -2,7 +2,7 @@
 // numbered, set on fire, burnt, removed, restyled and converted; trees
 // and other features added and cleared.
 
-import { STRUCTURE_TYPES, newSeed, isNumbered } from '../../../structures/index.js';
+import { STRUCTURE_TYPES, newSeed, isNumbered, freeAnchor } from '../../../structures/index.js';
 import { FEATURE_TYPES } from '../../../features/index.js';
 
 export class WorldStructures {
@@ -29,7 +29,7 @@ export class WorldStructures {
   // the ways come off them too.
   placeStructureAt(type, x, y, angle = 0, { seed = newSeed(), data = {} } = {}) {
     if (!this.fitsOutline(type, x, y, angle).ok) return null;
-    const node = this.grid.nodeAt(x, y);
+    const node = this.grid.nodeAt(...freeAnchor(STRUCTURE_TYPES[type], x, y, angle));
     if (node < 0) return null;
     this.history.touch();
     const rotation = Math.round(angle / (Math.PI / 2)) & 3;

@@ -372,3 +372,13 @@ export function footprintCenter(def, rotation = 0) {
 export function freeTilt(s) {
   return s.angle - (Math.round(s.angle / (Math.PI / 2)) * Math.PI) / 2;
 }
+
+// Where a structure of `def` placed freely with its middle at (x, y),
+// turned by `angle`, has the anchor its own coordinates start from (its
+// footprint's [0, 0]): the middle, less the footprint's centre turned by
+// the whole angle (the drawing turns about the anchor by its quarter turn
+// and tilt together).
+export function freeAnchor(def, x, y, angle) {
+  const [cx, cy] = footprintCenter(def, 0), c = Math.cos(angle), sn = Math.sin(angle);
+  return [x - (cx * c - cy * sn), y - (cx * sn + cy * c)];
+}

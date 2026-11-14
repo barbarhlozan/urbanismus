@@ -326,8 +326,10 @@ still reads a building's dot or turn, on purpose:
   and facing by nearest road point.
   *Started 2026-11-14:* `fitsOutline`, `freePlacement` (facing the
   nearest road, seeded setback), `placeStructureAt` (`s.free`), the
-  build tool placing one-dot buildings freely, `cmd.place`. Still to do:
-  wider buildings and sites free, a tighter `body` inside the `plot`,
+  build tool placing buildings freely (wider ones too, their anchor
+  turned about the middle: `freeAnchor`), front yards from the pose,
+  `cmd.place`. Still to do: sites (parks, squares) and stations free, a
+  tighter `body` inside the `plot`, plots spreading by outline,
   access by the road point (now the nearest dot's), roads kept off free
   buildings by outline (now by their nearest dot).
 - **B2 – Opus, after B1.** Snapping along a road with seeded setback,
