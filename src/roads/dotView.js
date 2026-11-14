@@ -21,7 +21,7 @@ import { RoadNetwork, edgeKey } from './network.js';
 import { measurePolyline, pointAt } from './geometry.js';
 
 // The dots one line passes, in order, each 8-adjacent to the next, with
-// the point of the line nearest each. A corner the line only clips
+// the point of the line nearest each (`p`, at arc length `s`). A corner the line only clips
 // (a, b, c where a and c are neighbours already) is left out, so a
 // slant runs as diagonals, not a staircase.
 export function traceLine(pts, grid, scale = 1) {
@@ -30,17 +30,17 @@ export function traceLine(pts, grid, scale = 1) {
   const out = []; // { n, p, d }
   const steps = Math.max(1, Math.ceil(poly.total / step));
   for (let k = 0; k <= steps; k++) {
-    const p = pointAt(poly, (poly.total * k) / steps);
+    const at = (poly.total * k) / steps, p = pointAt(poly, at);
     const n = grid.nodeAt(p[0] / scale, p[1] / scale);
     if (n < 0) continue;
     const [gx, gy] = grid.xy(n);
     const d = Math.hypot(gx * scale - p[0], gy * scale - p[1]);
     const last = out[out.length - 1];
     if (last?.n === n) {
-      if (d < last.d) [last.p, last.d] = [p, d];
+      if (d < last.d) [last.p, last.d, last.s] = [p, d, at];
       continue;
     }
-    out.push({ n, p, d });
+    out.push({ n, p, d, s: at });
   }
   const near = (a, b) => {
     const [ax, ay] = grid.xy(a), [bx, by] = grid.xy(b);

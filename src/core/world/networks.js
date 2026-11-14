@@ -9,6 +9,7 @@ import { STRUCTURE_TYPES } from '../../../structures/index.js';
 import { smoothLine } from '../geom2d.js';
 import { meanderPaths } from '../../roads/meander.js';
 import { traceWays, traceLine } from '../../roads/dotView.js';
+import { pointAt, subPolyline } from '../../roads/geometry.js';
 
 export class WorldNetworks {
   // Where a footpath runs at dense dot f: wandering a little off its dots,
@@ -190,10 +191,20 @@ export class WorldNetworks {
     const layer = this.networks[kind];
     const view = traceWays(this.ways, kind, layer.grid, layer.scale);
     layer.graph = view.graph;
+    // a drawn curve's dots sit on it, and each dot step is drawn as its
+    // piece of the curve (`stepLines`, geometry.js edgeCurve)
     layer.curvePos = new Map();
+    layer.stepLines = new Map();
     for (const e of this.ways.edges.values()) {
       if (e.kind !== kind || e.pts.length <= 2) continue;
-      for (const { n } of traceLine(e.pts, layer.grid, layer.scale)) layer.curvePos.set(n, view.pos.get(n));
+      const poly = this.ways.measured(e);
+      const dots = traceLine(e.pts, layer.grid, layer.scale);
+      dots.forEach((d, i) => {
+        const s = i === 0 ? 0 : i === dots.length - 1 ? poly.total : d.s;
+        d.s = s;
+        layer.curvePos.set(d.n, pointAt(poly, s));
+        if (i) layer.stepLines.set(edgeKey(dots[i - 1].n, d.n), { from: dots[i - 1].n, pts: subPolyline(poly, dots[i - 1].s, s) });
+      });
     }
     layer.version++;
     if (kind === 'road') {

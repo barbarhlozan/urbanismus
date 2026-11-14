@@ -5,6 +5,7 @@
 import { exportCity } from '../ui/saveFile.js';
 import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { planRoute } from '../roads/routing.js';
+import { easeBends } from '../roads/curves.js';
 import { eraseTarget } from '../tools/erase.js';
 import { SUN, DAY, sunAt, stepAt, holdDay, goOnDay, dayLength } from '../render/shadows.js';
 
@@ -124,6 +125,18 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     return result.ok ? true : fail(`Can't lay ${kind}`, result.reason);
   }
 
+  // A way through points, as the drawing tool lays it (its bends eased
+  // to radius r).
+  function way(kind, points, r = kind === 'rail' ? 2.5 : kind === 'path' ? 0.3 : kind === 'fence' ? 0.15 : kind === 'lane' ? 0.7 : 1) {
+    const entry = NETWORKS[kind];
+    if (!entry) throw new Error(`cmd.way(${Object.keys(NETWORKS).map((k) => `'${k}'`).join(' | ')}, [[x, y], …])`);
+    const [layerKind, lane, street] = entry;
+    const line = easeBends(points, r);
+    if (!line) return fail(`Can't lay ${kind}`, 'too sharp a bend');
+    const result = world.layWay(layerKind, line, { lane, street });
+    return result.ok ? true : fail(`Can't lay ${kind}`, result.reason);
+  }
+
   function tree(x, y) {
     const f = world.addFeature('tree', world.grid.nodeAt(x, y));
     return f ?? fail(`Can't plant a tree at ${x}, ${y}`, 'off the map or one already there');
@@ -233,6 +246,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     burn,
     build,
     road,
+    way,
     tree,
     erase,
     undo: () => world.history.undo(), // the player's last change (each cmd that builds or erases is one too)
@@ -300,6 +314,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         'cmd.log(n)               the last things the systems reported',
         "cmd.build('house', x, y, { rotation: 0..3 })   see cmd.types()",
         "cmd.road('street' | 'road' | 'lane' | 'path' | 'rail' | 'fence', [x, y], [x, y])",
+        "cmd.way('street', [[x, y], [x, y], …])   a curved way through points, as drawn",
         'cmd.tree(x, y)',
         'cmd.house(4)              the building č. p. 4; cmd.house() every one',
         'cmd.send([1, 2, 3], 7)    the people of č. p. 1, 2, 3 go to č. p. 7, stay and come home',

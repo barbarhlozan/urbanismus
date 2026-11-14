@@ -59,11 +59,15 @@ export function networkPolylines(layer, { cornerRadius, curveSamples }) {
   for (const n of graph.nodes()) {
     if (graph.degree(n) !== 2) continue;
     const [a, b] = graph.neighbors(n);
+    // (inside a drawn curve: its own line, no corner to round)
+    if (stepLine(layer, n, a) && stepLine(layer, n, b)) continue;
     trim.set(n, cornerRadius * Math.min(layer.distance(n, a), layer.distance(n, b)));
     lines.push(fillet(pos(a), pos(n), pos(b), cornerRadius, curveSamples));
   }
 
   for (const [a, b] of graph.edges()) {
+    const own = stepLine(layer, a, b);
+    if (own) { lines.push(own); continue; }
     const pa = pos(a);
     const pb = pos(b);
     const [ux, uy, l] = direction(pa, pb);
@@ -132,7 +136,17 @@ export function subPolyline(poly, s0, s1) {
 
 // The drawn centre line of one segment a -> b of a network (the same curves
 // as networkPolylines: half of the corner fillet at each end that bends).
+// The piece of a drawn curve (World.refreshNetwork, layer.stepLines)
+// between dots a and b, from a to b; null where the step isn't on one.
+export function stepLine(layer, a, b) {
+  const own = layer.stepLines?.get(a < b ? `${a}-${b}` : `${b}-${a}`);
+  if (!own) return null;
+  return own.from === a ? own.pts : [...own.pts].reverse();
+}
+
 export function edgeCurve(layer, { cornerRadius, curveSamples }, a, b) {
+  const own = stepLine(layer, a, b);
+  if (own) return own;
   const { graph } = layer;
   const pos = (n) => layer.pos(n);
   const half = curveSamples / 2;
