@@ -460,6 +460,32 @@ end snaps onto a footpath's junction as well as a road's.
 - **D3 – Sonnet, after D2.** Perf runs (`tools/perf/`) against today's
   numbers; report, don't tune.
 
+**Steps (planned 2026-11-14).** Each ends with the game running and `npm
+test` passing.
+
+1. **Way graph.** `src/sim/wayGraph.js`: a graph per way of getting about
+   (drive: roads and lanes; walk: footpaths, streets' sidewalks, lanes;
+   ride: footpaths and every road), derived from `world.ways` – their own
+   nodes, each edge cut where something taps it (a park's exit), with
+   sub-polylines. Attaching a point (a door, a stop) to the nearest edge
+   piece, routes between attached points (A*, by arc length, a lane's
+   slowness), explore / stroll for walks; a route is its way edge ids and
+   the polyline along their curves. Standalone, tested.
+2. **Drives on the ways.** Cars, trucks, visitors, commuters and buses
+   route on the drive graph; map exits are road way ends at the map's
+   edge; `buildTrip` takes a polyline; junction boxes are way nodes where
+   three roads meet; a trip is intact while its way edges are (or the
+   ways still run under it, after a split). Doors by point.
+3. **Walking and cycling on the ways.** `WalkNetwork` over the walk / ride
+   graphs: doors by access point, parks' hubs and exits tapped onto the
+   ways, strolls, walks to the wood, to stops, to fires.
+4. **Trains and level crossings, the brigade.** Trains route over rail
+   way edges with the bend limit at nodes; crossings are the nodes shared
+   by rail and road or path edges; the brigade and the people at fires on
+   the new routes.
+5. **Dot view trimmed, perf.** Whatever nothing reads any more goes from
+   `dotView.js` and the layers; perf runs against `main`.
+
 ### Stage E
 
 - **E1 – Opus.** Growth and new-map generation by position; sites fitted
