@@ -351,7 +351,9 @@ export function freeSideBy(world, s, dir) {
 export function courtSides(world, s) {
   const def = STRUCTURE_TYPES[s.type];
   if (!def?.court) return { left: null, right: null };
-  return courtOf(def, s, drawSeed(s), joinSides(world, s), (dir) => !!joinedNeighbour(world, s, dir, false));
+  // (placed freely, nor where another building or a way leaves no room)
+  const others = (dir) => !!joinedNeighbour(world, s, dir, false) || (!!s.free && world.courtBlocked(s, dir));
+  return courtOf(def, s, drawSeed(s), joinSides(world, s), others);
 }
 
 // Footprint offsets relative to the anchor dot, after rotation.

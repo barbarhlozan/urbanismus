@@ -7,6 +7,7 @@ import { makeRocks } from '../../terrain/rocks.js';
 import { riverField } from '../../terrain/rivers.js';
 import { STRUCTURE_TYPES, footprintOffsets } from '../../../structures/index.js';
 import { FEATURE_TYPES } from '../../../features/index.js';
+import { BODIES } from '../../../structures/bodies.js';
 import { rectOutline, distanceToPolygon, boxOf } from '../spatial.js';
 import { segmentDistance } from '../geom2d.js';
 import { mulberry32 } from '../random.js';
@@ -31,6 +32,9 @@ const SETBACK_VARY = 0.22;
 const JOIN_SNAP = 0.45;
 const JOIN_FACE = Math.PI / 6;
 const JOIN_TWIST = (10 * Math.PI) / 180;
+// bodyOf(): how far out beside a village house its own court reaches
+// (structures/courts.js, OWN_TO), with the bodies' margin
+export const COURT_TO = 0.48;
 
 // grade(): how finely a segment's climb is measured along it (grid units)
 const GRADE_STEP = 0.2;
@@ -168,12 +172,46 @@ export class WorldPlacement {
     return rectOutline(x, y, w, h, angle);
   }
 
+  // A type's body: [x0, y0, x1, y1] local to its middle (front towards -y)
+  // – its walls as drawn plus a little margin (structures/bodies.js), or
+  // its whole outline for a type without one (parks, squares).
+  bodyBox(type) {
+    const b = BODIES[type];
+    if (b) return b;
+    const [w, h] = this.outlineSize(type);
+    return [-w / 2, -h / 2, w / 2, h / 2];
+  }
+
+  // The body of a structure of `type` with its middle at (x, y), turned by
+  // `angle`, as a polygon – `box` (local, as bodyBox) if given.
+  bodyAt(type, x, y, angle = 0, box = this.bodyBox(type)) {
+    const [x0, y0, x1, y1] = box, c = Math.cos(angle), sn = Math.sin(angle);
+    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([lx, ly]) => [x + lx * c - ly * sn, y + lx * sn + ly * c]);
+  }
+
+  // The ground beside free village house s, on its local -x (dir -1) or +x
+  // (dir 1) side, that its own court would wall in (courts.js): out from
+  // its walls to COURT_TO, as deep as the walls. Polygon.
+  courtSpace(s, dir) {
+    const [x0, y0, x1, y1] = this.bodyBox(s.type);
+    const box = dir < 0 ? [-COURT_TO, y0, x0, y1] : [x1, y0, COURT_TO, y1];
+    return this.bodyAt(s.type, s.x, s.y, s.angle, box);
+  }
+
+  // Is there no room for free house s's own court on that side – another
+  // building's body or a way in it? (courtSides: it goes the other way, or
+  // there's none.)
+  courtBlocked(s, dir) {
+    const poly = this.courtSpace(s, dir);
+    return this.structureIndex.overlapping(poly).some((id) => id !== s.id) || !!this.wayAcross(poly);
+  }
+
   // Free placement (docs/free-placement-plan.md, stage B): may a structure
   // of `type` stand with its middle at (x, y), turned by `angle`? Its
-  // outline must stay on the map, overlap no other structure (touching is
-  // fine) and no way – road, railway, footpath – with its width, and the
-  // ground under it be dry, not too steep and free of what can't be
-  // cleared. Types with a rule of their own (stations and their track)
+  // outline must stay on the map, its body (bodyBox) overlap no other's
+  // (touching is fine) and no way – road, railway, footpath – with its
+  // width, and the ground under it be dry, not too steep and free of what
+  // can't be cleared. Types with a rule of their own (stations and their track)
   // still stand on the dots. { ok, reason }.
   fitsOutline(type, x, y, angle = 0, ignoreId = null) {
     const def = STRUCTURE_TYPES[type];
@@ -182,11 +220,14 @@ export class WorldPlacement {
     const poly = this.outlineAt(type, x, y, angle);
     const [x0, y0, x1, y1] = boxOf(poly);
     if (x0 < -0.5 || y0 < -0.5 || x1 > this.grid.width - 0.5 || y1 > this.grid.height - 0.5) return { ok: false, reason: 'Off the map' };
-    if (this.structureIndex.overlapping(poly).some((id) => id !== ignoreId)) return { ok: false, reason: 'Occupied' };
-    for (const id of this.featureIndex.overlapping(poly)) {
+    // (others and ways are kept off its body, the walls: its plot may reach
+    // under a neighbour's garden or up to a footpath)
+    const body = this.bodyAt(type, x, y, angle);
+    if (this.structureIndex.overlapping(body).some((id) => id !== ignoreId)) return { ok: false, reason: 'Occupied' };
+    for (const id of this.featureIndex.overlapping(body)) {
       if (FEATURE_TYPES[this.features.get(id)?.type]?.clearable === false) return { ok: false, reason: 'Blocked' };
     }
-    const way = this.wayAcross(poly);
+    const way = this.wayAcross(body);
     if (way) return { ok: false, reason: way };
     // the ground: points over the outline, its corners pulled in a little
     const [w, h] = this.outlineSize(type), c = Math.cos(angle), sn = Math.sin(angle);

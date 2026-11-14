@@ -223,9 +223,16 @@ export class PlotDrawing {
       return t !== null;
     };
     // (a road at a slant can cut across the plot's square: its fences stop short)
+    // (placed freely, a neighbour may stand inside its square: its walls are
+    // nobody's garden)
+    const others = (x, y, r) => {
+      if (!s.free) return false;
+      const [wx, wy] = toAnchor(x, y);
+      return world.structureIndex.near(ax + wx, ay + wy, r).some((id) => id !== s.id);
+    };
     const clear = (x, y) => {
       const [wx, wy] = toAnchor(x, y);
-      return !this.free || this.free(ax + wx, ay + wy, 0.02);
+      return (!this.free || this.free(ax + wx, ay + wy, 0.02)) && !others(x, y, 0.02);
     };
     const common = {
       style: plotDef.props,
@@ -314,7 +321,7 @@ export class PlotDrawing {
       sides,
       inside: (x, y, r) =>
         x - r > x0 && x + r < x1 && y - r > y0 && y + r < y1 &&
-        !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y, r),
+        !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y, r) && !others(x, y, r),
       onLine: (x, y) => !onBuilding(x, y, 0.02) && !inYard(x, y) && !water(x, y) && clear(x, y),
     };
   }

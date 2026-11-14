@@ -15,27 +15,40 @@ test('a house off the dots, anywhere free', () => {
 test('not across a road, but close beside it', () => {
   const w = flatWorld();
   road(w, [2, 5], [12, 5]);
+  // its walls (the body) up to the road's edge and a little clearance
+  const front = 5 + 0.11 + 0.04 - w.bodyBox('house')[1];
   assert.equal(fits(w, 6, 5.2).reason, 'Road');
-  assert.equal(fits(w, 6, 5.6).reason, 'Road'); // its front edge on the road's edge
-  assert.equal(fits(w, 6, 5.7).ok, true);
-  assert.equal(fits(w, 6, 4.3).ok, true); // the other side
+  assert.equal(fits(w, 6, front - 0.02).reason, 'Road');
+  assert.equal(fits(w, 6, front + 0.02).ok, true);
+  assert.equal(fits(w, 6, 10 - front - 0.02).ok, true); // the other side
 });
 
 test('a street keeps houses back to its kerb', () => {
   const w = flatWorld();
   street(w, [2, 5], [12, 5]);
-  assert.equal(fits(w, 6, 5.7).reason, 'Road');
-  assert.equal(fits(w, 6, 5.75).ok, true);
+  // (its walls, not its whole square, kept back: half a square less their depth)
+  const shift = -0.5 - w.bodyBox('house')[1];
+  assert.equal(fits(w, 6, 5.7 + shift - 0.01).reason, 'Road');
+  assert.equal(fits(w, 6, 5.75 + shift).ok, true);
 });
 
 test('not on another building; side by side is fine, at any angle', () => {
   const w = flatWorld();
-  const s = w.placeStructure('house', w.grid.index(6, 9));
+  const s = w.placeStructureAt('house', 6, 9, 0);
+  const [x0, , x1] = w.bodyBox('house');
   assert.equal(fits(w, 6.5, 9).reason, 'Occupied');
-  assert.equal(fits(w, 7, 9).ok, true); // wall to wall
-  assert.equal(fits(w, 7.1, 9, Math.PI / 4).reason, 'Occupied');
-  assert.equal(fits(w, 7.75, 9, Math.PI / 4).ok, true);
+  assert.equal(fits(w, 6 + x1 - x0 + 0.01, 9).ok, true); // wall to wall, its margin between
+  assert.equal(fits(w, 7, 9).ok, true);
+  assert.equal(fits(w, 6.7, 9, Math.PI / 4).reason, 'Occupied');
+  assert.equal(fits(w, 6.8, 9, Math.PI / 4).ok, true);
   assert.equal(w.fitsOutline('house', 6.5, 9, 0, s.id).ok, true); // itself, moved
+});
+
+test('a house on the dots keeps its whole square', () => {
+  const w = flatWorld();
+  w.placeStructure('house', w.grid.index(6, 9));
+  assert.equal(fits(w, 6.8, 9).reason, 'Occupied');
+  assert.equal(fits(w, 6.5 - w.bodyBox('house')[0] + 0.01, 9).ok, true);
 });
 
 test('not off the map, nor on a station-like rule', () => {

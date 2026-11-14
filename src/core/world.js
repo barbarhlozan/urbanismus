@@ -24,12 +24,12 @@ import { findHills } from '../terrain/hills.js';
 import { RoadNetwork } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
 import { Ways } from '../roads/ways.js';
-import { STRUCTURE_TYPES, footprintOffsets } from '../../structures/index.js';
+import { STRUCTURE_TYPES, footprintOffsets, joinSides, courtSides } from '../../structures/index.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { History } from './history.js';
 import { SpatialIndex, rectOutline } from './spatial.js';
 import { WorldNetworks } from './world/networks.js';
-import { WorldPlacement } from './world/placement.js';
+import { WorldPlacement, COURT_TO } from './world/placement.js';
 import { WorldAccess } from './world/access.js';
 import { WorldStructures } from './world/structures.js';
 
@@ -45,6 +45,10 @@ export class OldSaveError extends Error {
     this.code = 'old-save';
   }
 }
+
+// _rebodyAround(): how near a free house's middle another's body comes
+// for the two to share a wall or a court to give way
+const REBODY_REACH = 1.6;
 
 export class World {
   constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1 }) {
@@ -273,6 +277,25 @@ export class World {
     return this.outlineAt(s.type, s.x, s.y, s.angle);
   }
 
+  // A structure's body: what others and ways keep off (structureIndex).
+  // Placed freely, its walls (bodyBox), out to its outline's side where it
+  // shares a wall with a neighbour (or a court between them) and over its
+  // own court; on the dots, its whole outline.
+  bodyOf(s) {
+    if (!s.free) return this.outlineOf(s);
+    const def = STRUCTURE_TYPES[s.type];
+    let [x0, y0, x1, y1] = this.bodyBox(s.type);
+    if (def?.join) {
+      const [w] = this.outlineSize(s.type);
+      const join = joinSides(this, s), court = courtSides(this, s);
+      if (join.left) x0 = -w / 2;
+      if (join.right) x1 = w / 2;
+      if (court.left === 'own') x0 = Math.min(x0, -COURT_TO);
+      if (court.right === 'own') x1 = Math.max(x1, COURT_TO);
+    }
+    return this.bodyAt(s.type, s.x, s.y, s.angle, [x0, y0, x1, y1]);
+  }
+
   // Sets s.x, s.y (the footprint's middle) and s.angle (the way it's drawn
   // facing, drawnRotation) from where it stands on the dots. A structure
   // placed freely (s.free, placeStructureAt) keeps its own.
@@ -289,7 +312,10 @@ export class World {
     this.structures.set(s.id, s);
     for (const n of this.nodesOf(s)) this.structureAtNode.set(n, s.id);
     if (s.x == null || !s.free) this.poseStructure(s);
-    this.structureIndex.insert(s.id, this.outlineOf(s));
+    // (its walls first: whether it shares one, or has a court, goes by
+    // its neighbours' – and theirs by its)
+    this.structureIndex.insert(s.id, s.free ? this.bodyAt(s.type, s.x, s.y, s.angle) : this.outlineOf(s));
+    this._rebodyAround(s);
   }
 
   _unindexStructure(s) {
@@ -298,6 +324,19 @@ export class World {
       if (this.structureAtNode.get(n) === s.id) this.structureAtNode.delete(n);
     }
     this.structureIndex.remove(s.id);
+    this._rebodyAround(s);
+  }
+
+  // A free structure placed or taken away near `s`: its body, and those of
+  // the free houses that join beside it, again (bodyOf – walls shared or
+  // not, courts there or not).
+  _rebodyAround(s) {
+    if (!s.free) return;
+    const ids = this.structureIndex.near(s.x, s.y, REBODY_REACH);
+    for (const id of ids) {
+      const o = this.structures.get(id);
+      if (o?.free && STRUCTURE_TYPES[o.type]?.join) this.structureIndex.insert(id, this.bodyOf(o));
+    }
   }
 
   _insertFeature(f) {
