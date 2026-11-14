@@ -14,6 +14,7 @@
 // and single-track lanes (`lane`); drawing one over another converts it.
 
 import { easeBends } from '../roads/curves.js';
+import { measurePolyline, pointAt } from '../roads/geometry.js';
 import { t } from '../core/text.js';
 
 // The tightest bend each kind takes (radius, world units).
@@ -22,6 +23,8 @@ const LANE_RADIUS = 0.7;
 const SNAP = 0.35;               // onto a junction or a way
 const ANGLE_SNAP = Math.PI / 30; // 6°: onto the last leg's line, or square to it
 const SAME = 0.3;                // a click this near the last point lays the way
+const MARK_STEP = 0.4;           // a refused stretch gets a cross this often along the line
+const MARK_NEAR = 0.55;          // …where the line passes this near a dot the check refused
 
 // options: { kind, id (default: kind), lane / street (roads: build lanes / streets), group (Build menu group), fineGrid, curve (config key), hoverRadius }
 // Its words are tool.<id>, tool.<id>.blurb and network.*.<id> (text/ui.txt).
@@ -202,11 +205,14 @@ export function createNetworkTool(ctx, options) {
       if (!p) return out;
       out += kit.path(p.line, `${cls}${p.check.ok ? '' : ' invalid'}`, null);
       if (p.sharp) return out + kit.crossAt(...at, size);
-      // a steep-hill sign where it climbs too steeply, a cross for anything else
-      const steep = new Set(p.check.steep ?? []);
-      for (const n of new Set(p.check.blocked)) {
-        if (steep.has(n)) out += kit.steepAt(...layer.pos(n), size);
-        else out += kit.crossAt(...layer.dot(n), size);
+      // little crosses along the line itself where it can't go (too steep,
+      // water, something in the way) – not on the dots the check went by
+      const bad = [...new Set(p.check.blocked ?? [])].map((n) => layer.pos(n));
+      if (!bad.length) return out;
+      const poly = measurePolyline(p.line), near = MARK_NEAR * Math.max(layer.scale, 0.5);
+      for (let d = MARK_STEP / 2; d < poly.total; d += MARK_STEP) {
+        const [x, y] = pointAt(poly, d);
+        if (bad.some(([bx, by]) => Math.hypot(bx - x, by - y) < near)) out += kit.crossAt(x, y, size * 0.8);
       }
       return out;
     },
