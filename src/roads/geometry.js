@@ -6,6 +6,7 @@
 // stay sharp. Change the look of roads here without touching the data.
 
 import { SegmentIndex } from '../core/geom2d.js';
+import { wayOutlines } from './wayOutline.js';
 
 function direction(from, to) {
   const vx = to[0] - from[0];
@@ -247,20 +248,16 @@ export function pathJoins(world, curve, lane, pathCurve) {
 // `joins` (pathJoins): dead ends a footpath carries on from stay open.
 export function streetKerbs(world, curve, lane, joins = new Map()) {
   const layer = world.networks.road;
-  const width = (a, b) => {
-    if (world.hasSidewalk(a, b)) return curve.kerb;
-    if (!world.isLane(a, b)) return curve.edge;
-    return world.laneWalks.has(a < b ? `${a}-${b}` : `${b}-${a}`) ? lane.kerb : lane.edge;
-  };
-  // a side key from roadEdges: the segment's key, then 0 / 1 for the side
-  const kerbed = (k) => {
-    const [a, b] = k.slice(0, -1).split('-').map(Number);
-    return world.hasKerb(a, b, Number(k.slice(-1)));
-  };
+  // (from the ways' own curves: wayOutline.js; a lane's `walks` bit 1 is
+  // its side 0, offset + from a to b)
+  const width = (e) => (e.street ? curve.kerb : !e.lane ? curve.edge : e.walks ? lane.kerb : lane.edge);
+  const sides = (e) => (e.street ? [true, true] : e.lane ? [!!(e.walks & 1), !!(e.walks & 2)] : [false, false]);
+  const dot = (n) => { const p = world.ways.nodes.get(n); return layer.nodeAt(p.x, p.y); };
   const out = [];
-  for (const { key, kind, line, a, b, sides } of roadEdges(layer, curve, width, world.roadExits(), (n) => !joins.has(n))) {
-    const keep = kind === 'edge' ? kerbed(key) : (kind === 'corner' || kind === 'end') && sides.every(kerbed);
-    if (keep) out.push({ key, line, a, b });
+  for (const { key, kind, line, a, b, on } of wayOutlines(world.ways, {
+    keep: (e) => e.kind === 'road', width, sides, dot, capAt: (n) => !joins.has(dot(n)),
+  })) {
+    if (on && kind !== 'exit' && kind !== 'fade') out.push({ key, line, a, b });
   }
   return out;
 }
@@ -420,13 +417,11 @@ export function roadEdges(layer, curve, width, exits = [], capAt = () => true, t
 // The test says which: 'street', 'road' or 'lane' (a single-track lane,
 // between its narrower edges), or false.
 export function roadway(world, curve, lane) {
-  const layer = world.networks.road;
   const streets = [], plain = [], lanes = [];
   const walked = []; // lanes with a sidewalk (either side: up to its kerb)
-  for (const [a, b] of layer.graph.edges()) {
-    const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-    const list = world.sidewalks.has(key) ? streets : !world.lanes.has(key) ? plain : world.laneWalks.has(key) ? walked : lanes;
-    list.push(edgeCurve(layer, curve, a, b));
+  for (const e of world.ways.edges.values()) {
+    if (e.kind !== 'road') continue;
+    (e.street ? streets : !e.lane ? plain : e.walks ? walked : lanes).push(e.pts);
   }
   const s = new SegmentIndex(streets), p = new SegmentIndex(plain), l = new SegmentIndex(lanes), w = new SegmentIndex(walked);
   return (q) => {

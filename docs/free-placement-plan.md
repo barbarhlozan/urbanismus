@@ -445,6 +445,35 @@ junction still tangle, as dot roads did. Known: a way crossing a diagonal dot ro
 "Crosses another line" (`validateRoute`'s diagonal check), and a road's
 end snaps onto a footpath's junction as well as a road's.
 
+**Drawing that feels like drawing (planned 2026-11-14, after the user's
+screenshots of spikes and tangles).** Why it tangles: roads are still
+drawn through dot steps (`stepLines`), a dot shared by two ways is forced
+to one place (kinking a curve passing near a point), edges are offset
+without joins (short pieces and sharp turns fold), each arm draws its own
+edges to the node untrimmed against its neighbours, and an end snapping
+near a point leaves a stub shorter than the road is wide. Each step ends
+with the game running and `npm test` passing.
+
+1. **Reproduce.** On the test server: an end within a road width of a
+   junction, end or bend; a narrow Y; a road passing close to a point;
+   close clicks. Kept as tests where the geometry can be checked in Node.
+2. **Draw from curves.** Each way edge drawn from its own `pts`
+   (`renderer/networks.js`, new `roads/wayOutline.js`): edges, kerbs,
+   roadway, footpaths, rails. Offsets with joins that never fold (loops
+   cut out). The dot view stays only for placement and validation.
+3. **Junctions as one shape.** At each node the arms sorted by angle,
+   each side cut where it meets the neighbouring arm's side and the
+   corner rounded a little; lanes, streets and footpaths keep their
+   widths; level crossings stay right.
+4. **Re-fit instead of stubs.** A stroke starting or ending within ~1.5
+   road widths of a junction, end or bend: the meeting point moves to
+   where the stroke meets, the touched pieces re-smoothed as one curve;
+   closer points merge, no arm shorter than about a road width. Undo
+   brings it all back.
+5. **Drag to draw.** Click by click stays; dragging draws freehand,
+   smoothed and thinned into a gentle curve, laid on release (and on a
+   phone: one finger draws, lifting lays).
+
 - **C3 – Sonnet, after C1.** Drawing from curves: kerbs, joins, street
   furniture, footpaths' wander, park walks (`geometry.js`,
   `furniture.js`, `meander.js`, `siteWalks.js`, `renderer/networks.js`).

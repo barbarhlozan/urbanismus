@@ -13,7 +13,7 @@ import { STRUCTURE_TYPES } from '../../../structures/index.js';
 import { wander } from '../../../structures/plots.js';
 import { pathIndex } from '../lots.js';
 import { zebraCrossings } from '../../roads/furniture.js';
-import { networkPolylines } from '../../roads/geometry.js';
+import { wayOutlines } from '../../roads/wayOutline.js';
 import { trodden } from '../dirtPath.js';
 import { findBridges, makeDeck, bridgeLines } from '../bridges.js';
 import { hashKey, COS30, STRUCTURE_PAD } from './shared.js';
@@ -32,6 +32,17 @@ function spaced(pts, step) {
   }
   return out;
 }
+// exitDir for wayOutlines: a way end on a map exit's dot -> its direction.
+function wayExits(world, layer, exits) {
+  const byDot = new Map(exits.map((e) => [e.node, e.dir]));
+  return (n) => {
+    const p = world.ways.nodes.get(n), d = layer.nodeAt(p.x, p.y);
+    if (!byDot.has(d)) return null;
+    const [x, y] = layer.dot(d);
+    return Math.hypot(x - p.x, y - p.y) < 0.3 ? byDot.get(d) : null;
+  };
+}
+
 // Kerbs open this much wider than a footpath coming in, each side (grid units).
 const PATH_OPENING = 0.012;
 
@@ -147,13 +158,15 @@ export class NetworkDrawing {
     // footpaths carrying on from a road's dead end start where the road
     // has narrowed into them (see roadItems)
     const joined = new Map([...this.pathJoins().values()].map((j) => [j.fine, j]));
-    const joinOf = (a, b) => joined.get(a)?.to === b ? joined.get(a) : joined.get(b)?.to === a ? joined.get(b) : null;
     // the centre lines, for the painted schemes' wash (gl/lines.js)
-    networkPolylines(layer, this.config.path).forEach((pts, i) => add(`pw${i}`, 'path-wash', pts));
-    for (const { key, kind, line, a, b } of roadEdges(layer, this.config.path, this.config.path.edge, [], (n) => !intoSite(n) && !joined.has(n))) {
-      const j = kind === 'edge' && joinOf(a, b);
-      const at = j && layer.pos(j.fine);
-      const keep = j ? (q) => !onRoad(q) && Math.hypot(q[0] - at[0], q[1] - at[1]) >= JOIN_REACH - 1e-3 : (q) => !onRoad(q);
+    for (const e of world.ways.edges.values()) if (e.kind === 'path') add(`pw${e.id}`, 'path-wash', e.pts);
+    const dot = (n) => { const p = world.ways.nodes.get(n); return layer.nodeAt(p.x, p.y); };
+    const joinAt = [...joined.values()].map((j) => layer.pos(j.fine));
+    const keep = (q) => !onRoad(q) && joinAt.every((at) => Math.hypot(q[0] - at[0], q[1] - at[1]) >= JOIN_REACH - 1e-3);
+    for (const { key, kind, line, a, b } of wayOutlines(world.ways, {
+      keep: (e) => e.kind === 'path', width: () => this.config.path.edge, dot,
+      capAt: (n) => !intoSite(dot(n)) && !joined.has(dot(n)),
+    })) {
       if (kind === 'end') continue;
       keepRuns(line, keep).forEach((run, i) => {
         const k = `p${key}${i ? `:${i}` : ''}`;
@@ -325,12 +338,15 @@ export class NetworkDrawing {
   railPieces(add, addRuns) {
     const { world } = this;
     const layer = world.networks.rail;
-    const { edges, exits, buffers } = railParts(layer, this.config.rail, world.railExits());
+    const { exits, buffers } = railParts(layer, this.config.rail, world.railExits());
     const tracks = []; // for the track close up (trackItems)
-    // the dashes are a second line over the same track
-    for (const { a, b, line } of edges) {
-      for (const cls of ['rail', 'rail-dash']) add(`${cls}${edgeKey(a, b)}`, cls, line, a, b);
-      tracks.push({ key: edgeKey(a, b), line, a, b });
+    // the dashes are a second line over the same track; each way's own curve
+    const dot = (n) => { const p = world.ways.nodes.get(n); return layer.nodeAt(p.x, p.y); };
+    for (const e of world.ways.edges.values()) {
+      if (e.kind !== 'rail') continue;
+      const [a, b] = [dot(e.a), dot(e.b)];
+      for (const cls of ['rail', 'rail-dash']) add(`${cls}w${e.id}`, cls, e.pts, a, b);
+      tracks.push({ key: `w${e.id}`, line: e.pts, a, b });
     }
     for (const { node, line, fade } of exits) {
       for (const cls of ['rail', 'rail-dash']) add(`${cls}x${node}`, cls, line, node, node);
@@ -459,16 +475,21 @@ export class NetworkDrawing {
       // The road as its two edges, with corners at junctions, rounded dead
       // ends, and at map exits carried on past the edge, then faded out.
       // Lanes are narrower, and widen into the road where they meet one.
+      // (from the ways' own curves, junctions as one shape: wayOutline.js)
       const lane = this.config.lane;
-      const width = (a, b) => (world.isLane(a, b) ? lane.edge : curve.edge);
       // dead ends a footpath carries on from: open, narrowing into it
       const joins = this.pathJoins();
-      for (const { key, kind, line, a, b } of roadEdges(layer, curve, width, world.roadExits(), (n) => !joins.has(n), lane.taper)) {
+      const exits = wayExits(world, layer, world.roadExits());
+      const dot = (n) => { const p = world.ways.nodes.get(n); return layer.nodeAt(p.x, p.y); };
+      for (const { key, kind, line, a, b } of wayOutlines(world.ways, {
+        keep: (e) => e.kind === 'road', width: (e) => (e.lane ? lane.edge : curve.edge),
+        exitDir: exits, capAt: (n) => !joins.has(dot(n)), taper: lane.taper, dot,
+      })) {
         add(`r${key}`, kind === 'fade' ? 'road-exit' : 'road', line, a, b);
       }
       for (const [n, { line }] of joins) line.forEach((pts, i) => add(`rj${n}:${i}`, 'road', pts, n, n));
       // its centre lines, for the painted schemes' wash (gl/lines.js)
-      networkPolylines(layer, curve).forEach((pts, i) => add(`rw${i}`, 'road-wash', pts));
+      for (const e of world.ways.edges.values()) if (e.kind === 'road') add(`rw${e.id}`, 'road-wash', e.pts);
       // …carried on off the map at its exits, fading out (as the edges' 'road-exit')
       for (const { node, dir } of world.roadExits()) {
         const [x, y] = layer.pos(node);
