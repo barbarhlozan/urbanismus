@@ -423,6 +423,19 @@ call. Undo diffs ways by node and edge id (a way split by another comes
 back whole – tested). Rails and footpaths keep their smoothing
 (`railPos`, `pathPos`) until they're drawn from curves (step 4): with
 one-step edges the view's `pos` is just the dot. Next: step 4.
+Steps 5 and 6 done too (in that order, before 4): the tool lays ways
+point by point (`tools/network.js`; `World.checkWay` / `layWay`), refused
+points and blocked dots marked with crosses; a long way stays one edge
+while dot roads come and go (`syncWays` keeps an edge whose dots and
+attributes all hold), and its dots are drawn and travelled on the curve
+(`layer.curvePos`). Erase takes the nearest way edge between junctions
+(a street's sidewalks first) and joins the two edges left at a junction
+(`Ways.joinAt`). Left: step 4 – drawing each edge's own line instead of
+the dots' rounded polyline, junctions from the edges – and step 7, which
+needs parks placed freely first: their exits already work through the
+dot view. Known: a way crossing a diagonal dot road can be refused as
+"Crosses another line" (`validateRoute`'s diagonal check), and a road's
+end snaps onto a footpath's junction as well as a road's.
 
 - **C3 – Sonnet, after C1.** Drawing from curves: kerbs, joins, street
   furniture, footpaths' wander, park walks (`geometry.js`,
