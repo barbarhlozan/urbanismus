@@ -16,6 +16,7 @@
 import { easeBends } from '../roads/curves.js';
 import { measurePolyline, pointAt } from '../roads/geometry.js';
 import { t } from '../core/text.js';
+import { EXIT_REACH } from '../core/world/access.js';
 
 // The tightest bend each kind takes (radius, world units).
 const RADIUS = { road: 1, path: 0.3, rail: 2.5, fence: 0.15 };
@@ -47,6 +48,8 @@ export function createNetworkTool(ctx, options) {
     if (node) return [node.x, node.y];
     const hit = world.ways.edgeNear(x, y, SNAP * Math.max(layer.scale, 0.5));
     if (hit) return hit.point;
+    const edge = toEdge(x, y);
+    if (edge) return edge;
     const n = points.length;
     if (n >= 2) {
       const [px, py] = points[n - 1], [qx, qy] = points[n - 2];
@@ -59,6 +62,21 @@ export function createNetworkTool(ctx, options) {
       }
     }
     return [x, y];
+  };
+
+  // A point near the land's edge, or past it, onto the edge: the way runs
+  // on off the map there (World.roadExits). null when well inside.
+  const toEdge = (x, y) => {
+    const d = world.land.depth(x, y);
+    if (d > EXIT_REACH) return null;
+    const [ox, oy] = world.land.outward(x, y);
+    let p = [x + ox * d, y + oy * d];
+    // (the edge as measured along the radius: a step or two to sit on it)
+    for (let i = 0; i < 3; i++) {
+      const e = world.land.depth(...p);
+      p = [p[0] + ox * e, p[1] + oy * e];
+    }
+    return p;
   };
 
   const same = (p, q) => p && q && Math.hypot(p[0] - q[0], p[1] - q[1]) < SAME * Math.max(layer.scale, 0.5);
@@ -126,7 +144,7 @@ export function createNetworkTool(ctx, options) {
     move(x, y) {
       if (!stroke) return;
       const last = stroke.at(-1);
-      if (Math.hypot(x - last[0], y - last[1]) >= 0.04 * unit) stroke.push([x, y]);
+      if (Math.hypot(x - last[0], y - last[1]) >= 0.04 * unit) stroke.push(world.land.inside(x, y) ? [x, y] : toEdge(x, y));
     },
     end() {
       if (!stroke) return;

@@ -34,13 +34,8 @@ function spaced(pts, step) {
 }
 // exitDir for wayOutlines: a way end on a map exit's dot -> its direction.
 function wayExits(world, layer, exits) {
-  const byDot = new Map(exits.map((e) => [e.node, e.dir]));
-  return (n) => {
-    const p = world.ways.nodes.get(n), d = layer.nodeAt(p.x, p.y);
-    if (!byDot.has(d)) return null;
-    const [x, y] = layer.dot(d);
-    return Math.hypot(x - p.x, y - p.y) < 0.3 ? byDot.get(d) : null;
-  };
+  const byWay = new Map(exits.map((e) => [e.way, e.dir]));
+  return (n) => byWay.get(n) ?? null;
 }
 
 // Kerbs open this much wider than a footpath coming in, each side (grid units).
@@ -493,8 +488,7 @@ export class NetworkDrawing {
       // its centre lines, for the painted schemes' wash (gl/lines.js)
       for (const e of world.ways.edges.values()) if (e.kind === 'road') add(`rw${e.id}`, 'road-wash', e.pts);
       // …carried on off the map at its exits, fading out (as the edges' 'road-exit')
-      for (const { node, dir } of world.roadExits()) {
-        const [x, y] = layer.pos(node);
+      for (const { node, pos: [x, y], dir } of world.roadExits()) {
         add(`rwx${node}`, 'road-wash-exit', [[x, y], [x + dir[0] * 1.9, y + dir[1] * 1.9]], node, node);
       }
 

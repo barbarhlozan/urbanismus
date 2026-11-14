@@ -10,6 +10,10 @@ import { STRUCTURE_TYPES, footprintCenter, freeAnchor } from '../../../structure
 // side is its way in
 const FREE_REACH = 0.9;
 
+// A way ending this near the land's edge runs on off the map (about a
+// road's width: tools/network.js snaps an end this near onto the edge).
+export const EXIT_REACH = 0.5;
+
 export class WorldAccess {
   // Middle of a structure in world coordinates.
   centerOf(s) {
@@ -414,33 +418,41 @@ export class WorldAccess {
     if (this.structures.get(s.id) === s) this.poseStructure(s);
   }
 
-  // Map exits: roads that end at the edge of the map continue off it.
-  // Returns [{ node, dir: [dx, dy] }] with dir pointing off the map.
+  // Map exits: roads that end at the edge of the land (core/land.js)
+  // carry on off it. Returns [{ node (its dot), way (the ways' node), pos,
+  // dir: [dx, dy] }] with dir pointing off the map.
   roadExits() {
     const layer = this.networks.road;
-    if (this._exits?.version === layer.version) return this._exits.list;
-    const list = this.edgeExits(this.roads, this.grid);
-    this._exits = { version: layer.version, list };
-    return list;
+    const key = `${this.ways.version}|${layer.version}`;
+    if (this._exits?.key !== key) this._exits = { key, list: this.landExits('road', layer) };
+    return this._exits.list;
   }
 
   // Railways that run off the map edge, like roadExits().
   railExits() {
     const layer = this.networks.rail;
-    if (this._railExits?.version === layer.version) return this._railExits.list;
-    const list = this.edgeExits(this.rails, this.fine);
-    this._railExits = { version: layer.version, list };
-    return list;
+    const key = `${this.ways.version}|${layer.version}`;
+    if (this._railExits?.key !== key) this._railExits = { key, list: this.landExits('rail', layer) };
+    return this._railExits.list;
   }
 
-  edgeExits(graph, grid) {
-    const { width, height } = grid;
+  // Ends of the ways of `kind` within EXIT_REACH of the land's edge: the
+  // way runs on off it, along its own last stretch where that heads out,
+  // else straight off the edge.
+  landExits(kind, layer) {
     const list = [];
-    for (const n of graph.nodes()) {
-      if (graph.degree(n) !== 1) continue;
-      const [x, y] = grid.xy(n);
-      const dir = x === 0 ? [-1, 0] : x === width - 1 ? [1, 0] : y === 0 ? [0, -1] : y === height - 1 ? [0, 1] : null;
-      if (dir) list.push({ node: n, dir });
+    for (const [id, p] of this.ways.nodes) {
+      const at = this.ways.edgesAt(id).filter((e) => e.kind === kind);
+      if (at.length !== 1 || this.ways.edgesAt(id).length !== 1) continue;
+      if (this.land.depth(p.x, p.y) > EXIT_REACH) continue;
+      const e = at[0], pts = e.pts, end = e.a === id ? pts[0] : pts[pts.length - 1];
+      const back = e.a === id ? pts[Math.min(2, pts.length - 1)] : pts[Math.max(0, pts.length - 3)];
+      const out = this.land.outward(p.x, p.y);
+      let dir = [end[0] - back[0], end[1] - back[1]];
+      const l = Math.hypot(...dir);
+      dir = l ? [dir[0] / l, dir[1] / l] : out;
+      if (dir[0] * out[0] + dir[1] * out[1] < 0.35) dir = out;
+      list.push({ node: layer.nodeAt(p.x, p.y), way: id, pos: [p.x, p.y], dir });
     }
     return list;
   }

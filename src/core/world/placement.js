@@ -220,6 +220,7 @@ export class WorldPlacement {
     const poly = this.outlineAt(type, x, y, angle);
     const [x0, y0, x1, y1] = boxOf(poly);
     if (x0 < -0.5 || y0 < -0.5 || x1 > this.grid.width - 0.5 || y1 > this.grid.height - 0.5) return { ok: false, reason: 'Off the map' };
+    if (poly.some(([px, py]) => !this.land.inside(px, py))) return { ok: false, reason: 'Off the map' };
     // (others and ways are kept off its body, the walls: its plot may reach
     // under a neighbour's garden or up to a footpath)
     const body = this.bodyAt(type, x, y, angle);
@@ -376,7 +377,7 @@ export class WorldPlacement {
   // between two of its dots, and a type's own canPlace rule, are the whole
   // footprint's business.)
   dotBlocked(n, type = null, ignoreId = null) {
-    if (n < 0) return 'Off the map';
+    if (n < 0 || !this.land.inside(...this.grid.xy(n))) return 'Off the map';
     if (this.terrain.isWater(n)) return 'Water';
     const sid = this.structureAtNode.get(n);
     if (sid !== undefined && sid !== ignoreId) return 'Occupied';

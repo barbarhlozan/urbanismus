@@ -147,7 +147,7 @@ export class TerrainDrawing {
     const relief = world.relief();
     if (this.hills?.key !== key || this.hills.relief !== relief || this.hills.lift !== camera.lift) {
       const shade = hillShade(this.groundHeight(), box, sunFor(camera));
-      this.hills = { key, relief, lift: camera.lift, rings: hillShadeRings(shade, box, this.wetAt()), views: new Map() };
+      this.hills = { key, relief, lift: camera.lift, rings: hillShadeRings(shade, box, this.breakAt()), views: new Map() };
     }
     let view = this.hills.views.get(camera.angle);
     if (view == null) {
@@ -186,7 +186,7 @@ export class TerrainDrawing {
       const { terrain, grid } = world;
       const m = 1.2; // (as the contours)
       const height = (x, y) => camera.lift(x, y) + terrain.heightAt(x, y);
-      const vis = visibility(camera, height, [-m, -m, grid.width - 1 + m, grid.height - 1 + m]);
+      const vis = visibility(camera, height, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], undefined, (x, y) => world.land.drawn(x, y));
       const tiers = [[], [], []], runs = [[], [], []];
       browLines(vis, camera).forEach((line, n) => {
         for (const run of browRuns(line)) {
@@ -197,7 +197,7 @@ export class TerrainDrawing {
         }
       });
       // the rock faces turned to the viewer (those turned away are brows)
-      const rocks = rockLines(world, camera, height, [-0.5, -0.5, grid.width - 0.5, grid.height - 0.5], (x, y) => hiddenAt(vis, camera, x, y));
+      const rocks = rockLines(world, camera, height, [-0.5, -0.5, grid.width - 0.5, grid.height - 0.5], (x, y) => hiddenAt(vis, camera, x, y) || !world.land.drawn(x, y));
       const lips = rocks.lips.flatMap((l, n) => pencil(l, n, ROCK_LOOK.pencil));
       view = { tiers, runs, lips, faces: rocks.faces };
       if (this.brows.views.size >= 6) this.brows.views.delete(this.brows.views.keys().next().value);
@@ -242,13 +242,20 @@ export class TerrainDrawing {
     if (!this.steepLines) {
       const { grid } = this.world;
       const m = 1.2; // (as the contours)
-      this.steepLines = steepLines(this.world, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], this.wetAt());
+      this.steepLines = steepLines(this.world, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], this.breakAt());
     }
     if (lines) {
       this.terrainItems(lines, this.steepLines, 'steep');
       return '';
     }
     return chunked(this.steepLines, CONTOUR_CHUNK).map((ls) => `<path class="steep" d="${this.pathData(ls, false)}"/>`).join('');
+  }
+
+  // Where the terrain's lines break: on water, and off the land (a little,
+  // unevenly, past its edge: core/land.js drawn).
+  breakAt() {
+    const wet = this.wetAt(), land = this.world.land;
+    return (x, y) => wet(x, y) || !land.drawn(x, y);
   }
 
   // Is a world point on water (where the terrain's lines break)?
@@ -504,7 +511,7 @@ export class TerrainDrawing {
     const { grid } = this.world;
     const m = 1.2; // margin around the outermost dots
     if (!this.contourLines) {
-      this.contourLines = contours(this.world.elevation, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], ELEVATION, this.wetAt());
+      this.contourLines = contours(this.world.elevation, [-m, -m, grid.width - 1 + m, grid.height - 1 + m], ELEVATION, this.breakAt());
       // drawn by hand: each line as a run of pencil strokes (see pencil())
       this.contourStrokes = [[], [], []];
       for (const c of this.contourLines) this.contourStrokes[c.tier].push(...pencil(c.points, c.level, PENCIL[c.tier]));

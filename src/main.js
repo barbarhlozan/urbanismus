@@ -120,7 +120,7 @@ function loadWorld() {
     }
   }
   const seed = pending?.seed ?? CONFIG.seed ?? Math.floor(Math.random() * 1e9);
-  const world = new World({ ...CONFIG.grid, seed, name: pending?.name, hilliness: pending?.hilliness });
+  const world = new World({ ...CONFIG.grid, seed, name: pending?.name, hilliness: pending?.hilliness, land: 'round' });
   generateWorld(world, { ...CONFIG, terrain: { ...CONFIG.terrain, ...pending?.terrain } });
   return world;
 }

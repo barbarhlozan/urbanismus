@@ -77,7 +77,7 @@ function worldOf(camera, u, t) {
 
 // `height(x, y)`: the ground's height as drawn, in grid units (the relief's
 // lift plus the terrain's own). `box`: [x0, y0, x1, y1], the ground there.
-export function visibility(camera, height, box, opts = BROWS) {
+export function visibility(camera, height, box, opts = BROWS, keep = null) {
   const { du, dt, from, drop, smooth, fold, deepest } = opts;
   const z = camera.zScale;
   const [x0, y0, x1, y1] = box;
@@ -87,7 +87,7 @@ export function visibility(camera, height, box, opts = BROWS) {
   });
   const uMin = Math.min(...corners.map((c) => c[0])), uMax = Math.max(...corners.map((c) => c[0]));
   const tMin = Math.min(...corners.map((c) => c[1])), tMax = Math.max(...corners.map((c) => c[1]));
-  const inside = ([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  const inside = ([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1 && (!keep || keep(x, y)); // (keep: on the drawn land)
 
   const columns = [], events = [];
   const T = [], H = [], Y = [], R = [];

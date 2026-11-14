@@ -15,6 +15,9 @@ import { pointAt, subPolyline } from '../../roads/geometry.js';
 // (Ways.insert `refit`): about three road widths for roads, less for
 // footpaths; railways and fences don't bend what's there.
 const REFIT = { road: 0.7, path: 0.35 };
+// A way's line may run this far past the land's edge (an end snapped onto
+// it, eased a little outward).
+const EDGE_SLACK = 0.08;
 
 export class WorldNetworks {
   // Where a footpath runs at dense dot f: wandering a little off its dots,
@@ -289,6 +292,10 @@ export class WorldNetworks {
   checkWay(kind, line, { lane = false } = {}) {
     const layer = this.networks[kind];
     const dots = traceLine(line, layer.grid, layer.scale).map((d) => d.n);
+    // on the land: up to its edge, where it runs on off the map (an end
+    // drawn near the edge is snapped onto it: tools/network.js)
+    const off = line.filter(([x, y]) => !this.land.inside(x, y, -EDGE_SLACK));
+    if (off.length) return { ok: false, reason: 'Off the map', blocked: off.map(([x, y]) => layer.nodeAt(x, y)).filter((n) => n >= 0), dots };
     return { ...validateRoute(layer, dots, { lane }), dots };
   }
 

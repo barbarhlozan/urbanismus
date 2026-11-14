@@ -72,6 +72,7 @@ export function meadowGround(world, config) {
     // Is (x, y) open ground? null if not, else what's around it.
     at(x, y) {
       if (x < -0.45 || y < -0.45 || x > grid.width - 0.55 || y > grid.height - 0.55) return null;
+      if (!world.land.inside(x, y, 0.1 + 0.5 * world.land.fray(x * 3, y * 3))) return null; // (thinning out before the land's edge)
       const built = nearest(x, y, 1, (n) => world.structureAt(n), true);
       if (built < 0.75) return null;                   // plots and yards
       if (nearest(x, y, 1, (n) => world.featureAt(n), true) < 0.5) return null; // tree clumps

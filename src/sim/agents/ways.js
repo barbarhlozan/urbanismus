@@ -4,8 +4,6 @@
 
 import { WayGraph } from '../wayGraph.js';
 
-const EDGE = 0.75; // a road ending this near the map's edge goes on off it
-
 export class AgentWays {
   // Roads and lanes (a lane weighed by the time it takes, lane.speed),
   // rebuilt when the ways change.
@@ -20,17 +18,16 @@ export class AgentWays {
     return this._drive.g;
   }
 
-  // Road ends at the map's edge: [{ node, pos, dir }], dir pointing off it.
+  // Road ends at the land's edge: [{ node, pos, dir }], dir pointing off it.
   driveExits() {
     const g = this.driveGraph();
     if (!this._drive.exits) {
-      const { width, height } = this.world.grid;
+      // (World.roadExits: the road ends at the land's edge)
+      const ends = new Map(this.world.roadExits().map((e) => [e.way, e.dir]));
       const list = [];
       for (const [n, pieces] of g.adj) {
-        if (pieces.length !== 1) continue;
-        const [x, y] = g.nodes.get(n);
-        const off = [[x, [-1, 0]], [width - 1 - x, [1, 0]], [y, [0, -1]], [height - 1 - y, [0, 1]]].sort((p, q) => p[0] - q[0])[0];
-        if (off[0] <= EDGE) list.push({ node: n, pos: [x, y], dir: off[1] });
+        if (pieces.length !== 1 || !ends.has(n)) continue;
+        list.push({ node: n, pos: g.nodes.get(n), dir: ends.get(n) });
       }
       this._drive.exits = list;
     }

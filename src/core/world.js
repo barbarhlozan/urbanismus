@@ -15,6 +15,7 @@
 // class whose methods are copied onto World.prototype (at the end), so all
 // share `this`.
 
+import { Land } from './land.js';
 import { EventBus } from './events.js';
 import { CONFIG } from '../config.js';
 import { townName } from './townName.js';
@@ -51,8 +52,9 @@ export class OldSaveError extends Error {
 const REBODY_REACH = 1.6;
 
 export class World {
-  constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1 }) {
+  constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1, land = 'square' }) {
     this.seed = seed;
+    this.land = new Land(width, height, seed, land); // the map's own shape inside the grid (core/land.js)
     this.hilliness = hilliness; // scales the seed's hills (terrain/elevation.js)
     this.rockiness = rockiness; // 0–1, how much of the steep ground is rock (terrain/rocks.js)
     this.name = name || townName(seed); // what the player calls the town (older saves: from the seed)
@@ -367,6 +369,7 @@ export class World {
       name: this.name,
       hilliness: this.hilliness,
       rockiness: this.rockiness,
+      land: this.land.kind,
       width: this.grid.width,
       height: this.grid.height,
       nextId: this.nextId,
