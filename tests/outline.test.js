@@ -139,3 +139,15 @@ test('a wider building placed freely: its anchor turns with it about its middle'
   assert.deepEqual(freeAnchor(def, 5, 5, 0), [5 - cx, 5 - cy]);
   assert.deepEqual(w.structureIndex.at(s.x, s.y), [s.id]);
 });
+
+test('a road, railway or footpath may not be laid through a free building', async () => {
+  const { run, fineRun } = await import('./helpers.js');
+  const w = flatWorld();
+  const s = w.placeStructureAt('house', 6.5, 8, 0.3);
+  assert.ok(s);
+  const across = w.buildNetwork('road', run(w, [6, 3], [6, 14]));
+  assert.equal(across.ok, false);
+  assert.equal(across.reason, 'Occupied');
+  assert.equal(w.buildNetwork('road', run(w, [4, 3], [4, 14])).ok, true); // clear of it
+  assert.equal(w.buildNetwork('path', fineRun(w, [7, 3], [7, 14])).ok, false);
+});

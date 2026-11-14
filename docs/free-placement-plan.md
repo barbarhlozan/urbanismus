@@ -330,8 +330,8 @@ still reads a building's dot or turn, on purpose:
   turned about the middle: `freeAnchor`), front yards from the pose,
   `cmd.place`. Still to do: sites (parks, squares) and stations free, a
   tighter `body` inside the `plot`, plots spreading by outline,
-  access by the road point (now the nearest dot's), roads kept off free
-  buildings by outline (now by their nearest dot).
+  access by the road point (now the nearest dot's). (Ways are kept off
+  free buildings by outline: `freeBuildingOn`.)
 - **B2 – Opus, after B1.** Snapping along a road with seeded setback,
   quarter turns and free turning; joined walls side by side. Tuned in the
   browser.

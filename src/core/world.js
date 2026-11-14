@@ -87,6 +87,7 @@ export class World {
         scale: 1,
         isBlocked: (n) => this.isRoadBlocked(n),
         conflicts: (a, b) => this.railAlong(a, b),
+        occupied: (a, b) => this.freeBuildingOn('road', a, b, CONFIG.road.kerb),
         steep: (a, b, { lane = false } = {}) => this.grade(this.networks.road, a, b) > (lane ? CONFIG.steep.lane : CONFIG.steep.road),
         coarseOf: (n) => n,
         // drivers weigh a lane by the time it takes (CONFIG.lane.speed)
@@ -103,6 +104,7 @@ export class World {
         grid: this.fine,
         scale: 0.5,
         isBlocked: (f) => this.isRailBlocked(f),
+        occupied: (f, g) => this.freeBuildingOn('rail', f, g, 0.12),
         conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.paths.hasEdge(f, g),
         steep: (f, g) => this.grade(this.networks.rail, f, g) > CONFIG.steep.rail,
         maxTurn: Math.PI / 4,
@@ -120,6 +122,7 @@ export class World {
         grid: this.fine,
         scale: 0.5,
         isBlocked: (f) => this.isPathBlocked(f),
+        occupied: (f, g) => this.freeBuildingOn('path', f, g, CONFIG.path.edge),
         // (not along a road: sidewalks come with streets, the Street tool)
         conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
         coarseOf: (f) => this.fineToCoarse(f),

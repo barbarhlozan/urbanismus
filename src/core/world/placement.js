@@ -268,6 +268,21 @@ export class WorldPlacement {
     return best?.at ?? null;
   }
 
+  // Does a building placed freely stand on the segment a–b of network
+  // `kind`, with `half` its half width? (Those on the dots are kept off by
+  // their dots – isRoadBlocked and the like.)
+  freeBuildingOn(kind, a, b, half) {
+    const layer = this.networks[kind];
+    const pa = layer.pos(a), pb = layer.pos(b), r = half + WAY_CLEAR;
+    const box = [[Math.min(pa[0], pb[0]) - r, Math.min(pa[1], pb[1]) - r], [Math.max(pa[0], pb[0]) + r, Math.min(pa[1], pb[1]) - r],
+      [Math.max(pa[0], pb[0]) + r, Math.max(pa[1], pb[1]) + r], [Math.min(pa[0], pb[0]) - r, Math.max(pa[1], pb[1]) + r]];
+    for (const id of this.structureIndex.overlapping(box)) {
+      const s = this.structures.get(id);
+      if (s?.free && segmentPolygonDistance(pa, pb, this.structureIndex.outline(id)) < r) return true;
+    }
+    return false;
+  }
+
   // The first way whose width the polygon would stand on: 'Road',
   // 'Railway', 'Footpath' – or null. (Ways are still on the dots, so each
   // segment is the straight line between two of them.)
