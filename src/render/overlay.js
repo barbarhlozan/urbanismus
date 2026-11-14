@@ -191,7 +191,10 @@ export class OverlayKit {
     painter.roadGap = 1;
     def.draw(painter, instance);
     const [sx, sy] = this.camera.project(x, y, this.world.terrain.heightAt(x, y)).map(r2);
-    const key = `ghost:${def.id}:${x.toFixed(3)}:${y.toFixed(3)}:${angle.toFixed(3)}:${seed}:${data.kind ?? ''}:${blocked ? 1 : 0}`;
+    // (not keyed by where it stands: following the pointer it's the same
+    // ghost, so its entrance plays once – Renderer.keepAnimating – and no
+    // faded copy is left behind at every step – Renderer.letGo)
+    const key = `ghost:${def.id}:free:${seed}:${data.kind ?? ''}:${blocked ? 1 : 0}`;
     return `<g transform="translate(${sx} ${sy})"><g class="ghost-anim" data-anim="${key}">`
       + `<g class="ghost${blocked ? ' blocked' : ''}" transform="translate(${-sx} ${-sy})">${painter.toGroundSVG()}${painter.toSVG()}</g></g></g>`;
   }

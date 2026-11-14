@@ -58,14 +58,14 @@ test('a wider building is measured by its whole outline', () => {
 test('placed by a road: facing it, set back, unevenly by seed', () => {
   const w = flatWorld();
   road(w, [2, 5], [12, 5]);
-  const below = w.freePlacement('house', 6.3, 6.4, { seed: 1 });
+  const below = w.freePlacement('house', 6.3, 5.5, { seed: 1 });
   assert.ok(below.check.ok, below.check.reason);
   assert.ok(Math.abs(below.angle) < 1e-9); // below the road: front up
   assert.ok(below.y > 5.7 && below.y < 6.2);
   assert.ok(Math.abs(below.x - 6.3) < 1e-9); // along the road where pointed
-  const above = w.freePlacement('house', 6.3, 4.2, { seed: 1 });
+  const above = w.freePlacement('house', 6.3, 4.5, { seed: 1 });
   assert.ok(Math.abs(Math.abs(above.angle) - Math.PI) < 1e-9);
-  const ys = [1, 2, 3, 4, 5].map((seed) => w.freePlacement('house', 6, 6.4, { seed }).y);
+  const ys = [1, 2, 3, 4, 5].map((seed) => w.freePlacement('house', 6, 5.5, { seed }).y);
   assert.ok(Math.max(...ys) - Math.min(...ys) > 0.03); // not all the same setback
   const s = w.placeStructureAt('house', below.x, below.y, below.angle);
   assert.ok(s?.free);
@@ -76,7 +76,7 @@ test('placed by a road: facing it, set back, unevenly by seed', () => {
 test('a diagonal road turns the house to it', () => {
   const w = flatWorld();
   road(w, [2, 2], [10, 10]);
-  const p = w.freePlacement('house', 7, 5, { seed: 3 });
+  const p = w.freePlacement('house', 6.3, 5.7, { seed: 3 });
   assert.ok(p.check.ok, p.check.reason);
   assert.ok(Math.abs(Math.abs(p.angle) - Math.PI / 4) < 1e-9 || Math.abs(Math.abs(p.angle) - 3 * Math.PI / 4) < 1e-9, String(p.angle));
 });
@@ -99,7 +99,7 @@ test('a house by a free neighbour snaps flush to its side and they can share a w
   const { freeSideBy, joinSides } = await import('../structures/index.js');
   const w = flatWorld();
   road(w, [2, 2], [12, 7]); // a slanting road, so nothing lines up by chance
-  const p = w.freePlacement('house', 6, 5.5, { seed: 1 });
+  const p = w.freePlacement('house', 6, 4.5, { seed: 1 });
   const a = w.placeStructureAt('house', p.x, p.y, p.angle);
   // pointing roughly beside it, a little off
   const q = w.freePlacement('house', a.x + Math.cos(a.angle) * 1.2, a.y + Math.sin(a.angle) * 1.2 + 0.1, { seed: 9 });
@@ -113,6 +113,14 @@ test('a house by a free neighbour snaps flush to its side and they can share a w
   const sides = joinSides(w, a);
   assert.equal(sides.left, false);
   assert.equal(typeof sides.right, 'boolean'); // (whether they do is the seeded roll)
+});
+
+test('pointing away from the road: the house stands where pointed, not turned to it', () => {
+  const w = flatWorld();
+  road(w, [2, 5], [14, 5]);
+  const p = w.freePlacement('house', 6, 6.4, { seed: 1 });
+  assert.equal(p.road, null);
+  assert.deepEqual([p.x, p.y, p.angle], [6, 6.4, 0]);
 });
 
 test('far from a neighbour, no snap', () => {
@@ -155,7 +163,7 @@ test('a road, railway or footpath may not be laid through a free building', asyn
 test('turned by the player: from facing its road, or the viewer, by any angle', () => {
   const w = flatWorld();
   road(w, [2, 5], [12, 5]);
-  const p = w.freePlacement('house', 6, 6.4, { seed: 1, twist: 0.3 });
+  const p = w.freePlacement('house', 6, 5.5, { seed: 1, twist: 0.3 });
   assert.ok(p.road); // still by its road, set back as ever
   assert.ok(Math.abs(p.angle - 0.3) < 1e-9); // facing it, then turned by the twist
   const off = w.freePlacement('house', 6, 12, { rotation: 1, twist: 0.3 });

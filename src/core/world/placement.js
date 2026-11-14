@@ -16,10 +16,14 @@ import { mulberry32 } from '../random.js';
 // ground under it is sampled for water and slope (world units)
 const WAY_CLEAR = 0.04;
 const SAMPLE = 0.5;
-// freePlacement(): a road this near the pointer (from its centre line)
-// takes the building; it stands back from the road's edge by SETBACK plus
-// up to SETBACK_VARY more, seeded, so a row of houses isn't ruled
+// nearestRoadPoint(): how far from a road's centre line a point is still
+// by it (a building's yard reaches it). freePlacement(): a building taken
+// by a road stands back from its edge by SETBACK plus up to SETBACK_VARY
+// more, seeded, so a row of houses isn't ruled
 const ROAD_REACH = 1.6;
+// …but turns to face it only with the pointer this near the road's edge
+// (else it stands where pointed, as the player turned it)
+const SNAP_REACH = 0.55;
 const SETBACK = 0.1;
 const SETBACK_VARY = 0.22;
 // joinSnap(): a house this near the place beside a neighbour it could share
@@ -227,7 +231,8 @@ export class WorldPlacement {
   // { x, y, angle, road (the nearestRoadPoint or null), check }.
   freePlacement(type, x, y, { rotation = 0, turn = 0, twist = 0, seed = 1 } = {}) {
     twist += (turn * Math.PI) / 2; // (quarter turns: the dev command's, a park's)
-    const road = this.nearestRoadPoint(x, y);
+    const near = this.nearestRoadPoint(x, y);
+    const road = near && near.dist - near.half <= SNAP_REACH ? near : null;
     let angle = (rotation * Math.PI) / 2 + twist;
     if (road) {
       const [px, py] = road.point;
