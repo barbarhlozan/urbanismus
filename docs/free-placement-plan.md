@@ -324,6 +324,12 @@ still reads a building's dot or turn, on purpose:
 
 - **B1 – Opus.** Outlines (`plot`, `body`), the placement rule, access
   and facing by nearest road point.
+  *Started 2026-11-14:* `fitsOutline`, `freePlacement` (facing the
+  nearest road, seeded setback), `placeStructureAt` (`s.free`), the
+  build tool placing one-dot buildings freely, `cmd.place`. Still to do:
+  wider buildings and sites free, a tighter `body` inside the `plot`,
+  access by the road point (now the nearest dot's), roads kept off free
+  buildings by outline (now by their nearest dot).
 - **B2 – Opus, after B1.** Snapping along a road with seeded setback,
   quarter turns and free turning; joined walls side by side. Tuned in the
   browser.

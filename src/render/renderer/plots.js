@@ -82,7 +82,7 @@ export class PlotDrawing {
     }
     painter.join = joinSides(world, s);
     painter.court = courtSides(world, s);
-    painter.setTilt(tiltOf(def, s, painter.join, world));
+    painter.setTilt(tiltOf(def, s, painter.join, world), !!s.free);
     painter.roadGap = world.nodesOf(s).length === 1 ? roadFront(world, s).gap : 1; // see busStop.js
     if (s.ruin) drawRuin(painter, def); // burnt down (World.burnStructure)
     else def.draw(painter, s);
@@ -93,7 +93,7 @@ export class PlotDrawing {
     let courtWorld = [];
     if (core && (painter.court.left || painter.court.right)) {
       const cp = this.attachFree(new Painter(camera, { x, y, z }, quarterOf(world, s), drawSeed(s) ^ 0x3c6ef372));
-      cp.setTilt(painter.tilt);
+      cp.setTilt(painter.tilt, true);
       cp.rigid = rigid;
       cp.relief = relief;
       cp.level = painter.level;
@@ -131,7 +131,7 @@ export class PlotDrawing {
     const plotDef = def.plot ?? {};
     if (plotDef.props && core) {
       const pp = this.attachFree(new Painter(camera, { x, y, z }, 0, drawSeed(s) ^ 0x2c1b3c6d));
-      pp.setTilt(this.roadTurn(s)); // a plot turned with its building to a diagonal road
+      pp.setTilt(this.roadTurn(s), !!s.free); // a plot turned with its building to a diagonal road
       pp.rigid = rigid;
       pp.sways = live;
       pp.follow = true;

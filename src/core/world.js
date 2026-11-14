@@ -259,17 +259,17 @@ export class World {
   // ---------- persistence ----------
 
   // A structure's outline: the rectangle round its footprint, in world
-  // units ([[x, y], …]; a one-dot house a 1×1 square round its middle).
+  // units ([[x, y], …]; a one-dot house a 1×1 square round its middle),
+  // turned with it.
   outlineOf(s) {
-    const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
-    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    return rectOutline((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0 + 1, y1 - y0 + 1);
+    return this.outlineAt(s.type, s.x, s.y, s.angle);
   }
 
   // Sets s.x, s.y (the footprint's middle) and s.angle (the way it's drawn
-  // facing, drawnRotation) from where it stands on the dots.
+  // facing, drawnRotation) from where it stands on the dots. A structure
+  // placed freely (s.free, placeStructureAt) keeps its own.
   poseStructure(s) {
+    if (s.free) return;
     const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
     s.x = pts.reduce((a, p) => a + p[0], 0) / pts.length;
     s.y = pts.reduce((a, p) => a + p[1], 0) / pts.length;
@@ -280,7 +280,7 @@ export class World {
     this.structureVersion = (this.structureVersion ?? 0) + 1;
     this.structures.set(s.id, s);
     for (const n of this.nodesOf(s)) this.structureAtNode.set(n, s.id);
-    this.poseStructure(s);
+    if (s.x == null || !s.free) this.poseStructure(s);
     this.structureIndex.insert(s.id, this.outlineOf(s));
   }
 

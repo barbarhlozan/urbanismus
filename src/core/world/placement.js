@@ -7,6 +7,21 @@ import { makeRocks } from '../../terrain/rocks.js';
 import { riverField } from '../../terrain/rivers.js';
 import { STRUCTURE_TYPES, footprintOffsets } from '../../../structures/index.js';
 import { FEATURE_TYPES } from '../../../features/index.js';
+import { rectOutline, distanceToPolygon, boxOf } from '../spatial.js';
+import { segmentDistance } from '../geom2d.js';
+import { mulberry32 } from '../random.js';
+
+// fitsOutline(): how far a building keeps from a way's centre line, past
+// the way's own half width (its kerb for a street), and how finely the
+// ground under it is sampled for water and slope (world units)
+const WAY_CLEAR = 0.04;
+const SAMPLE = 0.5;
+// freePlacement(): a road this near the pointer (from its centre line)
+// takes the building; it stands back from the road's edge by SETBACK plus
+// up to SETBACK_VARY more, seeded, so a row of houses isn't ruled
+const ROAD_REACH = 1.6;
+const SETBACK = 0.1;
+const SETBACK_VARY = 0.22;
 
 // grade(): how finely a segment's climb is measured along it (grid units)
 const GRADE_STEP = 0.2;
@@ -126,6 +141,125 @@ export class WorldPlacement {
     return { ok: true };
   }
 
+  // The size of a type's outline in its own coordinates: [across its
+  // front, front to back] – the footprint's dots, a unit each.
+  outlineSize(type) {
+    const offs = STRUCTURE_TYPES[type]?.footprint ?? [[0, 0]];
+    const span = (k) => Math.max(...offs.map((o) => o[k])) - Math.min(...offs.map((o) => o[k])) + 1;
+    return [span(0), span(1)];
+  }
+
+  // A structure of `type` with its middle at (x, y), its front looking
+  // along `angle` (radians, see World.poseStructure): its outline.
+  outlineAt(type, x, y, angle = 0) {
+    const [w, h] = this.outlineSize(type);
+    return rectOutline(x, y, w, h, angle);
+  }
+
+  // Free placement (docs/free-placement-plan.md, stage B): may a structure
+  // of `type` stand with its middle at (x, y), turned by `angle`? Its
+  // outline must stay on the map, overlap no other structure (touching is
+  // fine) and no way – road, railway, footpath – with its width, and the
+  // ground under it be dry, not too steep and free of what can't be
+  // cleared. Types with a rule of their own (stations and their track)
+  // still stand on the dots. { ok, reason }.
+  fitsOutline(type, x, y, angle = 0, ignoreId = null) {
+    const def = STRUCTURE_TYPES[type];
+    if (!def) return { ok: false, reason: 'Unknown type' };
+    if (def.canPlace) return { ok: false, reason: 'On the grid only' };
+    const poly = this.outlineAt(type, x, y, angle);
+    const [x0, y0, x1, y1] = boxOf(poly);
+    if (x0 < -0.5 || y0 < -0.5 || x1 > this.grid.width - 0.5 || y1 > this.grid.height - 0.5) return { ok: false, reason: 'Off the map' };
+    if (this.structureIndex.overlapping(poly).some((id) => id !== ignoreId)) return { ok: false, reason: 'Occupied' };
+    for (const id of this.featureIndex.overlapping(poly)) {
+      if (FEATURE_TYPES[this.features.get(id)?.type]?.clearable === false) return { ok: false, reason: 'Blocked' };
+    }
+    const way = this.wayAcross(poly);
+    if (way) return { ok: false, reason: way };
+    // the ground: points over the outline, its corners pulled in a little
+    const [w, h] = this.outlineSize(type), c = Math.cos(angle), sn = Math.sin(angle);
+    const nx = Math.max(1, Math.round(w / SAMPLE)), ny = Math.max(1, Math.round(h / SAMPLE));
+    for (let i = 0; i <= nx; i++) {
+      for (let j = 0; j <= ny; j++) {
+        const lx = (i / nx - 0.5) * (w - 0.1), ly = (j / ny - 0.5) * (h - 0.1);
+        const n = this.grid.nodeAt(x + lx * c - ly * sn, y + lx * sn + ly * c);
+        if (n < 0) return { ok: false, reason: 'Off the map' };
+        if (this.terrain.isWater(n)) return { ok: false, reason: 'Water' };
+        if (this.tooSteepToBuild(n, type)) return { ok: false, reason: 'Too steep' };
+      }
+    }
+    return { ok: true };
+  }
+
+  // The nearest point on a road's centre line within `reach` of (x, y):
+  // { point, dir (unit, along the road), dist, half (its half width),
+  // edge: [a, b] } or null. (Still the straight lines between road dots.)
+  nearestRoadPoint(x, y, reach = ROAD_REACH) {
+    const layer = this.networks.road;
+    let best = null;
+    for (const [a, b] of layer.graph.edges()) {
+      const [ax, ay] = layer.pos(a), [bx, by] = layer.pos(b);
+      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+      if (!l2) continue;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2));
+      const px = ax + dx * t, py = ay + dy * t, dist = Math.hypot(x - px, y - py);
+      if (dist > reach || (best && dist >= best.dist)) continue;
+      const len = Math.sqrt(l2);
+      const half = this.isLane(a, b) ? CONFIG.lane.edge : this.hasSidewalk(a, b) ? CONFIG.road.kerb : CONFIG.road.edge;
+      best = { point: [px, py], dir: [dx / len, dy / len], dist, half, edge: [a, b] };
+    }
+    return best;
+  }
+
+  // Where a structure of `type` the player points at (x, y) would stand,
+  // placed freely: near a road, its front turned to the road and stood
+  // back from its edge (SETBACK, plus a seeded bit more), then `turn`
+  // quarter turns more (side or back to the road); with no road near, at
+  // the pointer, facing quarter turn `rotation`.
+  // { x, y, angle, road (the nearestRoadPoint or null), check }.
+  freePlacement(type, x, y, { rotation = 0, turn = 0, seed = 1 } = {}) {
+    const road = this.nearestRoadPoint(x, y);
+    let angle = (rotation * Math.PI) / 2;
+    if (road) {
+      const [px, py] = road.point;
+      // from the road towards the pointer (straight off it if it's on the line)
+      let nx = x - px, ny = y - py;
+      const d = Math.hypot(nx, ny);
+      if (d < 1e-6) [nx, ny] = [-road.dir[1], road.dir[0]];
+      else [nx, ny] = [nx / d, ny / d];
+      const [, depth] = this.outlineSize(type);
+      const back = SETBACK + SETBACK_VARY * mulberry32((seed ^ 0x5e7b4c) >>> 0)();
+      const out = road.half + WAY_CLEAR + back + depth / 2;
+      [x, y] = [px + nx * out, py + ny * out];
+      // front (sin a, -cos a) looking back at the road: -n
+      angle = Math.atan2(-nx, ny) + (turn * Math.PI) / 2;
+    }
+    return { x, y, angle, road, check: this.fitsOutline(type, x, y, angle) };
+  }
+
+  // The first way whose width the polygon would stand on: 'Road',
+  // 'Railway', 'Footpath' – or null. (Ways are still on the dots, so each
+  // segment is the straight line between two of them.)
+  wayAcross(poly) {
+    const [x0, y0, x1, y1] = boxOf(poly);
+    const ways = [
+      ['road', 'Road', (a, b) => (this.isLane(a, b) ? CONFIG.lane.edge : this.hasSidewalk(a, b) ? CONFIG.road.kerb : CONFIG.road.edge)],
+      ['rail', 'Railway', () => 0.12],
+      ['path', 'Footpath', () => CONFIG.path.edge],
+    ];
+    for (const [kind, reason, half] of ways) {
+      const layer = this.networks[kind];
+      for (const [a, b] of layer.graph.edges()) {
+        const pa = layer.pos(a), pb = layer.pos(b);
+        const reach = half(a, b) + WAY_CLEAR;
+        if (Math.max(pa[0], pb[0]) < x0 - reach || Math.min(pa[0], pb[0]) > x1 + reach) continue;
+        if (Math.max(pa[1], pb[1]) < y0 - reach || Math.min(pa[1], pb[1]) > y1 + reach) continue;
+        if (segmentPolygonDistance(pa, pb, poly) < reach) return reason;
+      }
+    }
+    return null;
+  }
+
   // Why a structure of `type` can't have main dot `n` among its dots, or
   // null if it can: what fitsStructure checks dot by dot – and what the dots
   // round the pointer show while building (OverlayKit.nearDots), so a dot is
@@ -145,4 +279,21 @@ export class WorldPlacement {
     if (this.paths.hasNode(this.coarseToFine(n))) return 'Footpath';
     return null;
   }
+}
+
+// How near a segment comes to a convex polygon: 0 if it crosses or
+// enters it.
+function segmentPolygonDistance(a, b, poly) {
+  let best = Math.min(distanceToPolygon(poly, ...a), distanceToPolygon(poly, ...b));
+  for (let i = 0; i < poly.length && best > 0; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    if (segmentsCross(a, b, p, q)) return 0;
+    best = Math.min(best, segmentDistance(p, a, b));
+  }
+  return best;
+}
+
+function segmentsCross(a, b, c, d) {
+  const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+  return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b);
 }

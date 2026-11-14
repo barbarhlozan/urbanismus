@@ -233,6 +233,7 @@ export class WorldAccess {
   // was built with (s.data.face, see faceOnce) – a road laid past it later
   // doesn't turn it round – except for those that always face their road.
   drawnRotation(s) {
+    if (s.free) return Math.round(s.angle / (Math.PI / 2)) & 3;
     if (s.data?.face != null && !STRUCTURE_TYPES[s.type]?.facesRoad) return s.data.face;
     return this.facingRotation(s.type, s.node, s.rotation, s.data?.turn ?? 0);
   }
@@ -247,6 +248,7 @@ export class WorldAccess {
   // the road (or footpath) there is then, else as the player placed it
   // (and with no road to be turned from, s.data.turn goes).
   faceOnce(s) {
+    if (s.free) return; // it faces the way it was placed
     const nodes = this.nodesOf(s);
     if (nodes.length !== 1 || STRUCTURE_TYPES[s.type]?.facesRoad) return;
     if (!this.frontFor(nodes)) delete s.data.turn;

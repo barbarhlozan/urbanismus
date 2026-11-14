@@ -210,6 +210,7 @@ export function yardOf(def, s, { cars = true } = {}) {
 // would swing it off (walkways running out across the road). Without
 // `world` (no road known) only the small turn.
 export function tiltOf(def, s, join = { left: false, right: false }, world = null) {
+  if (s.free) return freeTilt(s); // placed freely: as far off its quarter turn as it stands
   if ((def.footprint ?? [[0, 0]]).length !== 1 || join.left || join.right || def.site) return 0;
   const road = world ? roadFront(world, s).tilt : 0;
   if (Math.abs(road) > 1e-6) return road;
@@ -228,6 +229,7 @@ export function tiltOf(def, s, join = { left: false, right: false }, world = nul
 // beside a diagonal), for the drawing to keep its distance (g.roadGap).
 export function roadFront(world, s) {
   const none = { tilt: 0, gap: 1 };
+  if (s.free) return { tilt: freeTilt(s), gap: 1 }; // it was set square to its road as placed
   // squares: their paving joins their neighbours' on the grid, never turned
   if (STRUCTURE_TYPES[s.type]?.keepsGrid) return none;
   const rot = world.frontRotation(s);
@@ -287,6 +289,7 @@ export function joinedRow(world, s) {
 // (dir 1) side, or null.
 // (`roll` false: whether one stands there to join, whatever the roll says)
 function joinedNeighbour(world, s, dir, roll = true) {
+  if (s.free) return null; // (joined walls off the dots: stage B, to come)
   const def = STRUCTURE_TYPES[s.type];
   const join = def?.join;
   if (!join || world.nodesOf(s).length !== 1) return null;
@@ -330,4 +333,10 @@ export function footprintCenter(def, rotation = 0) {
     offs.reduce((s, o) => s + o[0], 0) / offs.length,
     offs.reduce((s, o) => s + o[1], 0) / offs.length,
   ];
+}
+
+// A freely placed structure's angle past its quarter turn (radians, within
+// ±π/4): what Painter.setTilt turns its drawing by.
+export function freeTilt(s) {
+  return s.angle - (Math.round(s.angle / (Math.PI / 2)) * Math.PI) / 2;
 }

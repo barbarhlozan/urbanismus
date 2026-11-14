@@ -101,6 +101,16 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     return world.placeStructure(type, at.node, { rotation: at.rotation });
   }
 
+  // Placed freely, as the build tool does with the pointer at (x, y): by
+  // a road, facing it and set back (World.freePlacement).
+  function place(type, x, y, { rotation = 0, turn = 0, seed } = {}) {
+    if (!STRUCTURE_TYPES[type]) throw new Error(`Unknown structure '${type}' (cmd.types() lists them)`);
+    seed ??= Math.floor(Math.random() * 2 ** 31);
+    const p = world.freePlacement(type, x, y, { rotation, turn, seed });
+    if (!p.check.ok) return fail(`Can't place ${type} at ${x}, ${y}`, p.check.reason);
+    return world.placeStructureAt(type, p.x, p.y, p.angle, { seed });
+  }
+
   const NETWORKS = { street: ['road', false, true], road: ['road', false], lane: ['road', true], path: ['path', false], rail: ['rail', false], fence: ['fence', false] };
 
   // A straight (or diagonal, then straight) run from one dot to another.
@@ -275,6 +285,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
       }
       return { on: DAY.on, ...DAY.steps[renderer?.dayStep ?? stepAt(hour ?? 12)], day: DAY.day };
     },
+    place,
     save: () => save(world), // downloads the town as a file: a backup outside the page
     help() {
       const lines = [
@@ -282,6 +293,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         `cmd.weather(${config.weather.kinds.map((k) => `'${k}'`).join(' | ')})   now: '${world.weather.kind}'`,
         `cmd.time('pause' | 'play' | 0..${clock.speeds.length - 1})`,
         'cmd.jump(minutes)         run the town ahead, up to 60',
+        "cmd.place('house', x, y)  build off the dots, as the pointer would (by a road: facing it)",
         "cmd.clear('deer' | 'boats' | 'cows' | 'sheep')",
         "cmd.unlock(name) / cmd.lock(name)   as in story/unlocks.txt",
         "cmd.story.play('Branch') / .reset() / .reload()",

@@ -21,6 +21,29 @@ export class WorldStructures {
     return s;
   }
 
+  // Free placement (docs/free-placement-plan.md, stage B): a structure with
+  // its middle at (x, y), its front looking along `angle`, wherever its
+  // outline fits (fitsOutline). It's marked s.free and keeps that position;
+  // s.node and s.rotation are the nearest dot and quarter turn, for what
+  // still goes by the dots (roads kept off it, the way to its door) until
+  // the ways come off them too.
+  placeStructureAt(type, x, y, angle = 0, { seed = newSeed(), data = {} } = {}) {
+    if (!this.fitsOutline(type, x, y, angle).ok) return null;
+    const node = this.grid.nodeAt(x, y);
+    if (node < 0) return null;
+    this.history.touch();
+    const rotation = Math.round(angle / (Math.PI / 2)) & 3;
+    const s = { id: this.nextId++, type, x, y, angle, free: true, node, rotation, seed, data };
+    this.numberStructure(s);
+    this._insertStructure(s);
+    for (const id of this.featureIndex.overlapping(this.outlineOf(s))) {
+      const f = this.features.get(id);
+      if (f && FEATURE_TYPES[f.type]?.clearable !== false) this.removeFeature(id);
+    }
+    this.events.emit('structure:added', s);
+    return s;
+  }
+
   // House numbers, as the číslo popisné of a Czech village: every building
   // gets the next one when it is built (s.no), and keeps it whatever it
   // turns into. Numbers run through the whole town and a building's dies

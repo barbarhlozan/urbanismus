@@ -29,6 +29,11 @@ export function createBuildTool(ctx, defs) {
   const single = () => (def().footprint ?? [[0, 0]]).length === 1;
   const turnable = () => !def().facesRoad;
   const turn = () => (single() && turnable() ? rotation : 0);
+  // placed freely (World.freePlacement, docs/free-placement-plan.md): one-dot
+  // buildings without a rule of their own; the rest still on the dots
+  const free = () => single() && !def().canPlace && !def().site;
+  let point = null; // the pointer's world position (snap)
+  const freeAt = () => point && world.freePlacement(def().id, point[0], point[1], { rotation: placed(), turn: turn(), seed });
   const rotate = () => { if (turnable()) rotation = (rotation + 1) % 4; };
   const data = () => ({ ...(turn() ? { turn: turn() } : {}), ...(kind ? { kind } : {}) });
   const reroll = () => {
@@ -70,12 +75,19 @@ export function createBuildTool(ctx, defs) {
     },
 
     snap(x, y) {
+      point = [x, y];
+      if (free()) return world.grid.nodeAt(x, y);
       const [cx, cy] = footprintCenter(def(), placed());
       return world.grid.nodeAt(x - cx, y - cy);
     },
 
     click(node) {
       if (!UNLOCKS.allows(def().id)) return;
+      if (free()) {
+        const p = freeAt();
+        if (p?.check.ok && world.placeStructureAt(def().id, p.x, p.y, p.angle, { seed, data: kind ? { kind } : {} })) seed = newSeed();
+        return;
+      }
       const at = world.placementFor(def().id, node, placed());
       if (world.placeStructure(def().id, at.node, { rotation: at.rotation, seed, data: data() })) seed = newSeed();
     },
@@ -97,6 +109,10 @@ export function createBuildTool(ctx, defs) {
     overlay(kit, hover) {
       if (hover < 0) return '';
       const d = def();
+      if (free()) {
+        const p = freeAt();
+        return p ? kit.ghostAt(d, p.x, p.y, p.angle, seed, { blocked: !p.check.ok, data: kind ? { kind } : {} }) : '';
+      }
       const at = world.placementFor(d.id, hover, placed());
       if (at.check.ok) {
         let out = kit.ghost(d, at.node, world.facingRotation(d.id, at.node, at.rotation, turn()), seed, { data: data() });

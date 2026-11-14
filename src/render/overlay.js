@@ -4,7 +4,7 @@
 
 import { smoothPolyline } from '../roads/geometry.js';
 import { Painter } from './painter.js';
-import { drawSeed, tiltOf, roadFront } from '../../structures/index.js';
+import { drawSeed, tiltOf, roadFront, freeTilt } from '../../structures/index.js';
 import { fitSite, siteEdges } from './lots.js';
 import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
@@ -173,6 +173,23 @@ export class OverlayKit {
   // footprint's middle, so the animated one scales about the building's
   // base; data-anim keeps the animation going across overlay redraws
   // (Renderer.keepAnimating) and plays the exit (Renderer.letGo).
+  // A one-dot structure as it would stand placed freely (World.freePlacement):
+  // its middle at (x, y), its front along `angle`.
+  ghostAt(def, x, y, angle, seed = 1, { blocked = false, data = {} } = {}) {
+    const node = this.world.grid.nodeAt(x, y);
+    const rotation = Math.round(angle / (Math.PI / 2)) & 3;
+    const instance = { type: def.id, x, y, angle, free: true, node, rotation, seed, data };
+    const painter = new Painter(this.camera, { x, y, z: this.world.terrain.heightAt(x, y) }, rotation, drawSeed(instance));
+    painter.rigid = [x, y];
+    painter.setTilt(freeTilt(instance), true);
+    painter.roadGap = 1;
+    def.draw(painter, instance);
+    const [sx, sy] = this.camera.project(x, y, this.world.terrain.heightAt(x, y)).map(r2);
+    const key = `ghost:${def.id}:${x.toFixed(3)}:${y.toFixed(3)}:${angle.toFixed(3)}:${seed}:${data.kind ?? ''}:${blocked ? 1 : 0}`;
+    return `<g transform="translate(${sx} ${sy})"><g class="ghost-anim" data-anim="${key}">`
+      + `<g class="ghost${blocked ? ' blocked' : ''}" transform="translate(${-sx} ${-sy})">${painter.toGroundSVG()}${painter.toSVG()}</g></g></g>`;
+  }
+
   ghost(def, node, rotation = 0, seed = 1, { blocked = false, data = {} } = {}) {
     const [x, y] = this.world.grid.xy(node);
     const instance = { type: def.id, node, rotation, seed, data };
