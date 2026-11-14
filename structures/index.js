@@ -292,7 +292,7 @@ function joinedNeighbour(world, s, dir, roll = true) {
   if (!join || world.nodesOf(s).length !== 1) return null;
   if (s.data?.turn) return null; // turned away from the street front
   const rot = world.frontRotation(s);
-  const [x, y] = world.grid.xy(s.node);
+  const { x, y } = s; // one dot: its middle is the dot
   const side = (dir) => {
     const [dx, dy] = rotateQuarter(dir, 0, rot);
     const n = world.grid.nodeAt(x + dx, y + dy);

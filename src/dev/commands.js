@@ -132,7 +132,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
   function house(no) {
     const about = (s) => {
       const def = STRUCTURE_TYPES[s.type];
-      const [x, y] = world.grid.xy(s.node);
+      const { x, y } = s;
       return { no: s.no, type: s.type, name: def.name, x, y, residents: def.stats?.residents ?? 0, served: world.isServed(s), id: s.id };
     };
     if (no === undefined) return [...world.structures.values()].filter((s) => s.no != null).sort((a, b) => a.no - b.no).map(about);
