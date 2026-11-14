@@ -352,6 +352,15 @@ still reads a building's dot or turn, on purpose:
 - **C1 – Opus.** Nodes and edges with curves, edge attributes, A* over
   ids (`network.js`, `layer.js`, `pathfinding.js`); validating a drawn
   curve – bends, angles, water, slope, crossings (`routing.js`).
+  *Started 2026-11-14:* `src/roads/curves.js` (centre line through
+  clicked points, tightest bend, corners rounded with arcs –
+  `easeBends`) and `src/roads/ways.js` (nodes and edges with lines and
+  attributes, split at a point, remove with loose ends, nearest node /
+  edge point, A* routes, save) – both standalone, with tests, not yet
+  used by the game. Next in C1: crossings between lines (junction, level
+  crossing, gap), the minimum angle at a junction; then World holding a
+  `Ways` per kind in place of `NetworkLayer`, which is where the rest of
+  the game (drawing, agents) has to move with it – the big step.
 - **C2 – Opus, after C1.** Drawing ways with points and snapping, splits
   and junctions, bridges (`tools/network.js`); undo across a split edge.
 - **C3 – Sonnet, after C1.** Drawing from curves: kerbs, joins, street
