@@ -97,8 +97,6 @@ export class World {
         occupied: (a, b) => this.freeBuildingOn('road', a, b, CONFIG.road.kerb),
         steep: (a, b, { lane = false } = {}) => this.grade(this.networks.road, a, b) > (lane ? CONFIG.steep.lane : CONFIG.steep.road),
         coarseOf: (n) => n,
-        // drivers weigh a lane by the time it takes (CONFIG.lane.speed)
-        cost: (a, b) => this.grid.distance(a, b) / (this.isLane(a, b) ? CONFIG.lane.speed : 1),
         event: 'roads:changed',
         bridge: this.bridgeRule(2, (n) => this.railNear(n)),
       }),

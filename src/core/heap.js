@@ -1,4 +1,4 @@
-// Binary min-heap keyed by priority (used by pathfinding).
+// Binary min-heap keyed by priority (used by routing on the ways, sim/wayGraph.js).
 
 export class MinHeap {
   constructor() {

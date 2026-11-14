@@ -2,9 +2,7 @@
 // legs and followed – the pace, room on the road, doors, waiting at level
 // crossings – and checked again when the town changes under it.
 
-import { STRUCTURE_TYPES } from '../../../structures/index.js';
-import { smoothPolyline, fillet, offsetPolyline, measurePolyline, pointAt, roadway } from '../../roads/geometry.js';
-import { hubRadius } from '../../roads/siteWalks.js';
+import { fillet, offsetPolyline, measurePolyline, pointAt, roadway } from '../../roads/geometry.js';
 
 const NONE = [];
 
@@ -281,12 +279,12 @@ export class AgentMovement {
     return true;
   }
 
-  // Door -> route nodes -> destination door (strolls end on the path).
-  // Each leg keeps to the right-hand side of its line.
+  // Door -> route along the ways (plan.pts, sim/wayGraph.js) ->
+  // destination door (strolls end on the path). Each leg keeps to the
+  // right-hand side of its line.
   buildTrip(plan, destId) {
-    const { world, config } = this;
+    const { config } = this;
     const drive = plan.mode === 'drive';
-    const layer = drive ? world.networks.road : world.networks.path;
     const curve = drive ? config.road : config.path;
     // on foot / by bike: the street's sidewalk or the road's lane where
     // there's roadway, near the middle of a footpath elsewhere
@@ -299,20 +297,10 @@ export class AgentMovement {
         return where === 'lane' ? walker.laneOffset : where ? walker.sideOffset : walker.pathOffset;
       };
 
-    // Only the route itself is smoothed; buildings are left and entered in a
-    // straight line from their edge, so nobody cuts across them or their yard.
-    const line = (nodes, fromPoint, toPoint, fromDoor, toDoor) => {
-      const pts = nodes.map((n) => layer.pos(n));
-      if (fromPoint) pts.unshift(fromPoint);
-      if (toPoint) pts.push(toPoint);
-      const first = fromPoint ? 1 : 0;
-      const smooth = smoothPolyline(pts, (i) => this.cornerAt(plan.mode, nodes[i - first]), curve.curveSamples);
-      if (fromDoor != null) smooth.unshift(this.doorEdge(fromDoor, smooth[0]));
-      if (toDoor != null) smooth.push(this.doorEdge(toDoor, smooth[smooth.length - 1]));
-      return smooth;
-    };
-    // a route along the ways (sim/wayGraph.js): already on the curves,
-    // rounded only where it turns at a junction
+    // Only the route itself is rounded; buildings are left and entered in
+    // a straight line from their edge, so nobody cuts across them or their
+    // yard. The ways are already curves: rounded only where it turns at a
+    // junction.
     const wayLine = (pts, joints, fromPoint, toPoint, fromDoor, toDoor) => {
       const at = new Set(joints ?? []);
       const smooth = [pts[0]];
@@ -328,13 +316,10 @@ export class AgentMovement {
       return smooth;
     };
     const atDoor = !plan.toPoint && plan.toDoor != null;
-    const smooth = plan.pts
-      ? wayLine(plan.pts, plan.joints, plan.fromPoint, plan.toPoint, plan.fromDoor, atDoor ? plan.toDoor : null)
-      : line(plan.nodes, plan.fromPoint, plan.toPoint, plan.fromDoor, atDoor ? plan.toDoor : null);
-    // loop walks come home another way (backNodes, ending at backDoor)
-    const loop = plan.backNodes || plan.backPts;
-    const back = plan.backPts ? wayLine(plan.backPts, plan.backJoints, null, null, null, plan.backDoor)
-      : plan.backNodes ? line(plan.backNodes, null, null, null, plan.backDoor) : smooth.slice().reverse();
+    const smooth = wayLine(plan.pts, plan.joints, plan.fromPoint, plan.toPoint, plan.fromDoor, atDoor ? plan.toDoor : null);
+    // loop walks come home another way (backPts, ending at backDoor)
+    const loop = !!plan.backPts;
+    const back = loop ? wayLine(plan.backPts, plan.backJoints, null, null, null, plan.backDoor) : smooth.slice().reverse();
     const home = loop ? plan.backDoor != null : plan.fromDoor != null;
 
     return {
@@ -347,8 +332,6 @@ export class AgentMovement {
       linger: !!plan.linger,   // wanders about the destination (a park)
       transit: plan.transit ?? null, // { stop }: waits there for a bus / train
       exit: plan.exit ?? null,
-      nodes: plan.nodes ?? null,
-      backNodes: plan.backNodes ?? null,
       ways: plan.ways ?? null,         // the way edges it goes along (sim/wayGraph.js)…
       wayPts: plan.pts ?? null,        // …and its route on them
       backWays: plan.backWays ?? null,
@@ -356,29 +339,6 @@ export class AgentMovement {
       out: this.leg(offsetPolyline(smooth, side), plan.fromDoor != null, atDoor, drive, plan.mode === 'cycle'),
       back: this.leg(offsetPolyline(back, side), loop ? false : atDoor, home, drive, plan.mode === 'cycle'),
     };
-  }
-
-  // How much a route rounds its turn at node n: like the drawn roads and
-  // paths – curved where the line just bends, (almost) sharp at junctions,
-  // so nobody takes a shortcut across a crossroads.
-  cornerAt(mode, n) {
-    const { world, config } = this;
-    if (mode === 'drive') {
-      return n === undefined || world.roads.degree(n) === 2 ? config.road.cornerRadius : config.road.junctionRadius;
-    }
-    const { cornerRadius, junctionRadius } = config.path;
-    if (n === undefined) return cornerRadius;
-    const c = world.fineToCoarse(n);
-    const onRoad = c >= 0 && world.roads.hasNode(c);
-    const pathDeg = world.paths.degree(n);
-    if (!onRoad && pathDeg === 0) {
-      // a park's hub: as its walkways are drawn (roads/siteWalks.js)
-      const s = world.structureAt(world.coarseAround(n)[0]);
-      const paths = s && STRUCTURE_TYPES[s.type]?.site && world.sitePaths(s);
-      if (paths?.hub === n) return hubRadius(paths.exits);
-    }
-    if (!onRoad) return pathDeg === 2 ? cornerRadius : junctionRadius;
-    return pathDeg === 0 && world.roads.degree(c) === 2 ? cornerRadius : junctionRadius; // along a street
   }
 
   // The roadway test (roads/geometry.js), rebuilt when roads, paths or
@@ -406,7 +366,6 @@ export class AgentMovement {
   // traffic.box of the junction's node (AgentSystem.junctionAt). In order: [{ node, in, out (arc lengths), ix,
   // iy (the way it goes in), turn (>0 right, <0 left) }].
   boxes(leg) {
-    const { world } = this;
     const r = this.config.traffic.box, step = 0.04;
     const out = [];
     let box = null;
@@ -507,13 +466,9 @@ export class AgentMovement {
   }
 
   tripIntact(trip) {
-    if (trip.ways) {
-      const g = trip.mode === 'drive' ? this.driveGraph() : this.footGraph(trip.mode === 'cycle');
-      return this.waysIntact(g, trip.ways, trip.wayPts) && (!trip.backWays || this.waysIntact(g, trip.backWays, trip.backPts));
-    }
-    const net = trip.mode === 'drive' ? this.world.roads : trip.mode === 'cycle' ? this.ride : this.walk;
-    const ok = (nodes) => nodes.every((n, i) => net.hasNode(n) && (i === 0 || net.hasEdge(nodes[i - 1], n)));
-    return ok(trip.nodes) && (!trip.backNodes || ok(trip.backNodes));
+    if (!trip.ways) return true; // (not along the ways: a stroll round the yard, a fire's)
+    const g = trip.mode === 'drive' ? this.driveGraph() : this.footGraph(trip.mode === 'cycle');
+    return this.waysIntact(g, trip.ways, trip.wayPts) && (!trip.backWays || this.waysIntact(g, trip.backWays, trip.backPts));
   }
 
   // After road / path edits, send anyone whose route no longer exists straight home.

@@ -53,7 +53,6 @@ test('attributes become the street, lane and kerb sets', () => {
   assert.equal(v.laneWalks.get(edgeKey(at(2, 5), at(3, 5))), 1);
   assert.equal(v.laneWalks.get(edgeKey(at(2, 8), at(3, 8))), 2);
   assert.equal(v.graph.hasNode(at(2, 12)), false); // a footpath isn't a road
-  assert.equal(v.edgeOf.get(edgeKey(at(1, 1), at(2, 1))), [...w.edges.values()][0].id);
 });
 
 test('two ways meeting share their junction dot', () => {

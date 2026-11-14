@@ -7,7 +7,6 @@
 //   traceWays(ways, kind, grid, scale) -> {
 //     graph,      RoadNetwork of the dots the edges pass
 //     pos,        Map dot -> [x, y] on the curve nearest it (world units)
-//     edgeOf,     Map edgeKey -> way edge id the dot step came from
 //     sidewalks,  Set of edgeKey: steps of edges with `street`
 //     lanes,      Set of edgeKey: steps of edges with `lane`
 //     laneWalks,  Map edgeKey -> sides (as World.laneWalks: bit 1 left of
@@ -56,7 +55,7 @@ export function traceWays(ways, kind, grid, scale = 1) {
   const kinds = new Set([kind].flat());
   const graph = new RoadNetwork();
   const pos = new Map(), best = new Map();
-  const edgeOf = new Map(), sidewalks = new Set(), lanes = new Set(), laneWalks = new Map();
+  const sidewalks = new Set(), lanes = new Set(), laneWalks = new Map();
   for (const e of ways.edges.values()) {
     if (!kinds.has(e.kind)) continue;
     const dots = traceLine(e.pts, grid, scale);
@@ -70,7 +69,6 @@ export function traceWays(ways, kind, grid, scale = 1) {
       const a = dots[i - 1].n, b = dots[i].n;
       graph.addEdge(a, b);
       const key = edgeKey(a, b);
-      edgeOf.set(key, e.id);
       if (e.lane) {
         lanes.add(key);
         if (e.walks) {
@@ -81,5 +79,5 @@ export function traceWays(ways, kind, grid, scale = 1) {
       } else if (e.street) sidewalks.add(key);
     }
   }
-  return { graph, pos, edgeOf, sidewalks, lanes, laneWalks };
+  return { graph, pos, sidewalks, lanes, laneWalks };
 }
