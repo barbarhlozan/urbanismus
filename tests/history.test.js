@@ -231,11 +231,11 @@ test('a building brought back by undo or redo has its position and angle again',
 
 test('a way split by one laid across it comes back whole on undo', () => {
   const w = flatWorld();
-  w.layWay([[2, 6], [12, 6]], { kind: 'road' });
+  w.layWay('road', [[2, 6], [12, 6]]);
   w.history.commit();
   const [first] = w.ways.edges.values();
   const saved = JSON.stringify(w.toJSON());
-  w.layWay([[7, 2], [7, 11]], { kind: 'road' });
+  w.layWay('road', [[7, 2], [7, 11]]);
   w.history.commit();
   assert.equal(w.ways.edges.has(first.id), false); // split at the crossing
   assert.equal(w.roads.degree(w.grid.index(7, 6)), 4);

@@ -160,8 +160,8 @@ export class World {
     this.events.on('roads:changed', () => {
       for (const s of this.structures.values()) if (STRUCTURE_TYPES[s.type]?.facesRoad) this.poseStructure(s);
     });
-    this.networks.rail.pos = (f) => this.railPos(f);
-    this.networks.path.pos = (f) => this.pathPos(f);
+    this.networks.rail.pos = (f) => this.networks.rail.curvePos?.get(f) ?? this.railPos(f);
+    this.networks.path.pos = (f) => this.networks.path.curvePos?.get(f) ?? this.pathPos(f);
   }
 
   get roads() {

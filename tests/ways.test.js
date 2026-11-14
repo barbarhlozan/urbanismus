@@ -135,3 +135,32 @@ test('insert: two crossings on the same way both split it', () => {
   assert.equal(pieces.length, 3);
   assert.ok(Math.abs(pieces.reduce((s, e) => s + w.length(e), 0) - 10) < 1e-6);
 });
+
+test('in the world: a drawn curve stays one way while dot roads come and go', async () => {
+  const { flatWorld, road } = await import('./helpers.js');
+  const w = flatWorld();
+  const line = curveThrough([[2, 3], [7, 5], [12, 4]]);
+  assert.ok(w.layWay('road', line).ok);
+  const [curve] = w.ways.edges.values();
+  road(w, [4, 10], [9, 10]);
+  assert.ok(w.ways.edges.has(curve.id));
+  // drawn through the dots it passes, kept on the curve
+  const mid = [...w.roads.nodes()].find((n) => w.grid.xy(n)[0] === 7 && w.grid.xy(n)[1] <= 6);
+  assert.ok(mid !== undefined);
+  assert.notDeepEqual(w.networks.road.pos(mid), w.networks.road.dot(mid));
+  // a dot taken out of it: the curve goes, what's left stays as road
+  w.removeRoadAt(mid);
+  assert.equal(w.ways.edges.has(curve.id), false);
+  assert.ok(w.roads.hasNode(w.grid.index(2, 3)));
+});
+
+test('in the world: a way over a building is refused, and says where', async () => {
+  const { flatWorld } = await import('./helpers.js');
+  const w = flatWorld();
+  const house = w.placeStructureAt('house', 6, 6, 0);
+  assert.ok(house);
+  const r = w.layWay('road', curveThrough([[2, 6], [10, 6]]));
+  assert.equal(r.ok, false);
+  assert.ok(r.blocked.length > 0);
+  assert.equal(w.ways.edges.size, 0);
+});

@@ -34,9 +34,10 @@ export class NetworkLayer {
     return [x * this.scale, y * this.scale];
   }
 
-  // Where the network is drawn and travelled at this node.
+  // Where the network is drawn and travelled at this node: on the curve
+  // drawn through it, if one was (World.refreshNetwork), else the dot.
   pos(n) {
-    return this.dot(n);
+    return this.curvePos?.get(n) ?? this.dot(n);
   }
 
   distance(a, b) {
