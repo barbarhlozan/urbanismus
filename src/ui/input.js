@@ -1,9 +1,10 @@
-// Pointer input on the map (the #input box over it, see styles.css): left click / tap = tool click, drag (left
-// or middle button, one finger) = pan, right-button drag = turn the view
-// (across the screen; it coasts on a little when let go), two fingers =
-// pinch zoom + pan, and twisting them turns the view, right click =
-// cancel, middle click = the tool's Tab (rotate / flip the bend), wheel =
-// zoom around the cursor.
+// Pointer input on the map (the #input box over it, see styles.css): left click / tap = tool click, drag (any
+// button, one finger) = pan – except a left drag the tool draws with (a
+// way, `sketch`), when the right button still pans – two fingers = pinch
+// zoom + pan, and twisting them turns the view (while it may turn,
+// Camera.FIXED), right click = cancel, middle click = the tool's Tab
+// (rotate / flip the bend), wheel = zoom around the cursor (or the tool's:
+// turning a building in hand).
 //
 // Touch has no hover: the hover position only moves on a tap (not while
 // panning), and stays where it was when the finger lifts.
@@ -107,14 +108,10 @@ export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle
         } else el.classList.add('panning');
       }
       // step by step: past the edge of the map the drag gets heavier
-      // (Camera.pan). The right button turns the view instead, around the
-      // middle of the screen: dragging right carries the near side right.
+      // (Camera.pan). Every button pans (the right one too, so the map can
+      // be moved while drawing a way with the left).
       if (drag.sketching) {
         sketch.move(...pick(e));
-      } else if (drag.moved && drag.button === 2 && isMouse) {
-        drag.turning ??= {};
-        turn(drag.turning, middle(), -(e.clientX - drag.last[0]) * Camera.TURN.px, e.timeStamp);
-        drag.last = [e.clientX, e.clientY];
       } else if (drag.moved) {
         camera.pan(e.clientX - drag.last[0], e.clientY - drag.last[1]);
         drag.last = [e.clientX, e.clientY];
