@@ -170,20 +170,43 @@ export class Ways {
   // it can't be laid. A junction must meet at `minAngle` at least.
   // Nothing changes unless all of it can be laid.
   // { ok: true, edges, nodes } or { ok: false, reason, at: [x, y] }.
-  insert(line, props = {}, { snap = 0.35, minAngle = Math.PI / 6, rule = crossRule } = {}) {
+  // `refit` (0: off): an end further than `snap` from a node but within
+  // `refit` of it – or meeting a way nearer than `refit` to one of its
+  // ends, which would leave a stub – takes that node instead, and the node
+  // moves to where the stroke ends, the ways at it bent smoothly to follow
+  // (bendEnd). An end within `snap` keeps the node where it is and the
+  // stroke bends into it the same way, rather than kinking at the last step.
+  insert(line, props = {}, { snap = 0.35, minAngle = Math.PI / 6, rule = crossRule, refit = 0 } = {}) {
     const kind = props.kind ?? 'road';
     if (line.length < 2) return { ok: false, reason: 'Too short', at: line[0] };
+    const joinsAt = (n) => this.edgesAt(n.id).some((e) => rule(kind, e.kind) === 'join');
     // the ends: what each would join (not changing anything yet)
     const endOf = ([x, y]) => {
       const node = this.nodeNear(x, y, snap);
       if (node) return { node, point: [node.x, node.y] };
       const hit = this.edgeNear(x, y, snap, (e) => rule(kind, e.kind) === 'join');
+      // (a node moves only where it stays clear of the other ways)
+      const free = (n) => !this.edgeNear(x, y, snap, (e) => e.a !== n.id && e.b !== n.id);
+      if (hit && refit) {
+        const total = this.length(hit.edge);
+        const id = hit.s < refit ? hit.edge.a : total - hit.s < refit ? hit.edge.b : null;
+        const n = id && this.nodes.get(id);
+        if (n && Math.hypot(n.x - x, n.y - y) <= refit + snap && free(n)) return { node: n, point: [x, y], move: true };
+      }
       if (hit) return { hit, point: hit.point };
+      const near = refit ? this.nodeNear(x, y, refit) : null;
+      if (near && joinsAt(near) && free(near)) return { node: near, point: [x, y], move: true };
       return { point: [x, y] };
     };
     const ends = [endOf(line[0]), endOf(line[line.length - 1])];
     if (ends[0].node && ends[0].node === ends[1].node) return { ok: false, reason: 'Too short', at: line[0] };
-    const pts = line.map((p) => [...p]);
+    let pts = line.map((p) => [...p]);
+    // (into a node it keeps: bent smoothly onto it)
+    ends.forEach((end, k) => {
+      if (!end.node || end.move) return;
+      const p = k ? pts[pts.length - 1] : pts[0];
+      pts = bendEnd(pts, !k, [end.point[0] - p[0], end.point[1] - p[1]]);
+    });
     pts[0] = ends[0].point;
     pts[pts.length - 1] = ends[1].point;
     const total = measurePolyline(pts).total;
@@ -233,10 +256,22 @@ export class Ways {
       if (Math.acos(Math.min(1, cos)) < minAngle) return { ok: false, reason: 'Too shallow a crossing', at: end.point };
     }
 
-    // all clear: split what it meets, then lay it piece by piece
+    // all clear: nodes moving to the stroke's ends take their ways along,
+    // then split what it meets, then lay it piece by piece
+    const moved = [];
+    for (const end of ends) {
+      if (!end.move) continue;
+      const n = end.node, d = [end.point[0] - n.x, end.point[1] - n.y];
+      for (const e of this.edgesAt(n.id)) {
+        e.pts = bendEnd(e.pts, e.a === n.id, d);
+        if (e.a === e.b) continue;
+        moved.push(e.id);
+      }
+      [n.x, n.y] = end.point;
+      this.version++;
+    }
     const nodeAtEnd = (end) => end.node ?? (end.hit ? this.split(end.hit.edge.id, end.hit.s).node : this.addNode(...end.point));
-    const first = nodeAtEnd(ends[0]);
-    // (the far end's way may be split by a crossing first: find it again)
+    // (the ends' ways may be split by a crossing first: found again after)
     const byEdge = new Map();
     for (const j of joins) {
       if (!byEdge.has(j.edge.id)) byEdge.set(j.edge.id, []);
@@ -254,16 +289,17 @@ export class Ways {
         edgeId = edges[0].id;
       }
     }
-    const last = ends[1].hit
-      ? (() => { const h = this.edgeNear(...ends[1].point, 1e-6, (e) => rule(kind, e.kind) === 'join'); return h ? this.split(h.edge.id, h.s).node : this.addNode(...ends[1].point); })()
-      : nodeAtEnd(ends[1]);
+    const endNode = (end) => end.hit
+      ? (() => { const h = this.edgeNear(...end.point, 1e-6, (e) => rule(kind, e.kind) === 'join'); return h ? this.split(h.edge.id, h.s).node : this.addNode(...end.point); })()
+      : nodeAtEnd(end);
+    const first = endNode(ends[0]), last = endNode(ends[1]);
     const stops = [{ t: 0, node: first }, ...[...junctions, ...passing].sort((p, q) => p.t - q.t), { t: total, node: last }];
     const poly = measurePolyline(pts), edges = [];
     for (let k = 1; k < stops.length; k++) {
       if (stops[k].node === stops[k - 1].node) continue;
       edges.push(this.addEdge(stops[k - 1].node.id, stops[k].node.id, subPolyline(poly, stops[k - 1].t, stops[k].t), props));
     }
-    return { ok: true, edges, nodes: stops.map((st) => st.node) };
+    return { ok: true, edges, nodes: stops.map((st) => st.node), moved };
   }
 
   // The cheapest route from node `from` to node `to`: { nodes, edges } or
@@ -395,4 +431,21 @@ function leaving(pts, fromStart) {
   let q = line[line.length - 1];
   for (const p of line) if (Math.hypot(p[0] - x0, p[1] - y0) >= LEAVE) { q = p; break; }
   return [q[0] - x0, q[1] - y0];
+}
+
+// A line with one end moved by d (`atStart`: its first point), the rest
+// following smoothly: points near that end move nearly as much, fading to
+// none over a stretch a few times the move (at least 1), so the line bends
+// into its new end instead of kinking there.
+export function bendEnd(pts, atStart, [dx, dy]) {
+  const reach = Math.max(1, Math.hypot(dx, dy) * 4);
+  const line = atStart ? pts : [...pts].reverse();
+  let s = 0;
+  const out = line.map((p, i) => {
+    if (i) s += Math.hypot(p[0] - line[i - 1][0], p[1] - line[i - 1][1]);
+    if (s >= reach) return [...p];
+    const u = s / reach, f = 1 - u * u * (3 - 2 * u);
+    return [p[0] + dx * f, p[1] + dy * f];
+  });
+  return atStart ? out : out.reverse();
 }

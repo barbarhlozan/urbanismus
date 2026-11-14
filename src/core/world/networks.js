@@ -11,6 +11,11 @@ import { meanderPaths } from '../../roads/meander.js';
 import { traceWays, traceLine } from '../../roads/dotView.js';
 import { pointAt, subPolyline } from '../../roads/geometry.js';
 
+// How near a node a new way's end takes it, moving it to meet the stroke
+// (Ways.insert `refit`): about three road widths for roads, less for
+// footpaths; railways and fences don't bend what's there.
+const REFIT = { road: 0.7, path: 0.35 };
+
 export class WorldNetworks {
   // Where a footpath runs at dense dot f: wandering a little off its dots,
   // with the lie of the ground (roads/meander.js), found again whenever
@@ -309,7 +314,7 @@ export class WorldNetworks {
     this.history.touch();
     const props = { kind, ...(lane ? { lane: true } : street ? { street: true } : {}) };
     const before = new Map([...this.ways.edges.values()].map((e) => [e.id, e.kind]));
-    const result = this.ways.insert(line, props);
+    const result = this.ways.insert(line, props, { refit: REFIT[kind] ?? 0 });
     if (!result.ok) return { ...result, blocked: [] };
     for (const n of dots) {
       // trees along it go (a railway's, also between dots)
@@ -319,6 +324,7 @@ export class WorldNetworks {
     }
     const kinds = new Set([kind]);
     for (const [id, k] of before) if (!this.ways.edges.has(id)) kinds.add(k);
+    for (const id of result.moved ?? []) kinds.add(this.ways.edges.get(id)?.kind);
     for (const k of kinds) {
       if (!this.networks[k]) continue;
       this.refreshNetwork(k);

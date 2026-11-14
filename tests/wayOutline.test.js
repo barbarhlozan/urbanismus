@@ -81,3 +81,25 @@ test('lanes keep their own width where they meet a road', () => {
   assert.equal(lane.length, 2);
   for (const { line } of lane) assert.ok(Math.abs(Math.abs(line.at(-1)[0] - 2) - 0.05) < 1e-6);
 });
+
+test('an end near a junction moves it there instead of leaving a stub', () => {
+  const ways = town([[[0, 0], [6, 0]], [[3, 0], [3, 3]]]);
+  const r = ways.insert(easeBends([[3.4, -3], [3.4, -0.25]], 1), { kind: 'road' }, { refit: 0.7 });
+  assert.ok(r.ok, r.reason);
+  // no new node by the junction: the stroke took it, the ways at it followed
+  const near = [...ways.nodes.values()].filter((n) => Math.hypot(n.x - 3.2, n.y + 0.1) < 0.8);
+  assert.equal(near.length, 1);
+  assert.deepEqual([near[0].x, near[0].y].map((v) => +v.toFixed(6)), [3.4, -0.25]);
+  for (const e of ways.edgesAt(near[0].id)) {
+    const end = e.a === near[0].id ? e.pts[0] : e.pts.at(-1);
+    assert.deepEqual(end, [3.4, -0.25]);
+  }
+  clean(ways);
+});
+
+test('an end meeting a way just by its end takes that end', () => {
+  const ways = town([[[0, 0], [4, 0]]]);
+  const r = ways.insert(easeBends([[4.3, 3], [3.7, 0.1]], 1), { kind: 'road' }, { refit: 0.7 });
+  assert.ok(r.ok, r.reason);
+  assert.equal(ways.nodes.size, 3);
+});
