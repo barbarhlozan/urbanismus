@@ -13,9 +13,13 @@
 //
 // Rules, one per line, outside branches:
 //   if <condition> trigger <Branch>
+//   narrator Name       whose lines are the caption, not a bubble (any number)
 // Branches:
 //   ::Name::            starts one (a line of just '::' ends it)
-//   Speaker: text       a line of dialogue
+//   Speaker: text       a line of dialogue, in a bubble over the scene's place
+//   Speaker @place: text   …over that building instead
+//   at <place>          where the lines after it are said (at nowhere: no place)
+//   ~crowd / ~calm      lines come by themselves, over each other / wait again
 //   text                a line with nobody speaking (narration)
 //   > text -> Branch    a choice; choices one after another are offered together
 //   -> Branch           go on in another branch
@@ -196,7 +200,10 @@ const SET = /^set\s+([A-Za-z_][\w.\-]*)\s*=\s*(.+)$/i;
 const CHRONICLE = /^chronicle\s*:\s*(.+)$/i;
 const UNLOCK = /^(unlock|lock)\s+([^:]+)$/i;
 const SCHEME = /^scheme\s+([^:]+)$/i;
-const SAY = /^([^:]{1,40}?)\s*:\s+(.+)$/;
+const SAY = /^([^:@]{1,40}?)\s*(?:@\s*([^\s:]+)\s*)?:\s+(.+)$/;
+const AT = /^at\s+([^\s,.]+)\s*$/i;
+const NARRATOR = /^narrator\s+(.+?)\s*$/i;
+const CROWD = /^~\s*(crowd|calm)\s*$/i;
 const PICK = /^pick\s+([A-Za-z_][\w.\-]*)\s*=\s*(.+)$/i;
 const SEND = /^send\s+(.+?)\s*(?:->|\s+to\s+)\s*([^\s,]+)\s*$/i;
 const BURN = /^burn\s+([^\s,]+)\s*$/i;
@@ -239,6 +246,7 @@ export function parseStory(text) {
   };
 
   const all = [];
+  const narrators = new Set();
   let branch = null;
   String(text).split(/\r?\n/).forEach((raw, k) => {
     const line = k + 1;
@@ -261,6 +269,8 @@ export function parseStory(text) {
     }
 
     if (!branch) {
+      const who = NARRATOR.exec(t);
+      if (who) return void narrators.add(normalName(who[1]));
       const rule = RULE.exec(t);
       if (!rule) return fail(line, `outside a branch only rules go ("if … trigger Branch"), not "${t}"`);
       const expr = cond(rule[1], line);
@@ -304,8 +314,13 @@ export function parseStory(text) {
       branch.steps.push({ kind: 'unlock', unlock: m[1].toLowerCase() === 'unlock', name: m[2].trim(), line });
     } else if ((m = CHRONICLE.exec(t))) {
       branch.steps.push({ kind: 'chronicle', text: m[1], line });
+    } else if ((m = AT.exec(t))) {
+      const nowhere = /^(nowhere|none)$/i.test(m[1]);
+      branch.steps.push({ kind: 'at', place: nowhere ? null : placeRef(m[1]), text: m[1], line });
+    } else if ((m = CROWD.exec(t))) {
+      branch.steps.push({ kind: 'crowd', on: m[1].toLowerCase() === 'crowd', line });
     } else if ((m = SAY.exec(t)) && !/^(if|set)\b/i.test(t)) {
-      branch.steps.push({ kind: 'say', speaker: m[1], text: m[2], line });
+      branch.steps.push({ kind: 'say', speaker: m[1], text: m[3], line, ...(m[2] ? { place: placeRef(m[2]), placeText: m[2] } : {}) });
     } else {
       branch.steps.push({ kind: 'say', speaker: null, text: t, line });
     }
@@ -337,11 +352,13 @@ export function parseStory(text) {
       if (s.kind === 'jump') check(s.to, s.target, s.line);
       if (s.kind === 'send') { s.from.forEach((r, k) => placeOk(r, s.fromText[k], s.line)); placeOk(s.to, s.toText, s.line); }
       if (s.kind === 'burn' || s.kind === 'ignite' || s.kind === 'putOut') placeOk(s.place, s.text, s.line);
+      if (s.kind === 'at' && s.place) placeOk(s.place, s.text, s.line);
+      if (s.kind === 'say' && s.place) placeOk(s.place, s.placeText, s.line);
       if (s.kind === 'pick' && s.which.to) placeOk(s.which.to, s.which.toText, s.line);
       if (s.kind === 'choice') for (const o of s.options) check(o.to, o.target, o.line);
     }
   }
-  return { rules, branches, errors, picked };
+  return { rules, branches, errors, picked, narrators };
 }
 
 // {name} in a line: a variable's value (or the town's name for {town}).

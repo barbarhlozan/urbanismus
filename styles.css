@@ -817,51 +817,45 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .tag { fill: var(--fg); font-family: var(--ui-font); stroke: var(--bg); stroke-width: calc(5px * var(--stroke, 1)); stroke-linejoin: round; paint-order: stroke; }
 .tag-line { fill: none; stroke: var(--fg); stroke-width: calc(1px * var(--stroke, 1)); stroke-linecap: round; }
 
-/* ---------- Dialogue (src/ui/dialogue.js) ---------- */
+/* ---------- The story: bubbles and the caption (src/ui/bubbles.js) ---------- */
 
-.dialogue {
-  position: fixed;
-  left: calc(20px + var(--safe-l));
-  bottom: calc(66px + var(--safe-b)); /* (over the north arrow) */
-  z-index: 11;
-  box-sizing: border-box;
-  width: min(440px, calc(100vw - 40px - var(--safe-l) - var(--safe-r)));
-  background: var(--bg);
-  border: var(--line) solid var(--fg);
-  border-radius: var(--radius);
-  cursor: pointer;
-  user-select: none;
+/* a bubble: one drawn bubble sliced in nine (corners kept, edges
+   stretched), the name inside when the speaker changes, the tail a drawing
+   of its own (bubbles-lab.html, style D) */
+.story-bubbles { position: fixed; inset: 0; z-index: 11; pointer-events: none; overflow: hidden; }
+.story-bubbles .bb {
+  position: absolute; left: 0; top: 0; width: max-content; max-width: 240px;
+  border: 11px solid transparent; border-image: var(--chat-sprite) 26 fill / 26px stretch;
+  padding: 1px 6px 2px; transition: opacity .35s; pointer-events: auto; cursor: pointer; user-select: none;
 }
-.dlg-speaker {
-  padding: 9px 14px 8px;
-  border-bottom: var(--line) solid var(--fg);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+.story-bubbles .bb-name { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--detail); white-space: nowrap; margin-bottom: 1px; }
+.story-bubbles .bb.noname .bb-name { display: none; }
+.story-bubbles .bb-text { font-size: 13.5px; line-height: 1.35; white-space: pre-line; color: var(--fg); }
+.story-bubbles .un, .story-cap .un { visibility: hidden; }
+.story-bubbles svg.ink { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; z-index: -1; pointer-events: none; }
+.story-bubbles .ink .pen { fill: none; stroke: var(--main); stroke-width: 1.2px; stroke-linecap: round; stroke-linejoin: round; }
+.story-bubbles .ink .paper { fill: var(--bg); stroke: none; }
+.story-bubbles .ink .fresh { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bb-draw .4s ease-out forwards; }
+@keyframes bb-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .story-bubbles .ink .fresh { animation: none; stroke-dasharray: none; } }
+
+/* the narrator (Děda, today, in the car) and the choices: a caption at the
+   bottom, not on the map */
+.story-cap {
+  position: fixed; left: 50%; bottom: calc(22px + var(--safe-b)); transform: translateX(-50%); z-index: 11;
+  width: min(600px, calc(100vw - 40px - var(--safe-l) - var(--safe-r))); text-align: center;
+  transition: opacity .3s; cursor: pointer; user-select: none;
 }
-.dlg-text { padding: 12px 34px 14px 14px; font-size: 14px; line-height: 1.55; min-height: 1.55em; white-space: pre-line; max-height: 40vh; overflow-y: auto; }
-.dialogue.narration .dlg-text { font-style: italic; color: color-mix(in srgb, var(--fg) 80%, var(--bg)); }
-.dlg-unwritten { visibility: hidden; }
-.dlg-more {
-  position: absolute;
-  right: 13px;
-  bottom: 9px;
-  width: 10px;
-  height: 16px;
-  overflow: visible;
-}
-.dlg-more :is(path, line, polyline, circle, ellipse, rect, polygon) { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
-.dialogue.typing .dlg-more, .dialogue.choosing .dlg-more { visibility: hidden; }
-.dlg-choices:empty { display: none; }
-.dlg-choices { border-top: var(--line) solid var(--fg); padding: 4px 0; }
-#ui .dlg-choices button {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-  padding: 7px 14px;
-  text-align: left;
-  font-size: 13.5px;
-}
-.dlg-n { color: var(--detail); font-variant-numeric: tabular-nums; }
+.story-cap.hidden { opacity: 0; pointer-events: none; }
+.story-cap .cap-name { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--detail); }
+.story-cap .cap-text { font-size: 15px; font-style: italic; line-height: 1.4; white-space: pre-line; text-shadow: 0 0 3px var(--bg), 0 0 6px var(--bg), 0 0 10px var(--bg); }
+.story-cap .cap-text:empty { display: none; }
+.story-cap.narration .cap-text { color: color-mix(in srgb, var(--fg) 85%, var(--bg)); }
+.story-cap .cap-choices { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 8px; }
+.story-cap .cap-choices:empty { display: none; }
+/* numbered lines; pointed at or picked with the keys: the pen's underline */
+#ui .story-cap button { padding: 4px 10px; font-size: 14px; text-shadow: 0 0 3px var(--bg), 0 0 6px var(--bg), 0 0 10px var(--bg); }
+.cap-n { color: var(--detail); margin-right: 8px; font-variant-numeric: tabular-nums; }
 
 /* ---------- Chronicle (src/ui/chronicleBook.js) ---------- */
 
@@ -1695,7 +1689,7 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 }
 /* pointed at (only where there's a pointer), or picked with the arrow keys */
 body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
-#ui .dlg-choices button.focus > .pm .pm-u { stroke-dashoffset: 0; opacity: 1; transition-delay: 0s; }
+#ui .cap-choices button.focus > .pm .pm-u { stroke-dashoffset: 0; opacity: 1; transition-delay: 0s; }
 /* chosen: boxed */
 #ui :is(.bm-tab.on, .bm-tool.active, .bm-camera.on, .controls button.on, .chron-tab.on) > .pm .pm-chosen { display: inline; }
 /* the line of words picked: ticked */
@@ -1773,8 +1767,7 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
   .bm-loose .key { display: none; }
   #ui .bm-loose > button { padding: 0 4px; gap: 4px; justify-content: center; }
 
-  .dialogue {
-    left: calc(8px + var(--safe-l));
+  .story-cap {
     width: calc(100vw - 16px - var(--safe-l) - var(--safe-r));
     bottom: calc(10px + var(--bar-h) + 2 * var(--line) + 10px + var(--safe-b));
   }

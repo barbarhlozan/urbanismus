@@ -1,7 +1,9 @@
 // Tells the story written in story/story.txt (format in story/README.md).
 // Every few seconds the rules are checked against the town (variables.js),
 // in the order they are written; the first that holds, for a branch not
-// told yet, is told in the dialogue window. Each branch is told once.
+// told yet, is told: in bubbles over the building where it happens (`at`,
+// `@place`), the narrator's lines in a caption (src/ui/bubbles.js). Each
+// branch is told once.
 // What has been told, the numbers the story `set` and the buildings it
 // picked (house numbers by name) are kept with the town (world.story), so
 // a reload carries on where it was. A picked name reads as its number in
@@ -10,8 +12,8 @@
 // ruin unless put out – the town's own doing, not the player's: ⌘Z
 // leaves it).
 //
-// Mistakes in the file are listed in the dialogue window when it loads (and
-// in the console), with their line.
+// Mistakes in the file are listed in the caption when it loads (and in the
+// console), with their line.
 //
 // From the console (see src/dev/commands.js):
 //   cmd.story.play('IntroDialogue')   tell a branch now
@@ -175,6 +177,8 @@ export class Storyteller {
     const key = normalName(name);
     if (!this.script?.branches.has(key) || this.telling) return;
     this.telling = true;
+    this.scene = null; // (where the lines are said: `at`)
+    this.crowd = false;
     try {
       await this.tell(key);
     } catch (err) {
@@ -205,9 +209,21 @@ export class Storyteller {
       const exists = (ref) => !!this.standing(ref);
       const fill = (t) => fillIn(t, lookup, this.world.name);
       switch (step.kind) {
-        case 'say':
-          await this.dialogue.say(step.speaker, fill(step.text));
+        case 'say': {
+          // the narrator, and narration, in the caption; the others over
+          // the building where it's said (none standing: the caption too)
+          const narrator = !step.speaker || this.script.narrators?.has(normalName(step.speaker));
+          const place = step.place ?? this.scene;
+          const at = narrator || !place ? null : this.standing(place);
+          await this.dialogue.say(step.speaker, fill(step.text), { at, crowd: this.crowd && !!at });
           quiet = 0;
+          break;
+        }
+        case 'at':
+          this.scene = step.place;
+          break;
+        case 'crowd':
+          this.crowd = step.on;
           break;
         case 'choice': {
           const pick = await this.dialogue.choose(step.options.map((o) => fill(o.text)));

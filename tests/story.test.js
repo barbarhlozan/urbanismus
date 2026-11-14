@@ -74,3 +74,27 @@ stray text`);
 test('{name} in a line', () => {
   assert.equal(fillIn('{town} has {residents} people, {nobody}', lookup, 'Vranov'), 'Vranov has 40 people, {nobody}');
 });
+
+test('where lines are said: at, @place, narrator, crowd', () => {
+  const { branches, errors, narrators } = parseStory(`narrator Děda
+::Naves::
+pick hudak = oldest house
+Děda: Naproti bydleli Hudákovi.
+at hudak
+Hudák: No pozri.
+Jarka @4: Umíš plavat?
+~crowd
+Host: Vodu!
+~calm
+at nowhere
+::`);
+  assert.deepEqual(errors, []);
+  assert.ok(narrators.has('deda'));
+  const steps = branches.get('naves').steps;
+  assert.deepEqual(steps[2], { kind: 'at', place: { name: 'hudak' }, text: 'hudak', line: 5 });
+  assert.equal(steps[3].place, undefined);
+  assert.deepEqual([steps[4].speaker, steps[4].text, steps[4].place], ['Jarka', 'Umíš plavat?', { no: 4 }]);
+  assert.deepEqual(steps.filter((s) => s.kind === 'crowd').map((s) => s.on), [true, false]);
+  assert.equal(steps.at(-1).place, null);
+  assert.match(parseStory('::A::\nat farm\n::').errors[0].msg, /nothing picked/);
+});
