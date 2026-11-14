@@ -525,6 +525,7 @@ export const CONFIG = {
     comfortDistance: 10,  // walk (rather than ride / drive) when the walk is at most this long
     maxDistance: 14,      // never walk further than this
     longWalkChance: 0.35, // chance of walking anyway when it's between the two (few families had a car)
+    across: { reach: 6, cost: 1.35 }, // between neighbours with no path: straight over the ground this far at most, counted this much longer
     strollMin: 1.5,       // strolls turn round this far along footpaths…
     strollMax: 5,         // …at most this far (at walking pace, a couple of minutes there and back)
     sideOffset: 0.15,     // pedestrians keep this far right of the line on a street (its sidewalk)…

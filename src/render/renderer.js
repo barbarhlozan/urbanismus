@@ -88,7 +88,7 @@ const TOP = ['mist', 'objects', 'overlay']; // in the #objects <svg>, see the co
 
 // The squash of a building pointed at (Renderer.markHovered): how long, the
 // share of it spent going down, and how much it's pressed down and spread.
-const SQUASH = { ms: 300, down: 0.3, press: 0.07, spread: 0.035 };
+const SQUASH = { ms: 260, down: 0.3, press: 0.03, spread: 0.015 };
 
 export class Renderer {
   constructor(svg, ground, { world, camera, agents, trains, boats, deer, livestock, parking, config }) {

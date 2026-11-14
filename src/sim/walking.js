@@ -23,6 +23,11 @@ import { pointAt, subPolyline } from '../roads/geometry.js';
 
 const MEND = 0.45; // a footpath ending this near a street steps onto it
 
+// acrossTo(): how far apart two buildings may be for a walk straight across
+// the ground, and how much longer than its length it counts (rough ground,
+// gates, the long way round a fence) – config.walk.across overrides it.
+const ACROSS = { reach: 6, cost: 1.35 };
+
 export class WalkNetwork {
   constructor(world, config, { allRoads = false } = {}) {
     this.world = world;
@@ -102,11 +107,38 @@ export class WalkNetwork {
     return r && { pts: r.pts, joints: r.joints, ways: r.ways, cost: r.cost, fromDoor: r.from?.door ?? null, toDoor: r.to?.door ?? null };
   }
 
-  // Cheapest walk between two structures within maxCost, or null.
+  // Cheapest walk between two structures within maxCost, or null: along
+  // the ways – or, on foot between neighbours, straight across the ground
+  // (acrossTo) when that's shorter for the way it's counted.
   route(from, to, maxCost = Infinity) {
     const starts = this.entries(from), ends = this.entries(to);
-    if (!starts.length || !ends.length) return null;
-    return this.plan(this.graph.routeMany(starts, ends, { maxCost }));
+    const byWays = starts.length && ends.length ? this.plan(this.graph.routeMany(starts, ends, { maxCost })) : null;
+    const across = this.allRoads ? null : this.acrossTo(from, to, maxCost);
+    if (!across) return byWays;
+    return !byWays || across.cost < byWays.cost ? across : byWays;
+  }
+
+  // A walk straight across the ground from one building to another near it
+  // (no footpath needed: a neighbour going to the pub over the grass) –
+  // within config.across.reach, not over water nor through another
+  // building. It counts config.across.cost times its length, so a path or
+  // pavement that gets there about as well is taken instead. Or null.
+  acrossTo(from, to, maxCost = Infinity) {
+    const { world } = this, cfg = this.config.across ?? ACROSS;
+    const a = [from.x, from.y], b = [to.x, to.y];
+    if (a[0] == null || b[0] == null) return null;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), cost = len * cfg.cost;
+    if (!len || len > cfg.reach || cost > maxCost) return null;
+    const pts = [];
+    const n = Math.max(1, Math.ceil(len / 0.25));
+    for (let k = 0; k <= n; k++) {
+      const x = a[0] + ((b[0] - a[0]) * k) / n, y = a[1] + ((b[1] - a[1]) * k) / n;
+      const node = world.grid.nodeAt(x, y);
+      if (node < 0 || world.terrain.isWater(node)) return null;
+      if (world.structureIndex.at(x, y).some((id) => id !== from.id && id !== to.id)) return null;
+      pts.push([x, y]);
+    }
+    return { pts, joints: [], ways: [], cost, fromDoor: a, toDoor: b, across: true };
   }
 
   // Dijkstra from a structure's entries: the way graph's explore().
