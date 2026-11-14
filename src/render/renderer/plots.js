@@ -5,7 +5,7 @@
 import { THEME } from '../../theme.js';
 import { Painter } from '../painter.js';
 import { VEHICLES, vehicleSVG, modelFor, headingIndex } from '../vehicles.js';
-import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront, courtSides } from '../../../structures/index.js';
+import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront, courtSides, freeTilt } from '../../../structures/index.js';
 import { drawCourt } from '../../../structures/courts.js';
 import { drawRuin } from '../../../structures/ruin.js';
 import { YARDS } from '../../../structures/yards.js';
@@ -111,7 +111,7 @@ export class PlotDrawing {
     if (yard) {
       const [dx, dy] = yard.origin;
       const yp = this.attachFree(new Painter(camera, { x: dx, y: dy, z: world.terrain.heightAt(dx, dy) }, yard.rotation, drawSeed(s) ^ 0x5bd1e995));
-      yp.setTilt(yard.tilt);
+      yp.setTilt(yard.tilt, !!s.free);
       yp.rigid = rigid;
       yp.sways = live;
       yp.follow = true;
@@ -408,6 +408,25 @@ export class PlotDrawing {
     const { world } = this;
     const nodes = world.nodesOf(s);
     const def = STRUCTURE_TYPES[s.type];
+    if (s.free) {
+      // placed freely: square to it, from its middle; fitYard finds how
+      // deep it may go towards the drawn road
+      const road = world.nearestRoadPoint(s.x, s.y);
+      if (!road && def.access !== 'any') return null;
+      const style = yardOf(def, s, { cars: !!road });
+      if (!style) return null;
+      const [w] = world.outlineSize(s.type);
+      return {
+        style,
+        origin: [s.x, s.y],
+        rotation: quarterOf(world, s),
+        tilt: freeTilt(s),
+        x0: -w / 2 + 0.05,
+        x1: w / 2 - 0.05,
+        y0: road ? -0.86 : -0.62,
+        y1: -0.34,
+      };
+    }
     const front = world.frontFor(nodes) ?? this.placedFront(s, nodes);
     if (front.road < 0 && def.access !== 'any') return null; // stations, industry: only towards a road
     const style = yardOf(def, s, { cars: front.road >= 0 });
