@@ -5,6 +5,10 @@
 import { ORTHO, DIAG } from '../grid.js';
 import { STRUCTURE_TYPES, footprintCenter, freeAnchor } from '../../../structures/index.js';
 
+// freeAccess(): a road this near (from its centre line) a free building's
+// side is its way in
+const FREE_REACH = 0.9;
+
 export class WorldAccess {
   // Middle of a structure in world coordinates.
   centerOf(s) {
@@ -32,7 +36,28 @@ export class WorldAccess {
   // Where a structure meets the road: { door: footprint node, road: road node }.
   // Straight neighbours are preferred over diagonal ones.
   accessInfo(s) {
+    if (s.free) return this.freeAccess(s);
     return this.accessFor(this.nodesOf(s));
+  }
+
+  // A building placed freely: the road in front of it – the nearest road
+  // point within FREE_REACH of the middle of its front (or, failing that,
+  // of any side) – and the nearer end of that stretch of road as the dot
+  // its people come and go by. { door: its dot, road } or null.
+  freeAccess(s) {
+    const [w, h] = this.outlineSize(s.type);
+    const fx = Math.sin(s.angle), fy = -Math.cos(s.angle);
+    const sides = [[fx * h / 2, fy * h / 2], [-fy * w / 2, fx * w / 2], [fy * w / 2, -fx * w / 2], [-fx * h / 2, -fy * h / 2]];
+    for (const [dx, dy] of sides) {
+      const road = this.nearestRoadPoint(s.x + dx, s.y + dy, FREE_REACH);
+      if (!road) continue;
+      const ends = road.edge.filter((n) => !this.terrain.isWater(n)); // not off a bridge
+      if (!ends.length) continue;
+      const [px, py] = road.point;
+      const end = ends.sort((a, b) => Math.hypot(...this.grid.xy(a).map((v, i) => v - [px, py][i])) - Math.hypot(...this.grid.xy(b).map((v, i) => v - [px, py][i])))[0];
+      return { door: s.node, road: end };
+    }
+    return null;
   }
 
   accessFor(nodes) {

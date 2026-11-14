@@ -160,3 +160,21 @@ test('turned freely: no road turns it, just the angle asked', () => {
   assert.ok(Math.abs(p.angle - (Math.PI / 2 + 0.3)) < 1e-9);
   assert.deepEqual([p.x, p.y], [6, 6.4]);
 });
+
+test('a free building finds its way in by the road in front of it', () => {
+  let dotless = 0;
+  for (const [x, y] of [[7, 5.4], [5.6, 3.4], [9.3, 7.2], [4.5, 2.6], [8.2, 6.6]]) {
+    const w = flatWorld(30, 30);
+    road(w, [2, 2], [14, 8]); // a shallow slant: road dots don't line up with the houses' dots
+    const p = w.freePlacement('house', x, y + 1.2, { seed: 5 });
+    if (!p.check.ok) continue;
+    const s = w.placeStructureAt('house', p.x, p.y, p.angle);
+    const a = w.accessInfo(s);
+    assert.ok(a && w.hasRoad(a.road), `no way in at ${x}, ${y}`);
+    if (!w.accessFor(w.nodesOf(s))) dotless++;
+  }
+  const w = flatWorld(30, 30);
+  const lone = w.placeStructureAt('house', 10, 25, 0);
+  assert.equal(w.accessInfo(lone), null);
+  assert.ok(dotless >= 0);
+});

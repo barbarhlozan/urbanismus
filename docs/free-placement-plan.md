@@ -331,7 +331,8 @@ still reads a building's dot or turn, on purpose:
   `cmd.place`. Still to do: sites (parks, squares) and stations free, a
   tighter `body` inside the `plot`, plots spreading by outline (free
   buildings keep their own square for now),
-  access by the road point (now the nearest dot's). (Ways are kept off
+  access by the road point (done: `freeAccess`, the nearer end of the road
+  stretch in front as its dot, until routing leaves the dots in D). (Ways are kept off
   free buildings by outline: `freeBuildingOn`.)
 - **B2 – Opus, after B1.** Snapping along a road with seeded setback,
   quarter turns and free turning; joined walls side by side. Tuned in the
