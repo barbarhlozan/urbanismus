@@ -39,6 +39,7 @@
     #guides * { fill: none; stroke-linecap: round; stroke-linejoin: round; }
     #guides .guide { stroke: var(--main); stroke-width: calc(1.3px * var(--stroke)); }
     #guides .away { stroke: var(--detail); stroke-width: calc(1.2px * var(--stroke)); stroke-dasharray: calc(4px * var(--stroke)) calc(4px * var(--stroke)); }
+    #guides .dash { stroke: var(--main); stroke-width: calc(1.2px * var(--stroke)); }
     #guides .faint { stroke: var(--detail); stroke-width: calc(1px * var(--stroke)); stroke-dasharray: calc(3px * var(--stroke)) calc(5px * var(--stroke)); }
     #guides .spot { fill: var(--main); stroke: none; }
     #guides .off { stroke: var(--detail); stroke-width: calc(1.1px * var(--stroke)); }
@@ -86,7 +87,7 @@
     // N notes, C colours, H hide the bar.
     import { SCHEMES, THEME } from './src/theme.js';
     import { Camera } from './src/render/camera.js';
-    import { Painter } from './src/render/painter.js';
+    import { Painter, LOOK } from './src/render/painter.js';
     import { sunFor, shadowSVG } from './src/render/shadows.js';
     import { mulberry32 } from './src/core/random.js';
     import { pointInPolygon } from './src/core/geom2d.js';
@@ -126,6 +127,19 @@
       rect(g, -0.07, Y0, H * 0.36, 0.04, H * 0.42);
       rect(g, 0, Y0, H + R * 0.28, 0.034, 0.045);
     };
+    // The walls as the roof will have them, the roof itself left off: the
+    // two short walls carried on up to the ridge (Painter.roofed draws the
+    // walls first, then the roof as a solid of its own – kept off here).
+    const gabled = (g) => {
+      const n = g.solids.length, face = g.face;
+      // (and outlined all round: in the game the roof draws their top edges)
+      g.face = function (pts, o = {}) { return this.solids.length > n + 1 ? this : face.call(this, pts, { ...o, open: undefined }); };
+      roof(g);
+      g.face = face;
+      g.solids.length = n + 1;
+    };
+    // the roof's slopes as faces only, before their hatching
+    const bareRoof = (g) => g.roofed(X0, Y0, 0, W, D, H, { h: R, ridge: 'y', hatch: false });
     const stack = (g) => chimney(g, 0.03, 0.06, H + R * 0.5, R * 0.6);
     const house = (g) => { roof(g); openings(g); stack(g); };
 
@@ -179,14 +193,64 @@
       ...corners.map((c, i) => ({ line: [[...c, H], [...corners[(i + 1) % 4], H]].map((p) => S(g, p)), cls })),
     ];
     // an arrow out of each wall (its normal): drawn on if the wall faces us
-    const normals = (g) => corners.map((a, i) => {
-      const b = corners[(i + 1) % 4], n = [b[1] - a[1], a[0] - b[0]], l = Math.hypot(...n);
-      const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, H / 2], tip = [m[0] + (n[0] / l) * 0.14, m[1] + (n[1] / l) * 0.14, H / 2];
+    // `n` out of a face from its middle `m`, drawn on if the face is
+    // turned to us, dashed if it is turned away
+    const arrow = (g, m, n, len = 0.14) => {
+      const l = Math.hypot(...n), u = n.map((k) => k / l), tip = m.map((k, i) => k + u[i] * len);
       const [s0, s1] = [S(g, m), S(g, tip)], d = [s1[0] - s0[0], s1[1] - s0[1]], dl = Math.hypot(...d), k = 7 / dl;
       const head = [[s1[0] - d[0] * k + d[1] * k * 0.6, s1[1] - d[1] * k - d[0] * k * 0.6], s1, [s1[0] - d[0] * k - d[1] * k * 0.6, s1[1] - d[1] * k + d[0] * k * 0.6]];
-      const cls = g.facing([n[0] / l, n[1] / l, 0]) ? 'guide' : 'away';
+      const cls = g.facing(u) ? 'guide' : 'away';
       return [{ line: [s0, s1], cls }, { line: head, cls }];
-    }).flat();
+    };
+    const normals = (g) => corners.flatMap((a, i) => {
+      const b = corners[(i + 1) % 4];
+      return arrow(g, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, H / 2], [b[1] - a[1], a[0] - b[0], 0]);
+    });
+    // the roof's two slopes: out sideways and up, square to the slope
+    const slopes = (g) => [-1, 1].flatMap((s) => arrow(g, [s * W / 4, 0, H + R / 2], [s * R, 0, W / 2], 0.16));
+    // Where the windows will go, worked out as g.windows() does
+    // (src/render/painter.js) for this house: each wall but the front cut
+    // into bays, as many as fit; a window in the middle of each, unless
+    // that brings one within LOOK.clear of a corner – then spread evenly
+    // between those margins. The front's door and windows are set by hand.
+    const BAY = 0.1 * LOOK.thin, WIN_W = 0.1 * 0.45, WIN_H = H * 0.4, WIN_Z = (H - WIN_H) * 0.55;
+    const SIDES = [[[X1, Y0], [X1, Y1], [1, 0, 0]], [[X1, Y1], [X0, Y1], [0, 1, 0]], [[X0, Y1], [X0, Y0], [-1, 0, 0]]];
+    const bays = (len) => {
+      let cols = Math.floor(len / BAY);
+      const pad = (len - cols * BAY) / 2, clear = Math.min(LOOK.clear, (len - WIN_W) / 2);
+      const cuts = Array.from({ length: cols + 1 }, (_, c) => pad + c * BAY);
+      let place = (c) => pad + c * BAY + (BAY - WIN_W) / 2;
+      if (place(0) < clear) {
+        while (cols > 1 && (len - 2 * clear - cols * WIN_W) / (cols - 1) < WIN_W * 0.8) cols--;
+        const st = cols > 1 ? (len - 2 * clear - WIN_W) / (cols - 1) : 0;
+        place = (c) => (cols > 1 ? clear + c * st : (len - WIN_W) / 2);
+      }
+      return { cuts, clear, at: Array.from({ length: cols }, (_, c) => place(c)) };
+    };
+    // a rectangle on a wall from a to b: t0..t1 along it, z0..z1 up
+    const onWall = (g, a, b, t0, t1, z0, z1) => {
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]), p = (t, z) => S(g, [a[0] + ((b[0] - a[0]) * t) / len, a[1] + ((b[1] - a[1]) * t) / len, z]);
+      return [p(t0, z0), p(t1, z0), p(t1, z1), p(t0, z1), p(t0, z0)];
+    };
+    const layout = (g) => {
+      const out = [];
+      for (const [a, b, n] of SIDES) {
+        if (!g.facing(n)) continue;
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]), { cuts, clear, at } = bays(len);
+        // the bays: lines up the wall where one ends and the next begins
+        for (const t of cuts) out.push({ line: onWall(g, a, b, t, t, 0, H).slice(0, 3).filter((_, i) => i !== 1), cls: 'faint' });
+        // the margins kept clear at both corners
+        for (const [t0, t1] of [[0, clear], [len - clear, len]]) out.push({ line: onWall(g, a, b, t0, t1, H * 0.12, H * 0.12).slice(0, 2), cls: 'guide' });
+        for (const t of at) out.push({ line: onWall(g, a, b, t, t + WIN_W, WIN_Z, WIN_Z + WIN_H), cls: 'dash' });
+      }
+      // the street front, by hand: the door, a window, one up in the gable
+      const F = [[X0, Y0], [X1, Y0]], f = (cx, w, z0, z1) => onWall(g, ...F, cx - X0 - w / 2, cx - X0 + w / 2, z0, z1);
+      if (g.facing(FRONT)) out.push(...[f(0.075, 0.055, 0, 0.11), f(-0.07, 0.04, H * 0.36, H * 0.78), f(0, 0.034, H + R * 0.28, H + R * 0.28 + 0.045)].map((line) => ({ line, cls: 'dash' })));
+      return out;
+    };
+
+    // from the tops of the short walls up to the ridge points
+    const rises = (g) => [Y0, Y1].flatMap((y) => [X0, X1].map((x) => ({ line: [S(g, [x, y, H]), S(g, [0, y, H + R])], cls: 'dash' })));
     const square = (g, cls = 'faint') => [{ line: [[CELL[0], CELL[1]], [CELL[2], CELL[1]], [CELL[2], CELL[3]], [CELL[0], CELL[3]], [CELL[0], CELL[1]]].map(([x, y]) => S(g, [x, y, 0])), cls }];
     const spots = (g, faint) => SPOTS.map(([x, y]) => plot.inside(x, y, 0.03)
       ? { dot: S(g, [x, y, 0]), cls: 'spot', r: faint ? 1.6 : 2.6 }
@@ -262,26 +326,68 @@ export const LOOK = {
   ...
 };`,
       },
-      roof: {
-        say: 'The roof runs from the wall heads up to the ridge, reaching a little past the walls at the eaves. Its slopes are filled with hatching, and the chimney comes up through it.',
-        src: 'structures/residential.js',
-        code: `g.roofed(x, y, 0, W, D, H,
-  { h: R, ridge: 'y' }); // ridge along the depth
-chimney(g, 0.03, 0.06, H + R * 0.5, R * 0.6);
+      gables: {
+        say: 'Before the roof goes on, the two short walls at the front and the back are carried on up to the ridge points, into a triangle: the gable. So the front wall is no longer a rectangle but one five-sided face, from the ground right up to the top of the roof. That is why it changes shape here.',
+        src: 'src/render/painter.js · roofed, _walls',
+        code: `// a gable end: its wall runs on up to the ridge
+gables[0] = { peak: H + R };  // front
+gables[2] = { peak: H + R };  // back
 
-// LOOK.eave = 0.03 past the walls`,
+// _walls: five corners instead of four
+this.face([[ax, ay, z0], [bx, by, z0],
+           [bx, by, zb], [mx, my, peak], [ax, ay, za]]);`,
+      },
+      roof: {
+        say: 'Now the two slopes are laid from the heads of the long walls up to the ridge, resting on the gables and reaching a little past the walls at the eaves. Each slope is a face like a wall and gets the same arrow, but tilted up, square to the slope. The same check decides: the arrow towards us, the slope is drawn; away, it is skipped. On a steep roof like this one the far slope turns away; a flatter roof would show both.',
+        src: 'src/render/painter.js · roofed',
+        code: `// a slope: eave corners first, then the ridge
+const plane = (pts) => {
+  face(pts);  // the arrow, the check, the outline
+  ...
+};
+// the arrow of the left slope, up and outwards
+n = [-R, 0, W / 2]
+// facing us when it points against the view
+facing = dot(n, view) < 0`,
+      },
+      hatching: {
+        say: 'Then each slope is hatched. The arrow is checked once more, so a slope turned away gets no lines. The lines run straight up the slope, square to the eave, one every 2¼ hundredths of a step along it, each stopping a little short of the edges at a slightly different place, as a hand would. Last, the chimney comes up through the roof.',
+        src: 'src/render/painter.js · _hatch',
+        code: `// turned away: no hatching
+if (!this._facing(normal, pts[0])) return;
+// e along the eave, s up the slope
+const e = unit(sub(pts[1], o));
+for (let u = u0; u < u1; u += LOOK.hatch) {
+  // a little short of the edges, unevenly
+  const lo = w0 + len * (0.03 + 0.06 * jitter);
+  const hi = w1 - len * (0.05 + 0.12 * jitter);
+  lines.push([back(u, hi), back(u, lo)]);
+}`,
+      },
+      bays: {
+        say: 'Windows are not placed one by one. Each wall is cut into bays twelve hundredths wide, as many as fit, and each bay is to get a window in its middle. But no window may come within eight of a corner, where the pen’s lines would run into it; if one would, the windows are spread evenly between those two margins instead, one fewer if they would stand too close. The street front is different: its door and window are placed by hand.',
+        src: 'src/render/painter.js · windows',
+        code: `let cols = Math.floor(len / spacing); // bays that fit
+const pad = (len - cols * spacing) / 2;
+// in the middle of its bay
+let place = (c) => pad + c * spacing + (spacing - ww) / 2;
+// too near a corner: spread evenly between the margins
+if (place(0) < LOOK.clear) {
+  const step = (len - 2 * clear - ww) / (cols - 1);
+  place = (c) => clear + c * step;
+}`,
       },
       openings: {
-        say: 'Windows are spaced along each wall, as many as fit at one every twelve. The street front gets the door and a window placed by hand, and a little window up in the gable.',
+        say: 'Then each window is drawn where it was placed: a filled rectangle, a little under half the wall high and set a touch below the middle, its corners slightly rounded. A window is drawn only on a wall that faces us, by the same arrow as the wall itself.',
         src: 'src/render/painter.js · windows',
-        code: `const bay = 0.1 * LOOK.thin;     // 0.12
-const n = Math.floor(length / bay);
-for (let i = 0; i < n; i++) {
-  // centred in its bay, 0.4 of the wall high
-  const u = (i + 0.5) * length / n;
-  ...
-}
-door(g, 0.075, Y0, 0.055, 0.11);`,
+        code: `// 0.4 of the wall high, a touch below the middle
+const zb = z0 + (step - wh) * 0.55, zt = zb + wh;
+for (let c = 0; c < cols; c++) {
+  const t0 = place(c), t1 = t0 + ww;
+  this.line([at(t0, zb), at(t1, zb), at(t1, zt),
+             at(t0, zt), at(t0, zb)],
+            { facing: n, cls: 'ink' }); // only if the wall faces us
+}`,
       },
       yard: {
         say: 'The house owns the ground halfway to the next dots of the grid. A village house standing on its own gets a walled yard four times in ten, on a side with no neighbour. It is picked from the house’s own seed, so the same house always gets the same yard.',
@@ -398,11 +504,14 @@ line.push(at(from + (to - from) * t,
         points: HOUSE_POINTS,
         steps: [
           { name: 'Points', note: 'points', draw: () => {}, pts: 1 },
-          { name: 'Joining', note: 'join', draw: () => {}, pts: 0.55, guides: (g) => edges(g) },
-          { name: 'Facing', note: 'facing', draw: () => {}, pts: 0.3, guides: (g) => [...edges(g, 'faint'), ...normals(g)] },
+          { name: 'Joining', note: 'join', draw: () => {}, pts: 0.55, guides: (g) => edges(g, 'dash') },
+          { name: 'Facing', note: 'facing', draw: () => {}, pts: 0.3, guides: (g) => [...edges(g, 'dash'), ...normals(g)] },
           { name: 'Walls', note: 'walls', draw: walls, pts: 0.3 },
-          { name: 'Roof', note: 'roof', draw: (g) => { roof(g); stack(g); } },
-          { name: 'Windows & doors', note: 'openings', draw: house },
+          { name: 'Gables', note: 'gables', draw: gabled, pts: 0.55, guides: (g) => rises(g) },
+          { name: 'Roof', note: 'roof', draw: bareRoof, guides: (g) => slopes(g) },
+          { name: 'Hatching', note: 'hatching', draw: (g) => { roof(g); stack(g); } },
+          { name: 'Bays', note: 'bays', draw: (g) => { roof(g); stack(g); }, guides: (g) => layout(g) },
+          { name: 'Windows & doors', note: 'openings', draw: house, guides: (g) => layout(g).filter((it) => it.cls === 'dash').map((it) => ({ ...it, cls: 'faint' })) },
           { name: 'Yard', note: 'yard', draw: (g) => { house(g); yard(g); }, guides: (g) => square(g) },
           { name: 'Spots', note: 'spots', draw: (g) => { house(g); yard(g); }, guides: (g) => [...square(g), ...spots(g)] },
           { name: 'Garden', note: 'garden', draw: (g) => { house(g); yard(g); garden(g); }, guides: (g) => [...square(g), ...spots(g, true)] },
@@ -491,7 +600,7 @@ line.push(at(from + (to - from) * t,
       $('scene').setAttribute('class', 'scene layer-objects lod-0');
       drawGrid(g, scale);
       for (const id of ['solids', 'ground', 'shadows', 'guides']) $(id).innerHTML = '';
-      shown = [];
+      shown = []; guidesShown = new Map();
     }
 
     // The map's grid dots round the drawing.
@@ -522,70 +631,147 @@ line.push(at(from + (to - from) * t,
         const [sx, sy] = toScreen(g, p);
         const dot = mk('circle', { class: 'pt', cx: sx, cy: sy, r: 4 / scale }, layer);
         const label = mk('text', { class: 'pt-label', x: sx + 7 / scale, y: sy - 6 / scale, 'font-size': 13 / scale }, layer);
-        label.textContent = fmt(p);
         label.style.display = labels && step === 0 ? '' : 'none';
-        if (!animate) return;
-        const delay = 300 + i * 160;
-        dot.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay, fill: 'backwards' });
-        label.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: delay + 100, fill: 'backwards' });
+        if (!animate) return void (label.textContent = fmt(p));
+        // plotted one by one, at uneven intervals, its numbers typed beside it
+        const delay = 300 + i * 260 + rand(-60, 90);
+        stamp(dot, delay);
+        typeOut(label, fmt(p), delay + 120, 22);
       });
+    }
+
+    // Typing: text put in a few characters at a time, unevenly, as by
+    // someone at a keyboard. A newer step stops what an older one typed.
+    let typed = 0;
+    function typeOut(el, text, delay = 0, per = 18) {
+      const mine = typed;
+      el.textContent = '';
+      let t = delay;
+      for (let i = 1; i <= text.length; i++) {
+        t += per * rand(0.3, 1.9) + (text[i - 1] === ' ' && Math.random() < 0.1 ? rand(60, 160) : 0);
+        setTimeout(() => { if (typed === mine) el.textContent = text.slice(0, i); }, t);
+      }
+      setTimeout(() => { if (typed === mine) el.textContent = text; }, t + 1);
+      return t;
     }
     const fadeOf = (i) => STEPS[i].pts ?? 0;
 
     // The step's guides: lines drawn in with the pen, one after another,
-    // dashed ones and marks fading in; ones the step before had stay put.
-    let guidesShown = '';
+    // dashed ones a dash at a time, marks set down as the hand gets to
+    // them. Guides the step before had stay just as they were.
+    let guidesShown = new Map(); // guide (as JSON) -> its elements
     function drawGuides(items, animate) {
       const layer = $('guides'), scale = frame && $('view').getBoundingClientRect().width / frame[2];
-      const key = JSON.stringify(items);
-      if (key === guidesShown && animate) return;
-      guidesShown = key;
-      layer.innerHTML = '';
-      if (!scale) return;
-      const els = items.map((it) => {
-        if (it.dot) return mk('circle', { cx: it.dot[0], cy: it.dot[1], r: (it.r ?? 2.4) / scale, class: it.cls }, layer);
-        if (it.cross) {
-          const [x, y] = it.cross, k = 2.6 / scale;
-          return mk('path', { d: `M${x - k} ${y - k}L${x + k} ${y + k}M${x + k} ${y - k}L${x - k} ${y + k}`, class: it.cls }, layer);
+      const old = guidesShown, fresh = [];
+      guidesShown = new Map();
+      if (!scale) return void (layer.innerHTML = '');
+      for (const it of items) {
+        const key = JSON.stringify(it), kept = animate && old.get(key);
+        if (kept) {
+          old.delete(key);
+          guidesShown.set(key, kept);
+          kept.forEach((el) => layer.appendChild(el));
+          continue;
         }
-        return mk('polyline', { points: it.line.map((p) => p.join(',')).join(' '), class: it.cls }, layer);
-      });
+        const els = guide(it, scale, layer);
+        guidesShown.set(key, els);
+        fresh.push({ it, els });
+      }
+      for (const els of old.values()) els.forEach((el) => el.remove());
       if (!animate) return;
-      els.forEach((el, k) => {
-        const delay = 200 + (k / Math.max(1, els.length)) * 1400;
-        if (el.getAttribute('class') === 'guide' && el.tagName === 'polyline') {
-          const len = Math.max(el.getTotalLength(), 1);
-          el.animate([{ strokeDasharray: `${len} ${len}`, strokeDashoffset: len }, { strokeDasharray: `${len} ${len}`, strokeDashoffset: 0 }],
-            { duration: Math.min(700, 200 + len * scale * 2), delay, easing: 'ease-in-out', fill: 'backwards' });
-        } else el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay, fill: 'backwards' });
+      const lens = fresh.map(({ it }) => (it.line ? polyLen(it.line) * scale : 6));
+      const times = pace(lens, 1800);
+      fresh.forEach(({ it, els }, k) => {
+        const [delay, dur] = times[k];
+        if (it.cls === 'guide' && it.line) drawOn(els[0], Math.max(els[0].getTotalLength(), 1), 200 + delay, dur);
+        else els.forEach((el, j) => stamp(el, 200 + delay + (dur * j) / els.length));
       });
+    }
+    const polyLen = (pts) => pts.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
+
+    // A guide's elements: a dot, a cross, a line – or a dashed line as
+    // separate dashes of uneven length, so it can be drawn a dash at a time.
+    function guide(it, scale, layer) {
+      if (it.dot) return [mk('circle', { cx: it.dot[0], cy: it.dot[1], r: (it.r ?? 2.4) / scale, class: it.cls }, layer)];
+      if (it.cross) {
+        const [x, y] = it.cross, k = 2.6 / scale;
+        return [mk('path', { d: `M${x - k} ${y - k}L${x + k} ${y + k}M${x + k} ${y - k}L${x - k} ${y + k}`, class: it.cls }, layer)];
+      }
+      const pts = rough(it.line, scale);
+      if (it.cls !== 'dash') return [mk('polyline', { points: pts.map((p) => p.join(',')).join(' '), class: it.cls }, layer)];
+      const out = [];
+      let on = true, left = rand(3.5, 6.5) / scale, d = '';
+      for (let i = 1; i < pts.length; i++) {
+        let [ax, ay] = pts[i - 1];
+        const [bx, by] = pts[i];
+        let l = Math.hypot(bx - ax, by - ay);
+        while (l > 1e-9) {
+          const t = Math.min(left, l), [ux, uy] = [(bx - ax) / l, (by - ay) / l];
+          const [cx, cy] = [ax + ux * t, ay + uy * t];
+          if (on) d += `M${ax} ${ay}L${cx} ${cy}`;
+          [ax, ay, l, left] = [cx, cy, l - t, left - t];
+          if (left <= 1e-9) {
+            if (on) { out.push(mk('path', { d, class: 'dash' }, layer)); d = ''; }
+            on = !on;
+            left = (on ? rand(3.5, 6.5) : rand(3, 5)) / scale;
+          }
+        }
+      }
+      if (d) out.push(mk('path', { d, class: 'dash' }, layer));
+      return out;
+    }
+
+    // A construction line as drawn with a ruler in a hurry: a straight one
+    // run on a few pixels past both its ends, every point a pixel or so off.
+    function rough(line, scale) {
+      const px = 1 / scale, j = () => rand(-0.8, 0.8) * px;
+      let pts = line.map(([x, y]) => [x + j(), y + j()]);
+      if (line.length === 2) {
+        const [[ax, ay], [bx, by]] = pts, l = Math.hypot(bx - ax, by - ay) || 1;
+        const [ux, uy] = [(bx - ax) / l, (by - ay) / l], a = rand(2, 9) * px, b = rand(3, 11) * px;
+        pts = [[ax - ux * a, ay - uy * a], [bx + ux * b, by + uy * b]];
+      }
+      return pts;
     }
 
     // ----- the pen -----
 
-    // Sketch elements in, one after another (outlines drawn along their
-    // length, fills fading in after), as src/render/draw.js does on the map.
+    // A hand's pace, not a machine's: each stroke at its own speed, quick
+    // off the mark and slowing into its end, with the pen lifted a moment
+    // between strokes and now and then a longer stop to look. Strokes go
+    // one after another; `total` (ms) squeezes a long drawing in.
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const HAND = 'cubic-bezier(0.25, 0.6, 0.55, 1)';
+    const pxScale = () => frame ? $('view').getBoundingClientRect().width / frame[2] : 1;
+    function pace(lens, total) {
+      const raw = lens.map((len) => [(70 + len * 2.4) * rand(0.6, 1.5), Math.random() < 0.08 ? rand(220, 420) : rand(25, 110)]);
+      const sum = raw.reduce((s, [d, gap]) => s + d + gap, 0), k = Math.min(1, total / sum);
+      let t = 0;
+      return raw.map(([d, gap]) => { const at = t; t += (d + gap) * k; return [at, Math.max(40, d * k)]; });
+    }
+    const drawOn = (el, len, delay, duration) => el.animate(
+      [{ strokeDasharray: `${len} ${len}`, strokeDashoffset: len }, { strokeDasharray: `${len} ${len}`, strokeDashoffset: 0 }],
+      { duration, delay, easing: HAND, fill: 'backwards' });
+    // there at once from `delay` on, as a stamp or a fill put down
+    const stamp = (el, delay, prop = 'opacity') => el.animate([{ [prop]: 0 }, { [prop]: 1 }], { duration: 1, delay, fill: 'backwards' });
+
+    // Sketch elements in, one after another: outlines drawn along their
+    // length, fills put down once the outline is round, windows and doors
+    // (ink) set in as they come.
     function penIn(els, total = 1300) {
+      const s = pxScale();
       const items = els.map((el) => {
         let len = 0;
         try { len = el.getTotalLength(); } catch { /* not measurable */ }
         return { el, len: Math.max(len, 1) };
       });
-      const sum = items.reduce((s, it) => s + it.len, 0);
-      let t = 0;
-      for (const { el, len } of items) {
-        const dur = Math.max(140, (len / sum) * total * 1.8), delay = (t / sum) * total;
-        t += len;
-        // windows and doors (ink) and groups just fade in
-        if (el.classList.contains('ink') || !el.getTotalLength) {
-          el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: delay * 0.6, fill: 'backwards' });
-          continue;
-        }
-        const cs = getComputedStyle(el), filled = cs.fill !== 'none';
-        el.animate([{ strokeDasharray: `${len} ${len}`, strokeDashoffset: len }, { strokeDasharray: `${len} ${len}`, strokeDashoffset: 0 }],
-          { duration: dur, delay, easing: 'ease-in-out', fill: 'backwards' });
-        if (filled) el.animate([{ fillOpacity: 0 }, { fillOpacity: 1 }], { duration: 260, delay: delay + dur * 0.8, fill: 'backwards' });
-      }
+      const times = pace(items.map((it) => it.len * s), total);
+      items.forEach(({ el, len }, i) => {
+        const [delay, dur] = times[i];
+        if (el.classList.contains('ink') || !el.getTotalLength) return stamp(el, delay);
+        drawOn(el, len, delay, dur);
+        if (getComputedStyle(el).fill !== 'none') stamp(el, delay + dur, 'fillOpacity');
+      });
       return total;
     }
 
@@ -609,11 +795,14 @@ line.push(at(from + (to - from) * t,
       shown = leaves(host).map((el) => el.outerHTML);
       const gr = $('ground'), grChanged = gr.innerHTML !== ground;
       gr.innerHTML = ground;
-      if (animate && grChanged) gr.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 600, delay: 300, fill: 'backwards' });
+      // (ground marks and shadows come in a couple of jumps, not a fade)
+      if (animate && grChanged) gr.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, delay: 300, easing: 'steps(2, end)', fill: 'backwards' });
       const sh = $('shadows'), changed = sh.innerHTML !== shadows;
       sh.innerHTML = shadows;
-      if (animate && changed) sh.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700, delay: 600, fill: 'backwards' });
-      if (animate) penIn(fresh, Math.min(2600, 1300 + fresh.length * 8));
+      if (animate && changed) sh.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 600, delay: 900, easing: 'steps(3, end)', fill: 'backwards' });
+      typed++;
+      if (!animate) $('caption').querySelector('h1').textContent = STEPS[i].name; // (in case it was being typed)
+      if (animate) penIn(fresh, Math.min(3400, 1400 + fresh.length * 10));
       drawGuides(guides, animate);
       drawPoints(animate && fadeOf(i) === 1, fadeOf(i));
       caption(animate);
@@ -622,23 +811,36 @@ line.push(at(from + (to - from) * t,
 
     // The step's words and code beside the drawing.
     function notes(animate) {
-      const n = NOTES[STEPS[step].note], box = $('notes');
-      box.querySelector('p').textContent = n.say;
-      box.querySelector('.src').textContent = n.src;
+      const n = NOTES[STEPS[step].note], box = $('notes'), mine = typed;
       const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-      box.querySelector('pre').innerHTML = n.code.split('\n').map((l) => {
+      const lines = n.code.split('\n').map((l) => {
         const at = l.indexOf('//');
         return at < 0 ? esc(l) : `${esc(l.slice(0, at))}<span class="c">${esc(l.slice(at))}</span>`;
-      }).join('\n');
-      if (animate) [...box.children].forEach((el, k) => el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 150 + k * 200, fill: 'backwards' }));
+      });
+      const pre = box.querySelector('pre');
+      if (!animate) {
+        box.querySelector('p').textContent = n.say;
+        box.querySelector('.src').textContent = n.src;
+        pre.innerHTML = lines.join('\n');
+        return;
+      }
+      // the words typed, then the file named, then the code a line at a time
+      let t = typeOut(box.querySelector('p'), n.say, 250, 14);
+      t = typeOut(box.querySelector('.src'), n.src, t + 200, 10);
+      pre.innerHTML = '';
+      lines.forEach((_, k) => {
+        t += rand(60, 200) + (lines[k].trim() ? 0 : 120);
+        setTimeout(() => { if (typed === mine) pre.innerHTML = lines.slice(0, k + 1).join('\n'); }, t);
+      });
     }
 
     function caption(animate = false) {
       const s = STEPS[step], c = $('caption'), h1 = c.querySelector('h1');
       c.querySelector('.step').textContent = `${scene.name} · ${step + 1} / ${STEPS.length}`;
-      if (h1.textContent !== s.name) {
-        h1.textContent = s.name;
-        if (animate) h1.animate([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], 350);
+      if (h1.dataset.name !== s.name) {
+        h1.dataset.name = s.name;
+        if (animate) typeOut(h1, s.name, 0, 45);
+        else h1.textContent = s.name;
       }
       $('prev').disabled = step === 0;
       $('next').disabled = step === STEPS.length - 1;
@@ -671,7 +873,7 @@ line.push(at(from + (to - from) * t,
       };
       // from the start, on a blank sheet
       for (const id of ['solids', 'ground', 'shadows', 'guides']) $(id).innerHTML = '';
-      shown = []; guidesShown = '';
+      shown = []; guidesShown = new Map();
       playing = setTimeout(() => next(0), 400);
       caption();
     }
