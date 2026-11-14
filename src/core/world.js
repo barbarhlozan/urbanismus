@@ -227,6 +227,29 @@ export class World {
 
   // ---------- queries ----------
 
+  // The building under a point in world units (the pointer), placed freely
+  // or on the dots: the one whose outline holds it – the nearest, if
+  // outlines touch – or else the nearest within `reach` (a click on its
+  // roof lands on the ground just behind it), or else the one on the dot
+  // there. null if none.
+  structureAtPoint(x, y, reach = 0.3) {
+    const pick = (ids) => {
+      let best = null, bd = Infinity;
+      for (const id of ids) {
+        const s = this.structures.get(id);
+        const d = s ? Math.hypot(s.x - x, s.y - y) : Infinity;
+        if (d < bd) [best, bd] = [s, d];
+      }
+      return best;
+    };
+    const under = pick(this.structureIndex.at(x, y));
+    if (under) return under;
+    const near = pick(this.structureIndex.near(x, y, reach));
+    if (near) return near;
+    const n = this.grid.nodeAt(x, y);
+    return n < 0 ? null : this.structureAt(n);
+  }
+
   structureAt(node) {
     const id = this.structureAtNode.get(node);
     return id === undefined ? null : this.structures.get(id);

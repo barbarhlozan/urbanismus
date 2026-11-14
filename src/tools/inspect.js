@@ -35,8 +35,8 @@ export function createInspectTool(ctx) {
     label: t('tool.select'),
     toolbar: false, // it's what you're in when no tool is picked
 
-    click(node, event) {
-      const s = node < 0 ? null : ctx.world.structureAt(node);
+    click(node, event, point) {
+      const s = point ? ctx.world.structureAtPoint(...point) : node < 0 ? null : ctx.world.structureAt(node);
       if (!s) return ctx.popup.hide();
       ctx.onPick?.(s); // (the fire menu acts on it, ui/devMenus.js)
       const { title, items } = structureMenu(ctx, s);

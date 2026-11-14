@@ -7,7 +7,7 @@
 //     snap(x, y) -> node,          // turn the pointer's world position into a node;
 //                                  //   default: nearest main dot + a hover ring
 //     enter(params), exit(),
-//     hover(node), click(node, pointerEvent),
+//     hover(node), click(node, pointerEvent, point),   // point: the pointer's world [x, y] (or null)
 //     cancel() -> bool,            // true = handled, false = fall back to Select
 //     key(keyboardEvent) -> bool,  // true = handled
 //     wheel(wheelEvent) -> bool,   // true = handled (else the map zooms)
@@ -84,7 +84,7 @@ export class ToolManager {
       return;
     }
     this.armed = -1;
-    t?.click?.(this.hoverNode, event);
+    t?.click?.(this.hoverNode, event, this.point);
     this.resnap();
   }
 

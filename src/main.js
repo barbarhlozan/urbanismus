@@ -582,7 +582,7 @@ function pickUp() {
   const p = tools.point;
   const node = tools.hoverNode;
   if (!p || node < 0) return;
-  const s = world.structureAt(node);
+  const s = world.structureAtPoint(...p);
   let tool = null, params = {};
   if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation, turn: s.data?.turn ?? 0, kind: kindShown(STRUCTURE_TYPES[s.type], s) }];
   else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
@@ -813,8 +813,8 @@ function loop(now) {
     // the building under the pointer, with nothing in hand, gives a little
     // squash as the pointer comes onto it (Renderer.markHovered): there's
     // something to click; its name is on the card that opens
-    const hovered = tools.active?.id === 'inspect' && !popup.open && !photoPrint.open && tools.hoverNode >= 0
-      ? world.structureAt(tools.hoverNode) : null;
+    const hovered = tools.active?.id === 'inspect' && !popup.open && !photoPrint.open && tools.point
+      ? world.structureAtPoint(...tools.point) : null;
     renderer.hovered = hovered ? `s${hovered.id}` : null;
     renderer.frame((dotsShown() ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
     const sky = weather.sky();

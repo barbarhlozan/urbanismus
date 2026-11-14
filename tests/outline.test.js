@@ -202,3 +202,19 @@ test('a free building finds its way in by the road in front of it', () => {
   assert.equal(w.accessInfo(lone), null);
   assert.ok(dotless >= 0);
 });
+
+test('a free house is found where it stands, not by its dot: to erase, inspect, hover', async () => {
+  const { eraseTarget } = await import('../src/tools/erase.js');
+  const w = flatWorld();
+  const s = w.placeStructureAt('house', 7.45, 8.55, 0.4, { seed: 1 });
+  assert.ok(s);
+  // a point on the house whose nearest dot is not the one it's filed under
+  const [dx, dy] = [s.x + 0.2 * Math.cos(s.angle), s.y + 0.2 * Math.sin(s.angle)];
+  assert.equal(w.structureAtPoint(dx, dy)?.id, s.id);
+  assert.equal(w.structureAtPoint(s.x, s.y + 0.55)?.id, s.id); // just behind it (a click on the roof)
+  assert.equal(w.structureAtPoint(s.x + 3, s.y), null);
+  const t = eraseTarget(w, [dx, dy]);
+  assert.equal(t?.key, `s${s.id}`);
+  t.run();
+  assert.equal(w.structures.has(s.id), false);
+});

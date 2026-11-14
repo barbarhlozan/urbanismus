@@ -9,7 +9,7 @@ export function eraseTarget(world, point) {
   const node = world.grid.nodeAt(...point);
   if (node < 0) return null;
 
-  const s = world.structureAt(node);
+  const s = world.structureAtPoint(...point);
   // `key`: the drawing that turns to the secondary colour (Renderer.erasing)
   if (s) return { key: `s${s.id}`, at: world.centerOf(s), size: 0.3, run: () => world.removeStructure(s.id) };
   // ways: the nearest edge of each kind in turn, between its junctions
