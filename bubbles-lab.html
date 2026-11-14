@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <title>Dědina – bubbles lab</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--fg); font: 13px var(--ui-font); margin: 16px 20px 80px; }
+    h1 { font-weight: 500; font-size: 20px; margin: 0 0 4px; }
+    h2 { font-weight: 500; font-size: 15px; margin: 30px 0 4px; }
+    p.note { margin: 0 0 8px; color: var(--detail); max-width: 64em; line-height: 1.45; }
+    .bar { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin: 6px 0 8px; }
+    .grp { display: flex; gap: 4px; align-items: center; }
+    .lbl { color: var(--detail); margin-right: 4px; }
+    .bar button, .cap button {
+      font: inherit; color: var(--fg); background: none; cursor: pointer;
+      border: var(--line) solid color-mix(in srgb, var(--detail) 70%, var(--bg)); border-radius: var(--radius); padding: 3px 9px;
+    }
+    .bar button.on { border-color: var(--fg); background: color-mix(in srgb, var(--fg) 10%, var(--bg)); }
+    .bar input[type=range] { width: 260px; }
+    .stage { position: relative; height: 580px; border: var(--line) solid color-mix(in srgb, var(--detail) 45%, var(--bg)); overflow: hidden; user-select: none; }
+    .stage.click { cursor: pointer; }
+    .stage > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .bubbles { position: absolute; inset: 0; pointer-events: none; }
+    .stage-note { position: absolute; left: 12px; top: 10px; max-width: 420px; color: var(--detail); font-style: italic; font-size: 12px; transition: opacity .4s; }
+
+    /* ----- a bubble: the name over, the line under ----- */
+    .bb { position: absolute; left: 0; top: 0; width: max-content; max-width: 210px; transition: opacity .35s; }
+    .bb-name { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--detail); white-space: nowrap; }
+    .bb-text { font-size: 14px; line-height: 1.35; white-space: pre-line; }
+    .un { visibility: hidden; }
+    .bb.old { opacity: .35; }
+    .bb.gone { opacity: 0; }
+    .bb > svg.ink { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; z-index: -1; pointer-events: none; }
+    .ink .pen { fill: none; stroke: var(--main); stroke-width: 1.2px; stroke-linecap: round; stroke-linejoin: round; }
+    .ink .paper { fill: var(--bg); stroke: none; }
+    .ink .fresh { stroke-dasharray: 1; stroke-dashoffset: 1; animation: drawon .4s ease-out forwards; }
+    @keyframes drawon { to { stroke-dashoffset: 0; } }
+    /* A · tag: letters straight on the map, a leader to the roof, as the
+       map's own labels (.tag); no box */
+    .st-tag .bb { padding: 0 2px 3px; }
+    .st-tag .bb-text, .st-tag .bb-name { text-shadow: 0 0 2px var(--bg), 0 0 3px var(--bg), 0 0 5px var(--bg), 0 0 8px var(--bg); }
+    /* B · card: the dialogue window made small, name cell over the line */
+    .st-card .bb-name { padding: 5px 10px 4px; }
+    .st-card .bb-text { padding: 5px 11px 8px; }
+    /* C · bubble: a freehand round, the name outside over it */
+    .st-cloud .bb { padding: 9px 15px 11px; }
+    .st-cloud .bb-name { position: absolute; left: 14px; top: -14px; text-shadow: 0 0 3px var(--bg), 0 0 6px var(--bg); }
+
+    /* the narrator (DĚDA, today, in the car): a caption, not on the map */
+    .cap { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(600px, calc(100% - 40px)); text-align: center; transition: opacity .3s; }
+    .cap.hidden { opacity: 0; }
+    .cap-name { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--detail); }
+    .cap-text { font-size: 15px; font-style: italic; line-height: 1.4; text-shadow: 0 0 3px var(--bg), 0 0 6px var(--bg), 0 0 10px var(--bg); white-space: pre-line; }
+    .cap-choices { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 8px; pointer-events: auto; }
+    .cap-choices:empty { display: none; }
+    .cap button { background: var(--bg); padding: 5px 12px; font-size: 13.5px; }
+    .cap button:hover { border-color: var(--fg); }
+    .cap .n { color: var(--detail); margin-right: 8px; }
+
+    /* the scene on the church */
+    .two { display: grid; grid-template-columns: 1fr 340px; gap: 12px; align-items: start; }
+    pre.script { margin: 0; padding: 10px 12px; font: 12px/1.55 ui-monospace, Menlo, monospace; border: var(--line) solid color-mix(in srgb, var(--detail) 45%, var(--bg)); white-space: pre-wrap; }
+    pre.script span { display: block; color: var(--detail); padding-left: 4px; border-left: 2px solid transparent; }
+    pre.script span.now { color: var(--fg); border-left-color: var(--fg); }
+    pre.script span.c { font-style: italic; }
+    .actors .ladder { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
+    .actors .dust { fill: var(--detail); }
+  </style>
+</head>
+<body>
+  <h1>Bubbles &amp; scenes</h1>
+  <p class="note">Concepts for the story beats (story/scenar.md): who speaks shows over the building where it happens, the name on top and a short line under it. DĚDA tells it today, from the car, so he isn't on the map: his lines are a caption. Click the stage or press Enter to go on. <code>?scheme=0…3</code></p>
+
+  <h2>1 · Speech bubbles over the houses</h2>
+  <div class="bar">
+    <div class="grp" id="styles"><span class="lbl">Style</span>
+      <button data-v="tag">A · Tag</button><button data-v="card">B · Card</button><button data-v="cloud">C · Bubble</button></div>
+    <div class="grp" id="history"><span class="lbl">Earlier lines</span>
+      <button data-v="one">Gone</button><button data-v="thread">Stay, faded</button></div>
+    <div class="grp" id="beats"><span class="lbl">Beat</span>
+      <button data-v="naves">3 · Náves</button><button data-v="hospoda">4 · Hospoda</button><button data-v="pozar">12 · Požár</button></div>
+  </div>
+  <div class="stage click" id="village"></div>
+
+  <h2>2 · A scene: two men with a saw on the church tower (beat 18)</h2>
+  <p class="note">Story figures walk the map as the others do, but they can also go up onto a building – to a <em>spot</em> the building names (its door, gate, tower ledge, belfry) – and do something there. On the right, how the story file could say it; the line playing now is marked. They're drawn over the church (as the trains' carriages already are, <code>penTop</code>), which is right because the ladder goes on the side facing the camera.</p>
+  <div class="bar">
+    <button id="play">Pause</button>
+    <input type="range" id="scrub" min="0" max="20" step="0.01" value="0">
+    <span class="lbl" id="clock">0.0 s</span>
+    <span class="grp"><span class="lbl">Figure size</span><input type="range" id="size" min="1" max="5" step="0.1" value="2.5" style="width:110px"><span class="lbl" id="sizeOut">×2.5</span></span>
+  </div>
+  <div class="two">
+    <div class="stage" id="church" style="height:600px"></div>
+    <pre class="script" id="script"></pre>
+  </div>
+
+  <script type="module">
+    import { applyTheme } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter } from './src/render/painter.js';
+    import { sunFor, shadowSVG } from './src/render/shadows.js';
+    import { walkerSVG, smooth } from './src/render/people.js';
+    import { sketchBox, sketchPolyline, sketchLine, sketchEllipse, seedOf } from './src/render/sketch.js';
+    import { mulberry32 } from './src/core/random.js';
+    import { STRUCTURE_TYPES } from './structures/index.js';
+
+    const q = new URLSearchParams(location.search);
+    applyTheme(q.has('scheme') ? +q.get('scheme') : undefined);
+    const NS = 'http://www.w3.org/2000/svg';
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    // ---------- a little village, drawn as the game draws it ----------
+
+    const cam = new Camera({ width: 1, height: 1 }, { tile: 64 });
+    cam.rotation = 2; // (from the street: the fronts, local -y, face us)
+
+    // [name, type, kind, x, y, data]
+    function drawTown(list) {
+      const out = list.map(([name, type, kind, x, y, data], i) => {
+        const def = STRUCTURE_TYPES[type], seed = seedOf(i + 3, x, y);
+        const g = new Painter(cam, { x, y }, 0, seed);
+        def.draw(g, { type, seed, id: i, node: 0, rotation: 0, data: { kind, ...data } });
+        const fp = def.footprint, cx = fp.reduce((s, p) => s + p[0], 0) / fp.length, cy = fp.reduce((s, p) => s + p[1], 0) / fp.length;
+        return { name, g, cx, cy, depth: cam.depth(x + cx, y + cy) };
+      }).sort((a, b) => a.depth - b.depth);
+      const sun = sunFor(cam);
+      const svg = out.map((b) => b.g.toGroundSVG()).join('')
+        + out.map((b) => shadowSVG({ feet: b.g.feet, casts: b.g.casts, project: b.g.groundProjector() }, sun)).join('')
+        + out.map((b) => `<g data-name="${b.name}">${b.g.toSVG()}</g>`).join('');
+      // a point on a building, in its own coordinates, as scene px
+      const at = (name, x, y, z) => { const b = out.find((o) => o.name === name); return b.g._project(...b.g._world(x, y, z)); };
+      const top = (name) => { const b = out.find((o) => o.name === name); return at(name, b.cx, b.cy, b.g.top); };
+      return { svg, at, top };
+    }
+
+    // An <svg> for a stage holding the town, framed on what's drawn; its
+    // lines kept as thin on screen as the map's (--stroke).
+    function mountScene(stage, town, pad = 30, focus = null) {
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('class', 'scene');
+      svg.innerHTML = `<g class="scene layer-objects lod-0">${town.svg}</g><g class="actors layer-objects lod-0"></g>`;
+      stage.appendChild(svg);
+      const b = focus ?? svg.querySelector('g').getBBox();
+      svg.setAttribute('viewBox', `${b.x - pad} ${b.y - pad} ${b.width + 2 * pad} ${b.height + 2 * pad}`);
+      const fit = () => {
+        const k = Math.min(svg.clientWidth / (b.width + 2 * pad), svg.clientHeight / (b.height + 2 * pad));
+        svg.style.setProperty('--stroke', (1 / k).toFixed(3));
+      };
+      fit();
+      addEventListener('resize', fit);
+      // scene px -> stage px
+      svg.toStage = ([x, y]) => {
+        const p = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM()), r = stage.getBoundingClientRect();
+        return [p.x - r.left, p.y - r.top];
+      };
+      return svg;
+    }
+
+    // ---------- bubbles ----------
+    //
+    // talk.say({ who, text, anchor: () => [x, y] stage px, side: -1 | 0 | 1 })
+    // Each bubble is laid out every frame (its anchor can move), and eased
+    // there; its pen lines are drawn on when it first shows.
+
+    class Talk {
+      constructor(stage, { clock = () => performance.now() / 1000, ease = 0.22 } = {}) {
+        this.stage = stage;
+        this.clock = clock;
+        this.ease = ease;
+        this.layer = document.createElement('div');
+        this.layer.className = 'bubbles';
+        stage.append(this.layer);
+        this.list = [];
+        this.style = 'card';
+        this.history = 'thread';
+        this.count = 0;
+        this.speed = 42; // letters a second
+      }
+
+      setStyle(s) {
+        this.style = s;
+        this.stage.classList.remove('st-tag', 'st-card', 'st-cloud');
+        this.stage.classList.add(`st-${s}`);
+        for (const b of this.list) b.g.innerHTML = '', b.fresh = true;
+      }
+
+      say({ who, text, anchor, side = 0, slot = null, crowd = false, start = null, life = null }) {
+        const el = document.createElement('div');
+        el.className = 'bb';
+        el.innerHTML = `<div class="bb-name">${esc(who)}</div><div class="bb-text"></div>`;
+        this.layer.appendChild(el);
+        // its pen lines in an <svg> of its own, behind its letters but over
+        // older bubbles (drawn in stage px: moved back by where it is)
+        const ink = document.createElementNS(NS, 'svg');
+        ink.setAttribute('class', 'ink');
+        const g = document.createElementNS(NS, 'g');
+        ink.appendChild(g);
+        el.prepend(ink);
+        const n = ++this.count;
+        const rnd = mulberry32(seedOf(n, 9));
+        const b = { who, text, anchor, side, slot: slot ?? `${who}`, crowd, el, g, n, seed: seedOf(n, 31), start: start ?? this.clock(), life,
+          jitter: crowd ? [(rnd() - 0.5) * 260, 20 - rnd() * 110] : [0, 0], pos: null, fresh: true, shown: -1 };
+        el.querySelector('.bb-text').innerHTML = `<span class="un">${esc(text)}</span>`; // (laid out whole, written in)
+        if (!crowd && this.history === 'one') for (const o of this.list) this.drop(o);
+        if (!crowd && this.history === 'thread') for (const o of this.list) if (!o.crowd) o.old = true;
+        this.list.push(b);
+        return b;
+      }
+
+      typing(b) { return b.shown < b.text.length; }
+      finish(b) { b.start = -1e9; }
+      drop(b) { b.dropAt ??= this.clock(); }
+      clear() { for (const b of this.list) this.drop(b); }
+      fadeAll() { for (const b of this.list) b.old = true; }
+
+      // every frame
+      frame() {
+        const now = this.clock(), W = this.stage.clientWidth, H = this.stage.clientHeight;
+        // gone: a while after dropped, or its life up
+        for (const b of this.list) if (b.life && now - b.start > b.life) this.drop(b);
+        this.list = this.list.filter((b) => {
+          if (b.dropAt == null || now - b.dropAt < 0.4) return true;
+          b.el.remove();
+          return false;
+        });
+        // the thread: no more than two older ones kept
+        const kept = this.list.filter((b) => !b.crowd && b.dropAt == null);
+        for (const b of kept.slice(0, -3)) this.drop(b);
+
+        // stacked: in each slot (who, where) the newest lowest, older above
+        const lift = new Map();
+        for (const b of [...this.list].reverse()) {
+          // letters
+          const n = Math.max(0, Math.min(b.text.length, Math.floor((now - b.start) * this.speed)));
+          if (n !== b.shown) {
+            b.shown = n;
+            b.el.querySelector('.bb-text').innerHTML = `${esc(b.text.slice(0, n))}<span class="un">${esc(b.text.slice(n))}</span>`;
+          }
+          b.el.classList.toggle('old', !!b.old);
+          b.el.classList.toggle('gone', b.dropAt != null);
+
+          const [ax, ay] = b.anchor();
+          const w = b.el.offsetWidth, h = b.el.offsetHeight;
+          const key = b.crowd ? `c${b.n}` : b.slot, up = lift.get(key) ?? 0;
+          lift.set(key, up + h + (this.style === 'cloud' ? 22 : 10));
+          let x, y;
+          if (this.style === 'tag') {
+            x = b.side < 0 ? ax - 22 - w : ax + 22;
+            y = ay - 34 - h - up;
+          } else {
+            x = ax - w / 2 + b.side * (w / 2 + 4);
+            y = ay - h - (this.style === 'cloud' ? 30 : 24) - up;
+          }
+          x += b.jitter[0]; y += b.jitter[1];
+          x = Math.max(8, Math.min(W - w - 8, x));
+          y = Math.max(8, Math.min(H - h - 90, y));
+          if (!b.pos || this.ease >= 1) b.pos = [x, y];
+          else b.pos = [b.pos[0] + (x - b.pos[0]) * this.ease, b.pos[1] + (y - b.pos[1]) * this.ease];
+          b.el.style.transform = `translate(${b.pos[0].toFixed(1)}px, ${b.pos[1].toFixed(1)}px)`;
+          b.g.setAttribute('transform', `translate(${(-b.pos[0]).toFixed(1)} ${(-b.pos[1]).toFixed(1)})`);
+          this.drawInk(b, b.pos[0], b.pos[1], w, h, ax, ay, up > 0 && !b.crowd);
+        }
+      }
+
+      // The pen round a bubble: kept as elements, their `d` changed, so the
+      // drawing-on only plays once.
+      drawInk(b, x, y, w, h, ax, ay, stacked) {
+        const parts = [];
+        const s = b.seed;
+        if (this.style === 'tag') {
+          const near = b.side < 0 ? x + w : x, far = b.side < 0 ? x : x + w;
+          const yb = y + h;
+          // stacked older lines don't lead to the roof again
+          parts.push(['pen', stacked ? sketchLine([near, yb], [far, yb], s, { bow: 0.6 }) : sketchPolyline([[ax, ay - 3], [near, yb], [far, yb]], s, { bow: 0.6 })]);
+          if (!stacked) parts.push(['pen', sketchEllipse(ax, ay, 2.6, 2.6, s + 1, { lump: 0.15 })]);
+        } else {
+          const tx = Math.max(x + 16, Math.min(x + w - 16, ax)); // the tail's root, over the anchor
+          const yb = y + h;
+          const tip = [ax + (tx - ax) * 0.25, ay - 5];
+          if (this.style === 'card') {
+            parts.push(['paper', `M${x} ${y}h${w}v${h}h${-w}Z`]);
+            parts.push(['pen', sketchBox(x, y, w, h, s, { over: 5, waver: 1.1, slip: 0.8 })]);
+            const nh = b.el.querySelector('.bb-name').offsetHeight;
+            parts.push(['pen', sketchLine([x, y + nh], [x + w, y + nh], s + 2, { over: 2, bow: 0.5 })]);
+          } else {
+            const rnd = mulberry32(s), pts = [], N = 16, rx = w / 2 + 4, ry = h / 2 + 3, cx = x + w / 2, cy = y + h / 2;
+            for (let i = 0; i < N; i++) {
+              const a = (i / N) * Math.PI * 2, c = Math.cos(a), si = Math.sin(a);
+              // a rounded box more than an ellipse: corners pushed out
+              const k = 1 / Math.pow(Math.pow(Math.abs(c), 4) + Math.pow(Math.abs(si), 4), 0.25);
+              const j = 1 + (rnd() - 0.5) * 0.06;
+              pts.push([cx + c * rx * Math.min(k, 1.25) * j, cy + si * ry * Math.min(k, 1.25) * j]);
+            }
+            const d = smooth(pts, true);
+            parts.push(['paper', d]);
+            parts.push(['pen', d]);
+          }
+          if (!stacked) {
+            const ty = this.style === 'cloud' ? yb + 3 : yb;
+            const a = [tx - 6, ty], c = [tx + 6, ty];
+            parts.push(['paper', `M${a[0]} ${a[1] - 2}L${tip[0]} ${tip[1]}L${c[0]} ${c[1] - 2}Z`]);
+            parts.push(['pen', sketchLine(a, tip, s + 3, { bow: 0.8 }) + sketchLine(tip, c, s + 4, { bow: 0.8 })]);
+          }
+        }
+        while (b.g.children.length > parts.length) b.g.lastChild.remove();
+        parts.forEach(([cls, d], i) => {
+          let p = b.g.children[i];
+          if (!p) {
+            p = document.createElementNS(NS, 'path');
+            p.setAttribute('pathLength', '1');
+            b.g.appendChild(p);
+            if (cls === 'pen' && b.fresh) p.classList.add('fresh');
+          }
+          p.classList.toggle('pen', cls === 'pen');
+          p.classList.toggle('paper', cls === 'paper');
+          p.setAttribute('d', d);
+        });
+        b.fresh = false;
+      }
+    }
+
+    // ---------- the beats, in the repliky format ----------
+    //   NAME @place: line     (no @: the beat's place)
+    //   DĚDA: line            the narrator's caption
+    //   *[…]*                 what happens (shown top left)
+    //   > choice              its answer follows, to the next >
+    //   ~crowd / ~calm        lines come by themselves, over each other
+
+    const BEATS = {
+      naves: { at: 'hudak', text: `
+*[Ráno. Náves. Hráč postavil Hudákův statek.]*
+DĚDA: Naproti bydleli Hudákovi. Měli obrovskej statek, kam jsem chodil koukat na ovce.
+HUDÁK: No pozri. Pražský panáček.
+DĚDA: Nebyl jsem z Prahy. Pro Hudáka byl z Prahy každej, kdo měl boty.
+JARKA @chalupa: Ty jsi ten od Marie? Umíš plavat?
+MIREK @chalupa: Trochu.
+JARKA @chalupa: Tak zejtra u potoka. V poledne ne.
+DĚDA: Jarka byla holka od sousedů, trávili jsme spolu prakticky celý léto.
+DĚDA: Pak tam byla hospoda.` },
+      hospoda: { at: 'hospoda', text: `
+*[Večer. Bubliny jen u hospody.]*
+BARTOŠ: Sedni si, mladej. Dám ti malinovku na babičku, ju?
+BARTOŠ: Ty nevíš o Němce? Hudáku, on neví o Němce.
+HUDÁK: Šak sa nepýtaj.
+BARTOŠ: Bydlí nahoře nad kostelem. Sama. Od války.
+BARTOŠ: Loni na ní štěkal vlčák od Kopeckejch. Do tejdne ten pes chcípnul.
+HUDÁK: Otrávila. Ja to viem.
+BARTOŠ: Kdo ji v poledne potká, tomu se do večera něco stane.
+HOST: Mně se stalo. Žena mi odešla.
+BARTOŠ: Ta ti odešla kvůli Frantovi a protože seš furt tady, ty vole.
+> Bál ses jí?
+DĚDA: Strašně.
+DĚDA: Nikdy mi nic neudělala, ale měli jsme z ní všichni trochu strach.
+> A ten pes, to byla pravda?
+DĚDA: Pes umřel. To pravda byla.
+DĚDA: Ale Kopecký ho nechali žrát kde co, takže kdo ví, jak to bylo.` },
+      pozar: { at: 'penzion', text: `
+*[Noc. Penzion hoří.]*
+DĚDA: Vzbudil mě zvon. Někdo zvonil na kostele jako na poplach.
+BABIČKA @chalupa: Mirku, zůstaň doma!
+*[Celá ves u penzionu. Kýble, řetěz od studny. Bubliny padají jedna přes druhou.]*
+~crowd
+VLČEK: Mám tam plány! Všechny plány!
+HUDÁK: Šak ti nakreslia nové.
+BARTOŠ: Vodu! Ze studny, z potoka, odkudkoli!
+HOST: To je ona. Viděl jsem ji večer jít dolů.
+BARTOŠ: Ty večer vidíš všechno dvakrát.
+HOST: A ty jsi říkal, že ti ten penzion bere hosty.
+BARTOŠ: To jsem říkal z legrace, ty vole.
+PRAŽÁK: Tohle se nedělá. Tohle se přece nedělá.
+JARKA: Táta tam byl první. Ještě než začal zvon.
+~calm
+*[Ráno. Z penzionu zbyly zdi. Lidi se dívají nahoru k výměnku.]*
+BARTOŠ: Teď už to snad pochopí i předseda.
+DĚDA: Ráno to všichni věděli. Nikdo to neviděl, ale všichni to věděli.
+> Myslíš, že to byla ona?
+DĚDA: Tehdy jsem si to myslel. Všichni jsme si to mysleli.` },
+    };
+
+    function parseBeat({ at, text }) {
+      const steps = [], choices = [];
+      for (const raw of text.split('\n')) {
+        const line = raw.trim();
+        if (!line) continue;
+        let m;
+        const step = (m = line.match(/^\*\[(.*)\]\*$/)) ? { note: m[1] }
+          : line === '~crowd' ? { crowd: true } : line === '~calm' ? { crowd: false }
+          : (m = line.match(/^>\s*(.*)$/)) ? null
+          : (m = line.match(/^([^:@]+?)(?:\s*@(\w+))?:\s*(.*)$/)) ? { who: m[1].trim(), at: m[2] ?? at, text: m[3] } : { note: line };
+        if (line.startsWith('>')) { choices.push({ text: line.slice(1).trim(), steps: [] }); continue; }
+        (choices.length ? choices[choices.length - 1].steps : steps).push(step);
+      }
+      if (choices.length) steps.push({ choices });
+      return steps;
+    }
+
+    // ---------- 1 · the village stage ----------
+
+    const villageStage = document.getElementById('village');
+    const town = drawTown([
+      // a street along x, the houses on it facing it (-y); the church
+      // behind, the výměnek above it
+      ['hudak', 'house-wide', 'barn', -2.3, 0],
+      ['chalupa', 'house', 'farmstead', 0, 0],
+      ['hospoda', 'hospoda', 'village', 1.25, 0],
+      ['penzion', 'hotel', 'old', 2.5, 0],
+      ['kostel', 'church', 'onion', 0.4, 1.7, { grounds: 'few' }],
+      ['vymenek', 'smallholding', null, 1.6, 3.6],
+    ]);
+    const villageSvg = mountScene(villageStage, town, 70);
+    const talk = new Talk(villageStage);
+    const note = Object.assign(document.createElement('div'), { className: 'stage-note' });
+    const cap = Object.assign(document.createElement('div'), { className: 'cap hidden' });
+    cap.innerHTML = '<div class="cap-name">Děda</div><div class="cap-text"></div><div class="cap-choices"></div>';
+    villageStage.append(note, cap);
+    const capText = cap.querySelector('.cap-text'), capChoices = cap.querySelector('.cap-choices');
+
+    const play = { steps: [], i: 0, crowd: false, sides: new Map(), wait: null, timer: null, cap: null };
+
+    function startBeat(name) {
+      talk.clear();
+      clearTimeout(play.timer);
+      Object.assign(play, { steps: parseBeat(BEATS[name]), i: 0, crowd: false, sides: new Map(), wait: null, cap: null });
+      sidesFor(play.steps);
+      note.textContent = '';
+      cap.classList.add('hidden');
+      capChoices.innerHTML = '';
+      next();
+    }
+
+    // Each speaker keeps a side of the house through a beat, so two at one
+    // door read as a back-and-forth.
+    // (one alone at a house in the middle; two or more: left, right, left…)
+    function sidesFor(steps) {
+      const at = new Map();
+      const walk = (list) => { for (const s of list) { if (s.who && s.who !== 'DĚDA') { if (!at.has(s.at)) at.set(s.at, []); if (!at.get(s.at).includes(s.who)) at.get(s.at).push(s.who); } if (s.choices) for (const c of s.choices) walk(c.steps); } };
+      walk(steps);
+      for (const [place, who] of at) who.forEach((w, i) => play.sides.set(`${w}@${place}`, who.length === 1 ? 0 : i % 2 ? 1 : -1));
+    }
+    const sideOf = (who, at) => play.sides.get(`${who}@${at}`) ?? 0;
+
+    function typingCap() { return play.cap && performance.now() / 1000 - play.cap.start < play.cap.text.length / talk.speed; }
+
+    function next() {
+      // first: the line being written, all of it
+      const last = talk.list[talk.list.length - 1];
+      if (!play.crowd && last && last.dropAt == null && talk.typing(last)) return talk.finish(last);
+      if (typingCap()) return (play.cap.start = -1e9);
+      if (play.wait) return;
+      while (play.i < play.steps.length) {
+        const s = play.steps[play.i++];
+        if (s.note) { note.textContent = s.note; continue; }
+        if (s.crowd != null) { play.crowd = s.crowd; if (s.crowd) return crowd(); continue; }
+        if (s.choices) return offer(s.choices);
+        return speak(s);
+      }
+      // the end
+      talk.fadeAll();
+      cap.classList.add('hidden');
+      note.textContent = '(konec – vyber beat znovu)';
+    }
+
+    function speak(s) {
+      if (s.who === 'DĚDA') {
+        talk.fadeAll(); // the scene stays, faded, while he talks
+        cap.classList.remove('hidden');
+        play.cap = { text: s.text, start: performance.now() / 1000 };
+        return;
+      }
+      cap.classList.add('hidden');
+      play.cap = null;
+      const anchor = () => villageSvg.toStage(town.top(s.at));
+      talk.say({ who: s.who, text: s.text, anchor, side: sideOf(s.who, s.at), slot: `${s.at}:${sideOf(s.who, s.at)}` });
+    }
+
+    // Lines one over the other, by themselves, round the house: nobody
+    // waits for anybody. A click hurries them.
+    function crowd() {
+      const s = play.steps[play.i];
+      if (!s || s.who == null) return next();
+      play.i++;
+      const anchor = () => villageSvg.toStage(town.top(s.at));
+      talk.say({ who: s.who, text: s.text, anchor, crowd: true, life: 3.8 });
+      play.timer = setTimeout(crowd, 900 + Math.random() * 500);
+    }
+
+    function offer(choices) {
+      talk.fadeAll();
+      cap.classList.remove('hidden');
+      play.cap = null;
+      capText.textContent = '';
+      play.wait = true;
+      capChoices.innerHTML = choices.map((c, i) => `<button data-i="${i}"><span class="n">${i + 1}</span>${esc(c.text)}</button>`).join('');
+      capChoices.onclick = (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        e.stopPropagation();
+        const c = choices[+b.dataset.i];
+        capChoices.innerHTML = '';
+        play.wait = null;
+        play.steps.splice(play.i, 0, ...c.steps);
+        next();
+      };
+    }
+
+    villageStage.addEventListener('click', () => { if (play.crowd) { clearTimeout(play.timer); crowd(); } else next(); });
+    addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') next();
+    });
+    addEventListener('keydown', (e) => {
+      if (!play.wait || !/^[1-9]$/.test(e.key)) return;
+      capChoices.querySelector(`[data-i="${+e.key - 1}"]`)?.click();
+    });
+
+    function buttons(id, value, on) {
+      const el = document.getElementById(id);
+      const set = (v) => { for (const b of el.querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === v); on(v); };
+      el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) set(b.dataset.v); });
+      set(value);
+    }
+
+    // ---------- 2 · the scene on the church ----------
+
+    const churchStage = document.getElementById('church');
+    const ct = drawTown([
+      ['kostel', 'church', 'onion', 0, 0, { grounds: 'few' }],
+      ['vymenek', 'smallholding', null, 1.9, -0.9],
+    ]);
+    // framed on the church, with room in front for the walk in
+    const P = (x, y, z) => ct.at('kostel', x, y, z);
+    const frame = [P(-1.1, -0.1, 0), P(1.75, -0.8, 0), P(0.5, 0.2, 1.55), P(0.1, -0.9, 0)];
+    const xs = frame.map((p) => p[0]), ys = frame.map((p) => p[1]);
+    const churchSvg = mountScene(churchStage, ct, 6, { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) });
+    const actors = churchSvg.querySelector('.actors');
+    const sceneTalk = new Talk(churchStage, { clock: () => T, ease: 1 });
+
+    // The tower of the onion church (structures/heritage.js baroqueChurch):
+    // its lower stage's front face at y 0.06, the cornice on it at z 0.5,
+    // the belfry window above.
+    const LADDER = { x: [0.37, 0.43], foot: -0.1, top: 0.05, z: 0.5 };
+    const onLadder = (u) => [0.4, LADDER.foot + (LADDER.top - LADDER.foot) * u, LADDER.z * u - 0.02 * (u > 0 ? 1 : 0)];
+    const LEDGE = [0.455, 0.06, 0.5];
+    const BELFRY = [0.475, 0.08, 0.64];
+    const DOOR = [0.4, -0.16, 0];
+    const EDGE = [-1.05, -0.2, 0], EDGE2 = [-1.2, -0.05, 0];
+    const GATE = [0.95, -0.45, 0], FROM = [1.65, -0.75, 0];
+
+    const lerp = (a, b, u) => a.map((v, i) => v + (b[i] - v) * u);
+    const clamp01 = (u) => Math.max(0, Math.min(1, u));
+    const span = (t, a, b) => clamp01((t - a) / (b - a));
+    const easeIO = (u) => u * u * (3 - 2 * u);
+
+    // Where each figure is at time t: [x, y, z] on the church, and what it's
+    // doing (walking: steps bob; climbing: rungs; sawing).
+    function chlap1(t) {
+      if (t < 3) return { p: lerp(EDGE, DOOR, span(t, 0, 3)), walk: t > 0 };
+      if (t < 4) return { p: DOOR };
+      if (t < 6) return { p: onLadder(span(t, 4, 6)), climb: true };
+      if (t < 6.6) return { p: lerp(onLadder(1), LEDGE, span(t, 6, 6.6)) };
+      if (t < 13) return { p: LEDGE, saw: t > 7 && t < 12.8 };
+      if (t < 13.4) return { p: lerp(LEDGE, onLadder(1), span(t, 13, 13.4)) };
+      if (t < 14.6) return { p: onLadder(1 - span(t, 13.4, 14.6)), climb: true };
+      return { p: lerp(DOOR, EDGE, easeIO(span(t, 14.6, 17))), walk: t < 17, run: true };
+    }
+    function chlap2(t) {
+      if (t < 3.5) return { p: lerp(EDGE2, [0.34, -0.2, 0], span(t, 0.4, 3.5)), walk: t > 0.4 };
+      if (t < 6.3) return { p: [0.34, -0.2, 0] };
+      if (t < 7.8) return { p: onLadder(span(t, 6.3, 7.8) * 0.72), climb: true };
+      if (t < 13) return { p: onLadder(0.72) };
+      if (t < 14) return { p: onLadder(0.72 * (1 - span(t, 13, 14))), climb: true };
+      return { p: lerp([0.34, -0.2, 0], EDGE2, easeIO(span(t, 14, 16.6))), walk: t < 16.6, run: true };
+    }
+    function anna(t) {
+      if (t < 9) return { p: FROM, hidden: true };
+      return { p: lerp(FROM, GATE, span(t, 9, 11.2)), walk: t < 11.2, face: -1 };
+    }
+
+    const FIG = { chlap1: 1, chlap2: 9, anna: 3 }; // body variants (people.js BUILDS)
+    let size = 2.5;
+
+    function drawFigure(name, st, t, prev) {
+      if (st.hidden) return '';
+      const [sx, sy] = P(...st.p);
+      const [px] = prev ? P(...prev.p) : [sx];
+      const mirror = st.face ?? (sx < px - 0.01 ? -1 : 1);
+      let squash = 1, dx = 0;
+      if (st.walk) squash = 1 - 0.2 * Math.abs(Math.sin(t * (st.run ? 16 : 9)));
+      if (st.climb) dx = Math.sin(t * 14) * 0.25;
+      if (st.saw) dx = Math.sin(t * 19) * 0.2;
+      const k = size;
+      return `<g transform="translate(${(sx + dx).toFixed(2)} ${sy.toFixed(2)}) scale(${(mirror * k).toFixed(2)} ${(k * squash).toFixed(2)})">${walkerSVG(FIG[name])}</g>`;
+    }
+
+    // dust off the saw: falls from where it bites, drifts, fades
+    function dust(t) {
+      let out = '';
+      const [bx, by] = P(...BELFRY);
+      const [, gy] = P(BELFRY[0], -0.05, 0);
+      for (let i = 0; i < 40; i++) {
+        const born = 7 + i * 0.145;
+        const age = t - born;
+        if (age < 0 || age > 1.6 || born > 12.8) continue;
+        const rnd = mulberry32(i * 7919);
+        const x = bx + (rnd() - 0.3) * 2 + age * (rnd() - 0.5) * 3;
+        const y = Math.min(gy, by + age * age * 22);
+        out += `<circle class="dust" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${(0.22 * size / 1.6).toFixed(2)}" opacity="${(1 - age / 1.6).toFixed(2)}"/>`;
+      }
+      return out;
+    }
+
+    function ladder(t) {
+      const u = easeIO(span(t, 3, 4));
+      if (u <= 0) return '';
+      // (stood up from lying along the ground: the top swings up)
+      const lean = (z) => [0, LADDER.foot + (LADDER.top - LADDER.foot) * (z / LADDER.z), z];
+      let d = '';
+      const topZ = LADDER.z * u;
+      for (const x of LADDER.x) {
+        const a = P(x, LADDER.foot, 0), b = P(x, LADDER.foot + (LADDER.top - LADDER.foot) * u - (1 - u) * 0.35, topZ);
+        d += sketchLine(a, b, seedOf(x * 100, 5), { bow: 0.3 });
+      }
+      for (let z = 0.05; z < topZ; z += 0.055) {
+        const yy = lean(z)[1] - (1 - u) * 0.35 * (z / Math.max(topZ, 1e-3));
+        d += sketchLine(P(LADDER.x[0], yy, z), P(LADDER.x[1], yy, z), seedOf(z * 100, 6), { bow: 0.2 });
+      }
+      return `<path class="ladder" d="${d}"/>`;
+    }
+
+    function saw(t, st) {
+      if (!st.saw) return '';
+      const [sx, sy] = P(...st.p), [bx, by] = P(...BELFRY);
+      const hand = [sx + 0.55 * size, sy - 1.5 * size];
+      const dirx = bx - hand[0], diry = by - hand[1], len = Math.hypot(dirx, diry) || 1;
+      const ux = dirx / len, uy = diry / len, o = Math.sin(t * 19) * 0.9 * size / 1.6;
+      const a = [hand[0] + ux * o, hand[1] + uy * o], b = [a[0] + ux * 2.4 * size, a[1] + uy * 2.4 * size];
+      return `<path class="ladder" d="M${a[0].toFixed(2)} ${a[1].toFixed(2)}L${b[0].toFixed(2)} ${b[1].toFixed(2)}" style="stroke-width:calc(var(--pen-4) * var(--stroke, 1))"/>`;
+    }
+
+    // what the story file would say, each line with when it plays
+    const SCRIPT = [
+      [null, '::Pila::', 'c'],
+      [null, 'pick vez = church'],
+      [null, 'pick vymenek = smallholding'],
+      [null, 'actor chlap1, chlap2 from edge   # strangers'],
+      [null, 'actor anna = wenzlova at vymenek'],
+      [[0, 3.5], 'walk chlap1, chlap2 -> vez.door'],
+      [[3, 4], 'prop ladder at vez.tower'],
+      [[4, 6.6], 'climb chlap1 -> vez.ledge'],
+      [[6.3, 7.8], 'climb chlap2 -> vez.ladder'],
+      [[7, 12.8], 'act chlap1 saw vez.belfry'],
+      [[9, 11.2], 'walk anna -> vez.gate and wait'],
+      [[11.2, 12.6], 'WENZLOVÁ @anna: Weg da! Runter!'],
+      [[12.6, 13], 'CHLAP @chlap2: Ježišmarja, Němka!'],
+      [[13, 14.6], 'climb down chlap1, chlap2'],
+      [[14.6, 17], 'run chlap1, chlap2 -> edge'],
+      [[17, 20], 'look anna -> vez.tower   # stays'],
+      [null, '::'],
+    ];
+    const scriptEl = document.getElementById('script');
+    scriptEl.innerHTML = SCRIPT.map(([, line, c]) => `<span class="${c ?? ''}">${esc(line)}</span>`).join('');
+    const scriptLines = [...scriptEl.children];
+
+    // bubbles in the scene follow their figure's head
+    const SAYS = [
+      { t: [11.2, 15], who: 'Wenzlová', text: 'Weg da! Runter!', fig: anna, side: 1 },
+      { t: [12.6, 15], who: 'Chlap', text: 'Ježišmarja, Němka!', fig: chlap2, side: -1 },
+    ];
+    const headOf = (fig) => () => { const [x, y] = P(...fig(T).p); return churchSvg.toStage([x, y - 2.6 * size]); };
+    const live = new Map();
+
+    let T = 0, playing = true, last = performance.now();
+    const scrub = document.getElementById('scrub'), clock = document.getElementById('clock');
+    document.getElementById('play').onclick = (e) => { playing = !playing; e.target.textContent = playing ? 'Pause' : 'Play'; };
+    scrub.oninput = () => { T = +scrub.value; };
+    const sizeIn = document.getElementById('size');
+    sizeIn.oninput = () => { size = +sizeIn.value; document.getElementById('sizeOut').textContent = `×${size}`; };
+
+    function churchFrame(dt) {
+      if (playing) { T += dt; if (T > 20) T = 0; scrub.value = T; }
+      clock.textContent = `${T.toFixed(1)} s`;
+      const e = 1 / 30;
+      const s1 = chlap1(T), s2 = chlap2(T), sa = anna(T);
+      actors.innerHTML = ladder(T)
+        + drawFigure('chlap2', s2, T, chlap2(T - e))
+        + drawFigure('chlap1', s1, T, chlap1(T - e))
+        + saw(T, s1) + dust(T)
+        + drawFigure('anna', sa, T, anna(T - e));
+      SCRIPT.forEach(([w], i) => scriptLines[i].classList.toggle('now', !!w && T >= w[0] && T < w[1]));
+      for (const s of SAYS) {
+        const on = T >= s.t[0] && T < s.t[1];
+        if (on && !live.has(s)) live.set(s, sceneTalk.say({ who: s.who, text: s.text, anchor: headOf(s.fig), side: s.side, slot: s.who, start: s.t[0] }));
+        if (!on && live.has(s)) { const b = live.get(s); b.el.remove(); sceneTalk.list = sceneTalk.list.filter((o) => o !== b); live.delete(s); }
+      }
+      sceneTalk.frame();
+    }
+
+    // ---------- go ----------
+
+    buttons('styles', q.get('style') ?? 'card', (v) => { talk.setStyle(v); sceneTalk.setStyle(v); });
+    buttons('history', 'thread', (v) => { talk.history = v; });
+    buttons('beats', q.get('beat') ?? 'hospoda', startBeat);
+    sceneTalk.history = 'thread';
+
+    function loop(now) {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      talk.frame();
+      if (play.cap) {
+        const n = Math.max(0, Math.min(play.cap.text.length, Math.floor((now / 1000 - play.cap.start) * talk.speed)));
+        capText.innerHTML = `${esc(play.cap.text.slice(0, n))}<span class="un">${esc(play.cap.text.slice(n))}</span>`;
+      }
+      churchFrame(dt);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+    window.lab = { talk, sceneTalk, next, startBeat, setT: (t) => { T = t; playing = false; } };
+  </script>
+</body>
+</html>
