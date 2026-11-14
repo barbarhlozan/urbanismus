@@ -221,7 +221,12 @@ export class WorldPlacement {
   // quarter turns more (side or back to the road); with no road near, at
   // the pointer, facing quarter turn `rotation`.
   // { x, y, angle, road (the nearestRoadPoint or null), check }.
-  freePlacement(type, x, y, { rotation = 0, turn = 0, seed = 1 } = {}) {
+  freePlacement(type, x, y, { rotation = 0, turn = 0, seed = 1, loose = null } = {}) {
+    // turned freely (loose: radians past quarter turn `rotation`): just there
+    if (loose != null) {
+      const angle = (rotation * Math.PI) / 2 + loose;
+      return { x, y, angle, road: null, check: this.fitsOutline(type, x, y, angle) };
+    }
     const road = this.nearestRoadPoint(x, y);
     let angle = (rotation * Math.PI) / 2;
     if (road) {

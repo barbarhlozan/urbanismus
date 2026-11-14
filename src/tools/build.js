@@ -34,8 +34,19 @@ export function createBuildTool(ctx, defs) {
   // still on the dots
   const free = () => !def().canPlace && !def().site;
   let point = null; // the pointer's world position (snap)
-  const freeAt = () => point && world.freePlacement(def().id, point[0], point[1], { rotation: placed(), turn: turn(), seed });
-  const rotate = () => { if (turnable()) rotation = (rotation + 1) % 4; };
+  // Turn freely (the toggle, or Alt): no road or neighbour turns it, and
+  // Tab turns it by FREE_STEP from facing the viewer
+  let loose = false, steps = 0;
+  const FREE_STEP = Math.PI / 12;
+  const freeAt = () => point && (loose
+    ? world.freePlacement(def().id, point[0], point[1], { rotation: placed(), seed, loose: steps * FREE_STEP })
+    : world.freePlacement(def().id, point[0], point[1], { rotation: placed(), turn: turn(), seed }));
+  const rotate = () => {
+    if (!turnable()) return;
+    if (loose && free()) steps = (steps + 1) % 24;
+    else rotation = (rotation + 1) % 4;
+  };
+  const loosen = () => { loose = !loose; steps = 0; };
   const data = () => ({ ...(turn() ? { turn: turn() } : {}), ...(kind ? { kind } : {}) });
   const reroll = () => {
     const kinds = kindsOf(def());
@@ -95,6 +106,7 @@ export function createBuildTool(ctx, defs) {
 
     key(e) {
       if (e.key === 'Tab') rotate();
+      else if (e.key === 'Alt' && !e.repeat && free() && turnable()) loosen();
       else if (keyOf(e) === ' ') reroll();
       else if (e.key === 'Shift' && !e.repeat && open().length > 1) resize();
       else return false;
@@ -104,6 +116,7 @@ export function createBuildTool(ctx, defs) {
     actions: () => [
       ...(open().length > 1 ? [{ label: `${t('size')}: ${sizeOf(def())}`, key: 'Shift', run: resize }] : []),
       ...(turnable() ? [{ label: t('rotate'), icon: 'rotate', key: 'Tab', run: rotate }] : []),
+      ...(turnable() && free() ? [{ label: t('turn-freely'), key: 'Alt', on: loose, run: loosen }] : []),
       { label: t('another-look'), icon: 'another-look', key: 'Space', run: reroll },
     ],
 
@@ -112,7 +125,10 @@ export function createBuildTool(ctx, defs) {
       const d = def();
       if (free()) {
         const p = freeAt();
-        return p ? kit.ghostAt(d, p.x, p.y, p.angle, seed, { blocked: !p.check.ok, data: data() }) : '';
+        if (!p) return '';
+        // where it can't stand: faded, with a cross – or the steep-hill sign
+        const mark = p.check.ok ? '' : p.check.reason === 'Too steep' ? kit.steepAt(p.x, p.y) : kit.crossAt(p.x, p.y);
+        return kit.ghostAt(d, p.x, p.y, p.angle, seed, { blocked: !p.check.ok, data: data() }) + mark;
       }
       const at = world.placementFor(d.id, hover, placed());
       if (at.check.ok) {

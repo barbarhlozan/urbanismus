@@ -507,6 +507,10 @@ rotate
   cs: Otočit
   en: Turn
 
+turn-freely
+  cs: Otáčet volně
+  en: Turn freely
+
 another-look
   cs: Jiná podoba
   en: Another look

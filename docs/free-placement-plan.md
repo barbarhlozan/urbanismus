@@ -329,7 +329,8 @@ still reads a building's dot or turn, on purpose:
   build tool placing buildings freely (wider ones too, their anchor
   turned about the middle: `freeAnchor`), front yards from the pose,
   `cmd.place`. Still to do: sites (parks, squares) and stations free, a
-  tighter `body` inside the `plot`, plots spreading by outline,
+  tighter `body` inside the `plot`, plots spreading by outline (free
+  buildings keep their own square for now),
   access by the road point (now the nearest dot's). (Ways are kept off
   free buildings by outline: `freeBuildingOn`.)
 - **B2 – Opus, after B1.** Snapping along a road with seeded setback,
@@ -337,7 +338,8 @@ still reads a building's dot or turn, on purpose:
   browser.
   *2026-11-14:* joined walls between free houses (`freeSideBy`: a width
   along the side, the same turn) and the snap flush to a neighbour's side
-  (`joinSnap`, within 0.45). Still to do: free turning with Alt.
+  (`joinSnap`, within 0.45). Turning freely: the Build menu's toggle or
+  Alt, then Tab by 15°.
 - **B3 – Sonnet, after B1.** Courts, yards and plots from outlines
   (`courts.js`, `yards.js`, `plots.js`).
 - **B4 – Sonnet, after B1.** The pointer draws the outline and why it

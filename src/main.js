@@ -616,7 +616,7 @@ window.addEventListener('keydown', (e) => {
     takeBack(e.shiftKey || e.key.toLowerCase() === 'y' ? 'redo' : 'undo');
     return;
   }
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.metaKey || e.ctrlKey || (e.altKey && e.key !== 'Alt')) return; // (Alt alone: turn freely, while building)
   // the open book takes the keys (and nothing reaches the map behind it)
   if (chronicleBook.open) {
     if (chronicleBook.key(e)) e.preventDefault();

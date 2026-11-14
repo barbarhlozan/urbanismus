@@ -151,3 +151,12 @@ test('a road, railway or footpath may not be laid through a free building', asyn
   assert.equal(w.buildNetwork('road', run(w, [4, 3], [4, 14])).ok, true); // clear of it
   assert.equal(w.buildNetwork('path', fineRun(w, [7, 3], [7, 14])).ok, false);
 });
+
+test('turned freely: no road turns it, just the angle asked', () => {
+  const w = flatWorld();
+  road(w, [2, 5], [12, 5]);
+  const p = w.freePlacement('house', 6, 6.4, { rotation: 1, loose: 0.3 });
+  assert.equal(p.road, null);
+  assert.ok(Math.abs(p.angle - (Math.PI / 2 + 0.3)) < 1e-9);
+  assert.deepEqual([p.x, p.y], [6, 6.4]);
+});

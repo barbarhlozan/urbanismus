@@ -5,7 +5,7 @@
 import { THEME } from '../../theme.js';
 import { Painter } from '../painter.js';
 import { VEHICLES, vehicleSVG, modelFor, headingIndex } from '../vehicles.js';
-import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront, courtSides, freeTilt } from '../../../structures/index.js';
+import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront, courtSides, freeTilt, footprintOffsets } from '../../../structures/index.js';
 import { drawCourt } from '../../../structures/courts.js';
 import { drawRuin } from '../../../structures/ruin.js';
 import { YARDS } from '../../../structures/yards.js';
@@ -71,7 +71,8 @@ export class PlotDrawing {
       p.keepTier = (detail >> 2) & 3;
     };
     keep(painter);
-    const points = world.nodesOf(s).map((n) => world.grid.xy(n));
+    // (where it stands: placed freely, its outline's corners)
+    const points = s.free ? world.outlineOf(s) : world.nodesOf(s).map((n) => world.grid.xy(n));
     if (def.site) {
       painter.follow = true; // parks and squares lie on the ground like yards
       const site = world.siteArea(s.type, s.node, s.rotation);
@@ -178,7 +179,10 @@ export class PlotDrawing {
   plotFor(s, plotDef, painter, core, yardWorld, courtWorld = []) {
     const { world } = this;
     const [ax, ay] = world.anchorOf(s);
-    const pts = world.nodesOf(s).map((n) => world.grid.xy(n));
+    // its footprint's squares' middles (placed freely: where it stands, not its dot)
+    const pts = s.free
+      ? footprintOffsets(STRUCTURE_TYPES[s.type], quarterOf(world, s)).map(([dx, dy]) => [ax + dx, ay + dy])
+      : world.nodesOf(s).map((n) => world.grid.xy(n));
     const xs = pts.map((p) => p[0] - ax), ys = pts.map((p) => p[1] - ay);
     const tilt = this.roadTurn(s);
     const [tc, ts] = [Math.cos(tilt), Math.sin(tilt)];
@@ -232,7 +236,8 @@ export class PlotDrawing {
 
     // A garden spreading over the ground round it: the half-dot squares it
     // claims, its boundary where they meet anyone else's – or nobody's.
-    const reach = !tilt && SPREAD[plotDef.props];
+    // (not one placed freely: the claims are half-dot squares on the dots)
+    const reach = !tilt && !s.free && SPREAD[plotDef.props];
     if (reach) {
       const { owner, seen, draws } = this.claimFor(s, reach);
       const own = (x, y) => owner(Math.floor(2 * (ax + x)), Math.floor(2 * (ay + y))) === s.id;
