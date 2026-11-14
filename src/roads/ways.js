@@ -212,6 +212,17 @@ export class Ways {
       if (near.dist <= snap && near.s > snap && near.s < total - snap) passing.push({ t: near.s, node: n });
     }
     for (const end of ends) {
+      if (end.node) {
+        // ending at a junction: not alongside a way already leaving it (the
+        // two would run on top of each other there – a knot of edge lines)
+        const out = leaving(pts, end === ends[0]);
+        for (const e of this.edgesAt(end.node.id)) {
+          const other = leaving(e.pts, e.a === end.node.id);
+          const cos = (out[0] * other[0] + out[1] * other[1]) / ((Math.hypot(...out) * Math.hypot(...other)) || 1);
+          if (Math.acos(Math.max(-1, Math.min(1, cos))) < minAngle) return { ok: false, reason: 'Too shallow a crossing', at: end.point };
+        }
+        continue;
+      }
       if (!end.hit) continue;
       // meeting a way end-on: at a sensible angle too
       const e = end.hit.edge, poly = this.measured(e);
@@ -373,4 +384,15 @@ export class Ways {
     w.nextId = data?.nextId ?? 1;
     return w;
   }
+}
+
+// Which way a line leaves its start (`fromStart`) or its end: from that
+// end to the point LEAVE along it (or its far end, if shorter).
+const LEAVE = 0.4;
+function leaving(pts, fromStart) {
+  const line = fromStart ? pts : [...pts].reverse();
+  const [x0, y0] = line[0];
+  let q = line[line.length - 1];
+  for (const p of line) if (Math.hypot(p[0] - x0, p[1] - y0) >= LEAVE) { q = p; break; }
+  return [q[0] - x0, q[1] - y0];
 }

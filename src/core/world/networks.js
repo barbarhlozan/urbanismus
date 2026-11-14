@@ -296,8 +296,15 @@ export class WorldNetworks {
     const check = this.checkWay(kind, line, { lane });
     if (!check.ok) return check;
     const layer = this.networks[kind], dots = check.dots;
-    for (let i = 1; i < dots.length; i++) {
-      if (layer.graph.hasEdge(dots[i - 1], dots[i])) return this.buildNetwork(kind, dots, { lane, street });
+    // drawn over a way of its kind: the whole of it along that way converts
+    // it (a road to a lane, a street); running along one for a stretch and
+    // off it – two ways on top of each other – can't be laid (only its
+    // first or last step may lie on one: setting off from a junction)
+    const along = [];
+    for (let i = 1; i < dots.length; i++) if (layer.graph.hasEdge(dots[i - 1], dots[i])) along.push(i);
+    if (along.length === dots.length - 1) return this.buildNetwork(kind, dots, { lane, street });
+    if (along.some((i) => i !== 1 && i !== dots.length - 1) || (along.length && dots.length <= 3)) {
+      return { ok: false, reason: 'Runs along another line', blocked: along.flatMap((i) => [dots[i - 1], dots[i]]) };
     }
     this.history.touch();
     const props = { kind, ...(lane ? { lane: true } : street ? { street: true } : {}) };

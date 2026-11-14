@@ -204,3 +204,16 @@ test('a way passing close by a loose end takes it in as a junction', () => {
   const end = [...w.nodes.values()].find((n) => n.x === 5 && Math.abs(n.y - 3.8) < 1e-9);
   assert.equal(w.edgesAt(end.id).length, 3);
 });
+
+test('insert: a way ending at a junction alongside a way already there is refused', () => {
+  const w = new Ways();
+  w.insert(curveThrough([[0, 0], [10, 0]]), { kind: 'road' });
+  w.insert(curveThrough([[5, -4], [5, 4]]), { kind: 'road' }); // a crossroads at (5, 0)
+  const before = JSON.stringify(w.toJSON());
+  const shallow = w.insert(curveThrough([[1, 0.8], [5, 0.05]]), { kind: 'road', lane: true });
+  assert.equal(shallow.ok, false);
+  assert.equal(shallow.reason, 'Too shallow a crossing');
+  assert.equal(JSON.stringify(w.toJSON()), before);
+  const square = w.insert(curveThrough([[2, 3], [5, 0.05]]), { kind: 'road' }); // at 45°: fine
+  assert.ok(square.ok, square.reason);
+});
