@@ -8,6 +8,7 @@ import { validateRoute } from '../../roads/routing.js';
 import { STRUCTURE_TYPES } from '../../../structures/index.js';
 import { smoothLine } from '../geom2d.js';
 import { meanderPaths } from '../../roads/meander.js';
+import { traceWays } from '../../roads/dotView.js';
 
 export class WorldNetworks {
   // Where a footpath runs at dense dot f: wandering a little off its dots,
@@ -179,6 +180,94 @@ export class WorldNetworks {
     return gone;
   }
 
+  // ---------- the ways and their dot view ----------
+
+  // Rebuilds a layer's dots (and, for roads, the street sets) from the
+  // ways – see world.js, `ways`.
+  refreshNetwork(kind) {
+    const layer = this.networks[kind];
+    const view = traceWays(this.ways, kind, layer.grid, layer.scale);
+    layer.graph = view.graph;
+    layer.version++;
+    if (kind === 'road') {
+      this.sidewalks = view.sidewalks;
+      this.lanes = view.lanes;
+      this.laneWalks = view.laneWalks;
+    }
+  }
+
+  // Makes the ways of a kind what its dots (and street sets) now say –
+  // for the changes still worked out dot by dot (building and removing
+  // with the dot tool, streets, undo): each dot step a way edge, its
+  // street, lane and kerbs as the edge's attributes. Then the dot view
+  // is rebuilt from the ways, so the two can't drift apart.
+  syncWays(kind) {
+    const layer = this.networks[kind], ways = this.ways, graph = layer.graph;
+    const dotOf = (id) => { const n = ways.nodes.get(id); return layer.nodeAt(n.x, n.y); };
+    const steps = new Map(), nodeAt = new Map();
+    for (const e of ways.edges.values()) {
+      if (e.kind !== kind) continue;
+      const a = dotOf(e.a), b = dotOf(e.b);
+      nodeAt.set(a, e.a);
+      nodeAt.set(b, e.b);
+      steps.set(edgeKey(a, b), { e, a, b });
+    }
+    for (const { e, a, b } of steps.values()) if (!graph.hasEdge(a, b)) ways.removeEdge(e.id);
+    const nodeFor = (d) => {
+      const id = nodeAt.get(d);
+      if (id && ways.nodes.has(id)) return id;
+      const n = ways.addNode(...layer.dot(d));
+      nodeAt.set(d, n.id);
+      return n.id;
+    };
+    for (const [a, b] of graph.edges()) {
+      const key = edgeKey(a, b), had = steps.get(key);
+      if (!had || !ways.edges.has(had.e.id)) {
+        ways.addEdge(nodeFor(a), nodeFor(b), [layer.dot(a), layer.dot(b)], { kind, ...this.stepAttrs(kind, a, b) });
+        continue;
+      }
+      const want = this.stepAttrs(kind, had.a, had.b), e = had.e;
+      if (e.lane !== want.lane || e.street !== want.street || e.walks !== want.walks) {
+        delete e.lane; delete e.street; delete e.walks;
+        Object.assign(e, want);
+        ways.version++;
+      }
+    }
+    this.refreshNetwork(kind);
+  }
+
+  // Lays a way along `line` (its centre line, from roads/curves.js) –
+  // Ways.insert: joining, splitting and crossing what it meets – and
+  // rebuilds the dots of every kind it touched. The drawing tool's way
+  // in (step 5 of the switch); the dot tool still goes by buildNetwork.
+  layWay(line, props = {}) {
+    this.history.touch();
+    const before = new Map([...this.ways.edges.values()].map((e) => [e.id, e.kind]));
+    const result = this.ways.insert(line, props);
+    if (!result.ok) return result;
+    const kinds = new Set(result.edges.map((e) => e.kind));
+    for (const [id, kind] of before) if (!this.ways.edges.has(id)) kinds.add(kind);
+    for (const kind of kinds) {
+      if (!this.networks[kind]) continue;
+      this.refreshNetwork(kind);
+      const layer = this.networks[kind];
+      this.events.emit(layer.event, { layer, nodes: [...layer.graph.nodes()], ...(kind === 'road' ? { sidewalks: true } : {}) });
+    }
+    return result;
+  }
+
+  // A road step's attributes from the street sets, seen from dot a to b.
+  stepAttrs(kind, a, b) {
+    if (kind !== 'road') return {};
+    const key = edgeKey(a, b), out = {};
+    if (this.lanes.has(key)) {
+      out.lane = true;
+      const sides = this.laneWalks.get(key);
+      if (sides) out.walks = a < b ? sides : ((sides & 1) << 1) | ((sides & 2) >> 1);
+    } else if (this.sidewalks.has(key)) out.street = true;
+    return out;
+  }
+
   hasRoad(node) {
     return this.roads.hasNode(node);
   }
@@ -252,7 +341,7 @@ export class WorldNetworks {
       if (street) this.sidewalks.add(key);
       else this.sidewalks.delete(key);
     }
-    layer.version++;
+    this.syncWays(kind);
     this.events.emit(layer.event, { layer, nodes, sidewalks: walks || undefined });
     return check;
   }
@@ -270,7 +359,7 @@ export class WorldNetworks {
         for (const k of [...set.keys()]) if (!this.roads.hasEdge(...k.split('-').map(Number))) set.delete(k);
       }
     }
-    layer.version++;
+    this.syncWays(kind);
     this.events.emit(layer.event, { layer, nodes });
     return true;
   }
@@ -335,7 +424,7 @@ export class WorldNetworks {
     }
     if (!changed) return false;
     const layer = this.networks.road;
-    layer.version++;
+    this.syncWays('road');
     this.events.emit(layer.event, { layer, nodes: edges.flat(), sidewalks: true });
     return true;
   }

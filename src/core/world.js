@@ -23,6 +23,7 @@ import { Terrain } from '../terrain/terrain.js';
 import { findHills } from '../terrain/hills.js';
 import { RoadNetwork } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
+import { Ways } from '../roads/ways.js';
 import { STRUCTURE_TYPES, footprintOffsets } from '../../structures/index.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { History } from './history.js';
@@ -34,7 +35,7 @@ import { WorldStructures } from './world/structures.js';
 
 // 11: positions and angles (free placement). Older saves aren't converted:
 // the game says so and starts a new map (OldSaveError).
-const SAVE_VERSION = 11;
+const SAVE_VERSION = 12; // 12: the ways graph (roads/ways.js) instead of dot networks
 
 // A save from before SAVE_VERSION: not loaded (the town was laid out on
 // dots that are going away).
@@ -75,6 +76,12 @@ export class World {
     this.chronicle = { entries: [], marks: [] }; // the town's chronicle (src/sim/chronicle.js)
     this.history = new History(this); // undo and redo of the player's changes; every change below calls history.touch() first
 
+    // All the ways – roads, footpaths, railways, fences – as one graph
+    // (roads/ways.js), the only truth about them. The layers below, and
+    // the street sets, are its dot view (roads/dotView.js), rebuilt by
+    // syncWays / refreshNetwork whenever it changes, for what still reads
+    // dots (stage D of docs/free-placement-plan.md).
+    this.ways = new Ways();
     this.sidewalks = new Set(); // edgeKey of road segments that are streets (have sidewalks)
     this.lanes = new Set();     // edgeKey of road segments that are single-track lanes (never streets)
     this.laneWalks = new Map(); // edgeKey of lanes -> sides with a sidewalk: bit 1 left of the way from
@@ -328,10 +335,7 @@ export class World {
       nextId: this.nextId,
       nextNo: this.nextNo,
       terrain: this.terrain.toJSON(),
-      networks: Object.fromEntries(Object.entries(this.networks).map(([k, l]) => [k, l.graph.toJSON()])),
-      sidewalks: [...this.sidewalks],
-      lanes: [...this.lanes],
-      laneWalks: [...this.laneWalks],
+      ways: this.ways.toJSON(),
       structures: [...this.structures.values()],
       features: [...this.features.values()],
       time: Math.round(this.time),
@@ -347,22 +351,8 @@ export class World {
     const world = new World({ ...data, rockiness: data.rockiness ?? 0 }); // (older saves: no rock, their ground stays as built on)
     world.terrain.load(data.terrain);
 
-    for (const [kind, edges] of Object.entries(data.networks)) {
-      if (world.networks[kind]) {
-        world.networks[kind].graph = RoadNetwork.fromJSON(edges);
-        world.networks[kind].version++;
-      }
-    }
-
-    for (const key of data.lanes ?? []) {
-      const [a, b] = key.split('-').map(Number);
-      if (world.roads.hasEdge(a, b)) world.lanes.add(key);
-    }
-    for (const key of data.sidewalks ?? []) {
-      const [a, b] = key.split('-').map(Number);
-      if (world.roads.hasEdge(a, b) && !world.lanes.has(key)) world.sidewalks.add(key);
-    }
-    for (const [key, sides] of data.laneWalks ?? []) if (world.lanes.has(key)) world.laneWalks.set(key, sides);
+    world.ways = Ways.fromJSON(data.ways);
+    for (const kind of Object.keys(world.networks)) world.refreshNetwork(kind);
 
     for (const s of data.structures) {
       s.rotation ??= 0;

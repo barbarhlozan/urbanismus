@@ -6,9 +6,9 @@
 // calls touch() before it changes anything; the first touch takes a
 // snapshot of the town, and when the click's handler is done (the end of
 // the task, a microtask later) the step closes with the difference: which
-// structures and trees came, went or changed, which segments of each
-// network and which sidewalks and lanes, and the chronicle lines the change
-// wrote. Snapshots rather than an inverse per World method, so whatever a
+// structures and trees came, went or changed, which of the ways' nodes
+// and edges (by id, with their street, lane and kerbs), and the chronicle
+// lines the change wrote. Snapshots rather than an inverse per World method, so whatever a
 // method sets off by itself (pruned bridges, a
 // station's track) comes back with it without each of those knowing about
 // undo.
@@ -40,7 +40,7 @@
 // The history lives only in the page: it isn't saved, and a new or loaded
 // town starts without one.
 
-import { edgeKey } from '../roads/network.js';
+import { traceLine } from '../roads/dotView.js';
 
 const LIMIT = 100;
 
@@ -48,18 +48,18 @@ const LIMIT = 100;
 // (s.data.parked, kept by sim/parking.js – the town's own business).
 const record = (s) => JSON.stringify({ ...s, data: { ...s.data, parked: undefined } });
 
-const edgeKeys = (graph) => {
-  const keys = new Set();
-  for (const [a, b] of graph.edges()) keys.add(edgeKey(a, b));
-  return keys;
-};
-const ends = (key) => key.split('-').map(Number);
+// The ways as recorded: nodes and edges by id (an edge without its cached
+// measurements).
+const nodeRecord = ({ id, x, y }) => JSON.stringify({ id, x, y });
+const edgeRecord = ({ _m, ...e }) => JSON.stringify(e);
 
-// What's in `after` and not in `before`, and the other way round.
-function setDiff(before, after) {
-  const added = [...after].filter((k) => !before.has(k));
-  const removed = [...before].filter((k) => !after.has(k));
-  return added.length || removed.length ? { added, removed } : null;
+// What changed in a Map of records: [{ id, before, after }] (null where
+// there was none).
+function mapDiff(before, after) {
+  const out = [];
+  for (const [id, was] of before) if (after.get(id) !== was) out.push({ id, before: was, after: after.get(id) ?? null });
+  for (const [id, now] of after) if (!before.has(id)) out.push({ id, before: null, after: now });
+  return out;
 }
 
 export class History {
@@ -167,12 +167,19 @@ export class History {
     return {
       structures: new Map([...w.structures.values()].map((s) => [s.id, record(s)])),
       features: new Map(w.features), // (never changed in place: kept as they are)
-      edges: Object.fromEntries(Object.entries(w.networks).map(([kind, layer]) => [kind, edgeKeys(layer.graph)])),
-      sidewalks: new Set(w.sidewalks),
-      lanes: new Set(w.lanes),
-      laneWalks: new Map(w.laneWalks),
+      ways: this.waysNow(),
       entries: w.chronicle.entries.length,
       marks: new Set(w.chronicle.marks),
+    };
+  }
+
+  // The ways now, as records by id.
+  waysNow() {
+    const { ways } = this.world;
+    return {
+      nodes: new Map([...ways.nodes.values()].map((n) => [n.id, nodeRecord(n)])),
+      edges: new Map([...ways.edges.values()].map((e) => [e.id, edgeRecord(e)])),
+      nextId: ways.nextId,
     };
   }
 
@@ -193,21 +200,11 @@ export class History {
     const features = [];
     for (const [id, f] of before.features) if (w.features.get(id) !== f) features.push({ id, before: f, after: w.features.get(id) ?? null });
     for (const f of w.features.values()) if (!before.features.has(f.id)) features.push({ id: f.id, before: null, after: f });
-    const edges = {};
-    for (const [kind, layer] of Object.entries(w.networks)) {
-      const d = setDiff(before.edges[kind], edgeKeys(layer.graph));
-      if (d) edges[kind] = d;
-    }
-    const sidewalks = setDiff(before.sidewalks, w.sidewalks);
-    const lanes = setDiff(before.lanes, w.lanes);
-    const laneWalks = [];
-    for (const key of new Set([...before.laneWalks.keys(), ...w.laneWalks.keys()])) {
-      const was = before.laneWalks.get(key) ?? null, now = w.laneWalks.get(key) ?? null;
-      if (was !== now) laneWalks.push({ key, before: was, after: now });
-    }
-    if (!structures.length && !features.length && !Object.keys(edges).length && !sidewalks && !lanes && !laneWalks.length) return null;
+    const now = this.waysNow();
+    const ways = { nodes: mapDiff(before.ways.nodes, now.nodes), edges: mapDiff(before.ways.edges, now.edges), nextId: [before.ways.nextId, now.nextId] };
+    if (!structures.length && !features.length && !ways.nodes.length && !ways.edges.length) return null;
     return {
-      structures, features, edges, sidewalks, lanes, laneWalks,
+      structures, features, ways,
       entries: w.chronicle.entries.slice(before.entries),
       marks: w.chronicle.marks.filter((m) => !before.marks.has(m)),
     };
@@ -217,12 +214,8 @@ export class History {
   apply(step, side) {
     const w = this.world;
     const undo = side === 'before';
-    // segments to put in and take out
-    const put = {}, take = {};
-    for (const [kind, d] of Object.entries(step.edges)) {
-      put[kind] = undo ? d.removed : d.added;
-      take[kind] = undo ? d.added : d.removed;
-    }
+    // ways coming back: their edges as they'll be
+    const coming = step.ways.edges.filter((c) => c[side]).map((c) => JSON.parse(c[side]));
 
     // Room for what comes back: no structure the step didn't touch on its ground.
     const ours = new Set(step.structures.map((c) => c.id));
@@ -230,20 +223,21 @@ export class History {
       const id = w.structureAtNode.get(n);
       return id !== undefined && !ours.has(id) ? id : undefined;
     };
-    const coming = step.structures.filter((c) => c[side]).map((c) => JSON.parse(c[side]));
-    for (const s of coming) {
+    const comingS = step.structures.filter((c) => c[side]).map((c) => JSON.parse(c[side]));
+    for (const s of comingS) {
       if (w.nodesOf(s).some((n) => n < 0 || foreign(n) !== undefined)) return { ok: false, reason: 'Occupied' };
     }
-    for (const [kind, keys] of Object.entries(put)) {
-      const fine = kind !== 'road';
+    for (const e of coming) {
+      const layer = w.networks[e.kind];
+      if (!layer) continue;
       const blocked = (n) => {
-        if (!fine) return foreign(n) !== undefined;
+        if (e.kind === 'road') return foreign(n) !== undefined;
         const around = w.coarseAround(n).map(foreign);
         // railways keep clear of buildings; footpaths and fences only of
         // the inside of one (as World.isRailBlocked / isPathBlocked)
-        return kind === 'rail' ? around.some((id) => id !== undefined) : around[0] !== undefined && around.every((id) => id === around[0]);
+        return e.kind === 'rail' ? around.some((id) => id !== undefined) : around[0] !== undefined && around.every((id) => id === around[0]);
       };
-      if (keys.some((key) => ends(key).some(blocked))) return { ok: false, reason: 'Occupied' };
+      if (traceLine(e.pts, layer.grid, layer.scale).some((d) => blocked(d.n))) return { ok: false, reason: 'Occupied' };
     }
 
     this.applying = true;
@@ -300,37 +294,38 @@ export class History {
           newF.push(to);
         }
       }
-      // networks and streets
-      const touched = {};
-      for (const kind of Object.keys(step.edges)) {
-        const { graph } = w.networks[kind];
-        const nodes = touched[kind] = [];
-        for (const key of take[kind]) { graph.removeEdge(...ends(key)); nodes.push(...ends(key)); }
-        for (const key of put[kind]) { graph.addEdge(...ends(key)); nodes.push(...ends(key)); }
+      // the ways: edges out, nodes as they were, edges in – by id, so an
+      // edge a later way split comes back whole, and the halves go
+      const ways = w.ways, kinds = new Map(); // kind -> dots touched
+      const touch = (json) => {
+        if (!json) return;
+        const e = JSON.parse(json), layer = w.networks[e.kind];
+        if (!layer) return;
+        if (!kinds.has(e.kind)) kinds.set(e.kind, []);
+        kinds.get(e.kind).push(...traceLine(e.pts, layer.grid, layer.scale).map((d) => d.n));
+      };
+      for (const c of step.ways.edges) {
+        touch(c.before);
+        touch(c.after);
+        ways.dropEdge(c.id);
       }
-      let streets = false;
-      for (const name of ['sidewalks', 'lanes']) {
-        const d = step[name];
-        if (!d) continue;
-        streets = true;
-        for (const key of undo ? d.added : d.removed) w[name].delete(key);
-        for (const key of undo ? d.removed : d.added) w[name].add(key);
-        (touched.road ??= []).push(...[...d.added, ...d.removed].flatMap(ends));
+      for (const c of step.ways.nodes) {
+        if (c[side]) ways.restoreNode(JSON.parse(c[side]));
+        else ways.dropNode(c.id);
       }
-      for (const c of step.laneWalks) {
-        streets = true;
-        if (c[side] === null) w.laneWalks.delete(c.key);
-        else w.laneWalks.set(c.key, c[side]);
-        (touched.road ??= []).push(...ends(c.key));
-      }
+      for (const c of step.ways.edges) if (c[side]) ways.restoreEdge(JSON.parse(c[side]));
+      // ids: given back if nothing has taken a later one since
+      const [was, now] = step.ways.nextId;
+      if (!undo) ways.nextId = Math.max(ways.nextId, now);
+      else if (ways.nextId === now) ways.nextId = was;
+      for (const kind of kinds.keys()) w.refreshNetwork(kind);
 
       // and tell everyone, now that the town is whole again
       removed.forEach((s) => w.events.emit('structure:removed', s));
       goneF.forEach((f) => w.events.emit('feature:removed', f));
-      for (const [kind, nodes] of Object.entries(touched)) {
+      for (const [kind, nodes] of kinds) {
         const layer = w.networks[kind];
-        layer.version++;
-        w.events.emit(layer.event, { layer, nodes: [...new Set(nodes)], ...(kind === 'road' && streets ? { sidewalks: true } : {}) });
+        w.events.emit(layer.event, { layer, nodes: [...new Set(nodes)], ...(kind === 'road' ? { sidewalks: true } : {}) });
       }
       added.forEach((s) => w.events.emit('structure:added', s));
       changed.forEach((s) => w.events.emit('structure:changed', s));

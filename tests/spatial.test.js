@@ -81,7 +81,7 @@ test('World: a save from before positions is refused as old', async () => {
   const { flatWorld } = await import('./helpers.js');
   const { World } = await import('../src/core/world.js');
   const json = JSON.parse(JSON.stringify(flatWorld().toJSON()));
-  assert.equal(json.version, 11);
-  json.version = 10;
+  assert.equal(json.version, 12);
+  json.version = 11;
   assert.throws(() => World.fromJSON(json), (err) => err.code === 'old-save');
 });

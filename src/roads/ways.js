@@ -268,6 +268,46 @@ export class Ways {
     return { nodes, edges, cost: best.get(to) };
   }
 
+  // ---------- for undo (core/history.js): put back exactly as recorded ----------
+
+  // A node or edge as it was ({ id, x, y } / an edge's record), in place
+  // of whatever has that id now. Ends of a restored edge must be there.
+  restoreNode({ id, x, y }) {
+    const n = this.nodes.get(id);
+    if (n) [n.x, n.y] = [x, y];
+    else {
+      this.nodes.set(id, { id, x, y });
+      this.at.set(id, new Set());
+    }
+    this.version++;
+  }
+
+  restoreEdge(record) {
+    if (this.edges.has(record.id)) this.dropEdge(record.id);
+    const e = { ...record, pts: record.pts.map((p) => [...p]) };
+    this.edges.set(e.id, e);
+    this.at.get(e.a).add(e.id);
+    this.at.get(e.b).add(e.id);
+    this.version++;
+  }
+
+  // An edge or node taken away and nothing else (its ends stay).
+  dropEdge(id) {
+    const e = this.edges.get(id);
+    if (!e) return;
+    this.edges.delete(id);
+    this.at.get(e.a)?.delete(id);
+    this.at.get(e.b)?.delete(id);
+    this.version++;
+  }
+
+  dropNode(id) {
+    for (const e of this.at.get(id) ?? []) this.dropEdge(e);
+    this.nodes.delete(id);
+    this.at.delete(id);
+    this.version++;
+  }
+
   toJSON() {
     return {
       nextId: this.nextId,

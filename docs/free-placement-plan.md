@@ -414,8 +414,15 @@ saved or edited: `Ways` is the only truth.
 7. **Parks and squares** off the dots with the footpaths: `siteExits`
    become the points where footpath edges meet the site's outline.
 
-*2026-11-14:* step 1 done (see below); steps 2–7 not started – the
-session stopped at its usage line.
+*2026-11-14:* steps 1–3 done. `world.ways` is the truth and is saved
+(`SAVE_VERSION` 12); the dot tool's changes still work dot by dot and
+`syncWays` writes them into the ways as one edge per dot step (lanes are
+`kind: 'road'` with `lane: true`, kerbs `walks`), then rebuilds the dot
+view. `layWay` lays a curve through `Ways.insert` – what the new tool will
+call. Undo diffs ways by node and edge id (a way split by another comes
+back whole – tested). Rails and footpaths keep their smoothing
+(`railPos`, `pathPos`) until they're drawn from curves (step 4): with
+one-step edges the view's `pos` is just the dot. Next: step 4.
 
 - **C3 – Sonnet, after C1.** Drawing from curves: kerbs, joins, street
   furniture, footpaths' wander, park walks (`geometry.js`,
