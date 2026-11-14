@@ -152,13 +152,16 @@ test('a road, railway or footpath may not be laid through a free building', asyn
   assert.equal(w.buildNetwork('path', fineRun(w, [7, 3], [7, 14])).ok, false);
 });
 
-test('turned freely: no road turns it, just the angle asked', () => {
+test('turned by the player: from facing its road, or the viewer, by any angle', () => {
   const w = flatWorld();
   road(w, [2, 5], [12, 5]);
-  const p = w.freePlacement('house', 6, 6.4, { rotation: 1, loose: 0.3 });
-  assert.equal(p.road, null);
-  assert.ok(Math.abs(p.angle - (Math.PI / 2 + 0.3)) < 1e-9);
-  assert.deepEqual([p.x, p.y], [6, 6.4]);
+  const p = w.freePlacement('house', 6, 6.4, { seed: 1, twist: 0.3 });
+  assert.ok(p.road); // still by its road, set back as ever
+  assert.ok(Math.abs(p.angle - 0.3) < 1e-9); // facing it, then turned by the twist
+  const off = w.freePlacement('house', 6, 12, { rotation: 1, twist: 0.3 });
+  assert.equal(off.road, null);
+  assert.ok(Math.abs(off.angle - (Math.PI / 2 + 0.3)) < 1e-9);
+  assert.deepEqual([off.x, off.y], [6, 12]);
 });
 
 test('a free building finds its way in by the road in front of it', () => {

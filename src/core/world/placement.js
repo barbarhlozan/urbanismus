@@ -26,6 +26,7 @@ const SETBACK_VARY = 0.22;
 // a wall with goes there, if they face within JOIN_FACE of each other
 const JOIN_SNAP = 0.45;
 const JOIN_FACE = Math.PI / 6;
+const JOIN_TWIST = (10 * Math.PI) / 180;
 
 // grade(): how finely a segment's climb is measured along it (grid units)
 const GRADE_STEP = 0.2;
@@ -224,14 +225,10 @@ export class WorldPlacement {
   // quarter turns more (side or back to the road); with no road near, at
   // the pointer, facing quarter turn `rotation`.
   // { x, y, angle, road (the nearestRoadPoint or null), check }.
-  freePlacement(type, x, y, { rotation = 0, turn = 0, seed = 1, loose = null } = {}) {
-    // turned freely (loose: radians past quarter turn `rotation`): just there
-    if (loose != null) {
-      const angle = (rotation * Math.PI) / 2 + loose;
-      return { x, y, angle, road: null, check: this.fitsOutline(type, x, y, angle) };
-    }
+  freePlacement(type, x, y, { rotation = 0, turn = 0, twist = 0, seed = 1 } = {}) {
+    twist += (turn * Math.PI) / 2; // (quarter turns: the dev command's, a park's)
     const road = this.nearestRoadPoint(x, y);
-    let angle = (rotation * Math.PI) / 2;
+    let angle = (rotation * Math.PI) / 2 + twist;
     if (road) {
       const [px, py] = road.point;
       // from the road towards the pointer (straight off it if it's on the line)
@@ -244,13 +241,14 @@ export class WorldPlacement {
       const out = road.half + WAY_CLEAR + back + depth / 2;
       [x, y] = [px + nx * out, py + ny * out];
       // front (sin a, -cos a) looking back at the road: -n
-      angle = Math.atan2(-nx, ny) + (turn * Math.PI) / 2;
+      angle = Math.atan2(-nx, ny) + twist;
     }
     // a park or square keeps square with the dots' directions (its ground
     // and walkways are laid out by quarter turns): the nearest one
     if (STRUCTURE_TYPES[type]?.site) angle = Math.round(angle / (Math.PI / 2)) * (Math.PI / 2);
-    // beside a house it could share a wall with: flush to its side
-    const flush = !turn && this.joinSnap(type, x, y, angle);
+    // beside a house it could share a wall with: flush to its side (not
+    // once the player has turned it away)
+    const flush = Math.abs(twist) < JOIN_TWIST && this.joinSnap(type, x, y, angle);
     if (flush) [x, y, angle] = flush;
     return { x, y, angle, road, check: this.fitsOutline(type, x, y, angle) };
   }

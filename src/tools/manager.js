@@ -10,6 +10,7 @@
 //     hover(node), click(node, pointerEvent),
 //     cancel() -> bool,            // true = handled, false = fall back to Select
 //     key(keyboardEvent) -> bool,  // true = handled
+//     wheel(wheelEvent) -> bool,   // true = handled (else the map zooms)
 //     actions() -> [{ label, key?, icon?, on?, run }],  // on-screen buttons for keyboard features
 //                                  //   and options (on: a setting shown pressed while it holds)
 //     touchConfirm: true,          // on touch, first tap previews, a second tap on
@@ -115,6 +116,13 @@ export class ToolManager {
 
   key(event) {
     const handled = this.active?.key?.(event) ?? false;
+    if (handled) this.resnap();
+    return handled;
+  }
+
+  // The scroll wheel: the tool's if it takes it (true), else the map zooms.
+  wheel(event) {
+    const handled = this.active?.wheel?.(event) ?? false;
     if (handled) this.resnap();
     return handled;
   }

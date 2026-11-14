@@ -554,6 +554,10 @@ tools.onChange((tool) => {
     : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: ['road', 'lane', 'street'].includes(tool.id) };
   contours.lend(!!dots && tool.id !== 'bulldoze' && UNLOCKS.allowsControl('terrain'));
 });
+// Ways and buildings are placed freely now (docs/free-placement-plan.md):
+// the dots are shown only for what still stands on them – stations, whose
+// track runs on the dots.
+const dotsShown = () => !!dots?.building && !!STRUCTURE_TYPES[dots.building.type]?.canPlace;
 tools.use('inspect');
 
 // ---------- input ----------
@@ -605,6 +609,7 @@ attachInput(document.getElementById('input'), {
   },
   // middle click works like Tab: rotate what's being placed, flip a line's bend
   onMiddle: () => { if (!photoPrint.open) tools.key({ key: 'Tab', preventDefault() {} }); },
+  onWheel: (e) => !photoPrint.open && tools.wheel(e),
 });
 
 window.addEventListener('keydown', (e) => {
@@ -616,7 +621,7 @@ window.addEventListener('keydown', (e) => {
     takeBack(e.shiftKey || e.key.toLowerCase() === 'y' ? 'redo' : 'undo');
     return;
   }
-  if (e.metaKey || e.ctrlKey || (e.altKey && e.key !== 'Alt')) return; // (Alt alone: turn freely, while building)
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
   // the open book takes the keys (and nothing reaches the map behind it)
   if (chronicleBook.open) {
     if (chronicleBook.key(e)) e.preventDefault();
@@ -791,7 +796,7 @@ function loop(now) {
     const hovered = tools.active?.id === 'inspect' && !popup.open && !photoPrint.open && tools.hoverNode >= 0
       ? world.structureAt(tools.hoverNode) : null;
     renderer.hovered = hovered ? `s${hovered.id}` : null;
-    renderer.frame((dots ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
+    renderer.frame((dotsShown() ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
     const sky = weather.sky();
     // (no sun at night, so no cloud shadows: they fade away)
     cloudShadows.frame(simDt, camera, renderer.dark ? 0 : sky.cover, { hatch: SUN.hatch, stroke: renderer.strokeK });

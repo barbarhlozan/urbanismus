@@ -144,9 +144,10 @@ export class Ambience {
     const gone = step.structures.filter((s) => !s.after).length;
     const changed = step.structures.length - added - gone;
     let laid = 0, cut = 0;
-    for (const d of Object.values(step.edges)) {
-      laid += d.added.length;
-      cut += d.removed.length;
+    // ways (core/history.js step.ways): an edge that's new laid, one gone cut
+    for (const c of step.ways?.edges ?? []) {
+      if (c.after && !c.before) laid++;
+      else if (c.before && !c.after) cut++;
     }
     const [first, each, most] = SOUND.build.line;
     const [a, b] = SOUND.build.one;

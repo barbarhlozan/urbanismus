@@ -1,12 +1,15 @@
 // Drawing tool for any kind of way (roads, footpaths, railways, fences),
 // point by point (docs/free-placement-plan.md, stage C): click where it
-// starts, click along, and click the last point again (or double-click)
-// to lay it. The points become a smooth curve, its bends eased to what the
-// kind can take (curves.js easeBends); a point it can't take is refused.
-// Points snap onto a junction or a way near them, and a little to the
-// way's own line and square off it. If anything blocks it, nothing is
-// built; a cross marks where. After laying, the next way starts from its
-// end, so ways can be chained; clicking that point again stops. Roads
+// starts, then click along – the way is built as you go, from the first
+// point to the last one clicked, one smooth curve through them all, its
+// bends eased to what the kind can take (curves.js easeBends). Each click
+// takes back the way laid at the one before (its own undo step, nothing
+// else) and lays the longer curve in its place, so the whole way is one
+// step for ⌘Z. A point it can't take is refused (a cross marks where) and
+// the way stays as it was. Clicking the last point again, Esc or
+// right-click ends the way; the next click starts a new one. Points snap
+// onto a junction or a way near them, and a little to the way's own line
+// and square off it. Roads
 // come as three tools: streets with sidewalks and lamps (`street`), roads
 // and single-track lanes (`lane`); drawing one over another converts it.
 
@@ -63,15 +66,38 @@ export function createNetworkTool(ctx, options) {
     if (!points.length || !at || same(at, points[points.length - 1])) return null;
     const line = lineThrough([...points, at]);
     if (!line) return { line: [...points, at], check: { ok: false, blocked: [], reason: 'Too sharp a bend' }, sharp: true };
+    // part of it laid already: just the stretch beyond the last point (the
+    // world holds the rest, so a check would find it in its own way – the
+    // click says whether it can go)
+    if (laidStep) {
+      const [lx, ly] = points[points.length - 1];
+      let k = 0, best = Infinity;
+      line.forEach(([x, y], i) => { const d = Math.hypot(x - lx, y - ly); if (d < best) [k, best] = [i, d]; });
+      return { line: line.slice(k), check: { ok: true, blocked: [] } };
+    }
     return { line, check: world.checkWay(kind, line, { lane }) };
   };
 
-  const lay = () => {
-    const line = lineThrough(points);
-    const result = line && world.layWay(kind, line, { lane, street });
-    if (result?.ok) points = [points[points.length - 1]];
-    else refused = points[points.length - 1];
+  // the undo step of the way laid so far (null: nothing laid yet)
+  let laidStep = null;
+  const history = world.history;
+  // Lays the way through `pts`, in place of the one laid at the last click.
+  const relay = (pts) => {
+    const line = lineThrough(pts);
+    if (!line) return false;
+    history.commit();
+    const mine = laidStep && history.done[history.done.length - 1] === laidStep;
+    if (mine && !history.undo().ok) return false;
+    const result = world.layWay(kind, line, { lane, street });
+    if (result?.ok) {
+      history.commit();
+      laidStep = history.done[history.done.length - 1] ?? null;
+      return true;
+    }
+    if (mine) history.redo(); // (the way as it was)
+    return false;
   };
+  const stop = () => { points = []; laidStep = null; };
 
   return {
     id,
@@ -88,11 +114,11 @@ export function createNetworkTool(ctx, options) {
     },
 
     enter() {
-      points = [];
+      stop();
     },
 
     exit() {
-      points = [];
+      stop();
     },
 
     hover() {},
@@ -101,25 +127,21 @@ export function createNetworkTool(ctx, options) {
       if (!at) return;
       refused = null;
       const last = points[points.length - 1];
-      if (same(at, last)) {
-        // the last point again: lay it (or, from a way just laid, stop)
-        if (points.length >= 2) lay();
-        else points = [];
-        return;
-      }
+      if (same(at, last)) { stop(); return; } // the last point again: done
       if (!points.length) {
         const n = layer.nodeAt(...at);
         if (n >= 0 && layer.isBlocked(n) && !world.ways.nodeNear(...at, 1e-6)) { refused = at; return; }
         points = [at];
+        laidStep = null;
         return;
       }
-      if (!lineThrough([...points, at])) { refused = at; return; }
+      if (!relay([...points, at])) { refused = at; return; }
       points = [...points, at];
     },
 
     cancel() {
       if (!points.length) return false;
-      points = [];
+      stop();
       return true;
     },
 

@@ -13,7 +13,7 @@ import { Camera } from '../render/camera.js';
 
 const DRAG_THRESHOLD = { mouse: 5, touch: 10 };
 
-export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle }) {
+export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle, onWheel = () => false }) {
   let drag = null;
   const touches = new Map(); // pointerId -> [x, y], for pinch
   let pinch = null;
@@ -146,6 +146,9 @@ export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle
 
   el.addEventListener('wheel', (e) => {
     e.preventDefault();
+    // the tool may take it (a building in hand turns); a trackpad's pinch
+    // (ctrlKey) always zooms
+    if (!e.ctrlKey && onWheel(e)) return;
     camera.zoomAt(...local(e), Math.exp(-e.deltaY * 0.0015));
   }, { passive: false });
 }
