@@ -239,10 +239,10 @@ export class Renderer {
     for (const type of ['feature:added', 'feature:removed']) {
       world.events.on(type, (f) => {
         this.objsDirty.add(`f${f.id}`);
-        this.touchAround([world.grid.xy(f.node)], 2, true); // gardens spreading round it
+        this.touchAround([[f.x, f.y]], 2, true); // gardens spreading round it
         this.forests = null; // found again (forestState)
         this.dirty.add('forest');
-        this.touchMeadow([world.grid.xy(f.node)]);
+        this.touchMeadow([[f.x, f.y]]);
       });
     }
     for (const k of ['s', 'f']) {

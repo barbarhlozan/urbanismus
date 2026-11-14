@@ -14,7 +14,7 @@ import { rotateQuarter } from '../../core/grid.js';
 import { pointInPolygon } from '../../core/geom2d.js';
 import { fitYard, fitSite, siteEdges, plotClaim } from '../lots.js';
 import { SUN } from '../shadows.js';
-import { SVGNS, NEAR, bareOf, COS30, r2, STRUCTURE_PAD } from './shared.js';
+import { SVGNS, NEAR, bareOf, COS30, r2, STRUCTURE_PAD, quarterOf, centerOf } from './shared.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
 // Objects' box corners lifted and warped, per their points (sceneBox).
@@ -44,12 +44,12 @@ export class PlotDrawing {
     const live = camera === this.camera;
     const [x, y] = world.grid.xy(s.node);
     const z = world.terrain.heightAt(x, y);
-    const painter = this.attachFree(new Painter(camera, { x, y, z }, world.drawnRotation(s), drawSeed(s)));
+    const painter = this.attachFree(new Painter(camera, { x, y, z }, quarterOf(world, s), drawSeed(s)));
     // the building moves with the relief as one piece, so it stays square on
     // slopes (see Camera.project) – and so does a whole street front of
     // buildings sharing walls, so the walls still meet. Its yard and plot (and
     // parks and squares) keep its warp but follow the ground (Painter.follow).
-    const joined = joinedRow(world, s), row = joined.map((o) => world.centerOf(o));
+    const joined = joinedRow(world, s), row = joined.map((o) => centerOf(world, o));
     const rigid = [row.reduce((a, p) => a + p[0], 0) / row.length, row.reduce((a, p) => a + p[1], 0) / row.length];
     painter.rigid = rigid;
     // On uneven ground it stands level at the highest ground under it –
@@ -92,7 +92,7 @@ export class PlotDrawing {
     // standing with it, not lying on the ground like the front yard.
     let courtWorld = [];
     if (core && (painter.court.left || painter.court.right)) {
-      const cp = this.attachFree(new Painter(camera, { x, y, z }, world.drawnRotation(s), drawSeed(s) ^ 0x3c6ef372));
+      const cp = this.attachFree(new Painter(camera, { x, y, z }, quarterOf(world, s), drawSeed(s) ^ 0x3c6ef372));
       cp.setTilt(painter.tilt);
       cp.rigid = rigid;
       cp.relief = relief;
@@ -448,7 +448,7 @@ export class PlotDrawing {
   // placed, the door in the middle of that row.
   placedFront(s, nodes) {
     const { world } = this;
-    const dir = rotateQuarter(0, -1, world.drawnRotation(s));
+    const dir = rotateQuarter(0, -1, quarterOf(world, s));
     const row = nodes.filter((n) => !nodes.includes(world.grid.offset(n, dir[0], dir[1])));
     return { door: row[Math.floor(row.length / 2)], dir, road: -1 };
   }
