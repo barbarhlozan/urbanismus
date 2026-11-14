@@ -486,6 +486,23 @@ test` passing.
 5. **Dot view trimmed, perf.** Whatever nothing reads any more goes from
    `dotView.js` and the layers; perf runs against `main`.
 
+*2026-11-14:* steps 1–5 done. Agents, buses, trains and the brigade
+route on the ways: `sim/wayGraph.js` (pieces between nodes and cuts,
+attach, `routeMany`, `explore`, `trackRoute` for trains), the drive graph,
+its exits and junctions in `sim/agents/ways.js`, `WalkNetwork` over the
+walk / ride graphs. A trip is a polyline along the curves with its way
+edge ids (`trip.ways`, `wayPts`); it stays intact after a split while the
+ways still run under it. Doors are points (`accessInfo`'s `doorPt`, the
+road `point`). Loose ends within 0.45 of another way are mended onto it
+(`mend`), as the dot view joined them. Level crossings are where rail and
+road / path ways cross (`crossingsOf`). Gone: `roads/pathfinding.js`, the
+layers' `cost`, the dot view's `edgeOf`, the dot-based trip building.
+The dot view stays for drawing, placement and validation (`stepLines`,
+`roadway()`, `sidewalks` / `lanes` sets, `world.roadExits()` for drawing
+roads off the map) – stage E. Not yet: a park's hub is rounded like any
+junction (was `hubRadius`); stations still find their track on the dots
+(`stationStop`).
+
 ### Stage E
 
 - **E1 – Opus.** Growth and new-map generation by position; sites fitted
