@@ -99,12 +99,56 @@ export function createNetworkTool(ctx, options) {
   };
   const stop = () => { points = []; laidStep = null; };
 
+  // Drawn freehand (a drag, one finger on a phone): the stroke as the
+  // pointer went, laid on release – thinned to its turning points and
+  // eased into the kind's bends, so a wobbly hand gives a gentle curve.
+  let stroke = null;
+  const unit = Math.max(layer.scale, 0.5);
+  const thin = (pts, tol) => {
+    const keep = simplify(pts, tol * unit);
+    // (no two points closer than a road's bend can use)
+    const out = [keep[0]];
+    for (const p of keep.slice(1, -1)) if (Math.hypot(p[0] - out.at(-1)[0], p[1] - out.at(-1)[1]) >= radius * 0.6) out.push(p);
+    const end = keep.at(-1);
+    if (out.length > 1 && Math.hypot(end[0] - out.at(-1)[0], end[1] - out.at(-1)[1]) < radius * 0.6) out.pop();
+    out.push(end);
+    return out;
+  };
+  const sketch = {
+    start(x, y) {
+      stop();
+      refused = null;
+      stroke = [snapPoint(x, y)];
+    },
+    move(x, y) {
+      if (!stroke) return;
+      const last = stroke.at(-1);
+      if (Math.hypot(x - last[0], y - last[1]) >= 0.04 * unit) stroke.push([x, y]);
+    },
+    end() {
+      if (!stroke) return;
+      const raw = stroke;
+      stroke = null;
+      if (raw.length < 2) return;
+      raw[raw.length - 1] = snapPoint(...raw.at(-1));
+      // looser and looser, until the bends are ones the kind can take
+      for (const tol of [0.12, 0.25, 0.5]) {
+        const pts = thin(raw, tol);
+        if (pts.length >= 2 && lineThrough(pts) && relay(pts)) { stop(); return; }
+      }
+      refused = raw.at(-1);
+      stop();
+    },
+    cancel() { stroke = null; },
+  };
+
   return {
     id,
     group: options.group,
     blurb: t(`tool.${id}.blurb`),
     label: t(`tool.${id}`),
     fineGrid,
+    sketch,
     // a point is set with one tap; the next needs a confirming tap
     touchConfirm: () => points.length > 0,
 
@@ -150,6 +194,7 @@ export function createNetworkTool(ctx, options) {
     overlay(kit) {
       let out = '';
       const size = 0.16 * Math.sqrt(layer.scale);
+      if (stroke) return stroke.length > 1 ? kit.path(stroke, cls, null) : '';
       if (at && !points.length) out += kit.ringAt(...at, hoverRadius * layer.scale);
       for (const p of points) out += kit.ringAt(...p, 0.18 * layer.scale, 'anchor');
       if (refused) out += kit.crossAt(...refused, size);
@@ -166,4 +211,20 @@ export function createNetworkTool(ctx, options) {
       return out;
     },
   };
+}
+
+// A line with only the points that matter (Ramer–Douglas–Peucker): none
+// further than `tol` from the line kept.
+export function simplify(pts, tol) {
+  if (pts.length < 3) return pts.slice();
+  const [a, b] = [pts[0], pts.at(-1)];
+  const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy);
+  let far = 0, at = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [x, y] = pts[i];
+    const d = l ? Math.abs((x - a[0]) * dy - (y - a[1]) * dx) / l : Math.hypot(x - a[0], y - a[1]);
+    if (d > far) [far, at] = [d, i];
+  }
+  if (far <= tol) return [a, b];
+  return [...simplify(pts.slice(0, at + 1), tol).slice(0, -1), ...simplify(pts.slice(at), tol)];
 }

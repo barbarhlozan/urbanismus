@@ -196,12 +196,12 @@ test("in the world: the eraser takes a street's sidewalks before the street", as
   assert.equal(w.roads.edgeCount, 0);
 });
 
-test('a way passing close by a loose end takes it in as a junction', () => {
+test('a way passing close by a loose end takes it in as a junction, the end moved onto it', () => {
   const w = new Ways();
   w.insert([[5, 1], [5, 3.8]], { kind: 'road' }); // ends just short of y = 4
   const r = w.insert([[1, 4], [9, 4]], { kind: 'road' });
   assert.ok(r.ok);
-  const end = [...w.nodes.values()].find((n) => n.x === 5 && Math.abs(n.y - 3.8) < 1e-9);
+  const end = [...w.nodes.values()].find((n) => Math.abs(n.x - 5) < 1e-9 && Math.abs(n.y - 4) < 1e-9);
   assert.equal(w.edgesAt(end.id).length, 3);
 });
 

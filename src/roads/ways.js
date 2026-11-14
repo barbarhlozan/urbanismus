@@ -213,6 +213,9 @@ export class Ways {
     if (total < snap) return { ok: false, reason: 'Too short', at: pts[0] };
     // crossings along the way (not those at its ends: the ends see to them)
     const joins = [];
+    const taken = new Set(ends.map((e) => e.node?.id ?? e.hit?.edge.a).filter(Boolean));
+    const passing = [];
+    const stub = Math.max(snap, refit);
     for (const e of this.edges.values()) {
       for (const c of crossingsOf(pts, e.pts)) {
         if (c.sa < snap || c.sa > total - snap) continue;
@@ -220,19 +223,26 @@ export class Ways {
         if (what === 'refuse') return { ok: false, reason: 'Crosses another line', at: c.point };
         if (what === 'gap') continue;
         if (c.angle < minAngle) return { ok: false, reason: 'Too shallow a crossing', at: c.point };
+        // crossing a way just short of its loose end: no stub left beyond,
+        // the end is taken in where they cross
+        const len = this.length(e);
+        const id = this.at.get(e.a).size === 1 && c.sb < stub ? e.a : this.at.get(e.b).size === 1 && len - c.sb < stub ? e.b : null;
+        if (id && !taken.has(id)) {
+          taken.add(id);
+          passing.push({ t: c.sa, node: this.nodes.get(id), moveTo: c.point });
+          continue;
+        }
         joins.push({ edge: e, t: c.sa, s: c.sb });
       }
     }
     // loose ends of other ways it passes close by: it takes them in
-    const taken = new Set(ends.map((e) => e.node?.id ?? e.hit?.edge.a).filter(Boolean));
-    const passing = [];
     const along = measurePolyline(pts);
     for (const [id, set] of this.at) {
       if (set.size !== 1 || taken.has(id)) continue;
       const [edge] = this.edgesAt(id);
       if (rule(kind, edge.kind) !== 'join') continue;
       const n = this.nodes.get(id), near = nearestOn(along, n.x, n.y);
-      if (near.dist <= snap && near.s > snap && near.s < total - snap) passing.push({ t: near.s, node: n });
+      if (near.dist <= snap && near.s > snap && near.s < total - snap) passing.push({ t: near.s, node: n, moveTo: pointAt(along, near.s) });
     }
     for (const end of ends) {
       if (end.node) {
@@ -269,6 +279,14 @@ export class Ways {
       }
       [n.x, n.y] = end.point;
       this.version++;
+    }
+    for (const { node: n, moveTo } of passing) {
+      if (!moveTo) continue;
+      for (const e of this.edgesAt(n.id)) {
+        e.pts = bendEnd(e.pts, e.a === n.id, [moveTo[0] - n.x, moveTo[1] - n.y]);
+        moved.push(e.id);
+      }
+      [n.x, n.y] = moveTo;
     }
     const nodeAtEnd = (end) => end.node ?? (end.hit ? this.split(end.hit.edge.id, end.hit.s).node : this.addNode(...end.point));
     // (the ends' ways may be split by a crossing first: found again after)

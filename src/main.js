@@ -6,7 +6,7 @@ import { STYLE } from './render/style.js';
 import { makeWarp, makeLift } from './render/warp.js';
 import { ELEVATION } from './terrain/elevation.js';
 import { Annotations } from './ui/annotations.js';
-import { Dialogue } from './ui/dialogue.js';
+import { Bubbles } from './ui/bubbles.js';
 import { ChronicleBook } from './ui/chronicleBook.js';
 import { Chronicle } from './sim/chronicle.js';
 import { Storyteller } from './story/storyteller.js';
@@ -269,7 +269,19 @@ agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos)
 // the town's chronicle, and the story told along the way (story/story.txt)
 UNLOCKS.setWorld(world); // (what may be built: story/unlocks.txt, read with the story)
 const chronicle = new Chronicle(world, CONFIG);
-const dialogue = new Dialogue(uiRoot, { typing: CONFIG.story.typing, avoid: '.build-menu' });
+// what's said shows over the building it's said at (ui/bubbles.js): its
+// roof, as drawn, in client px
+const dialogue = new Bubbles(uiRoot, {
+  typing: CONFIG.story.typing,
+  avoid: '.build-menu',
+  roofOf: (s) => {
+    if (!world.structures.has(s.id)) return null;
+    const top = renderer.objs.get(`s${s.id}`)?.at?.top ?? 1;
+    const [ax, ay] = world.anchorOf(s), [cx, cy] = world.centerOf(s);
+    const [x, y] = camera.project(cx, cy, world.terrain.heightAt(ax, ay) + top, [cx, cy]);
+    return [x * camera.zoom + camera.panX, y * camera.zoom + camera.panY];
+  },
+});
 const story = new Storyteller({ world, agents, fires, trains, dialogue, chronicle, config: CONFIG });
 // (read with the opening, below: openIntro)
 
@@ -610,6 +622,14 @@ attachInput(document.getElementById('input'), {
   // middle click works like Tab: rotate what's being placed, flip a line's bend
   onMiddle: () => { if (!photoPrint.open) tools.key({ key: 'Tab', preventDefault() {} }); },
   onWheel: (e) => !photoPrint.open && tools.wheel(e),
+  // a way tool in hand: dragging draws the way (tools/network.js)
+  sketch: {
+    wants: () => !photoPrint.open && !!tools.active?.sketch,
+    start: (x, y) => { tools.active?.sketch?.start(x, y); tools.pointer(x, y); },
+    move: (x, y) => { tools.active?.sketch?.move(x, y); tools.pointer(x, y); },
+    end: () => { tools.active?.sketch?.end(); tools.resnap(); },
+    cancel: () => tools.active?.sketch?.cancel(),
+  },
 });
 
 window.addEventListener('keydown', (e) => {
@@ -815,6 +835,7 @@ function loop(now) {
     hud.update();
     chronicle.update(dt);
     if (!opening) story.update(dt); // (the story waits for the map to be drawn)
+    dialogue.frame();
   } catch (err) {
     if (!reported) console.error('Frame failed:', err);
     reported = true;

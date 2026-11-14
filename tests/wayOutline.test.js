@@ -103,3 +103,12 @@ test('an end meeting a way just by its end takes that end', () => {
   assert.ok(r.ok, r.reason);
   assert.equal(ways.nodes.size, 3);
 });
+
+test('crossing a way just short of its loose end takes the end in, no stub', () => {
+  const ways = town([[[2, 4], [2, 0.3]]]);
+  const r = ways.insert(easeBends([[0, 0], [4, 0]], 1), { kind: 'road' }, { refit: 0.7 });
+  assert.ok(r.ok, r.reason);
+  assert.equal(ways.edges.size, 3);
+  assert.ok([...ways.nodes.values()].some((n) => n.x === 2 && Math.abs(n.y) < 1e-9 && ways.at.get(n.id).size === 3));
+  clean(ways);
+});

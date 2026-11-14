@@ -492,7 +492,16 @@ Still from the dots: fences, bridges, zebras and lamps, `pathJoins`, rail
 buffers and exits, `curvePos` for whatever still reads `layer.pos`.
 Not checked: whether moved ways are still valid (a bent road may now
 cross a house's corner – `checkWay` only checks the new stroke); outer
-corners of a narrow Y are only lightly rounded. Next: step 5.
+corners of a narrow Y are only lightly rounded. Step 5 too: with a way
+tool in hand, a left-button or one-finger drag draws instead of panning
+(`ui/input.js` `sketch`, wired in `main.js`); on release the stroke is
+thinned (`simplify`, Ramer–Douglas–Peucker at 0.12, then 0.25, 0.5 until
+`easeBends` takes it) and laid as one way; clicking point by point still
+works. A crossing just short of a way's loose end, or a way passing a
+loose end within `snap`, takes that end in and moves it onto the new
+way (no stub, no kink). Not tried on a real phone: one-finger drag now
+draws while a way tool is in hand, so panning there is two fingers –
+to be judged by hand.
 
 - **C3 – Sonnet, after C1.** Drawing from curves: kerbs, joins, street
   furniture, footpaths' wander, park walks (`geometry.js`,
