@@ -28,6 +28,6 @@ export function eraseTarget(world, point) {
     return { at: world.networks.fence.pos(fence), size: 0.12, run: () => world.removeNetworkAt('fence', fence) };
   }
   const f = world.featureAt(node);
-  if (f) return { key: `f${f.id}`, at: world.grid.xy(node), size: 0.2, run: () => world.removeFeature(f.id) };
+  if (f) return { key: `f${f.id}`, at: [f.x, f.y], size: 0.2, run: () => world.removeFeature(f.id) };
   return null;
 }

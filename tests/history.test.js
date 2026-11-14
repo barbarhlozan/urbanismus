@@ -209,3 +209,22 @@ test('only the last hundred steps are kept', () => {
   for (let y = 0; y < 30; y += 2) for (let x = 0; x < 30; x += 4) steps(w, () => w.buildNetwork('road', run(w, [x, y], [x + 1, y])));
   assert.equal(w.history.done.length, 100);
 });
+
+test('a building brought back by undo or redo has its position and angle again', () => {
+  const w = flatWorld();
+  let house;
+  steps(w, () => (house = w.placeStructure('house', at(w, 4, 6), { rotation: 1 })));
+  const pose = { x: house.x, y: house.y, angle: house.angle };
+  assert.equal(pose.x, 4);
+  assert.equal(pose.y, 6);
+  steps(w, () => w.removeStructure(house.id));
+  assert.ok(w.history.undo().ok);
+  const back = w.structures.get(house.id);
+  assert.deepEqual({ x: back.x, y: back.y, angle: back.angle }, pose);
+  assert.deepEqual(w.structureIndex.at(4, 6), [house.id]);
+  assert.ok(w.history.redo().ok);
+  assert.equal(w.structures.has(house.id), false);
+  assert.deepEqual(w.structureIndex.at(4, 6), []);
+  assert.ok(w.history.undo().ok);
+  assert.equal(w.structures.get(house.id).x, 4);
+});
