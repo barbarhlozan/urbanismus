@@ -197,13 +197,13 @@ export function createNetworkTool(ctx, options) {
     overlay(kit) {
       let out = '';
       const size = 0.16 * Math.sqrt(layer.scale);
-      if (stroke) return stroke.length > 1 ? kit.path(stroke, cls, null) : '';
+      if (stroke) return stroke.length > 1 ? kit.sketchPath(stroke, cls) : '';
       if (at && !points.length) out += kit.ringAt(...at, hoverRadius * layer.scale);
       for (const p of points) out += kit.ringAt(...p, 0.18 * layer.scale, 'anchor');
       if (refused) out += kit.crossAt(...refused, size);
       const p = plan();
       if (!p) return out;
-      out += kit.path(p.line, `${cls}${p.check.ok ? '' : ' invalid'}`, null);
+      out += kit.sketchPath(p.line, `${cls}${p.check.ok ? '' : ' invalid'}`);
       if (p.sharp) return out + kit.crossAt(...at, size);
       // little crosses along the line itself where it can't go (too steep,
       // water, something in the way) – not on the dots the check went by
@@ -212,7 +212,7 @@ export function createNetworkTool(ctx, options) {
       const poly = measurePolyline(p.line), near = MARK_NEAR * Math.max(layer.scale, 0.5);
       for (let d = MARK_STEP / 2; d < poly.total; d += MARK_STEP) {
         const [x, y] = pointAt(poly, d);
-        if (bad.some(([bx, by]) => Math.hypot(bx - x, by - y) < near)) out += kit.crossAt(x, y, size * 0.8);
+        if (bad.some(([bx, by]) => Math.hypot(bx - x, by - y) < near)) out += kit.crossAt(x, y, size * 0.5);
       }
       return out;
     },

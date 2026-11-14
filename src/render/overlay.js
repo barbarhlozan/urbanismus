@@ -50,14 +50,21 @@ export class OverlayKit {
     return node < 0 ? '' : this.ringAt(...this.world.grid.xy(node), r, cls);
   }
 
-  // Upright "X" (screen-aligned so it never lines up with roads), with a halo
-  // so it stays readable on top of buildings.
+  // An "X" in a quick hand (screen-aligned so it never lines up with roads):
+  // two strokes of uneven length, each a little off the diagonal, bowed and
+  // running past their ends – with a halo so it stays readable on top of
+  // buildings.
   crossAt(x, y, size = 0.16) {
     const [cx, cy] = this.project(x, y);
     const s = size * this.camera.tile;
-    const k = 1 / this.camera.zoom, seed = seedOf(x, y);
-    const d = sketchLine([cx - s, cy - s], [cx + s, cy + s], seed, { k, over: 1.5 })
-      + sketchLine([cx - s, cy + s], [cx + s, cy - s], seed + 1, { k, over: 1.5 });
+    const k = 1 / this.camera.zoom, seed = seedOf(x, y), rnd = mulberry32(seed ^ 0x2c05);
+    const arm = (a) => {
+      const t = a + (rnd() - 0.5) * 0.35, l0 = s * (0.75 + 0.4 * rnd()), l1 = s * (0.75 + 0.4 * rnd());
+      const ox = (rnd() - 0.5) * 0.25 * s, oy = (rnd() - 0.5) * 0.25 * s;
+      return [[cx + ox - Math.cos(t) * l0, cy + oy - Math.sin(t) * l0], [cx + ox + Math.cos(t) * l1, cy + oy + Math.sin(t) * l1]];
+    };
+    const d = sketchLine(...arm(Math.PI / 4), seed, { k, over: 2, bow: 2.4 })
+      + sketchLine(...arm(-Math.PI / 4), seed + 1, { k, over: 2, bow: 2.4 });
     return `<path class="cross-halo" d="${d}"/><path class="cross" d="${d}"/>`;
   }
 
@@ -157,6 +164,36 @@ export class OverlayKit {
   }
 
   // points: world coordinates; curve: { cornerRadius, curveSamples } or null for straight
+  // A way as it's being drawn: a pencil line along `points` (world), not
+  // ruled – it wanders a little either side, slowly, as a hand does, in
+  // two passes of the pencil. Seeded by where it starts, so it holds still
+  // while the pointer moves on.
+  sketchPath(points, cls) {
+    if (points.length < 2) return '';
+    const k = 1 / this.camera.zoom, seed = seedOf(...points[0]);
+    const scr = points.map(([x, y]) => this.project(x, y));
+    // evenly along the screen line, a sample every few pixels
+    const step = 5 * k, pts = [scr[0]];
+    for (let i = 1; i < scr.length; i++) {
+      const [ax, ay] = scr[i - 1], [bx, by] = scr[i], len = Math.hypot(bx - ax, by - ay);
+      for (let d = step; d < len; d += step) pts.push([ax + ((bx - ax) * d) / len, ay + ((by - ay) * d) / len]);
+      pts.push(scr[i]);
+    }
+    const pass = (n, amp) => {
+      const rnd = mulberry32((seed + n * 7919) >>> 0), f1 = 0.035 + 0.02 * rnd(), f2 = 0.11 + 0.05 * rnd(), p1 = rnd() * 6.3, p2 = rnd() * 6.3;
+      let along = 0, d = '';
+      pts.forEach(([x, y], i) => {
+        const [px, py] = pts[Math.max(0, i - 1)], [qx, qy] = pts[Math.min(pts.length - 1, i + 1)];
+        const len = Math.hypot(qx - px, qy - py) || 1, nx = -(qy - py) / len, ny = (qx - px) / len;
+        if (i) along += Math.hypot(x - pts[i - 1][0], y - pts[i - 1][1]) / k;
+        const w = amp * k * (0.65 * Math.sin(along * f1 + p1) + 0.35 * Math.sin(along * f2 + p2));
+        d += `${i ? 'L' : 'M'}${r2(x + nx * w)} ${r2(y + ny * w)}`;
+      });
+      return d;
+    };
+    return `<path class="${cls}" d="${pass(0, 0.9)}"/><path class="${cls} again" d="${pass(1, 1.3)}"/>`;
+  }
+
   path(points, cls, curve = this.config.road) {
     const pts = curve ? smoothPolyline(points, curve.cornerRadius, curve.curveSamples) : points;
     const d = pts.map(([x, y], i) => {

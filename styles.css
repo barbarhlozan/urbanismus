@@ -443,7 +443,10 @@ svg.draft .layer-lots .d2 { display: none; }
 .overlay .preview.path { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 .overlay .preview.lane { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
 .overlay .preview.rail { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-dasharray: calc(1px * var(--stroke, 1)) calc(2.5px * var(--stroke, 1)); }
-.overlay .preview.invalid { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-dasharray: calc(6px * var(--stroke, 1)) calc(4px * var(--stroke, 1)); }
+/* a way being drawn (OverlayKit.sketchPath): a pencil line, two light passes, not dotted */
+.overlay path.preview:is(.road, .lane, .street, .path, .rail, .fence) { stroke-dasharray: none; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); opacity: 0.85; }
+.overlay path.preview.again { stroke-width: calc(var(--pen-2, 0.6px) * var(--stroke, 1)); opacity: 0.45; }
+.overlay path.preview.invalid { stroke: var(--detail); stroke-dasharray: none; }
 .overlay .cross { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
 .overlay .cross-halo { fill: none; stroke: var(--bg); stroke-width: calc(5px * var(--stroke, 1)); stroke-linecap: round; }
 /* something built here: the no-entry road sign on its post (OverlayKit.noEntryAt) */
