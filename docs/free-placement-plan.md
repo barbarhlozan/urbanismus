@@ -333,6 +333,9 @@ still reads a building's dot or turn, on purpose:
 - **B2 – Opus, after B1.** Snapping along a road with seeded setback,
   quarter turns and free turning; joined walls side by side. Tuned in the
   browser.
+  *2026-11-14:* joined walls between free houses (`freeSideBy`: a width
+  along the side, the same turn) and the snap flush to a neighbour's side
+  (`joinSnap`, within 0.45). Still to do: free turning with Alt.
 - **B3 – Sonnet, after B1.** Courts, yards and plots from outlines
   (`courts.js`, `yards.js`, `plots.js`).
 - **B4 – Sonnet, after B1.** The pointer draws the outline and why it

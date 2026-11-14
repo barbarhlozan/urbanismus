@@ -108,7 +108,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     seed ??= Math.floor(Math.random() * 2 ** 31);
     const p = world.freePlacement(type, x, y, { rotation, turn, seed });
     if (!p.check.ok) return fail(`Can't place ${type} at ${x}, ${y}`, p.check.reason);
-    return world.placeStructureAt(type, p.x, p.y, p.angle, { seed });
+    return world.placeStructureAt(type, p.x, p.y, p.angle, { seed, data: turn ? { turn } : {} });
   }
 
   const NETWORKS = { street: ['road', false, true], road: ['road', false], lane: ['road', true], path: ['path', false], rail: ['rail', false], fence: ['fence', false] };

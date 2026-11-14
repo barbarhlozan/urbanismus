@@ -22,6 +22,10 @@ const SAMPLE = 0.5;
 const ROAD_REACH = 1.6;
 const SETBACK = 0.1;
 const SETBACK_VARY = 0.22;
+// joinSnap(): a house this near the place beside a neighbour it could share
+// a wall with goes there, if they face within JOIN_FACE of each other
+const JOIN_SNAP = 0.45;
+const JOIN_FACE = Math.PI / 6;
 
 // grade(): how finely a segment's climb is measured along it (grid units)
 const GRADE_STEP = 0.2;
@@ -234,7 +238,34 @@ export class WorldPlacement {
       // front (sin a, -cos a) looking back at the road: -n
       angle = Math.atan2(-nx, ny) + (turn * Math.PI) / 2;
     }
+    // beside a house it could share a wall with: flush to its side
+    const flush = !turn && this.joinSnap(type, x, y, angle);
+    if (flush) [x, y, angle] = flush;
     return { x, y, angle, road, check: this.fitsOutline(type, x, y, angle) };
+  }
+
+  // For a structure of a type that joins (def.join) about to stand at
+  // (x, y, angle): the place wall to wall with a free neighbour of its
+  // group facing about the same way, if one is within JOIN_SNAP of where it
+  // would stand – [x, y, angle] there, turned as the neighbour – else null.
+  joinSnap(type, x, y, angle) {
+    const join = STRUCTURE_TYPES[type]?.join;
+    if (!join || (STRUCTURE_TYPES[type].footprint ?? [[0, 0]]).length !== 1) return null;
+    const [w] = this.outlineSize(type);
+    let best = null;
+    for (const id of this.structureIndex.near(x, y, w + JOIN_SNAP)) {
+      const o = this.structures.get(id);
+      if (!o?.free || o.data?.turn || STRUCTURE_TYPES[o.type]?.join?.group !== join.group) continue;
+      if (Math.cos(o.angle - angle) < Math.cos(JOIN_FACE)) continue;
+      const [ow] = this.outlineSize(o.type), d = (w + ow) / 2;
+      for (const dir of [-1, 1]) {
+        const px = o.x + dir * Math.cos(o.angle) * d, py = o.y + dir * Math.sin(o.angle) * d;
+        const dist = Math.hypot(px - x, py - y);
+        if (dist > JOIN_SNAP || (best && dist >= best.dist)) continue;
+        if (this.fitsOutline(type, px, py, o.angle).ok) best = { dist, at: [px, py, o.angle] };
+      }
+    }
+    return best?.at ?? null;
   }
 
   // The first way whose width the polygon would stand on: 'Road',

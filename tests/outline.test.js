@@ -94,3 +94,32 @@ test('a free house survives saving, and undo takes it away', async () => {
   w.history.undo();
   assert.equal(w.structures.has(s.id), false);
 });
+
+test('a house by a free neighbour snaps flush to its side and they can share a wall', async () => {
+  const { freeSideBy, joinSides } = await import('../structures/index.js');
+  const w = flatWorld();
+  road(w, [2, 2], [12, 7]); // a slanting road, so nothing lines up by chance
+  const p = w.freePlacement('house', 6, 5.5, { seed: 1 });
+  const a = w.placeStructureAt('house', p.x, p.y, p.angle);
+  // pointing roughly beside it, a little off
+  const q = w.freePlacement('house', a.x + Math.cos(a.angle) * 1.2, a.y + Math.sin(a.angle) * 1.2 + 0.1, { seed: 9 });
+  assert.ok(q.check.ok, q.check.reason);
+  assert.ok(Math.abs(q.angle - a.angle) < 1e-9);
+  assert.ok(Math.abs(Math.hypot(q.x - a.x, q.y - a.y) - 1) < 1e-9);
+  const b = w.placeStructureAt('house', q.x, q.y, q.angle);
+  assert.equal(freeSideBy(w, a, 1)?.id, b.id);
+  assert.equal(freeSideBy(w, b, -1)?.id, a.id);
+  assert.equal(freeSideBy(w, a, -1), null);
+  const sides = joinSides(w, a);
+  assert.equal(sides.left, false);
+  assert.equal(typeof sides.right, 'boolean'); // (whether they do is the seeded roll)
+});
+
+test('far from a neighbour, no snap', () => {
+  const w = flatWorld();
+  road(w, [2, 5], [14, 5]);
+  const a = w.placeStructureAt('house', 5, 5.9, 0);
+  const q = w.freePlacement('house', 6.8, 6.4, { seed: 2 });
+  assert.ok(Math.abs(q.x - 6.8) < 1e-9);
+  assert.ok(!!a);
+});

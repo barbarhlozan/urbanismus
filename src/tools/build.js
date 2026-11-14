@@ -85,7 +85,7 @@ export function createBuildTool(ctx, defs) {
       if (!UNLOCKS.allows(def().id)) return;
       if (free()) {
         const p = freeAt();
-        if (p?.check.ok && world.placeStructureAt(def().id, p.x, p.y, p.angle, { seed, data: kind ? { kind } : {} })) seed = newSeed();
+        if (p?.check.ok && world.placeStructureAt(def().id, p.x, p.y, p.angle, { seed, data: data() })) seed = newSeed();
         return;
       }
       const at = world.placementFor(def().id, node, placed());
@@ -111,7 +111,7 @@ export function createBuildTool(ctx, defs) {
       const d = def();
       if (free()) {
         const p = freeAt();
-        return p ? kit.ghostAt(d, p.x, p.y, p.angle, seed, { blocked: !p.check.ok, data: kind ? { kind } : {} }) : '';
+        return p ? kit.ghostAt(d, p.x, p.y, p.angle, seed, { blocked: !p.check.ok, data: data() }) : '';
       }
       const at = world.placementFor(d.id, hover, placed());
       if (at.check.ok) {

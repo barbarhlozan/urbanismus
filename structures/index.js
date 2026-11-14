@@ -289,11 +289,18 @@ export function joinedRow(world, s) {
 // (dir 1) side, or null.
 // (`roll` false: whether one stands there to join, whatever the roll says)
 function joinedNeighbour(world, s, dir, roll = true) {
-  if (s.free) return null; // (joined walls off the dots: stage B, to come)
   const def = STRUCTURE_TYPES[s.type];
   const join = def?.join;
   if (!join || world.nodesOf(s).length !== 1) return null;
   if (s.data?.turn) return null; // turned away from the street front
+  if (s.free) {
+    // placed freely: one standing wall to wall on that side, turned the same
+    const o = freeSideBy(world, s, dir);
+    if (!o || o.data?.turn) return null;
+    const ojoin = STRUCTURE_TYPES[o.type]?.join;
+    if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return null;
+    return !roll || joinRoll(s, o, join, ojoin) ? o : null;
+  }
   const rot = world.frontRotation(s);
   const { x, y } = s; // one dot: its middle is the dot
   const side = (dir) => {
@@ -306,11 +313,36 @@ function joinedNeighbour(world, s, dir, roll = true) {
     if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return null;
     if (o.data?.turn || world.frontRotation(o) !== rot) return null;
     if (!roll) return o;
-    const [a, b] = s.id < o.id ? [s, o] : [o, s];
-    const r = mulberry32((drawSeed(a) ^ Math.imul(drawSeed(b), 0x85ebca6b) ^ 0x10ad) >>> 0)();
-    return r < Math.min(join.chance ?? 1, ojoin.chance ?? 1) ? o : null;
+    return joinRoll(s, o, join, ojoin) ? o : null;
   };
   return side(dir);
+}
+
+// Whether two neighbours that could share a wall do: a roll seeded by
+// both, under the lower of their chances.
+function joinRoll(s, o, join, ojoin) {
+  const [a, b] = s.id < o.id ? [s, o] : [o, s];
+  const r = mulberry32((drawSeed(a) ^ Math.imul(drawSeed(b), 0x85ebca6b) ^ 0x10ad) >>> 0)();
+  return r < Math.min(join.chance ?? 1, ojoin.chance ?? 1);
+}
+
+// The freely placed structure standing wall to wall with free structure s
+// on its local -x (dir -1) or +x (dir 1) side – its middle a width along
+// that side (within JOIN_GAP), turned the same (within JOIN_TURN) – or null.
+const JOIN_GAP = 0.1;
+const JOIN_TURN = (3 * Math.PI) / 180;
+export function freeSideBy(world, s, dir) {
+  const [w] = world.outlineSize(s.type);
+  const ax = Math.cos(s.angle), ay = Math.sin(s.angle);
+  for (const id of world.structureIndex.near(s.x + dir * ax * w, s.y + dir * ay * w, 0.6)) {
+    const o = world.structures.get(id);
+    if (!o?.free || o.id === s.id) continue;
+    const turn = Math.abs(Math.atan2(Math.sin(o.angle - s.angle), Math.cos(o.angle - s.angle)));
+    if (turn > JOIN_TURN) continue;
+    const [ow] = world.outlineSize(o.type), d = (w + ow) / 2;
+    if (Math.hypot(o.x - (s.x + dir * ax * d), o.y - (s.y + dir * ay * d)) <= JOIN_GAP) return o;
+  }
+  return null;
 }
 
 // The courts beside a village house (structures/courts.js): shared with a
