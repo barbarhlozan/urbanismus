@@ -293,7 +293,7 @@ export class History {
         const to = c[side];
         if (!to && f) {
           w.features.delete(f.id);
-          if (w.featureAtNode.get(f.node) === f.id) w.featureAtNode.delete(f.node);
+          w._unindexFeature(f);
           goneF.push(f);
         } else if (to && !f && !w.featureAt(to.node) && !w.structureAt(to.node)) {
           w._insertFeature(to);

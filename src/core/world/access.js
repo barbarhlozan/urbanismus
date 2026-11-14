@@ -8,6 +8,7 @@ import { STRUCTURE_TYPES } from '../../../structures/index.js';
 export class WorldAccess {
   // Middle of a structure in world coordinates.
   centerOf(s) {
+    if (s.x != null && this.structures.get(s.id) === s) return [s.x, s.y];
     const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
     return [
       pts.reduce((a, p) => a + p[0], 0) / pts.length,
@@ -238,6 +239,7 @@ export class WorldAccess {
     if (nodes.length !== 1 || STRUCTURE_TYPES[s.type]?.facesRoad) return;
     if (!this.frontFor(nodes)) delete s.data.turn;
     s.data.face = this.facingRotation(s.type, s.node, s.rotation, s.data.turn ?? 0);
+    if (this.structures.get(s.id) === s) this.poseStructure(s);
   }
 
   // Map exits: roads that end at the edge of the map continue off it.

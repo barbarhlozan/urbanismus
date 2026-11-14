@@ -89,6 +89,12 @@ if (!probe) {
 // Set up in the New map menu, handed over across the reload (see newMap).
 const PENDING_KEY = 'urbanismus.pendingMap';
 
+// A town saved by a version before free placement can't be loaded: it's
+// kept under OLD_SAVE_KEY (once – an earlier copy isn't overwritten), the
+// game starts on a new map and says so (see the end of the set-up).
+const OLD_SAVE_KEY = `${CONFIG.storageKey}.old`;
+let oldSave = false;
+
 function loadWorld() {
   let pending = null;
   try {
@@ -102,6 +108,14 @@ function loadWorld() {
       const raw = localStorage.getItem(CONFIG.storageKey);
       if (raw) return World.fromJSON(JSON.parse(raw));
     } catch (err) {
+      if (err.code === 'old-save') {
+        oldSave = true;
+        try {
+          if (!localStorage.getItem(OLD_SAVE_KEY)) localStorage.setItem(OLD_SAVE_KEY, localStorage.getItem(CONFIG.storageKey));
+        } catch {
+          // storage full or unavailable: the old town can't be kept aside
+        }
+      }
       console.warn('Could not load save, starting fresh.', err);
     }
   }
@@ -510,6 +524,12 @@ const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"
 const assetsPage = new AssetsPage(uiRoot);
 const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMap"]'), { onCreate: newMap, onExport: () => exportCity(world) });
 UNLOCKS.onChange(followUnlocks); // (once the panels it closes exist)
+if (oldSave) {
+  const at = uiRoot.querySelector('.controls').getBoundingClientRect();
+  popup.show(innerWidth, at.bottom, t('import.older'), [
+    { label: t('control.newMap'), action: () => newMapMenu.toggle() },
+  ]);
+}
 followUnlocks();
 // pen-drawn frames on every UI box, to match the sketched map
 // (the corner menu has none: words on the paper)

@@ -77,8 +77,8 @@ function readCity(text) {
     world.prints = prints;
     return world;
   } catch (err) {
-    throw new Error(/newer version/.test(err.message)
-      ? t('import.newer')
+    throw new Error(/newer version/.test(err.message) ? t('import.newer')
+      : err.code === 'old-save' ? t('import.older')
       : t('import.damaged'));
   }
 }

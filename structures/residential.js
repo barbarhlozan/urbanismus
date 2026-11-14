@@ -157,7 +157,6 @@ export const house = {
   // a walled court beside it: between two neighbours, or its own (courts.js)
   join: { group: 'village', chance: 0.6 },
   court: { own: 0.4 },
-  // (saves from before version 6 have their kind written in: legacy.js)
   kinds: ['street', 'street', 'farmstead', 'farmstead', 'farm'],
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
@@ -404,7 +403,6 @@ export const houseWide = {
   stats: { residents: 8 },
   agents: 2,
   yards: ['garden', 'garden', 'trees'],
-  // (saves from before version 6 have their kind written in: legacy.js)
   kinds: ['twin', 'longhouse', 'barn', 'field'],
   fields: { field: [[0.68, 1.1, -0.08, 0.28, 0.05]] }, // the patch behind the chalupa, where they hoe (sim/agents.js, fieldsOf)
   draw(g, s) {

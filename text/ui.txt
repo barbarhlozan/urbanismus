@@ -181,6 +181,10 @@ import.newer
   cs: Obec uložila novější verze hry.
   en: The town was saved by a newer version of the game.
 
+import.older
+  cs: Tahle obec je ze starší verze Dědiny. Založ nový svět.
+  en: This town was made in an older version of Dědina. Start a new world.
+
 import.damaged
   cs: Soubor s obcí je poškozený a nedá se otevřít.
   en: The town's file is damaged and can't be opened.

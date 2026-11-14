@@ -147,7 +147,7 @@ export class WorldStructures {
     if (!f) return false;
     this.history.touch();
     this.features.delete(id);
-    this.featureAtNode.delete(f.node);
+    this._unindexFeature(f);
     this.events.emit('feature:removed', f);
     return true;
   }

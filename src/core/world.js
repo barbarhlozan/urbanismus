@@ -24,15 +24,26 @@ import { findHills } from '../terrain/hills.js';
 import { RoadNetwork } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
 import { STRUCTURE_TYPES, footprintOffsets } from '../../structures/index.js';
-import { upgrade, upgradeMarks, unretire, regroup, rehouse, refarm, repub, repark, reshop } from './legacy.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { History } from './history.js';
+import { SpatialIndex, rectOutline } from './spatial.js';
 import { WorldNetworks } from './world/networks.js';
 import { WorldPlacement } from './world/placement.js';
 import { WorldAccess } from './world/access.js';
 import { WorldStructures } from './world/structures.js';
 
-const SAVE_VERSION = 10; // 3: railways on the fine grid; 4: no building levels (legacy.js); 5: parks regrouped; 6: houses regrouped; 7: farmstead layouts; 8: pub kinds; 9: parks and squares cut; 10: shop kinds
+// 11: positions and angles (free placement). Older saves aren't converted:
+// the game says so and starts a new map (OldSaveError).
+const SAVE_VERSION = 11;
+
+// A save from before SAVE_VERSION: not loaded (the town was laid out on
+// dots that are going away).
+export class OldSaveError extends Error {
+  constructor(version) {
+    super(`Save is from an older version (${version})`);
+    this.code = 'old-save';
+  }
+}
 
 export class World {
   constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1 }) {
@@ -44,8 +55,16 @@ export class World {
     this.grid = new Grid(width, height);
     this.fine = new Grid(2 * width - 1, 2 * height - 1);
     this.terrain = new Terrain(this.grid);
-    this.structures = new Map();      // id -> { id, type, node, rotation, seed, data }
-    this.features = new Map();        // id -> { id, type, node, ox, oy, variant, scale }
+    // Structures and features have a position in world units (x, y; for a
+    // structure the middle of its footprint) and structures an angle
+    // (radians, the way the front looks: rotation r = r·π/2, front
+    // (sin a, -cos a)), kept up to date as they're indexed (poseStructure).
+    // For now they're still placed on the dots (node, rotation), and only
+    // the placement rules should read those – see docs/free-placement-plan.md.
+    this.structures = new Map();      // id -> { id, no, type, x, y, angle, node, rotation, seed, data }
+    this.features = new Map();        // id -> { id, type, x, y, node, ox, oy, variant, scale }
+    this.structureIndex = new SpatialIndex(); // structure id by outline (outlineOf)
+    this.featureIndex = new SpatialIndex();   // feature id by a small square round it
     this.structureAtNode = new Map(); // node -> structure id (every footprint node)
     this.featureAtNode = new Map();   // node -> feature id
     this.nextId = 1;
@@ -127,6 +146,10 @@ export class World {
         event: 'fences:changed',
       }),
     };
+    // a bus stop always faces its road: as the roads change, so may it
+    this.events.on('roads:changed', () => {
+      for (const s of this.structures.values()) if (STRUCTURE_TYPES[s.type]?.facesRoad) this.poseStructure(s);
+    });
     this.networks.rail.pos = (f) => this.railPos(f);
     this.networks.path.pos = (f) => this.pathPos(f);
   }
@@ -235,10 +258,30 @@ export class World {
 
   // ---------- persistence ----------
 
+  // A structure's outline: the rectangle round its footprint, in world
+  // units ([[x, y], …]; a one-dot house a 1×1 square round its middle).
+  outlineOf(s) {
+    const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    return rectOutline((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0 + 1, y1 - y0 + 1);
+  }
+
+  // Sets s.x, s.y (the footprint's middle) and s.angle (the way it's drawn
+  // facing, drawnRotation) from where it stands on the dots.
+  poseStructure(s) {
+    const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
+    s.x = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+    s.y = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    s.angle = (this.drawnRotation(s) * Math.PI) / 2;
+  }
+
   _insertStructure(s) {
     this.structureVersion = (this.structureVersion ?? 0) + 1;
     this.structures.set(s.id, s);
     for (const n of this.nodesOf(s)) this.structureAtNode.set(n, s.id);
+    this.poseStructure(s);
+    this.structureIndex.insert(s.id, this.outlineOf(s));
   }
 
   _unindexStructure(s) {
@@ -246,11 +289,21 @@ export class World {
     for (const n of this.nodesOf(s)) {
       if (this.structureAtNode.get(n) === s.id) this.structureAtNode.delete(n);
     }
+    this.structureIndex.remove(s.id);
   }
 
   _insertFeature(f) {
+    const [x, y] = this.grid.xy(f.node);
+    f.x = x + (f.ox ?? 0);
+    f.y = y + (f.oy ?? 0);
     this.features.set(f.id, f);
     this.featureAtNode.set(f.node, f.id);
+    this.featureIndex.insert(f.id, rectOutline(f.x, f.y, 0.2, 0.2));
+  }
+
+  _unindexFeature(f) {
+    if (this.featureAtNode.get(f.node) === f.id) this.featureAtNode.delete(f.node);
+    this.featureIndex.remove(f.id);
   }
 
   rename(name) {
@@ -287,13 +340,11 @@ export class World {
 
   static fromJSON(data) {
     if (data.version > SAVE_VERSION) throw new Error(`Save is from a newer version (${data.version})`);
+    if ((data.version ?? 1) < SAVE_VERSION) throw new OldSaveError(data.version ?? 1);
     const world = new World({ ...data, rockiness: data.rockiness ?? 0 }); // (older saves: no rock, their ground stays as built on)
     world.terrain.load(data.terrain);
 
-    const networks = data.networks ?? { road: data.roads ?? [] }; // v1 had only roads
-    // before v3 railways were on the main dots: each segment spans three dense ones
-    if ((data.version ?? 1) < 3 && networks.rail) networks.rail = networks.rail.flatMap((e) => world.fineSegment(...e));
-    for (const [kind, edges] of Object.entries(networks)) {
+    for (const [kind, edges] of Object.entries(data.networks)) {
       if (world.networks[kind]) {
         world.networks[kind].graph = RoadNetwork.fromJSON(edges);
         world.networks[kind].version++;
@@ -314,28 +365,11 @@ export class World {
       s.rotation ??= 0;
       s.seed ??= Math.imul(s.id, 2654435761) >>> 0;
       s.data ??= {};
-      if ((data.version ?? 1) < 4) upgrade(s); // buildings with levels: the structure each level is now
-      if ((data.version ?? 1) < 5) regroup(s); // parks: each look to the tool it belongs to now
-      if ((data.version ?? 1) < 6) rehouse(s); // houses: village houses and family houses apart
-      if ((data.version ?? 1) < 7) refarm(s); // farmsteads: the layout they had
-      if ((data.version ?? 1) < 8) repub(s); // pubs: the kind they had, the town pub a village one
-      if ((data.version ?? 1) < 9) repark(s); // parks and squares: the kinds cut, the squares one náměstí
-      if ((data.version ?? 1) < 10) reshop(s); // Jednota: the kind it had, pavilions and townhouses cut
-      unretire(s); // buildings taken out of the game: what replaced them
       if (!STRUCTURE_TYPES[s.type]) continue;
-      // Stations saved facing away from their track: turn them round.
-      const rule = STRUCTURE_TYPES[s.type].canPlace;
-      const fits = rule?.(world, world.footprintNodes(s.type, s.node, s.rotation), s.rotation);
-      if (rule && (!fits.ok || fits.lay)) {
-        const at = world.placementFor(s.type, s.node, s.rotation);
-        if (at.check.ok) [s.node, s.rotation] = [at.node, at.rotation];
-      }
       // Footprints may have grown since the save was made; skip what no longer fits.
       if (world.fitsStructure(s.type, s.node, s.rotation).ok) world._insertStructure(s);
       else console.warn(`Dropped ${s.type} #${s.id}: no longer fits`);
     }
-    // towns saved before buildings kept their facing: as they stand now
-    for (const s of world.structures.values()) if (s.data.face == null) world.faceOnce(s);
     for (const f of data.features) {
       if (FEATURE_TYPES[f.type] && !world.structureAt(f.node)) world._insertFeature(f);
     }
@@ -349,7 +383,7 @@ export class World {
     if (data.weather) world.weather = { kind: data.weather.kind, from: data.weather.from, since: data.weather.since, until: data.weather.until, n: data.weather.n ?? 0 }; // (older saves start fair; without `from` or `since`, WeatherSystem works them out)
     world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [], places: data.story?.places ?? {} };
     const marks = data.chronicle?.marks ?? [];
-    world.chronicle = { entries: data.chronicle?.entries ?? [], marks: (data.version ?? 1) < 4 ? upgradeMarks(marks) : marks };
+    world.chronicle = { entries: data.chronicle?.entries ?? [], marks };
     // how many of the entries have been read, and the book's tab last open
     // (older saves: everything read, the book at its chronicle)
     world.chronicle.seen = data.chronicle?.seen ?? world.chronicle.entries.length;

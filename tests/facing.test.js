@@ -30,12 +30,3 @@ test('a second road later behind it: keeps facing the first', () => {
   assert.equal(w.drawnRotation(s), 1);
   assert.equal(w.frontRotation(s), 0);
 });
-
-test('an older save: kept facing as it is drawn now', () => {
-  const w = flatWorld();
-  road(w, [2, 5], [10, 5]);
-  const s = house(w, 5, 6, 1);
-  delete s.data.face;
-  const back = World.fromJSON(JSON.parse(JSON.stringify(w.toJSON())));
-  assert.equal(back.structures.get(s.id).data.face, 0);
-});
