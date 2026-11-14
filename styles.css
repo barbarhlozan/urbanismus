@@ -1173,6 +1173,8 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
   -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent calc(var(--hole) - 120px), #000 var(--hole));
   mask-image: radial-gradient(circle at 50% 50%, transparent calc(var(--hole) - 120px), #000 var(--hole));
 }
+.intro.resuming .intro-card { visibility: hidden; }
+.intro.lifted { opacity: 0; transition: opacity 250ms ease-out; }
 .intro-card { display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; transition: opacity 350ms ease-out, transform 250ms ease-out; }
 .intro-card.shown { opacity: 1; }
 .intro-name { font-family: var(--ui-font); font-size: clamp(26px, 5vw, 40px); letter-spacing: 0.01em; }

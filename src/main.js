@@ -114,18 +114,62 @@ function loadWorld() {
 const world = loadWorld();
 
 let saveTimer = null;
+function saveNow() {
+  clearTimeout(saveTimer);
+  try {
+    localStorage.setItem(CONFIG.storageKey, JSON.stringify(world.toJSON()));
+  } catch (err) {
+    console.warn('Autosave failed.', err);
+  }
+}
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      localStorage.setItem(CONFIG.storageKey, JSON.stringify(world.toJSON()));
-    } catch (err) {
-      console.warn('Autosave failed.', err);
-    }
-  }, CONFIG.autosaveDelay);
+  saveTimer = setTimeout(saveNow, CONFIG.autosaveDelay);
+}
+// Off before the game loads itself again (switching language, new map,
+// import): the save is then written or dropped on purpose, and leaving the
+// page must not put the old town back.
+let autosave = true;
+function stopAutosave() {
+  autosave = false;
+  world.events.off('*', scheduleSave);
+  clearTimeout(saveTimer);
+  try { sessionStorage.removeItem(VIEW_KEY); } catch { /* storage unavailable */ } // (the opening cover again)
 }
 world.events.on('*', scheduleSave);
 scheduleSave();
+// A browser may throw a page out of memory once it's out of sight (or, on a
+// phone, when it runs short while in sight) and load it afresh when it comes
+// back: the town is saved as it goes out of sight, and every half a minute
+// besides for the clock and the weather, which change without an event. The
+// view is kept for this tab only (sessionStorage): loaded again, the game
+// comes back where it was, without the opening (openIntro, resumed).
+const VIEW_KEY = 'urbanismus.view';
+let savedAt = world.time;
+const keepView = () => {
+  if (!autosave || opening) return;
+  const [x, y] = camera.unprojectFlat(...camera.clientToScene(innerWidth / 2, innerHeight / 2));
+  try {
+    sessionStorage.setItem(VIEW_KEY, JSON.stringify({ x, y, zoom: camera.zoom, angle: camera.angle }));
+  } catch { /* storage unavailable: the opening again next time */ }
+};
+const keepSaved = () => {
+  if (!autosave) return;
+  savedAt = world.time;
+  saveNow();
+  keepView();
+};
+document.addEventListener('visibilitychange', () => { if (document.hidden) keepSaved(); });
+addEventListener('pagehide', keepSaved);
+setInterval(() => {
+  if (document.hidden) return;
+  if (world.time - savedAt >= 30) keepSaved();
+  else keepView();
+}, 30000);
+// a view kept from before: this tab's game loaded again
+const resumed = (() => {
+  try { return JSON.parse(sessionStorage.getItem(VIEW_KEY)); } catch { return null; }
+})();
 
 // ---------- systems ----------
 
@@ -138,6 +182,11 @@ camera.lift = makeLift(world.elevation, ELEVATION.relief, STYLE.relief,
   [-3, -3, world.grid.width + 2, world.grid.height + 2], 0.125); // (fine enough for the cliff faces, terrain/rocks.js)
 camera.setViewport(innerWidth, innerHeight); // (keeps the map in view, see Camera.pan)
 camera.centerOn(camera.cx, camera.cy, innerWidth, innerHeight);
+if (resumed) {
+  camera.angle = resumed.angle;
+  camera.zoom = Math.min(camera.maxZoom, Math.max(camera.minZoom, resumed.zoom));
+  camera.centerOn(resumed.x, resumed.y, innerWidth, innerHeight);
+}
 
 // Keep whatever is in the middle of the screen in the middle when resizing.
 // (the SVGs reach past the window, see Renderer.placeView, so use the window)
@@ -288,8 +337,7 @@ const actions = {
 // straight away and the game loads again (behind the opening cover).
 function switchLanguage(code) {
   saveLanguage(code);
-  world.events.off('*', scheduleSave);
-  clearTimeout(saveTimer);
+  stopAutosave();
   try {
     localStorage.setItem(CONFIG.storageKey, JSON.stringify(world.toJSON()));
   } catch (err) {
@@ -335,8 +383,7 @@ function explainHomeScreen() {
 
 // Discard this city and start over with the New map menu's settings.
 async function newMap(settings) {
-  world.events.off('*', scheduleSave);
-  clearTimeout(saveTimer);
+  stopAutosave();
   try {
     localStorage.removeItem(CONFIG.storageKey);
     localStorage.setItem(PENDING_KEY, JSON.stringify(settings));
@@ -366,11 +413,11 @@ async function importCity() {
     { label: t('cancel'), action: () => {} },
   ]);
   async function replaceCity(city) {
-    world.events.off('*', scheduleSave);
-    clearTimeout(saveTimer);
+    stopAutosave();
     try {
       localStorage.setItem(CONFIG.storageKey, JSON.stringify(city.toJSON()));
     } catch {
+      autosave = true;
       world.events.on('*', scheduleSave);
       return say(t('import.failed'), [{ label: t('import.storage'), info: true }]);
     }
@@ -626,6 +673,17 @@ async function openIntro() {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   // the map drawn with what's unlocked, and the name in its font
   await frames();
+  // this tab's game loaded again (the browser let it go, see keepSaved):
+  // no name and no pen, just the paper lifted off the map as it was
+  if (resumed) {
+    document.body.classList.remove('loading');
+    intro?.classList.add('lifted');
+    setTimeout(() => {
+      intro?.remove();
+      opening = false;
+    }, 300);
+    return;
+  }
   const card = intro?.querySelector('.intro-card');
   const name = intro?.querySelector('.intro-name');
   const show = () => {

@@ -30,6 +30,10 @@
     // a new map or a first visit has no town yet: the game's own name comes
     // first, and main.js turns it into the town's (introTitle)
     window.introTitle = true;
+    // this tab's game loaded again (main.js, keepSaved): plain paper, no name
+    try {
+      if (sessionStorage.getItem('urbanismus.view')) document.getElementById('intro').classList.add('resuming');
+    } catch { /* storage unavailable */ }
     try {
       const p = JSON.parse(localStorage.getItem('urbanismus.palette'));
       if (p) for (const k of ['bg', 'main', 'detail']) document.documentElement.style.setProperty(`--${k}`, p[k]);
