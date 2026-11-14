@@ -75,7 +75,7 @@ export class PlotDrawing {
     const points = s.free ? world.outlineOf(s) : world.nodesOf(s).map((n) => world.grid.xy(n));
     if (def.site) {
       painter.follow = true; // parks and squares lie on the ground like yards
-      const site = world.siteArea(s.type, s.node, s.rotation);
+      const site = world.siteAreaOf(s);
       painter.setSite(fitSite(world, this.config, site));
       painter.setSitePaths(siteEdges(world, this.config, world.sitePaths(s)));
       const [x0, y0, x1, y1] = site.rect;

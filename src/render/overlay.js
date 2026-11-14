@@ -182,6 +182,11 @@ export class OverlayKit {
     const instance = { type: def.id, x, y, angle, free: true, node, rotation, seed, data };
     const painter = new Painter(this.camera, { x: ax, y: ay, z: this.world.terrain.heightAt(ax, ay) }, rotation, drawSeed(instance));
     painter.rigid = [x, y];
+    if (def.site) {
+      painter.follow = true;
+      painter.setSite(fitSite(this.world, this.config, this.world.siteAreaOf(instance)));
+      painter.setSitePaths(siteEdges(this.world, this.config, this.world.sitePaths({ ...instance, id: -1 })));
+    }
     painter.setTilt(freeTilt(instance), true);
     painter.roadGap = 1;
     def.draw(painter, instance);

@@ -243,6 +243,9 @@ export class WorldPlacement {
       // front (sin a, -cos a) looking back at the road: -n
       angle = Math.atan2(-nx, ny) + (turn * Math.PI) / 2;
     }
+    // a park or square keeps square with the dots' directions (its ground
+    // and walkways are laid out by quarter turns): the nearest one
+    if (STRUCTURE_TYPES[type]?.site) angle = Math.round(angle / (Math.PI / 2)) * (Math.PI / 2);
     // beside a house it could share a wall with: flush to its side
     const flush = !turn && this.joinSnap(type, x, y, angle);
     if (flush) [x, y, angle] = flush;
@@ -283,7 +286,15 @@ export class WorldPlacement {
       [Math.max(pa[0], pb[0]) + r, Math.max(pa[1], pb[1]) + r], [Math.min(pa[0], pb[0]) - r, Math.max(pa[1], pb[1]) + r]];
     for (const id of this.structureIndex.overlapping(box)) {
       const s = this.structures.get(id);
-      if (s?.free && segmentPolygonDistance(pa, pb, this.structureIndex.outline(id)) < r) return true;
+      if (!s?.free) continue;
+      // a footpath may come up to a park or square (its walkways start
+      // there), only not through its middle
+      if (kind === 'path' && STRUCTURE_TYPES[s.type]?.site) {
+        const [w, h] = this.outlineSize(s.type);
+        if (segmentPolygonDistance(pa, pb, rectOutline(s.x, s.y, Math.max(0.1, w - 0.7), Math.max(0.1, h - 0.7), s.angle)) < 1e-6) return true;
+        continue;
+      }
+      if (segmentPolygonDistance(pa, pb, this.structureIndex.outline(id)) < r) return true;
     }
     return false;
   }

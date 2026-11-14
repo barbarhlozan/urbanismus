@@ -133,3 +133,24 @@ test('a park beside a diagonal lane is not turned', async () => {
   const h = w.placeStructure('house', w.grid.index(4, 6));
   assert.ok(h && Math.abs(tiltOf(STRUCTURE_TYPES.house, h, undefined, w)) > 0.1, 'a house still turns to it');
 });
+
+test('a park placed freely: square to the dots, its ground to the road, walkways from a footpath way', async () => {
+  const { curveThrough } = await import('../src/roads/curves.js');
+  const w = flatWorld();
+  road(w, [2, 4], [14, 4]);
+  const p = w.freePlacement('garden-park', 8.3, 5.4, { seed: 3 });
+  assert.ok(p.check.ok, p.check.reason);
+  assert.equal(Math.abs(Math.sin(p.angle * 2)) < 1e-9, true); // a quarter turn
+  const s = w.placeStructureAt('garden-park', p.x, p.y, p.angle);
+  assert.ok(s?.free);
+  const area = w.siteAreaOf(s);
+  assert.equal(area.road[1], true); // the side toward the road reaches it
+  const [, , , y1] = w.siteFrame(s);
+  // a footpath brought to its far side
+  assert.ok(w.layWay('path', curveThrough([[s.x + 0.2, y1 + 3], [s.x, y1 + 0.5]])).ok);
+  const { exits } = w.sitePaths(s);
+  const fromPath = exits.find((e) => e.road < 0 && e.site < 0);
+  assert.ok(fromPath, JSON.stringify(exits));
+  assert.ok(w.paths.hasNode(fromPath.node));
+  assert.ok(Math.abs(fromPath.pos[1] - (y1 + 0.5)) < 1e-9);
+});

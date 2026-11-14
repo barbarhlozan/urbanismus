@@ -3,6 +3,7 @@
 // reaches it.
 
 import { ORTHO, DIAG } from '../grid.js';
+import { crossingsOf } from '../../roads/curves.js';
 import { STRUCTURE_TYPES, footprintCenter, freeAnchor } from '../../../structures/index.js';
 
 // freeAccess(): a road this near (from its centre line) a free building's
@@ -78,6 +79,44 @@ export class WorldAccess {
   //   inner  [x0, y0, x1, y1] – the footprint dots' extent
   //   road   [left, top, right, bottom] – which sides face a road
   // The renderer then fits road sides to the drawn road curves (render/lots.js).
+  // A site placed freely (stage C, step 7: off the dots, still turned by
+  // quarters) is measured from its own pose: siteAreaOf(s).
+  siteAreaOf(s) {
+    if (!s.free) return this.siteArea(s.type, s.node, s.rotation);
+    const [x0, y0, x1, y1] = this.siteFrame(s);
+    const reach = (x, y) => {
+      if (x < -0.5 || y < -0.5 || x > this.grid.width - 0.5 || y > this.grid.height - 0.5) return 0.42;
+      if (this.ways.edgeNear(x, y, 0.55, (e) => e.kind === 'road')) return 0.9;
+      const o = this.structureAt(this.grid.nodeAt(x, y));
+      return o && o.id !== s.id && STRUCTURE_TYPES[o.type]?.site ? 0.5 : 0.42;
+    };
+    // a side reaches as far as its farthest point does: points a unit out
+    // along it, every half unit
+    const along = (a, b) => { const out = []; for (let t = a; t <= b + 1e-6; t += 0.5) out.push(t); return out; };
+    const side = (pts) => Math.max(...pts.map(([x, y]) => reach(x, y)));
+    const ext = [
+      side(along(y0, y1).map((t) => [x0 - 1, t])),
+      side(along(x0, x1).map((t) => [t, y0 - 1])),
+      side(along(y0, y1).map((t) => [x1 + 1, t])),
+      side(along(x0, x1).map((t) => [t, y1 + 1])),
+    ];
+    return { rect: [x0 - ext[0], y0 - ext[1], x1 + ext[2], y1 + ext[3]], inner: [x0, y0, x1, y1], road: ext.map((e) => e > 0.8) };
+  }
+
+  // A site's frame [x0, y0, x1, y1]: the extent of its footprint's dot
+  // centres – for one placed freely, the same worked out from its middle
+  // and quarter turn.
+  siteFrame(s) {
+    if (!s.free) {
+      const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
+      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+      return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    }
+    const [w, h] = this.outlineSize(s.type);
+    const [W, H] = Math.round(s.angle / (Math.PI / 2)) & 1 ? [h, w] : [w, h];
+    return [s.x - (W - 1) / 2, s.y - (H - 1) / 2, s.x + (W - 1) / 2, s.y + (H - 1) / 2];
+  }
+
   siteArea(type, node, rotation = 0) {
     const pts = this.footprintNodes(type, node, rotation).map((n) => this.grid.xy(n));
     const xs = pts.map((p) => p[0]);
@@ -149,9 +188,14 @@ export class WorldAccess {
   siteExits(s) {
     const stamp = `${this.networks.road.version}|${this.networks.path.version}|${this.structureVersion}`;
     if (this.siteCache?.stamp !== stamp) this.siteCache = { stamp, map: new Map() };
-    const key = `${s.id}|${s.type}|${s.node}|${s.rotation}`; // (previews have no id of their own)
+    const key = `${s.id}|${s.type}|${s.node}|${s.rotation}|${s.x}|${s.y}`; // (previews have no id of their own)
     const hit = this.siteCache.map.get(key);
     if (hit) return hit;
+    if (s.free) {
+      const out = this.freeSiteExits(s);
+      this.siteCache.map.set(key, out);
+      return out;
+    }
 
     const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
     const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
@@ -214,6 +258,91 @@ export class WorldAccess {
     const out = { hub: fineAt(cx, cy), hubPos: [cx, cy], half: Math.min(x1 - x0, y1 - y0) / 2 + 0.5, exits };
     this.siteCache.map.set(key, out);
     return out;
+  }
+
+  // siteExits for a site placed freely: found on the ways themselves, not
+  // on the dots – footpaths crossing one of its sides, ending at one, or
+  // (with neither) running along it; a street or lane along a side; a
+  // neighbouring site. Each exit's node is the footpath dot it joins (or
+  // the dense dot there), so walkers can route through.
+  freeSiteExits(s) {
+    const [x0, y0, x1, y1] = this.siteFrame(s);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const paths = this.networks.path;
+    const exits = [];
+    const nodeNear = ([x, y]) => {
+      let best = -1, bd = 0.8;
+      const [fx, fy] = [Math.round(2 * x), Math.round(2 * y)];
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          if (!this.fine.inBounds(fx + dx, fy + dy)) continue;
+          const f = this.fine.index(fx + dx, fy + dy);
+          if (!this.paths.hasNode(f)) continue;
+          const [px, py] = paths.pos(f), d = Math.hypot(px - x, py - y);
+          if (d < bd) [best, bd] = [f, d];
+        }
+      }
+      return best >= 0 ? best : paths.nodeAt(x, y);
+    };
+    const add = (pos, dir, road, site, node = nodeNear(pos)) => {
+      if (node < 0 || exits.some((e) => e.node === node)) return;
+      exits.push({ node, pos, dir, road, site });
+    };
+    const walkable = (n) => n >= 0 && this.hasRoad(n) && !this.terrain.isWater(n) &&
+      [...this.roads.neighbors(n)].some((m) => this.hasSidewalk(n, m) || this.isLane(n, m));
+    const sides = [
+      { dir: [-1, 0], at: (t) => [x0 - 0.5, t], span: [y0, y1] },
+      { dir: [1, 0], at: (t) => [x1 + 0.5, t], span: [y0, y1] },
+      { dir: [0, -1], at: (t) => [t, y0 - 0.5], span: [x0, x1] },
+      { dir: [0, 1], at: (t) => [t, y1 + 0.5], span: [x0, x1] },
+    ];
+    const pathEdges = [...this.ways.edges.values()].filter((e) => e.kind === 'path');
+    for (const { dir: [dx, dy], at, span: [a, b] } of sides) {
+      const line = [at(a - 0.5), at(b + 0.5)];
+      const tOf = ([x, y]) => (dx ? y : x);
+      const arriving = [];
+      let along = null;
+      for (const e of pathEdges) {
+        for (const c of crossingsOf(line, e.pts)) arriving.push(tOf(c.point));
+        // an end at the side, coming from outside
+        for (const [p, q] of [[e.pts[0], e.pts[1]], [e.pts[e.pts.length - 1], e.pts[e.pts.length - 2]]]) {
+          const off = (p[0] - line[0][0]) * dx + (p[1] - line[0][1]) * dy, t = tOf(p);
+          if (Math.abs(off) <= 0.3 && t >= a - 0.5 && t <= b + 0.5 && (q[0] - p[0]) * dx + (q[1] - p[1]) * dy > 0) arriving.push(t);
+        }
+        // running along: its nearest point to the side's middle
+        for (const p of e.pts) {
+          const off = Math.abs((p[0] - line[0][0]) * dx + (p[1] - line[0][1]) * dy), t = tOf(p);
+          if (off <= 0.35 && t >= a && t <= b && (!along || Math.abs(t - (a + b) / 2) < Math.abs(along - (a + b) / 2))) along = t;
+        }
+      }
+      for (const t of arriving.length ? arriving : along != null ? [along] : []) add(at(t), [dx, dy], -1, -1);
+      // a street or lane along it (not for a park); neighbouring sites
+      const outside = [];
+      for (let t = a; t <= b + 1e-6; t += 0.5) {
+        const [px, py] = at(t);
+        outside.push({ t, n: this.grid.nodeAt(px + dx * 0.5, py + dy * 0.5), p: [px + dx * 0.5, py + dy * 0.5] });
+      }
+      const road = STRUCTURE_TYPES[s.type]?.streetWays !== false && outside.find((o) => walkable(o.n));
+      if (road) add(at((a + b) / 2), [dx, dy], road.n, -1, this.fineNear(at((a + b) / 2)));
+      const shared = new Map();
+      for (const { t, n } of outside) {
+        const o = n >= 0 ? this.structureAt(n) : null;
+        if (!o || o.id === s.id || !STRUCTURE_TYPES[o.type]?.site) continue;
+        if (!shared.has(o.id)) shared.set(o.id, []);
+        shared.get(o.id).push(t);
+      }
+      for (const [id, ts] of shared) {
+        const pos = at((Math.min(...ts) + Math.max(...ts)) / 2);
+        add(pos, [dx, dy], -1, id, this.fineNear(pos));
+      }
+    }
+    return { hub: this.fineNear([cx, cy]), hubPos: [cx, cy], half: Math.min(x1 - x0, y1 - y0) / 2 + 0.5, exits };
+  }
+
+  // The dense dot nearest a world point, or -1 off the map.
+  fineNear([x, y]) {
+    const fx = Math.round(2 * x), fy = Math.round(2 * y);
+    return this.fine.inBounds(fx, fy) ? this.fine.index(fx, fy) : -1;
   }
 
   // Which way a structure's front looks: { door, dir: [dx, dy], road }.

@@ -28,22 +28,23 @@ export function createBuildTool(ctx, defs) {
   // those that always face it (def.facesRoad: no turning at all)
   const single = () => (def().footprint ?? [[0, 0]]).length === 1;
   const turnable = () => !def().facesRoad;
+  const loosens = () => turnable() && !def().site;
   const turn = () => (single() && turnable() ? rotation : 0);
   // placed freely (World.freePlacement, docs/free-placement-plan.md):
-  // buildings without a rule of their own; stations, parks and squares
-  // still on the dots
-  const free = () => !def().canPlace && !def().site;
+  // everything without a rule of its own (stations stay on the dots);
+  // parks and squares turn only by quarters (World.freePlacement)
+  const free = () => !def().canPlace;
   let point = null; // the pointer's world position (snap)
   // Turn freely (the toggle, or Alt): no road or neighbour turns it, and
   // Tab turns it by FREE_STEP from facing the viewer
   let loose = false, steps = 0;
   const FREE_STEP = Math.PI / 12;
-  const freeAt = () => point && (loose
+  const freeAt = () => point && (loose && !def().site
     ? world.freePlacement(def().id, point[0], point[1], { rotation: placed(), seed, loose: steps * FREE_STEP })
     : world.freePlacement(def().id, point[0], point[1], { rotation: placed(), turn: turn(), seed }));
   const rotate = () => {
     if (!turnable()) return;
-    if (loose && free()) steps = (steps + 1) % 24;
+    if (loose && free() && !def().site) steps = (steps + 1) % 24;
     else rotation = (rotation + 1) % 4;
   };
   const loosen = () => { loose = !loose; steps = 0; };
@@ -106,7 +107,7 @@ export function createBuildTool(ctx, defs) {
 
     key(e) {
       if (e.key === 'Tab') rotate();
-      else if (e.key === 'Alt' && !e.repeat && free() && turnable()) loosen();
+      else if (e.key === 'Alt' && !e.repeat && free() && loosens()) loosen();
       else if (keyOf(e) === ' ') reroll();
       else if (e.key === 'Shift' && !e.repeat && open().length > 1) resize();
       else return false;
@@ -116,7 +117,7 @@ export function createBuildTool(ctx, defs) {
     actions: () => [
       ...(open().length > 1 ? [{ label: `${t('size')}: ${sizeOf(def())}`, key: 'Shift', run: resize }] : []),
       ...(turnable() ? [{ label: t('rotate'), icon: 'rotate', key: 'Tab', run: rotate }] : []),
-      ...(turnable() && free() ? [{ label: t('turn-freely'), key: 'Alt', on: loose, run: loosen }] : []),
+      ...(loosens() && free() ? [{ label: t('turn-freely'), key: 'Alt', on: loose, run: loosen }] : []),
       { label: t('another-look'), icon: 'another-look', key: 'Space', run: reroll },
     ],
 
