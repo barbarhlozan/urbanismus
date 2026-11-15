@@ -215,8 +215,6 @@ export function createNetworkTool(ctx, options) {
     overlay(kit) {
       let out = '';
       const size = 0.16 * Math.sqrt(layer.scale);
-      // fields' edges aren't drawn on the map: with the tool in hand, those laid already show
-      if (kind === 'field') for (const e of world.ways.edges.values()) if (e.kind === 'field') out += kit.sketchPath(e.pts, `${cls} laid`);
       if (stroke) return out + (stroke.length > 1 ? kit.sketchPath(stroke, cls) : '');
       if (at && !points.length) out += kit.ringAt(...at, hoverRadius * layer.scale);
       for (const p of points) out += kit.ringAt(...p, 0.18 * layer.scale, 'anchor');

@@ -455,6 +455,7 @@ export class Renderer {
       for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
       this.dirty.clear();
       if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
+      this.growFields(); // (a field just closed coming up)
       if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
       // a new level of detail: the objects in sight, as many as fit in
       // config.render.rebuildBudget ms by what they took so far (rebandObjects),

@@ -12,6 +12,8 @@ import { ELEVATION, contours } from '../../terrain/elevation.js';
 import { sketchPolyline, seedOf } from '../sketch.js';
 import { hiddenUnder } from '../bridges.js';
 import { MEADOW, meadowGround, chunkSVG } from '../meadow.js';
+import { fieldsOf } from '../../sim/fields.js';
+import { drawEnabled } from '../draw.js';
 import { PENCIL, CONTOUR_CHUNK, chunked, cut, pencil } from '../pencil.js';
 import { BROWS, visibility, browLines, browRuns, hiddenAt } from '../brows.js';
 import { rockLines, ROCK_LOOK } from '../rocks.js';
@@ -30,6 +32,12 @@ import { SVGNS, TERRAIN_LINES, COS30, r2 } from './shared.js';
 // as high as `rise` of their length, `tilt` askew of level at most.
 const WATER = { radius: 0.75, soft: 5, metres: 6, step: 0.08, ripple: { gap: 0.4, room: 0.12, keep: 0.55, len: 0.3, rise: 0.11, tilt: 0.12 } };
 
+// A field just closed comes up plant by plant: each starts within `spread`
+// ms of the field closing (meadow.js `late`) and takes `each` ms to grow,
+// slowing to a stop as it reaches its height (no overshoot).
+const SPROUT = { spread: 1100, each: 450 };
+const fieldKey = (f) => `${f.crop}|${f.tris[0]}|${f.tris.length}`;
+
 export class TerrainDrawing {
   // ----- layers -----
 
@@ -44,10 +52,54 @@ export class TerrainDrawing {
       keys = new Set();
       for (let cy = 0; cy * c < height; cy++) for (let cx = 0; cx * c < width; cx++) keys.add(`${cx},${cy}`);
     }
-    const ground = meadowGround(world, this.config);
+    this.noteFields();
+    this.sproutPlants = null; // (the ground changed: the growing plants found again)
+    const ground = this.groundNow = meadowGround(world, this.config);
     for (const key of keys) this.drawChunk(key, ground);
     this.meadowDirty.clear();
     this.cullMeadow();
+  }
+
+  // The fields that weren't there at the last look start to grow
+  // (SPROUT); those there when the town was opened are grown already.
+  noteFields() {
+    const now = performance.now(), keys = new Set(fieldsOf(this.world).list.map(fieldKey));
+    this.sprouting ??= new Map();
+    if (this.fieldKeys && drawEnabled()) for (const k of keys) if (!this.fieldKeys.has(k)) this.sprouting.set(k, now);
+    for (const k of this.sprouting.keys()) if (!keys.has(k)) this.sprouting.delete(k);
+    this.fieldKeys = keys;
+  }
+
+  // How far up a plant in `field` has come (meadow.js chunkSVG growth).
+  cropGrowth(field, late) {
+    const start = this.sprouting?.get(fieldKey(field));
+    if (start === undefined) return 1;
+    const u = Math.min(1, Math.max(0, (performance.now() - start - late * SPROUT.spread) / SPROUT.each));
+    return 1 - (1 - u) ** 3;
+  }
+
+  // Each frame while a field is coming up: its chunks drawn again; done
+  // ones grown in full one last time.
+  growFields() {
+    if (!this.sprouting?.size) return;
+    const now = performance.now(), c = MEADOW.chunk, keys = new Set();
+    const fields = fieldsOf(this.world), cw = this.world.fine.width - 1;
+    const done = [];
+    for (const f of fields.list) {
+      const start = this.sprouting.get(fieldKey(f));
+      if (start === undefined) continue;
+      if (now - start > SPROUT.spread + SPROUT.each) done.push(fieldKey(f));
+      // the chunks its squares are in
+      for (const k of f.tris) {
+        const cell = k >> 2, i = cell % cw, j = (cell - i) / cw;
+        keys.add(`${Math.floor(Math.round(i / 2) / c)},${Math.floor(Math.round(j / 2) / c)}`);
+      }
+    }
+    for (const k of done) this.sprouting.delete(k);
+    if (!this.sprouting.size) this.sproutPlants = null;
+    if (!keys.size) return;
+    const ground = this.groundNow ??= meadowGround(this.world, this.config); // (as the last renderMeadow found it)
+    for (const key of keys) this.drawChunk(key, ground);
   }
 
   // One chunk of the meadow ('cx,cy'), at the camera's angle as it is.
@@ -62,7 +114,8 @@ export class TerrainDrawing {
       chunk = { g: this.layers.meadow.appendChild(document.createElementNS(SVGNS, 'g')), svg: null, shown: true };
       this.meadow.set(key, chunk);
     }
-    const svg = chunkSVG(world, ground, cx * c, cy * c, (x, y) => this.project(x, y), camera.tile);
+    const growing = !!this.sprouting?.size;
+    const svg = chunkSVG(world, ground, cx * c, cy * c, (x, y) => this.project(x, y), camera.tile, growing ? (f, late) => this.cropGrowth(f, late) : null, growing ? (this.sproutPlants ??= new Map()) : null);
     if (svg !== chunk.svg) chunk.g.innerHTML = chunk.svg = svg;
     if (chunk.turned) chunk.g.removeAttribute('transform');
     chunk.turned = false;

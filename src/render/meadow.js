@@ -217,8 +217,10 @@ function crops(world, ground, cx, cy, out) {
         const [x, y] = xy(u, w + g.range(-0.5, 0.5) * C.rows * (crop === 'grain' ? 0.25 : 0.1));
         if (!mine(x, y)) continue;
         const roll = g.random();
-        if (crop === 'grain') out.push({ x, y, tier: roll < 0.3 ? 0 : roll < 0.6 ? 1 : 2, parts: stalk(g, C.h) });
-        else out.push({ x, y, tier: roll < 0.45 ? 0 : 1, parts: potato(g, C.r, C.flowers) });
+        // (`field` and `late`, 0–1: when it comes up in a field just closed, chunkSVG's growth)
+        const late = hash(world.seed, Math.round(x * 1000), Math.round(y * 1000), 3) / 2 ** 32;
+        if (crop === 'grain') out.push({ x, y, tier: roll < 0.3 ? 0 : roll < 0.6 ? 1 : 2, parts: stalk(g, C.h), field, late });
+        else out.push({ x, y, tier: roll < 0.45 ? 0 : 1, parts: potato(g, C.r, C.flowers), field, late });
       }
     }
   }
@@ -230,13 +232,24 @@ function crops(world, ground, cx, cy, out) {
 // one <path> per tier and pen. `tile`: scene px per grid step.
 // `project` may return null (not in the picture) and `tile` may be a
 // function (x, y) -> px per grid unit, for the photo camera (photo.js).
-export function chunkSVG(world, ground, x0, y0, project, tile) {
+// `growth` (optional): (field, late) -> 0–1, how far up a crop plant has
+// come in a field just closed (0: not yet, 1: grown); `kept` (optional): a
+// Map that keeps each dot's plants from one drawing to the next while they
+// grow (only their size changes).
+export function chunkSVG(world, ground, x0, y0, project, tile, growth = null, kept = null) {
   const size = MEADOW.chunk;
   const runs = new Map(); // `${tier} ${pen}` -> path data
   const r1 = (n) => Math.round(n * 10) / 10;
   for (let cy = y0; cy < y0 + size; cy++) {
     for (let cx = x0; cx < x0 + size; cx++) {
-      for (const { x, y, tier, parts, ground: lying } of plant(world, ground, cx, cy)) {
+      let plants = kept?.get(cy * 1e5 + cx);
+      if (!plants) {
+        plants = plant(world, ground, cx, cy);
+        kept?.set(cy * 1e5 + cx, plants);
+      }
+      for (const { x, y, tier, parts, ground: lying, field, late } of plants) {
+        const k = growth && field ? growth(field, late) : 1;
+        if (k <= 0) continue;
         for (const [lines, pen] of lying ?? []) {
           const key = `${tier} ${pen}`;
           let d = runs.get(key) ?? '';
@@ -249,7 +262,7 @@ export function chunkSVG(world, ground, x0, y0, project, tile) {
         const at = project(x, y);
         if (!at) continue;
         const [sx, sy] = at;
-        const t = typeof tile === 'function' ? tile(x, y) : tile;
+        const t = (typeof tile === 'function' ? tile(x, y) : tile) * k;
         for (const [lines, pen] of parts) {
           if (!lines.length) continue;
           const key = `${tier} ${pen}`;
