@@ -298,6 +298,10 @@ export class Renderer {
         }
       });
     }
+    // a field closed or opened: the whole of it grows its crop again
+    // (render/meadow.js) – its edges alone say little of where it is
+    world.events.on('fields:changed', () => this.dirty.add('meadow'));
+    for (const type of ['roads:changed', 'rails:changed']) world.events.on(type, () => { if (world.networks.field.graph.edgeCount) this.dirty.add('meadow'); });
     // a car parking redraws only its own lot (renderParked)
     world.events.on('parking:changed', (s) => this.parkedDirty.add(s.id));
     on('terrain:changed', 'terrain', 'meadow', 'paths', 'rails', 'roads', 'fences');

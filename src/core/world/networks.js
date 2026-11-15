@@ -304,7 +304,7 @@ export class WorldNetworks {
   // of every kind it touched. Drawn over a way of its kind that's there
   // already (a road made a street), it goes dot by dot instead
   // (buildNetwork), which knows how to convert one into the other.
-  layWay(kind, line, { lane = false, street = false } = {}) {
+  layWay(kind, line, { lane = false, street = false, crop = null } = {}) {
     const check = this.checkWay(kind, line, { lane });
     if (!check.ok) return check;
     const layer = this.networks[kind], dots = check.dots;
@@ -314,12 +314,25 @@ export class WorldNetworks {
     // first or last step may lie on one: setting off from a junction)
     const along = [];
     for (let i = 1; i < dots.length; i++) if (layer.graph.hasEdge(dots[i - 1], dots[i])) along.push(i);
-    if (along.length === dots.length - 1) return this.buildNetwork(kind, dots, { lane, street });
+    if (along.length === dots.length - 1) {
+      const done = this.buildNetwork(kind, dots, { lane, street });
+      // a field's edge drawn over with the other crop: the edges along it take it
+      if (crop && done.ok) {
+        const on = new Set(dots);
+        for (const e of this.ways.edges.values()) {
+          if (e.kind === kind && e.crop !== crop && traceLine(e.pts, layer.grid, layer.scale).every((d) => on.has(d.n))) {
+            e.crop = crop;
+            this.ways.version++;
+          }
+        }
+      }
+      return done;
+    }
     if (along.some((i) => i !== 1 && i !== dots.length - 1) || (along.length && dots.length <= 3)) {
       return { ok: false, reason: 'Runs along another line', blocked: along.flatMap((i) => [dots[i - 1], dots[i]]) };
     }
     this.history.touch();
-    const props = { kind, ...(lane ? { lane: true } : street ? { street: true } : {}) };
+    const props = { kind, ...(lane ? { lane: true } : street ? { street: true } : {}), ...(crop ? { crop } : {}) };
     const before = new Map([...this.ways.edges.values()].map((e) => [e.id, e.kind]));
     const result = this.ways.insert(line, props, { refit: REFIT[kind] ?? 0 });
     if (!result.ok) return { ...result, blocked: [] };

@@ -523,9 +523,14 @@ function groundMarks(world, config, cam, bands, seen, onGround, groundAt, wetAt)
   for (let cy = Math.max(0, Math.floor(cam.ey - reach)); cy <= Math.min(grid.height - 1, cam.ey + reach); cy++) {
     for (let cx = Math.max(0, Math.floor(cam.ex - reach)); cx <= Math.min(grid.width - 1, cam.ex + reach); cx++) {
       if (!seen(cx, cy, 1)) continue;
-      for (const { x, y, tier, parts } of plant(world, open, cx, cy)) {
+      for (const { x, y, tier, parts, ground: lying } of plant(world, open, cx, cy)) {
         const ahead = cam.ahead(x, y);
         if (ahead < cam.near || Math.hypot(x - cam.ex, y - cam.ey) > reach) continue;
+        // (lines on the ground: a potato ridge)
+        for (const [lines, pen] of lying ?? []) {
+          const d = lines.filter((pts) => pts.every(([px, py]) => cam.ahead(px, py) > cam.near)).map((pts) => pts.map((q, i) => `${i ? 'L' : 'M'}${pt(onGround(...q))}`).join('')).join('');
+          if (d) bands.add(bands.of(ahead), 'meadow', `<path class="t${tier} ${pen}" d="${d}"/>`);
+        }
         const [sx, sy] = onGround(x, y);
         const t = cam.focal / Math.max(ahead, PHOTO.tuft);
         for (const [lines, pen] of parts) {

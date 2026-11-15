@@ -451,6 +451,22 @@ tool.fence.blurb
   cs: Uzavřená dokola je pastvina
   en: Closed all round, a pasture
 
+tool.grain
+  cs: Obilí
+  en: Grain
+
+tool.grain.blurb
+  cs: Uzavřené dokola je pole
+  en: Closed all round, a field
+
+tool.potatoes
+  cs: Brambory
+  en: Potatoes
+
+tool.potatoes.blurb
+  cs: Uzavřené dokola je pole
+  en: Closed all round, a field
+
 tool.erase
   cs: Vymazat
   en: Erase
@@ -496,6 +512,14 @@ network.stop.rail
 network.stop.fence
   cs: Ukončit ohradu
   en: End the fence
+
+network.stop.grain
+  cs: Ukončit pole
+  en: End the field
+
+network.stop.potatoes
+  cs: Ukončit pole
+  en: End the field
 
 # while placing buildings
 

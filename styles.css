@@ -346,6 +346,12 @@ mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3
 .layer-meadow .thin { stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
 .layer-meadow .ink { fill: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
 .mz0 .t1, .mz0 .t2, .mz1 .t2 { display: none; }
+/* crops in the fields (meadow.js crops): grain stalks and their ears in the
+   main pen, potato leaves outlined on paper, their ridges in the detail pen */
+.layer-meadow .grain { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+.layer-meadow .ear { stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+.layer-meadow .leaf { fill: var(--bg); stroke: var(--main); }
+.layer-meadow .bloom { fill: var(--bg); stroke: var(--main); }
 .ghost .gnd { fill: none; stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 /* the build preview: all in the detail pen, solid lines (the dashed .ghost
    look above is for buildings being erased); faded where it can't go */
@@ -444,7 +450,9 @@ svg.draft .layer-lots .d2 { display: none; }
 .overlay .preview.lane { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
 .overlay .preview.rail { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-dasharray: calc(1px * var(--stroke, 1)) calc(2.5px * var(--stroke, 1)); }
 /* a way being drawn (OverlayKit.sketchPath): a pencil line, two light passes, not dotted */
-.overlay path.preview:is(.road, .lane, .street, .path, .rail, .fence) { stroke-dasharray: none; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); opacity: 0.85; }
+.overlay path.preview:is(.road, .lane, .street, .path, .rail, .fence, .field) { stroke-dasharray: none; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); opacity: 0.85; }
+/* the fields' edges laid already, shown only while a field's tool is in hand (they aren't drawn on the map) */
+.overlay path.preview.field.laid { stroke: var(--detail); stroke-width: calc(var(--pen-2, 0.6px) * var(--stroke, 1)); opacity: 0.6; }
 .overlay path.preview.again { stroke-width: calc(var(--pen-2, 0.6px) * var(--stroke, 1)); opacity: 0.45; }
 .overlay path.preview.invalid { stroke: var(--detail); stroke-dasharray: none; }
 .overlay .cross { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; }
@@ -2029,6 +2037,11 @@ html:is(.wc, .painted) .layer-forest .forest-edge { display: none; }
 /* grass and flowers: green tufts, ochre dabs */
 html:is(.wc, .tint) .layer-meadow path { stroke: #93a35a; }
 html:is(.wc, .tint) .layer-meadow .ink { fill: #d6a043; stroke: #d6a043; }
+html:is(.wc, .tint) .layer-meadow path.grain { stroke: #b98a2c; }
+html:is(.wc, .tint) .layer-meadow path.ear { stroke: #9c6e1c; }
+html:is(.wc, .tint) .layer-meadow path.ridge { stroke: #9a7a5c; }
+html:is(.wc, .tint) .layer-meadow path.leaf { stroke: #5f7d38; }
+html:is(.wc, .tint) .layer-meadow path.bloom { stroke: #8a7aa8; }
 /* water (Renderer.washWater): a turquoise wash on a ring of green bank;
    the shore drawn in a deeper teal, the ripples lifted out pale */
 html:is(.wc, .tint) .pond { fill: #8ccbc6; stroke: none; }

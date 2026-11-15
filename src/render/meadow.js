@@ -11,6 +11,9 @@
 //   verges   by roads and footpaths: poppies, cornflowers, daisies
 //   shores   round lakes and along rivers: cattails and reeds
 //   yards    just outside buildings' plots: nettles
+//   fields   in a crop field closed all round (sim/fields.js): its crop
+//            in rows along the field – grain stalks with an ear, or
+//            potato ridges with a clump of leaves on each – and nothing else
 //
 // Detail tiers, each shown from a zoom up (the renderer sets mz0/1/2 on the
 // layer, styles.css hides the rest):
@@ -23,10 +26,12 @@
 // hundred elements, culled with the view and rebuilt only near a change.
 //
 // The glyphs are screen-facing polylines in grid units (u right, v up),
-// like the trees in features/trees.js.
+// like the trees in features/trees.js; a potato ridge is a line on the
+// ground itself (`ground`, world points).
 
 import { mulberry32, valueNoise2D } from '../core/random.js';
 import { freeTest, railIndex } from './lots.js';
+import { fieldsOf } from '../sim/fields.js';
 
 export const MEADOW = {
   chunk: 8,       // dots per chunk side
@@ -38,6 +43,10 @@ export const MEADOW = {
   verge: 0.4,     // how far from a road or footpath the verge flowers reach
   close: 1.5,     // zoom from which tier 2 shows
   runs: 0.008,     // chance a dot starts a run of molehills
+  // crops in the fields, grid units: rows this far apart, a plant every
+  // `step` along one (give or take a fifth), this tall
+  grain: { rows: 0.11, step: 0.07, gaps: 0.3, h: 0.055 },
+  potatoes: { rows: 0.13, step: 0.08, r: 0.03, flowers: 0.18 },
 };
 
 // ---------- where ----------
@@ -51,6 +60,7 @@ export function meadowGround(world, config) {
   const field = world.riverField;
   const patch = valueNoise2D(world.seed ^ 0x6d6561, MEADOW.patch);
   const detail = valueNoise2D(world.seed ^ 0x677261, MEADOW.patch / 3);
+  const fields = fieldsOf(world);
 
   // nearest thing of a kind among the dots around (x, y): Euclidean for
   // water, Chebyshev (square plots) for structures and trees
@@ -69,6 +79,11 @@ export function meadowGround(world, config) {
   };
 
   return {
+    // The crop field at (x, y): { crop, along } (sim/fields.js), or null.
+    field(x, y) {
+      const f = fields.at(x, y);
+      return f < 0 ? null : fields.list[f];
+    },
     // Is (x, y) open ground? null if not, else what's around it.
     at(x, y) {
       if (x < -0.45 || y < -0.45 || x > grid.width - 0.55 || y > grid.height - 0.55) return null;
@@ -126,7 +141,7 @@ export function plant(world, ground, cx, cy) {
     const x = cx + g.range(-0.5, 0.5), y = cy + g.range(-0.5, 0.5);
     const roll = g.random(), pick = g.random();
     const at = ground.at(x, y);
-    if (!at) continue;
+    if (!at || ground.field(x, y)) continue;
     if (at.shore < 0.45) {
       if (roll < MEADOW.chance.shore) grow(x, y, g, pick < 0.6 ? cattail : tuft, pick < 0.6 ? 0.2 : 0.12, 1);
     } else if (at.verge) {
@@ -151,12 +166,62 @@ export function plant(world, ground, cx, cy) {
     let [x, y] = [cx + g.range(-0.3, 0.3), cy + g.range(-0.3, 0.3)];
     for (let k = 0; k < n; k++, a += g.range(-0.5, 0.5)) { // the mole wanders
       const at = ground.at(x, y);
-      if (at && at.patch > 0.3 && at.shore > 0.45 && !at.verge) grow(x, y, g, molehill, 0.065, 1);
+      if (at && at.patch > 0.3 && at.shore > 0.45 && !at.verge && !ground.field(x, y)) grow(x, y, g, molehill, 0.065, 1);
       x += Math.cos(a) * g.range(0.22, 0.36);
       y += Math.sin(a) * g.range(0.22, 0.36);
     }
   }
+  crops(world, ground, cx, cy, out);
   return out;
+}
+
+// The crop on the dot's square, where it's in a field and open ground:
+// rows on fixed lines across the whole map (so they run on from dot to
+// dot), a plant at each step along them.
+function crops(world, ground, cx, cy, out) {
+  // the fields on the square (any reaches one of these points of it)
+  const here = new Set();
+  for (const dy of [-0.4, 0, 0.4]) {
+    for (const dx of [-0.4, 0, 0.4]) {
+      const f = ground.field(cx + dx, cy + dy);
+      if (f) here.add(f);
+    }
+  }
+  if (!here.size) return;
+  const g = rng(hash(world.seed, cx, cy, 77));
+  const grows = (x, y) => {
+    const f = ground.field(x, y), at = f && ground.at(x, y);
+    return at && at.shore > 0.2 ? f : null;
+  };
+  // (u along the rows, w across them, in world units, as x/y for the field)
+  for (const field of here) {
+    const { crop, along } = field, C = MEADOW[crop];
+    const [u0, w0] = along === 'x' ? [cx, cy] : [cy, cx];
+    const xy = (u, w) => (along === 'x' ? [u, w] : [w, u]);
+    const mine = (x, y) => grows(x, y) === field;
+    for (let k = Math.ceil((w0 - 0.5) / C.rows - 0.5); (k + 0.5) * C.rows < w0 + 0.5; k++) {
+      const w = (k + 0.5) * C.rows;
+      if (crop === 'potatoes') {
+        // the ridge (hrůbek): a line along the row, broken where the field isn't
+        let run = [];
+        const flush = () => { if (run.length > 1) out.push({ x: run[0][0], y: run[0][1], tier: 0, parts: [], ground: [[[run], 'ridge']] }); run = []; };
+        for (let u = u0 - 0.5; u <= u0 + 0.5 + 1e-9; u += 0.1) {
+          const p = xy(Math.min(u, u0 + 0.5), w);
+          if (mine(...p)) run.push(p);
+          else flush();
+        }
+        flush();
+      }
+      for (let u = u0 - 0.5 + g.range(0, C.step); u < u0 + 0.5; u += C.step * g.range(0.8, 1.2)) {
+        if (crop === 'grain' && g.chance(C.gaps)) continue;
+        const [x, y] = xy(u, w + g.range(-0.5, 0.5) * C.rows * (crop === 'grain' ? 0.25 : 0.1));
+        if (!mine(x, y)) continue;
+        const roll = g.random();
+        if (crop === 'grain') out.push({ x, y, tier: roll < 0.3 ? 0 : roll < 0.6 ? 1 : 2, parts: stalk(g, C.h) });
+        else out.push({ x, y, tier: roll < 0.45 ? 0 : 1, parts: potato(g, C.r, C.flowers) });
+      }
+    }
+  }
 }
 
 // ---------- drawing ----------
@@ -171,7 +236,16 @@ export function chunkSVG(world, ground, x0, y0, project, tile) {
   const r1 = (n) => Math.round(n * 10) / 10;
   for (let cy = y0; cy < y0 + size; cy++) {
     for (let cx = x0; cx < x0 + size; cx++) {
-      for (const { x, y, tier, parts } of plant(world, ground, cx, cy)) {
+      for (const { x, y, tier, parts, ground: lying } of plant(world, ground, cx, cy)) {
+        for (const [lines, pen] of lying ?? []) {
+          const key = `${tier} ${pen}`;
+          let d = runs.get(key) ?? '';
+          for (const pts of lines) {
+            const on = pts.map(([px, py]) => project(px, py));
+            if (on.every(Boolean)) d += on.map(([sx, sy], i) => `${i ? 'L' : 'M'}${r1(sx)} ${r1(sy)}`).join('');
+          }
+          runs.set(key, d);
+        }
         const at = project(x, y);
         if (!at) continue;
         const [sx, sy] = at;
@@ -378,4 +452,33 @@ function stones(g, h) {
     lines.push([[c + w * 0.3, H * 0.5], [c + w * 0.7, H * 0.15]]);
   }
   return [[lines, '']];
+}
+
+// Obilí – a grain stalk: a stroke leaning a little with the wind, bending
+// over at the top, and its ear.
+function stalk(g, h) {
+  const H = h * g.range(0.85, 1.15), w = h * 0.2 * g.range(0.6, 1.4);
+  const top = [w, H];
+  return [
+    [[[[0, 0], [w * 0.2, H * 0.6], top]], 'grain'],
+    [[[top, [w * 1.5 + h * 0.05, H + h * 0.35]]], 'ear'],
+  ];
+}
+
+// Brambory – a potato plant: three or four round leaves heaped on its
+// ridge, a pale flower on top now and then.
+function potato(g, r, flowers) {
+  const leaves = [], n = g.chance(0.5) ? 4 : 3;
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2 + g.random();
+    const c = [Math.cos(a) * r * 0.7, r * 0.9 - Math.sin(a) * r * 0.45 + (k === n - 1 ? r * 0.4 : 0)];
+    const rr = r * g.range(0.55, 0.75);
+    leaves.push(Array.from({ length: 9 }, (_, i) => {
+      const t = (i % 8) / 8 * Math.PI * 2;
+      return [c[0] + Math.cos(t) * rr, c[1] + Math.sin(t) * rr * 0.8];
+    }));
+  }
+  const out = [[leaves, 'leaf']];
+  if (g.chance(flowers)) out.push([[ring([g.range(-0.5, 0.5) * r, r * 2.2], r * 0.3, 6, g)], 'bloom']);
+  return out;
 }

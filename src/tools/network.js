@@ -19,7 +19,7 @@ import { t } from '../core/text.js';
 import { EXIT_REACH } from '../core/world/access.js';
 
 // The tightest bend each kind takes (radius, world units).
-const RADIUS = { road: 1, path: 0.3, rail: 2.5, fence: 0.15 };
+const RADIUS = { road: 1, path: 0.3, rail: 2.5, fence: 0.15, field: 0.15 };
 const LANE_RADIUS = 0.7;
 const SNAP = 0.35;               // onto a junction or a way
 const ANGLE_SNAP = Math.PI / 30; // 6°: onto the last leg's line, or square to it
@@ -27,11 +27,11 @@ const SAME = 0.3;                // a click this near the last point lays the wa
 const MARK_STEP = 0.4;           // a refused stretch gets a cross this often along the line
 const MARK_NEAR = 0.55;          // …where the line passes this near a dot the check refused
 
-// options: { kind, id (default: kind), lane / street (roads: build lanes / streets), group (Build menu group), fineGrid, curve (config key), hoverRadius }
+// options: { kind, id (default: kind), lane / street (roads: build lanes / streets), crop (field edges: what the field grows), group (Build menu group), fineGrid, curve (config key), hoverRadius }
 // Its words are tool.<id>, tool.<id>.blurb and network.*.<id> (text/ui.txt).
 export function createNetworkTool(ctx, options) {
   const { world, config } = ctx;
-  const { kind, lane = false, street = false, fineGrid = false, hoverRadius = 0.32 } = options;
+  const { kind, lane = false, street = false, crop = null, fineGrid = false, hoverRadius = 0.32 } = options;
   const id = options.id ?? kind;
   const layer = world.networks[kind];
   const radius = lane ? LANE_RADIUS : RADIUS[kind] ?? 0.5;
@@ -109,7 +109,7 @@ export function createNetworkTool(ctx, options) {
     history.commit();
     const mine = laidStep && history.done[history.done.length - 1] === laidStep;
     if (mine && !history.undo().ok) return false;
-    const result = world.layWay(kind, line, { lane, street });
+    const result = world.layWay(kind, line, { lane, street, crop });
     if (result?.ok) {
       history.commit();
       laidStep = history.done[history.done.length - 1] ?? null;
@@ -215,7 +215,9 @@ export function createNetworkTool(ctx, options) {
     overlay(kit) {
       let out = '';
       const size = 0.16 * Math.sqrt(layer.scale);
-      if (stroke) return stroke.length > 1 ? kit.sketchPath(stroke, cls) : '';
+      // fields' edges aren't drawn on the map: with the tool in hand, those laid already show
+      if (kind === 'field') for (const e of world.ways.edges.values()) if (e.kind === 'field') out += kit.sketchPath(e.pts, `${cls} laid`);
+      if (stroke) return out + (stroke.length > 1 ? kit.sketchPath(stroke, cls) : '');
       if (at && !points.length) out += kit.ringAt(...at, hoverRadius * layer.scale);
       for (const p of points) out += kit.ringAt(...p, 0.18 * layer.scale, 'anchor');
       if (refused) out += kit.crossAt(...refused, size);

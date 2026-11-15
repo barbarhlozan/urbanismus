@@ -22,11 +22,11 @@ import { crossingsOf } from './curves.js';
 // one's kind first, either order gives the same): 'join' – a junction,
 // shared by both (two roads; a footpath onto a road; a level crossing,
 // where a road or footpath crosses a railway); 'gap' – they cross
-// without meeting (a fence leaves a gap); 'refuse' – not allowed.
-const FAMILY = { road: 'road', lane: 'road', path: 'path', rail: 'rail', fence: 'fence' };
+// without meeting (a fence or a field's edge leaves a gap); 'refuse' – not allowed.
+const FAMILY = { road: 'road', lane: 'road', path: 'path', rail: 'rail', fence: 'fence', field: 'field' };
 export function crossRule(k1, k2) {
   const [a, b] = [FAMILY[k1] ?? k1, FAMILY[k2] ?? k2].sort();
-  if (a === 'fence' || b === 'fence') return a === b ? 'join' : 'gap';
+  if (a === 'fence' || b === 'fence' || a === 'field' || b === 'field') return a === b ? 'join' : 'gap';
   if (a === 'rail' && b === 'rail') return 'refuse';
   return 'join';
 }

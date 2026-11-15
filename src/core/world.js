@@ -159,6 +159,17 @@ export class World {
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'fences:changed',
       }),
+      // The edges of crop fields (sim/fields.js), laid as fences are but
+      // not drawn: a field closed all round grows its crop.
+      field: new NetworkLayer({
+        id: 'field',
+        grid: this.fine,
+        scale: 0.5,
+        isBlocked: (f) => this.isPathBlocked(f),
+        conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
+        coarseOf: (f) => this.fineToCoarse(f),
+        event: 'fields:changed',
+      }),
     };
     // a bus stop always faces its road: as the roads change, so may it
     this.events.on('roads:changed', () => {

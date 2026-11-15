@@ -65,6 +65,8 @@ export const ICONS = {
   'tool-path': 'Build menu tile: Pěšina / Footpath',
   'tool-rail': 'Build menu tile: Železnice / Railway',
   'tool-fence': 'Build menu tile: Ohrada / Fence',
+  'tool-grain': 'Build menu tile: Obilí / Grain',
+  'tool-potatoes': 'Build menu tile: Brambory / Potatoes',
   'tool-erase': 'Build menu: Vymazat / Erase (a rubber)',
 };
 
