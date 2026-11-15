@@ -39,7 +39,7 @@
      building's menu) as wide as the town panel, four tiles across */
   --cell: calc(var(--bar-h) - 2px);
   --tile: calc(2 * var(--cell));
-  --bm-w: var(--panel-w/2);
+  --bm-w: calc(3 * var(--tile) + 2 * 2px + 12px + 2 * var(--line)); /* three tiles across */
   --ui-font: "Basteleur", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* notches and home indicators on phones */
   --safe-t: env(safe-area-inset-top, 0px);
@@ -471,8 +471,8 @@ svg.draft .layer-lots .d2 { display: none; }
 @media (prefers-reduced-motion: reduce) { .overlay .eraser-mark { animation: none; } }
 /* Erase: the eraser over what would go (OverlayKit.eraserAt) */
 .overlay .eraser-body { fill: var(--bg); stroke: none; }
-.overlay .eraser-tip { fill: color-mix(in srgb, var(--fg) 25%, var(--bg)); stroke: none; }
-.overlay .eraser { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.overlay .eraser-hatch { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
+.overlay .eraser { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .overlay .steep-wedge { fill: var(--fg); stroke: var(--fg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 /* among the dots around the pointer (OverlayKit.nearDots) the signs are as
    quiet as the dots: their grey, a thinner line, no halo */
@@ -1136,23 +1136,15 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .ledger-has h5 { margin: 0; height: var(--rule); }
 .ledger-thing { margin: 0; break-inside: avoid; }
 
-/* the book by the town's name, with a dot while there's something new in it */
-#ui .hud .chron { position: relative; }
-.hud .chron .stat-icon, .hud .dev-menu .stat-icon { width: 15px; height: 15px; }
+/* the camera by the town's name (photo mode) */
+#ui .hud .hud-photo { position: relative; }
+.hud .hud-photo .camera-icon { width: 19px; height: 19px; }
+.hud .hud-photo .camera-icon path { stroke-width: calc(1.25px * var(--stroke, 1)); }
+.hud .dev-menu .stat-icon { width: 15px; height: 15px; }
 /* TEMPORARY: the time menu's one row, ‹ the hour › (src/ui/devMenus.js) */
 .popup .dev-arrow { display: block; min-width: 22px; font-size: 20px; line-height: 22px; }
 .popup .dev-hour { display: block; font-size: 17px; line-height: 22px; font-variant-numeric: tabular-nums; }
 .popup .dev-hour.held { text-decoration: underline; text-underline-offset: 4px; }
-.hud .chron.new::after {
-  content: '';
-  position: absolute;
-  top: 8px;
-  right: 7px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--fg);
-}
 
 .hidden { display: none !important; }
 
@@ -1218,7 +1210,7 @@ body.loading #ui { visibility: hidden; }
   .intro-langs { animation: none; }
 }
 /* not unlocked yet (src/story/unlocks.js): left out of the Build menu */
-#ui .bm-tool.locked, #ui .bm-tab.locked, #ui .controls button.locked, #ui .hud .chron.locked { display: none !important; }
+#ui .bm-tool.locked, #ui .bm-tab.locked, #ui .controls button.locked, #ui .hud .hud-photo.locked { display: none !important; }
 
 /* ---------- Build menu (bottom centre; a rail on the right on wide screens, below) ---------- */
 
@@ -1691,16 +1683,16 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 .pm .pm-chosen { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 /* (the marks go behind what's in the control, within the control's own
    layer, so its drawing and word sit over the hatching) */
-#ui :is(.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab) { isolation: isolate; }
-#ui :is(.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab) > .pm { z-index: -1; }
-#ui :is(.bm-tab.on, .bm-tool.active, .bm-camera.on, .controls button.on, .chron-tab.on) > :not(.pm) {
+#ui :is(.bm-tab, .bm-tool, .hud-photo, .controls button, .chron-tab) { isolation: isolate; }
+#ui :is(.bm-tab, .bm-tool, .hud-photo, .controls button, .chron-tab) > .pm { z-index: -1; }
+#ui :is(.bm-tab.on, .bm-tool.active, .hud-photo.on, .controls button.on, .chron-tab.on) > :not(.pm) {
   text-shadow: 0 0 2px var(--bg), 0 0 2px var(--bg), 0 0 3px var(--bg);
 }
 /* pointed at (only where there's a pointer), or picked with the arrow keys */
 body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
 #ui .cap-choices button.focus > .pm .pm-u { stroke-dashoffset: 0; opacity: 1; transition-delay: 0s; }
 /* chosen: boxed */
-#ui :is(.bm-tab.on, .bm-tool.active, .bm-camera.on, .controls button.on, .chron-tab.on) > .pm .pm-chosen { display: inline; }
+#ui :is(.bm-tab.on, .bm-tool.active, .hud-photo.on, .controls button.on, .chron-tab.on) > .pm .pm-chosen { display: inline; }
 /* the line of words picked: ticked */
 #ui .scheme.on > .pm .pm-tick { display: inline; }
 /* a setting: its box, crossed while on */
@@ -1911,7 +1903,7 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 /* while the print is out, photo mode rests: its dock goes, and the camera
    in the Build menu can't be pressed until the print is put away */
 body.print-open #ui .build-menu .bm-dock { visibility: hidden; }
-body.print-open #ui .bm-camera { pointer-events: none; opacity: 0.4; }
+body.print-open #ui .hud-photo { pointer-events: none; opacity: 0.4; }
 .photo-print svg.photo { width: 100%; height: auto; display: block; }
 .photo-caption { font-size: 13px; text-align: center; padding: 2px 0; }
 .photo-buttons { display: flex; justify-content: center; gap: 8px; }

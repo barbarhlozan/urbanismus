@@ -111,6 +111,80 @@ export function sketchBox(x, y, w, h, seed, { over = 7, waver = 2.2, slip = 1.6 
   return d;
 }
 
+// A box with rounded corners drawn in one go, the way the buildings' walls
+// are drawn now: the pen starts along the top, goes round once and closes
+// a little past where it began, slightly off it – no strokes running out
+// past the corners. Still a hand: each corner turns a little tighter or
+// wider than the others and swings a touch out or in, the sides drift
+// gently (`waver` px), the line trembles finely along its length
+// (`tremor` px), and the end lands up to `slip` px off the start, running
+// `lap` px over it.
+export function sketchRoundBox(x, y, w, h, seed, { radius = 6, waver = 1, lap = 6, slip = 0.8, tremor = 0.35 } = {}) {
+  const rnd = mulberry32(seed);
+  const R = Math.max(0, Math.min(radius, w / 2, h / 2));
+  // top left, top right, bottom right, bottom left
+  const r = [0, 1, 2, 3].map(() => R * (0.6 + 0.8 * rnd()));
+  const swing = [0, 1, 2, 3].map(() => (rnd() - 0.4) * Math.min(1.4, R * 0.25));
+  const turn = (k, cx, cy, a0) => (t) => {
+    const q = a0 + (t * Math.PI) / 2, c = Math.cos(q), s = Math.sin(q);
+    return [cx + c * r[k], cy + s * r[k], c, s];
+  };
+  // the outline, clockwise from the top left after the corner: straight
+  // sides and quarter turns, each (t 0–1) -> [x, y, outward normal x, y]
+  const arc = (k) => (Math.PI * r[k]) / 2;
+  const pieces = [
+    [w - r[0] - r[1], (t) => [x + r[0] + t * (w - r[0] - r[1]), y, 0, -1]],
+    [arc(1), turn(1, x + w - r[1], y + r[1], -Math.PI / 2)],
+    [h - r[1] - r[2], (t) => [x + w, y + r[1] + t * (h - r[1] - r[2]), 1, 0]],
+    [arc(2), turn(2, x + w - r[2], y + h - r[2], 0)],
+    [w - r[2] - r[3], (t) => [x + w - r[2] - t * (w - r[2] - r[3]), y + h, 0, 1]],
+    [arc(3), turn(3, x + r[3], y + h - r[3], Math.PI / 2)],
+    [h - r[3] - r[0], (t) => [x, y + h - r[3] - t * (h - r[3] - r[0]), -1, 0]],
+    [arc(0), turn(0, x + r[0], y + r[0], Math.PI)],
+  ];
+  const P = pieces.reduce((n, [len]) => n + len, 0) || 1;
+  // where along the outline each corner's middle is (for its swing)
+  const mids = [];
+  { let d = 0; pieces.forEach(([len], i) => { if (i % 2) mids.push([d + len / 2, [1, 2, 3, 0][(i - 1) / 2]]); d += len; }); }
+  const along = (d) => {
+    d = ((d % P) + P) % P;
+    for (const [len, f] of pieces) {
+      if (d <= len && len > 0) return f(d / len);
+      d -= len;
+    }
+    return pieces[0][1](0);
+  };
+  // slow bends, a fine tremble, and the drift that keeps the end off the start
+  const l1 = 140 + rnd() * 120, l2 = 45 + rnd() * 30, l3 = 9 + rnd() * 5, l4 = 4.5 + rnd() * 2;
+  const p1 = rnd() * 6.3, p2 = rnd() * 6.3, p3 = rnd() * 6.3, p4 = rnd() * 6.3;
+  const drift = (rnd() - 0.5) * 2 * slip, off0 = (rnd() - 0.5) * slip;
+  const TAU = 2 * Math.PI;
+  const bend = (d) => waver * (0.7 * Math.sin((TAU * d) / l1 + p1) + 0.3 * Math.sin((TAU * d) / l2 + p2));
+  const tremble = (d) => tremor * (0.65 * Math.sin((TAU * d) / l3 + p3) + 0.35 * Math.sin((TAU * d) / l4 + p4));
+  const corners = (d) => {
+    let o = 0;
+    for (const [m, k] of mids) {
+      let e = Math.abs((((d - m) % P) + P) % P);
+      e = Math.min(e, P - e);
+      const span = arc(k) * 0.8 + 3;
+      if (e < span * 2) o += swing[k] * Math.exp(-((e / span) ** 2));
+    }
+    return o;
+  };
+  const start = (0.05 + rnd() * 0.3) * (w - r[0] - r[1]);
+  const total = P + lap * (0.6 + 0.4 * rnd());
+  const n = Math.max(32, Math.ceil(total / 2));
+  let out = '';
+  for (let i = 0; i <= n; i++) {
+    const u = i / n, d = start + u * total;
+    const [px, py, nx, ny] = along(d);
+    // the slow bends ease out at the ends, so start and end don't wander apart
+    const o = off0 + drift * u + bend(d) * Math.sin(Math.PI * Math.min(1, u * 1.15)) + tremble(d) + corners(d);
+    out += `${i ? 'L' : 'M'}${r2(px + nx * o)} ${r2(py + ny * o)}`;
+  }
+  return out;
+}
+
 // An ellipse drawn in one go the way a pen circles a spot: a bit more than
 // one turn, slightly lumpy, the end missing the start.
 export function sketchEllipse(cx, cy, rx, ry, seed, { k = 1, turns = 1.12, lump = 0.06 } = {}) {

@@ -67,7 +67,20 @@ export function reveal(el, show, { from = [0, 4], force = false, rows = null, fa
       { opacity: 0, transform: fade ? 'none' : `${off} rotate(${t}deg) scale(0.93)` },
       { opacity: 1, transform: 'none' },
     ], { duration: MOTION.in, easing: fade ? MOTION.easeIn : MOTION.land }));
-    if (rows) anims.push(...follow(el.querySelectorAll(rows)));
+    if (rows) {
+      const list = [...el.querySelectorAll(rows)], moving = follow(list);
+      anims.push(...moving);
+      // rows still rising stick out below a scrolling box's end: it would
+      // show its scrollbar for that moment, so it doesn't scroll till they land
+      const boxes = new Set();
+      for (const row of list) {
+        for (let p = row.parentElement; p && p !== el.parentElement; p = p.parentElement) {
+          if (/auto|scroll/.test(getComputedStyle(p).overflowY)) { boxes.add(p); break; }
+        }
+      }
+      for (const b of boxes) b.style.overflowY = 'hidden';
+      Promise.allSettled(moving.map((a) => a.finished)).then(() => { for (const b of boxes) b.style.overflowY = ''; });
+    }
     // the frame is drawn a little slower than the contents arrive: a pen going round
     if (frame) anims.push(frame.animate([{ strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }],
       { duration: MOTION.in * 1.4, easing: MOTION.easeIn }));

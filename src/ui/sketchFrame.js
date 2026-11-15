@@ -1,13 +1,14 @@
 // Pen-drawn frames for the UI boxes, to match the sketched map: each box
-// gets an <svg> over its border with a box drawn freehand – four wavering
-// strokes that run on past the corners, long sides sometimes in two goes
-// (render/sketch.js sketchBox) – redrawn when the box changes size. The CSS
+// gets an <svg> over its border with a box drawn freehand – one stroke
+// round rounded corners, closing a little past where it began, the way the
+// buildings are drawn now (render/sketch.js sketchRoundBox) – redrawn when
+// the box changes size. The CSS
 // border stays for spacing but turns transparent, and the box no longer
 // clips what's in it, so the strokes can run out past its edge (.sketched
 // in styles.css).
 //
-// The frame is drawn a couple of pixels inside the box, so inner dividers
-// that run to the edge poke out past it like overshoots too.
+// The frame lies on the box's border, so inner dividers that run to the
+// edge end on it.
 //
 // Not every box in the same hand (HANDS): the town's panel is drawn
 // steadily, a menu that comes and goes quickly and loosely, the rest in
@@ -17,17 +18,17 @@
 // with a new seed, when it's pressed (el.resketch, called by penMarks.js);
 // otherwise a frame keeps its strokes and is only refitted to a new size.
 
-import { sketchBox, seedOf } from '../render/sketch.js';
+import { sketchRoundBox, seedOf } from '../render/sketch.js';
 
-const INSET = 2;
-const OVER = 8; // px the strokes run on past the corners, at most
+const INSET = 1.5;
+const RADIUS = 7; // px, the corners of a big box (small ones round less)
 const NS = 'http://www.w3.org/2000/svg';
 
-// { over: px past the corners at most, waver: px a side bends, slip: px its
-// ends start off the line } (render/sketch.js sketchBox)
+// { waver: px a side bends, slip: px the end lands off the start, lap: px
+// it runs over the start, tremor: px the line trembles } (render/sketch.js sketchRoundBox)
 export const HANDS = {
-  steady: { over: 4, waver: 1, slip: 0.7 },
-  loose: { over: 12, waver: 3.4, slip: 2.4 },
+  steady: { waver: 0.8, slip: 0.5, lap: 4, tremor: 0.25 },
+  loose: { waver: 2.2, slip: 1.6, lap: 10, tremor: 0.45 },
 };
 
 let count = 0;
@@ -48,9 +49,11 @@ export function sketchFrame(el, hand = {}) {
     const width = el.offsetWidth, height = el.offsetHeight;
     if (!width || !height) return;
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    // (small boxes – a button, the dock – overshoot less)
-    const over = Math.min(hand.over ?? OVER, 3 + Math.min(width, height) * 0.1);
-    path.setAttribute('d', sketchBox(INSET, INSET, width - INSET * 2, height - INSET * 2, seed, { ...hand, over }));
+    // (small boxes – a button, the dock – round less and bend less)
+    const small = Math.min(width, height);
+    const radius = Math.min(RADIUS, 2 + small * 0.12);
+    const waver = Math.min(hand.waver ?? 1.4, small * 0.03);
+    path.setAttribute('d', sketchRoundBox(INSET, INSET, width - INSET * 2, height - INSET * 2, seed, { ...hand, radius, waver }));
   };
   // boxes that rebuild their content (innerHTML) drop the frame: put it back
   const attach = () => {

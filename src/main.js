@@ -466,7 +466,7 @@ const followUnlocks = () => {
   // cars, trucks and buses: off the map if locked, and the car parks follow
   agents.followVehicles();
   renderer.dirty.add('parked');
-  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act="terrain"], .bm-camera, .hud .chron')) {
+  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act="terrain"], .hud .hud-photo')) {
     btn.classList.toggle('locked', !UNLOCKS.allowsControl(btn.dataset.act ?? 'chronicle'));
   }
   const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu };

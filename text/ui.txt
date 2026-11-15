@@ -397,6 +397,18 @@ group.heritage
   cs: Památky
   en: Monuments
 
+tab.buildings
+  cs: Stavby
+  en: Buildings
+
+tab.roads
+  cs: Cesty
+  en: Roads
+
+tab.parks
+  cs: Parky a náměstí
+  en: Parks and squares
+
 # ---------- Tools ----------
 
 tool.select

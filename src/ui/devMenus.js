@@ -31,7 +31,7 @@ export class DevMenus {
     this.world = world;
     this.target = null; // the building whose card was opened last
 
-    const book = root.querySelector('.hud .chron');
+    const book = root.querySelector('.hud .hud-photo');
     book.insertAdjacentHTML('afterend',
       `<button class="close dev-menu" data-dev="time" title="${t('dev.time')}" aria-label="${t('dev.time')}">${iconSvg('dev-time', 'class="icon stat-icon" aria-hidden="true"', CLOCK)}</button>` +
       `<button class="close dev-menu" data-dev="fire" title="${t('dev.fire')}" aria-label="${t('dev.fire')}">${iconSvg('dev-fire', 'class="icon stat-icon" aria-hidden="true"', FLAME)}</button>`);

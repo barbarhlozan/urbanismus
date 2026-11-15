@@ -6,7 +6,7 @@ import { smoothPolyline } from '../roads/geometry.js';
 import { Painter } from './painter.js';
 import { drawSeed, tiltOf, roadFront, freeTilt, freeAnchor } from '../../structures/index.js';
 import { fitSite, siteEdges } from './lots.js';
-import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
+import { sketchEllipse, sketchLine, sketchHatch, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
 import { controlArt } from '../ui/icons.js';
 import { THEME } from '../theme.js';
@@ -138,25 +138,41 @@ export class OverlayKit {
     return dots + signs;
   }
 
-  // Erase mode, over what would go: the eraser from the Erase icon
-  // (icons.js, without its smudge), tilted, pen-drawn, filled with the
-  // paper so it reads over anything.
+  // Erase mode, over what would go: the rubber from the Erase tile
+  // (icons/ui/tool-erase.svg, without its smudge) – tilted, rounded, drawn
+  // by hand, a little differently wherever it lands – filled with the paper
+  // so it reads over anything, its rubber tip hatched as a roof is.
   eraserAt(x, y, size = 0.16) {
     const [cx, cy] = this.project(x, y);
-    const s = (size * this.camera.tile) / 11; // the icon's 32-box, around its middle
-    const k = 1 / this.camera.zoom, seed = seedOf(x, y, 11);
-    const p = ([px, py]) => [cx + (px - 16.2) * s, cy + (py - 18.2) * s];
-    const body = [[6, 22], [20.1, 7.9], [26.5, 14.3], [12.4, 28.4]].map(p);
-    const [a, b] = [p([10.9, 17.1]), p([17.3, 23.5])]; // where the rubber tip starts
-    const outline = body.map((q, i) => sketchLine(q, body[(i + 1) % 4], seed + i, { k, over: 1 })).join('')
-      + sketchLine(a, b, seed + 5, { k, over: 0.5 });
-    const fill = `M${body.map(([qx, qy]) => `${r2(qx)} ${r2(qy)}`).join('L')}Z`;
-    const tip = `M${[body[0], a, b, body[3]].map(([qx, qy]) => `${r2(qx)} ${r2(qy)}`).join('L')}Z`;
+    const s = (size * this.camera.tile) / 8.25; // the tile's 24-box, around its middle
+    const seed = seedOf(x, y, 11);
+    // each point of the drawing nudged a hair, so no two are alike (the
+    // same point the same way in the outline, its fill and the tip)
+    const q = (px, py) => {
+      const rnd = mulberry32(seedOf(px, py, seed));
+      const jx = (rnd() - 0.5) * 0.5, jy = (rnd() - 0.5) * 0.5;
+      return `${r2(cx + (px + jx - 12.15) * s)} ${r2(cy + (py + jy - 13.65) * s)}`;
+    };
+    const path = (pts) => pts.map(([c, ...n]) => c + (n.length ? q(...n.slice(0, 2)) + (n.length > 2 ? ' ' + q(...n.slice(2)) : '') : '')).join('');
+    const rim = [['M', 4.38, 15.39], ['Q', 9.12, 10.91, 13.51, 6.07], ['Q', 14.61, 5.12, 15.71, 6.31], ['Q', 17.51, 8.25, 19.42, 10.08],
+      ['Q', 20.54, 10.89, 19.34, 12.09], ['Q', 14.78, 16.31, 10.49, 20.8], ['Q', 9.39, 22.19, 8.54, 20.83], ['Q', 6.64, 19.04, 4.61, 17.39],
+      ['Q', 3.66, 16.23, 4.78, 15.38], ['L', 3.9, 15.1]];
+    const outline = path(rim);
+    const band = path([['M', 9.17, 10.51], ['Q', 11.95, 13.5, 14.99, 16.23]]);
+    const fill = path(rim.slice(0, -1)) + 'Z';
+    const tip = path([['M', 9.17, 10.51], ['Q', 11.95, 13.5, 14.99, 16.23], ['L', 10.49, 20.8], ['Q', 9.39, 22.19, 8.54, 20.83],
+      ['Q', 6.64, 19.04, 4.61, 17.39], ['Q', 3.66, 16.23, 4.78, 15.38]]) + 'Z';
+    // the tip's hatching: strokes across the box round it, cut to its shape
+    const [x0, y0] = [cx + (3.4 - 12.15) * s, cy + (10.2 - 13.65) * s];
+    const [x1, y1] = [cx + (15.3 - 12.15) * s, cy + (22.4 - 13.65) * s];
+    const hatch = sketchHatch(x0, y0, x1 - x0, y1 - y0, seed + 7, { gap: Math.max(3.2, s * 1.6) });
+    const clip = `eraser-tip-${seed}`;
     // data-anim: it pops up once where it lands, not again on every redraw
     // of a pan, and shrinks away when it goes (Renderer.keepAnimating, letGo)
     return `<g class="eraser-mark" data-anim="erase-${seed}">`
+      + `<clipPath id="${clip}"><path d="${tip}"/></clipPath>`
       + `<path class="cross-halo" d="${outline}"/><path class="eraser-body" d="${fill}"/>`
-      + `<path class="eraser-tip" d="${tip}"/><path class="eraser" d="${outline}"/></g>`;
+      + `<path class="eraser-hatch" clip-path="url(#${clip})" d="${hatch}"/><path class="eraser" d="${outline}${band}"/></g>`;
   }
 
   steep(node, size) {
