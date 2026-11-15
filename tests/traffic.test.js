@@ -215,3 +215,38 @@ test('a busy crossroads: everyone gets through, nobody drives through anyone', (
   assert.deepEqual(left, [], 'everyone got through');
   assert.ok(worst > 0.1, `no two crossing each other overlapped (closest ${worst.toFixed(3)})`);
 });
+
+// (stage D: on the ways themselves)
+test('a drive follows a curved way, not its dots', async () => {
+  const { curveThrough } = await import('../src/roads/curves.js');
+  const { w, agents } = town((w) => {
+    const r = w.layWay('road', curveThrough([[0, 10], [8, 6], [15, 10], [22, 6], [29, 10]]));
+    assert.ok(r.ok !== false, r.reason);
+  });
+  const g = agents.driveGraph();
+  const curve = [...w.ways.edges.values()].find((e) => e.kind === 'road');
+  const from = g.attach(4, 8, 1), to = g.attach(26, 8, 1);
+  const way = agents.driveWay(from, to);
+  assert.ok(way, 'a drive along the curve');
+  assert.deepEqual(way.ways, [curve.id]);
+  // every point of it on the curve
+  for (const p of way.pts) assert.ok(g.attach(p[0], p[1], 1e-6), `${p} off the curve`);
+  // and the map's edge is a way out at both ends
+  assert.equal(agents.driveExits().length, 2);
+});
+
+test('a bus comes in, calls at the stops on the way and leaves', () => {
+  const { agents } = town((w) => {
+    road(w, [0, 10], [29, 10]);
+    w.placeStructure('bus-stop', w.grid.index(8, 9));
+    w.placeStructure('bus-stop', w.grid.index(20, 11));
+  });
+  const stops = agents.busStops();
+  assert.equal(stops.length, 2);
+  agents.agents.clear();
+  assert.ok(agents.spawnBus(stops));
+  const bus = [...agents.agents.values()].find((a) => a.bus);
+  assert.ok(bus.legs.length >= 1);
+  const calls = bus.legs.flatMap((l) => l.calls);
+  assert.equal(calls.length, 2);
+});

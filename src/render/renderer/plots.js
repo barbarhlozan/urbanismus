@@ -5,7 +5,7 @@
 import { THEME } from '../../theme.js';
 import { Painter } from '../painter.js';
 import { VEHICLES, vehicleSVG, modelFor, headingIndex } from '../vehicles.js';
-import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront, courtSides } from '../../../structures/index.js';
+import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront, courtSides, freeTilt, footprintOffsets } from '../../../structures/index.js';
 import { drawCourt } from '../../../structures/courts.js';
 import { drawRuin } from '../../../structures/ruin.js';
 import { YARDS } from '../../../structures/yards.js';
@@ -14,7 +14,7 @@ import { rotateQuarter } from '../../core/grid.js';
 import { pointInPolygon } from '../../core/geom2d.js';
 import { fitYard, fitSite, siteEdges, plotClaim } from '../lots.js';
 import { SUN } from '../shadows.js';
-import { SVGNS, NEAR, bareOf, COS30, r2, STRUCTURE_PAD } from './shared.js';
+import { SVGNS, NEAR, bareOf, COS30, r2, STRUCTURE_PAD, quarterOf, centerOf } from './shared.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
 // Objects' box corners lifted and warped, per their points (sceneBox).
@@ -42,14 +42,14 @@ export class PlotDrawing {
     if (!def) return null;
     const { world } = this;
     const live = camera === this.camera;
-    const [x, y] = world.grid.xy(s.node);
+    const [x, y] = world.anchorOf(s);
     const z = world.terrain.heightAt(x, y);
-    const painter = this.attachFree(new Painter(camera, { x, y, z }, world.drawnRotation(s), drawSeed(s)));
+    const painter = this.attachFree(new Painter(camera, { x, y, z }, quarterOf(world, s), drawSeed(s)));
     // the building moves with the relief as one piece, so it stays square on
     // slopes (see Camera.project) – and so does a whole street front of
     // buildings sharing walls, so the walls still meet. Its yard and plot (and
     // parks and squares) keep its warp but follow the ground (Painter.follow).
-    const joined = joinedRow(world, s), row = joined.map((o) => world.centerOf(o));
+    const joined = joinedRow(world, s), row = joined.map((o) => centerOf(world, o));
     const rigid = [row.reduce((a, p) => a + p[0], 0) / row.length, row.reduce((a, p) => a + p[1], 0) / row.length];
     painter.rigid = rigid;
     // On uneven ground it stands level at the highest ground under it –
@@ -71,10 +71,11 @@ export class PlotDrawing {
       p.keepTier = (detail >> 2) & 3;
     };
     keep(painter);
-    const points = world.nodesOf(s).map((n) => world.grid.xy(n));
+    // (where it stands: placed freely, its outline's corners)
+    const points = s.free ? world.outlineOf(s) : world.nodesOf(s).map((n) => world.grid.xy(n));
     if (def.site) {
       painter.follow = true; // parks and squares lie on the ground like yards
-      const site = world.siteArea(s.type, s.node, s.rotation);
+      const site = world.siteAreaOf(s);
       painter.setSite(fitSite(world, this.config, site));
       painter.setSitePaths(siteEdges(world, this.config, world.sitePaths(s)));
       const [x0, y0, x1, y1] = site.rect;
@@ -82,7 +83,7 @@ export class PlotDrawing {
     }
     painter.join = joinSides(world, s);
     painter.court = courtSides(world, s);
-    painter.setTilt(tiltOf(def, s, painter.join, world));
+    painter.setTilt(tiltOf(def, s, painter.join, world), !!s.free);
     painter.roadGap = world.nodesOf(s).length === 1 ? roadFront(world, s).gap : 1; // see busStop.js
     if (s.ruin) drawRuin(painter, def); // burnt down (World.burnStructure)
     else def.draw(painter, s);
@@ -92,8 +93,8 @@ export class PlotDrawing {
     // standing with it, not lying on the ground like the front yard.
     let courtWorld = [];
     if (core && (painter.court.left || painter.court.right)) {
-      const cp = this.attachFree(new Painter(camera, { x, y, z }, world.drawnRotation(s), drawSeed(s) ^ 0x3c6ef372));
-      cp.setTilt(painter.tilt);
+      const cp = this.attachFree(new Painter(camera, { x, y, z }, quarterOf(world, s), drawSeed(s) ^ 0x3c6ef372));
+      cp.setTilt(painter.tilt, true);
       cp.rigid = rigid;
       cp.relief = relief;
       cp.level = painter.level;
@@ -111,7 +112,7 @@ export class PlotDrawing {
     if (yard) {
       const [dx, dy] = yard.origin;
       const yp = this.attachFree(new Painter(camera, { x: dx, y: dy, z: world.terrain.heightAt(dx, dy) }, yard.rotation, drawSeed(s) ^ 0x5bd1e995));
-      yp.setTilt(yard.tilt);
+      yp.setTilt(yard.tilt, !!s.free);
       yp.rigid = rigid;
       yp.sways = live;
       yp.follow = true;
@@ -131,7 +132,7 @@ export class PlotDrawing {
     const plotDef = def.plot ?? {};
     if (plotDef.props && core) {
       const pp = this.attachFree(new Painter(camera, { x, y, z }, 0, drawSeed(s) ^ 0x2c1b3c6d));
-      pp.setTilt(this.roadTurn(s)); // a plot turned with its building to a diagonal road
+      pp.setTilt(this.roadTurn(s), !!s.free); // a plot turned with its building to a diagonal road
       pp.rigid = rigid;
       pp.sways = live;
       pp.follow = true;
@@ -177,8 +178,11 @@ export class PlotDrawing {
   // (SPREAD) not turned also takes the empty ground round it (claimFor).
   plotFor(s, plotDef, painter, core, yardWorld, courtWorld = []) {
     const { world } = this;
-    const [ax, ay] = world.grid.xy(s.node);
-    const pts = world.nodesOf(s).map((n) => world.grid.xy(n));
+    const [ax, ay] = world.anchorOf(s);
+    // its footprint's squares' middles (placed freely: where it stands, not its dot)
+    const pts = s.free
+      ? footprintOffsets(STRUCTURE_TYPES[s.type], quarterOf(world, s)).map(([dx, dy]) => [ax + dx, ay + dy])
+      : world.nodesOf(s).map((n) => world.grid.xy(n));
     const xs = pts.map((p) => p[0] - ax), ys = pts.map((p) => p[1] - ay);
     const tilt = this.roadTurn(s);
     const [tc, ts] = [Math.cos(tilt), Math.sin(tilt)];
@@ -219,9 +223,16 @@ export class PlotDrawing {
       return t !== null;
     };
     // (a road at a slant can cut across the plot's square: its fences stop short)
+    // (placed freely, a neighbour may stand inside its square: its walls are
+    // nobody's garden)
+    const others = (x, y, r) => {
+      if (!s.free) return false;
+      const [wx, wy] = toAnchor(x, y);
+      return world.structureIndex.near(ax + wx, ay + wy, r).some((id) => id !== s.id);
+    };
     const clear = (x, y) => {
       const [wx, wy] = toAnchor(x, y);
-      return !this.free || this.free(ax + wx, ay + wy, 0.02);
+      return (!this.free || this.free(ax + wx, ay + wy, 0.02)) && !others(x, y, 0.02);
     };
     const common = {
       style: plotDef.props,
@@ -232,7 +243,8 @@ export class PlotDrawing {
 
     // A garden spreading over the ground round it: the half-dot squares it
     // claims, its boundary where they meet anyone else's – or nobody's.
-    const reach = !tilt && SPREAD[plotDef.props];
+    // (not one placed freely: the claims are half-dot squares on the dots)
+    const reach = !tilt && !s.free && SPREAD[plotDef.props];
     if (reach) {
       const { owner, seen, draws } = this.claimFor(s, reach);
       const own = (x, y) => owner(Math.floor(2 * (ax + x)), Math.floor(2 * (ay + y))) === s.id;
@@ -309,7 +321,7 @@ export class PlotDrawing {
       sides,
       inside: (x, y, r) =>
         x - r > x0 && x + r < x1 && y - r > y0 && y + r < y1 &&
-        !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y, r),
+        !onBuilding(x, y, r) && !inYard(x, y) && !water(x, y, r) && !others(x, y, r),
       onLine: (x, y) => !onBuilding(x, y, 0.02) && !inYard(x, y) && !water(x, y) && clear(x, y),
     };
   }
@@ -408,6 +420,25 @@ export class PlotDrawing {
     const { world } = this;
     const nodes = world.nodesOf(s);
     const def = STRUCTURE_TYPES[s.type];
+    if (s.free) {
+      // placed freely: square to it, from its middle; fitYard finds how
+      // deep it may go towards the drawn road
+      const road = world.nearestRoadPoint(s.x, s.y);
+      if (!road && def.access !== 'any') return null;
+      const style = yardOf(def, s, { cars: !!road });
+      if (!style) return null;
+      const [w] = world.outlineSize(s.type);
+      return {
+        style,
+        origin: [s.x, s.y],
+        rotation: quarterOf(world, s),
+        tilt: freeTilt(s),
+        x0: -w / 2 + 0.05,
+        x1: w / 2 - 0.05,
+        y0: road ? -0.86 : -0.62,
+        y1: -0.34,
+      };
+    }
     const front = world.frontFor(nodes) ?? this.placedFront(s, nodes);
     if (front.road < 0 && def.access !== 'any') return null; // stations, industry: only towards a road
     const style = yardOf(def, s, { cars: front.road >= 0 });
@@ -448,7 +479,7 @@ export class PlotDrawing {
   // placed, the door in the middle of that row.
   placedFront(s, nodes) {
     const { world } = this;
-    const dir = rotateQuarter(0, -1, world.drawnRotation(s));
+    const dir = rotateQuarter(0, -1, quarterOf(world, s));
     const row = nodes.filter((n) => !nodes.includes(world.grid.offset(n, dir[0], dir[1])));
     return { door: row[Math.floor(row.length / 2)], dir, road: -1 };
   }

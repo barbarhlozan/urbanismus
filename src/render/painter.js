@@ -337,8 +337,10 @@ export class Painter {
   // Turn the whole drawing by a small angle (radians, counter-clockwise
   // seen from above) on top of its quarter-turn rotation – houses standing a
   // little askew (tiltOf in structures/index.js). Call before drawing.
-  setTilt(angle) {
-    if (cleanOn()) angle *= CLEAN.tilt;
+  // exact: the turn is where the thing stands (a building placed freely),
+  // not a look – kept as it is in the clean scheme too
+  setTilt(angle, exact = false) {
+    if (cleanOn() && !exact) angle *= CLEAN.tilt;
     this.tilt = angle;
     this._tc = Math.cos(angle);
     this._ts = Math.sin(angle);

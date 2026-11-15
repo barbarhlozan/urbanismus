@@ -74,28 +74,6 @@ test('a town that already stands: what is there counts as written', () => {
   assert.deepEqual(texts(c).slice(1), ['The second house was built.']);
 });
 
-test('an old save: levels become their own structures, keeping their look', async () => {
-  const { World } = await import('../src/core/world.js');
-  const { drawSeed } = await import('../structures/index.js');
-  const w = flatWorld();
-  road(w, [2, 5], [10, 5]);
-  const json = JSON.parse(JSON.stringify(w.toJSON()));
-  json.version = 3;
-  json.structures = [
-    { id: 90, type: 'residential', node: w.grid.index(3, 6), rotation: 0, level: 3, seed: 1234, data: { locked: true } },
-    { id: 91, type: 'square', node: w.grid.index(4, 6), rotation: 0, level: 2, seed: 99, data: {} },
-    { id: 92, type: 'mine', node: w.grid.index(2, 10), rotation: 0, seed: 7, data: {} },
-  ];
-  json.chronicle.marks = ['first:residential', 'first:residential:3', 'first:road'];
-  const old = World.fromJSON(json);
-  const [block, fountain, pit] = [90, 91, 92].map((id) => old.structures.get(id));
-  assert.deepEqual([block.type, fountain.type, pit.type], ['block', 'plaza', 'pit']);
-  assert.equal(drawSeed(block), (1234 ^ Math.imul(3, 0x9e3779b1)) >>> 0); // as it was drawn at level 3
-  assert.equal(block.level, undefined);
-  assert.deepEqual(block.data, { face: 0 }); // facing the road it stands by (World.faceOnce)
-  assert.deepEqual(old.chronicle.marks, ['first:house', 'first:block', 'first:road']);
-});
-
 test('it is kept with the town', () => {
   const w = flatWorld();
   const c = new Chronicle(w, CONFIG);

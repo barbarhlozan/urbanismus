@@ -2,8 +2,8 @@
 
 The story lives in `story/story.txt`, a plain text file. It has **rules** that
 watch the town, and **branches** of dialogue that the rules start. Reload the
-game after editing it. Any mistakes are listed in the dialogue window when it
-loads, with their line numbers.
+game after editing it. Any mistakes are listed at the bottom of the screen
+when it loads, with their line numbers.
 
 A branch is told once per town. To hear it again, run `cmd.story.reset()`
 in the browser console, or `cmd.story.play('IntroDialogue')` to tell one
@@ -72,8 +72,11 @@ The wind blows over the meadow.
 | Line | What it does |
 |---|---|
 | `::Name::` | starts a branch (a line of just `::` ends it; the next `::Name::` does too) |
-| `Speaker: text` | a line of dialogue, with the speaker's name on top |
-| `text` | narration, nobody speaking |
+| `Speaker: text` | a line of dialogue, in a bubble over the scene's building (see below) |
+| `Speaker @place: text` | …over that building instead, for this line |
+| `at place` | where the lines after it are said: a name picked or a house number (`at nowhere`: none) |
+| `text` | narration, nobody speaking: at the bottom of the screen |
+| `~crowd` / `~calm` | lines come by themselves, one over the other, without waiting / they wait again |
 | `> text -> Branch` | a choice; choices one after another are offered together (`*` works too) |
 | `-> Branch` | go on in another branch |
 | `if condition -> Branch` | …only if the condition holds |
@@ -94,9 +97,40 @@ name: `{residents} people live in {town} now.`
 Branches you reach with `->` or a choice count as told too, so `seen(Geese)`
 is true once someone picked that choice.
 
-The player clicks the dialogue window, or presses Enter, to go on. Choices
-are picked with a click, or with ↑ ↓ and Enter. The town keeps going
-underneath.
+### Where it's said
+
+What people say shows in bubbles over the building where it happens, the
+speaker's name inside, stacked like a chat: each speaker at a house keeps a
+lane (two on the sides, a third in the middle, four in four), the newest
+line lowest, older ones above and paler, and a tail from the last of a
+speaker's run down to the roof. A building off the screen keeps its bubbles
+at the edge on its side, their tails pointing out towards it.
+
+```
+narrator Děda
+
+::Naves::
+pick chalupa = oldest house
+pick hudak = nearest house to chalupa
+Děda: Naproti bydleli Hudákovi.
+at hudak
+Hudák: No pozri. Pražský panáček.
+Jarka @chalupa: Ty jsi ten od Marie? Umíš plavat?
+Mirek @chalupa: Trochu.
+::
+```
+
+`narrator Name` (outside the branches, once) is whoever tells the story
+rather than being in it: their lines, narration and the choices are at the
+bottom of the screen, not on the map. So is a line when no place was given
+with `at` or `@`, or when that building isn't standing.
+
+Under `~crowd` each line comes a moment after the last without waiting for
+the player, and goes by itself (a crowd at a fire); `~calm` waits again.
+
+The player clicks a bubble or the line at the bottom, or presses Enter, to
+go on. Choices are picked with a click, a number, or ↑ ↓ and Enter. The
+town keeps going underneath.
 
 ## Buildings
 

@@ -10,7 +10,6 @@
 
 import { STRUCTURE_TYPES, yardOf, kindsOf, kindShown } from '../../structures/index.js';
 import { YARDS, YARD_STYLES } from '../../structures/yards.js';
-import { statIcon } from '../ui/icons.js';
 import { iconSvg } from '../ui/uiIcons.js';
 import { t, hasText } from '../core/text.js';
 import { nameOf } from '../ui/names.js';
@@ -35,8 +34,8 @@ export function createInspectTool(ctx) {
     label: t('tool.select'),
     toolbar: false, // it's what you're in when no tool is picked
 
-    click(node, event) {
-      const s = node < 0 ? null : ctx.world.structureAt(node);
+    click(node, event, point) {
+      const s = point ? ctx.world.structureAtPoint(...point) : node < 0 ? null : ctx.world.structureAt(node);
       if (!s) return ctx.popup.hide();
       ctx.onPick?.(s); // (the fire menu acts on it, ui/devMenus.js)
       const { title, items } = structureMenu(ctx, s);
@@ -91,9 +90,6 @@ function residents(def) {
   const label = esc(t('stat.residents.n', { n }));
   return `<span class="bi-people${n > 12 ? ' crowd' : ''}" role="img" title="${label}" aria-label="${label}">${Array.from({ length: n }, (_, i) => one(i)).join('')}</span>`;
 }
-function warning(def) {
-  return `<div class="bi-row warn"><span class="stat">${statIcon('cutoff')}${t(def.access === 'any' ? 'inspect.needs.any' : 'inspect.needs.road')}</span></div>`;
-}
 
 // The house number as the little enamel plate by the door: "č. p." and
 // the number, in a frame.
@@ -144,7 +140,7 @@ function structureMenu({ world }, s) {
 
   // under its name its house number (and what it is, when the name is the
   // families'), the families when there are many, who runs what, how many
-  // live there and a warning if nothing reaches it; then a row of drawings
+  // live there; then a row of drawings
   const people = s.ruin ? '' : residents(def);
   const families = familiesOf(s);
   const title = families.title ?? nameOf(def);
@@ -161,7 +157,6 @@ function structureMenu({ world }, s) {
   const work = staffRows(world, s) + workRows(world, s);
   if (work) items.push({ block: work });
   if (people) items.push({ block: people });
-  if (!world.isServed(s)) items.push({ block: warning(def) });
 
   // how it looks, as two drawings side by side (each named on pointing at
   // it): its next kind, in the order Space goes through them while

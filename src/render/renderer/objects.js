@@ -14,7 +14,7 @@ import { SegmentIndex } from '../../core/geom2d.js';
 import { FEATURE_TYPES } from '../../../features/index.js';
 import { mergeRuns, isoSort } from '../order.js';
 import { SUN } from '../shadows.js';
-import { SVGNS, NEAR, bareOf, BAND_HOLD, STEPS, GL_AHEAD, detailRank, STRUCTURE_PAD } from './shared.js';
+import { SVGNS, NEAR, bareOf, BAND_HOLD, STEPS, GL_AHEAD, detailRank, STRUCTURE_PAD, centerOf } from './shared.js';
 
 // A drawn element (painter.js) carrying detail class d2, or d1 / d2 (atDetail).
 const DETAIL_2 = /<(?:path|polygon|polyline|circle|ellipse|rect|line)\b[^>]*\bclass="[^"]*\bd2\b[^"]*"[^>]*\/>/g;
@@ -391,8 +391,8 @@ export class ObjectDrawing {
       return Math.hypot(sx * camera.zoom + camera.panX - cx, sy * camera.zoom + camera.panY - cy);
     };
     const near = [
-      ...[...world.structures.values()].map((s) => [`s${s.id}`, off(world.centerOf(s))]),
-      ...[...world.features.values()].map((f) => [`f${f.id}`, off(world.grid.xy(f.node))]),
+      ...[...world.structures.values()].map((s) => [`s${s.id}`, off(centerOf(world, s))]),
+      ...[...world.features.values()].map((f) => [`f${f.id}`, off([f.x, f.y])]),
     ].filter(([key, d]) => d < Math.hypot(cx, cy) && this.objs.get(key)?.shown !== false)
       .sort((a, b) => a[1] - b[1])
       .slice(0, DRAW.cap);
@@ -509,9 +509,7 @@ export class ObjectDrawing {
     const def = FEATURE_TYPES[f.type];
     if (!def) return null;
     const { world } = this;
-    const [nx, ny] = world.grid.xy(f.node);
-    const x = nx + f.ox;
-    const y = ny + f.oy;
+    const { x, y } = f;
     // seeded per feature, so each tree has its own shape
     const painter = new Painter(camera, { x, y, z: world.terrain.heightAt(x, y) }, 0, Math.imul(f.id, 2654435761) ^ f.node);
     painter.rigid = [x, y];

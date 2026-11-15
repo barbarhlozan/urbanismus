@@ -48,6 +48,13 @@
     /* C · bubble: a freehand round, the name outside over it */
     .st-cloud .bb { padding: 9px 15px 11px; }
     .st-cloud .bb-name { position: absolute; left: 14px; top: -14px; text-shadow: 0 0 3px var(--bg), 0 0 6px var(--bg); }
+    /* D · chat: one drawn bubble sliced in nine (corners kept, edges
+       stretched), stacked like a chat in a lane per speaker; the name
+       inside, only when the speaker changes; the tail a drawing of its own */
+    .st-chat .bb { border: 11px solid transparent; border-image: var(--chat-sprite) 26 fill / 26px stretch; padding: 1px 6px 2px; transition: opacity .35s; }
+    .st-chat .bb-name { font-size: 10px; margin-bottom: 1px; }
+    .st-chat .bb.noname .bb-name { display: none; }
+    .st-chat .bb-text { font-size: 13.5px; }
 
     /* the narrator (DĚDA, today, in the car): a caption, not on the map */
     .cap { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(600px, calc(100% - 40px)); text-align: center; transition: opacity .3s; }
@@ -77,13 +84,13 @@
   <h2>1 · Speech bubbles over the houses</h2>
   <div class="bar">
     <div class="grp" id="styles"><span class="lbl">Style</span>
-      <button data-v="tag">A · Tag</button><button data-v="card">B · Card</button><button data-v="cloud">C · Bubble</button></div>
+      <button data-v="tag">A · Tag</button><button data-v="card">B · Card</button><button data-v="cloud">C · Bubble</button><button data-v="chat">D · Chat</button></div>
     <div class="grp" id="history"><span class="lbl">Earlier lines</span>
       <button data-v="one">Gone</button><button data-v="thread">Stay, faded</button></div>
     <div class="grp" id="beats"><span class="lbl">Beat</span>
       <button data-v="naves">3 · Náves</button><button data-v="hospoda">4 · Hospoda</button><button data-v="pozar">12 · Požár</button></div>
   </div>
-  <div class="stage click" id="village"></div>
+  <div class="stage click" id="village" style="height:700px"></div>
 
   <h2>2 · A scene: two men with a saw on the church tower (beat 18)</h2>
   <p class="note">Story figures walk the map as the others do, but they can also go up onto a building – to a <em>spot</em> the building names (its door, gate, tower ledge, belfry) – and do something there. On the right, how the story file could say it; the line playing now is marked. They're drawn over the church (as the trains' carriages already are, <code>penTop</code>), which is right because the ladder goes on the side facing the camera.</p>
@@ -166,6 +173,26 @@
     // Each bubble is laid out every frame (its anchor can move), and eased
     // there; its pen lines are drawn on when it first shows.
 
+    // The chat bubble, drawn once: a rounded box in one pen line whose ends
+    // overlap where it closes, paper inside, in this scheme's ink. 120×72,
+    // sliced 26 in from each side (a stand-in until it's drawn by hand).
+    function chatSprite() {
+      const css = getComputedStyle(document.documentElement);
+      const ink = css.getPropertyValue('--main').trim() || '#3a2c24', paper = css.getPropertyValue('--bg').trim() || '#f3eee2';
+      const shape = (open) => {
+        const rnd = mulberry32(11), N = 34, a0 = Math.PI * 0.62, e = 3.6, pts = [];
+        for (let i = 0; i <= (open ? N + 3 : N - 1); i++) {
+          const a = a0 + (i / N) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+          const j = 1 + (rnd() - 0.5) * 0.025 - (i > N ? 0.012 * (i - N) : 0);
+          pts.push([60 + Math.sign(c) * Math.abs(c) ** (2 / e) * 57 * j, 36 + Math.sign(s) * Math.abs(s) ** (2 / e) * 33 * j]);
+        }
+        return smooth(pts, !open);
+      };
+      const svg = `<svg xmlns="${NS}" width="120" height="72" viewBox="0 0 120 72"><path d="${shape(false)}" fill="${paper}"/>`
+        + `<path d="${shape(true)}" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+      return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    }
+
     class Talk {
       constructor(stage, { clock = () => performance.now() / 1000, ease = 0.22 } = {}) {
         this.stage = stage;
@@ -183,12 +210,16 @@
 
       setStyle(s) {
         this.style = s;
-        this.stage.classList.remove('st-tag', 'st-card', 'st-cloud');
+        this.stage.classList.remove('st-tag', 'st-card', 'st-cloud', 'st-chat');
         this.stage.classList.add(`st-${s}`);
-        for (const b of this.list) b.g.innerHTML = '', b.fresh = true;
+        if (s === 'chat') this.stage.style.setProperty('--chat-sprite', chatSprite());
+        for (const b of this.list) {
+          b.g.innerHTML = '', b.fresh = true;
+          b.el.style.maxWidth = b.el.style.opacity = '';
+        }
       }
 
-      say({ who, text, anchor, side = 0, slot = null, crowd = false, start = null, life = null }) {
+      say({ who, text, anchor, side = 0, slot = null, place = null, lane = null, lanes = 1, crowd = false, start = null, life = null }) {
         const el = document.createElement('div');
         el.className = 'bb';
         el.innerHTML = `<div class="bb-name">${esc(who)}</div><div class="bb-text"></div>`;
@@ -202,7 +233,11 @@
         el.prepend(ink);
         const n = ++this.count;
         const rnd = mulberry32(seedOf(n, 9));
-        const b = { who, text, anchor, side, slot: slot ?? `${who}`, crowd, el, g, n, seed: seedOf(n, 31), start: start ?? this.clock(), life,
+        place ??= slot ?? who;
+        // (chat) the name only when the one before at this place was someone else
+        const before = [...this.list].reverse().find((o) => !o.crowd && o.dropAt == null && o.place === place);
+        const b = { who, text, anchor, side, slot: slot ?? `${who}`, place, crowd, el, g, n, seed: seedOf(n, 31), start: start ?? this.clock(), life,
+          lane: lane ?? (side < 0 ? 0.2 : side > 0 ? 0.8 : 0.5), lanes, named: !before || before.who !== who,
           jitter: crowd ? [(rnd() - 0.5) * 260, 20 - rnd() * 110] : [0, 0], pos: null, fresh: true, shown: -1 };
         el.querySelector('.bb-text').innerHTML = `<span class="un">${esc(text)}</span>`; // (laid out whole, written in)
         if (!crowd && this.history === 'one') for (const o of this.list) this.drop(o);
@@ -215,7 +250,7 @@
       finish(b) { b.start = -1e9; }
       drop(b) { b.dropAt ??= this.clock(); }
       clear() { for (const b of this.list) this.drop(b); }
-      fadeAll() { for (const b of this.list) b.old = true; }
+      fadeAll() { for (const b of this.list) b.old = b.dim = true; }
 
       // every frame
       frame() {
@@ -229,11 +264,13 @@
         });
         // the thread: no more than two older ones kept
         const kept = this.list.filter((b) => !b.crowd && b.dropAt == null);
-        for (const b of kept.slice(0, -3)) this.drop(b);
+        for (const b of kept.slice(0, this.style === 'chat' ? -4 : -3)) this.drop(b);
 
         // stacked: in each slot (who, where) the newest lowest, older above
-        const lift = new Map();
+        // (chat: one stack a place, everybody in it)
+        const lift = new Map(), below = new Map(), rank = new Map();
         for (const b of [...this.list].reverse()) {
+          if (this.style === 'chat') { this.chatFrame(b, lift, below, rank, W, H); continue; }
           // letters
           const n = Math.max(0, Math.min(b.text.length, Math.floor((now - b.start) * this.speed)));
           if (n !== b.shown) {
@@ -264,6 +301,76 @@
           b.g.setAttribute('transform', `translate(${(-b.pos[0]).toFixed(1)} ${(-b.pos[1]).toFixed(1)})`);
           this.drawInk(b, b.pos[0], b.pos[1], w, h, ax, ay, up > 0 && !b.crowd);
         }
+      }
+
+      // Chat: the place's talk as one column over the roof, a lane a
+      // speaker (two: the sides; a third in the middle; four: four lanes).
+      // The newest lowest; older ones above, paler; a tail only under the
+      // last of one speaker's run, leaning from its lane to the house.
+      chatFrame(b, lift, below, rank, W, H) {
+        const now = this.clock();
+        const n = Math.max(0, Math.min(b.text.length, Math.floor((now - b.start) * this.speed)));
+        if (n !== b.shown) {
+          b.shown = n;
+          b.el.querySelector('.bb-text').innerHTML = `${esc(b.text.slice(0, n))}<span class="un">${esc(b.text.slice(n))}</span>`;
+        }
+        const key = b.crowd ? `c${b.n}` : b.place;
+        const r = rank.get(key) ?? 0;
+        rank.set(key, r + 1);
+        b.el.classList.toggle('noname', !b.named);
+        b.el.classList.remove('old', 'gone');
+        b.el.style.opacity = b.dropAt != null ? 0 : Math.min([1, 0.78, 0.58, 0.42, 0.32][r] ?? 0.3, b.dim ? 0.35 : 1);
+        b.el.style.maxWidth = `${b.lanes >= 4 ? 175 : b.lanes === 3 ? 205 : 240}px`; // (with its 34px of frame)
+
+        const [ax, ay] = b.anchor();
+        const w = b.el.offsetWidth, h = b.el.offsetHeight;
+        const tail = b.crowd || below.get(key) !== b.who;
+        below.set(key, b.who);
+        const up = lift.get(key) ?? 0;
+        const COL = 380, laneX = ax - COL / 2 + COL * b.lane;
+        let x = Math.max(ax - COL / 2, Math.min(ax + COL / 2 - w, laneX - w / 2));
+        let y = ay - h - 18 - up - (tail ? 10 : 0);
+        lift.set(key, up + h + (tail ? 10 : 0) + 5);
+        x += b.jitter[0]; y += b.jitter[1];
+        x = Math.max(8, Math.min(W - w - 8, x));
+        // an older line pushed off the top goes, rather than sit on the others
+        if (y < 4 && r > 0) b.el.style.opacity = 0;
+        y = Math.min(H - h - 90, y);
+        if (!b.pos || this.ease >= 1) b.pos = [x, y];
+        else b.pos = [b.pos[0] + (x - b.pos[0]) * this.ease, b.pos[1] + (y - b.pos[1]) * this.ease];
+        b.el.style.transform = `translate(${b.pos[0].toFixed(1)}px, ${b.pos[1].toFixed(1)}px)`;
+        // the ink svg sits in the padding box, inside the 11px border
+        const ox = b.pos[0] + 11, oy = b.pos[1] + 11;
+        b.g.setAttribute('transform', `translate(${(-ox).toFixed(1)} ${(-oy).toFixed(1)})`);
+        const parts = [];
+        if (tail) {
+          const [px, py] = b.pos;
+          const tx = Math.max(px + 22, Math.min(px + w - 22, laneX + (ax - laneX) * 0.45));
+          const by = py + h - 3; // the sprite's line
+          const dx = ax - tx, dy = Math.max(20, ay - by), l = Math.hypot(dx, dy);
+          const tip = [tx + (dx / l) * 14, by + (dy / l) * 14];
+          const a = [tx - 6, by], c = [tx + 6, by];
+          parts.push(['paper', `M${a[0]} ${a[1] - 3}L${tip[0]} ${tip[1]}L${c[0]} ${c[1] - 3}Z`]);
+          parts.push(['pen', sketchLine(a, tip, b.seed + 3, { bow: 0.8 }) + sketchLine(tip, c, b.seed + 4, { bow: 0.8 })]);
+        }
+        this.setInk(b, parts);
+      }
+
+      setInk(b, parts) {
+        while (b.g.children.length > parts.length) b.g.lastChild.remove();
+        parts.forEach(([cls, d], i) => {
+          let p = b.g.children[i];
+          if (!p) {
+            p = document.createElementNS(NS, 'path');
+            p.setAttribute('pathLength', '1');
+            b.g.appendChild(p);
+            if (cls === 'pen' && b.fresh) p.classList.add('fresh');
+          }
+          p.classList.toggle('pen', cls === 'pen');
+          p.classList.toggle('paper', cls === 'paper');
+          p.setAttribute('d', d);
+        });
+        b.fresh = false;
       }
 
       // The pen round a bubble: kept as elements, their `d` changed, so the
@@ -440,6 +547,10 @@ DĚDA: Tehdy jsem si to myslel. Všichni jsme si to mysleli.` },
       const walk = (list) => { for (const s of list) { if (s.who && s.who !== 'DĚDA') { if (!at.has(s.at)) at.set(s.at, []); if (!at.get(s.at).includes(s.who)) at.get(s.at).push(s.who); } if (s.choices) for (const c of s.choices) walk(c.steps); } };
       walk(steps);
       for (const [place, who] of at) who.forEach((w, i) => play.sides.set(`${w}@${place}`, who.length === 1 ? 0 : i % 2 ? 1 : -1));
+      // (chat) lanes: two on the sides, a third in the middle, four in four
+      const LANES = [[0.5], [0.2, 0.8], [0.17, 0.83, 0.5], [0.14, 0.86, 0.38, 0.62]];
+      play.lanes = new Map();
+      for (const [place, who] of at) who.forEach((w, i) => play.lanes.set(`${w}@${place}`, { lane: LANES[Math.min(4, who.length) - 1][i] ?? 0.5, lanes: who.length }));
     }
     const sideOf = (who, at) => play.sides.get(`${who}@${at}`) ?? 0;
 
@@ -474,7 +585,7 @@ DĚDA: Tehdy jsem si to myslel. Všichni jsme si to mysleli.` },
       cap.classList.add('hidden');
       play.cap = null;
       const anchor = () => villageSvg.toStage(town.top(s.at));
-      talk.say({ who: s.who, text: s.text, anchor, side: sideOf(s.who, s.at), slot: `${s.at}:${sideOf(s.who, s.at)}` });
+      talk.say({ who: s.who, text: s.text, anchor, side: sideOf(s.who, s.at), slot: `${s.at}:${sideOf(s.who, s.at)}`, place: s.at, ...play.lanes.get(`${s.who}@${s.at}`) });
     }
 
     // Lines one over the other, by themselves, round the house: nobody
@@ -700,7 +811,7 @@ DĚDA: Tehdy jsem si to myslel. Všichni jsme si to mysleli.` },
 
     // ---------- go ----------
 
-    buttons('styles', q.get('style') ?? 'card', (v) => { talk.setStyle(v); sceneTalk.setStyle(v); });
+    buttons('styles', q.get('style') ?? 'chat', (v) => { talk.setStyle(v); sceneTalk.setStyle(v); });
     buttons('history', 'thread', (v) => { talk.history = v; });
     buttons('beats', q.get('beat') ?? 'hospoda', startBeat);
     sceneTalk.history = 'thread';

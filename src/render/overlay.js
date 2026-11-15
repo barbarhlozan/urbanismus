@@ -4,9 +4,9 @@
 
 import { smoothPolyline } from '../roads/geometry.js';
 import { Painter } from './painter.js';
-import { drawSeed, tiltOf, roadFront } from '../../structures/index.js';
+import { drawSeed, tiltOf, roadFront, freeTilt, freeAnchor } from '../../structures/index.js';
 import { fitSite, siteEdges } from './lots.js';
-import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
+import { sketchEllipse, sketchLine, sketchHatch, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
 import { controlArt } from '../ui/icons.js';
 import { THEME } from '../theme.js';
@@ -50,14 +50,21 @@ export class OverlayKit {
     return node < 0 ? '' : this.ringAt(...this.world.grid.xy(node), r, cls);
   }
 
-  // Upright "X" (screen-aligned so it never lines up with roads), with a halo
-  // so it stays readable on top of buildings.
+  // An "X" in a quick hand (screen-aligned so it never lines up with roads):
+  // two strokes of uneven length, each a little off the diagonal, bowed and
+  // running past their ends – with a halo so it stays readable on top of
+  // buildings.
   crossAt(x, y, size = 0.16) {
     const [cx, cy] = this.project(x, y);
     const s = size * this.camera.tile;
-    const k = 1 / this.camera.zoom, seed = seedOf(x, y);
-    const d = sketchLine([cx - s, cy - s], [cx + s, cy + s], seed, { k, over: 1.5 })
-      + sketchLine([cx - s, cy + s], [cx + s, cy - s], seed + 1, { k, over: 1.5 });
+    const k = 1 / this.camera.zoom, seed = seedOf(x, y), rnd = mulberry32(seed ^ 0x2c05);
+    const arm = (a) => {
+      const t = a + (rnd() - 0.5) * 0.35, l0 = s * (0.75 + 0.4 * rnd()), l1 = s * (0.75 + 0.4 * rnd());
+      const ox = (rnd() - 0.5) * 0.25 * s, oy = (rnd() - 0.5) * 0.25 * s;
+      return [[cx + ox - Math.cos(t) * l0, cy + oy - Math.sin(t) * l0], [cx + ox + Math.cos(t) * l1, cy + oy + Math.sin(t) * l1]];
+    };
+    const d = sketchLine(...arm(Math.PI / 4), seed, { k, over: 2, bow: 2.4 })
+      + sketchLine(...arm(-Math.PI / 4), seed + 1, { k, over: 2, bow: 2.4 });
     return `<path class="cross-halo" d="${d}"/><path class="cross" d="${d}"/>`;
   }
 
@@ -131,25 +138,41 @@ export class OverlayKit {
     return dots + signs;
   }
 
-  // Erase mode, over what would go: the eraser from the Erase icon
-  // (icons.js, without its smudge), tilted, pen-drawn, filled with the
-  // paper so it reads over anything.
+  // Erase mode, over what would go: the rubber from the Erase tile
+  // (icons/ui/tool-erase.svg, without its smudge) – tilted, rounded, drawn
+  // by hand, a little differently wherever it lands – filled with the paper
+  // so it reads over anything, its rubber tip hatched as a roof is.
   eraserAt(x, y, size = 0.16) {
     const [cx, cy] = this.project(x, y);
-    const s = (size * this.camera.tile) / 11; // the icon's 32-box, around its middle
-    const k = 1 / this.camera.zoom, seed = seedOf(x, y, 11);
-    const p = ([px, py]) => [cx + (px - 16.2) * s, cy + (py - 18.2) * s];
-    const body = [[6, 22], [20.1, 7.9], [26.5, 14.3], [12.4, 28.4]].map(p);
-    const [a, b] = [p([10.9, 17.1]), p([17.3, 23.5])]; // where the rubber tip starts
-    const outline = body.map((q, i) => sketchLine(q, body[(i + 1) % 4], seed + i, { k, over: 1 })).join('')
-      + sketchLine(a, b, seed + 5, { k, over: 0.5 });
-    const fill = `M${body.map(([qx, qy]) => `${r2(qx)} ${r2(qy)}`).join('L')}Z`;
-    const tip = `M${[body[0], a, b, body[3]].map(([qx, qy]) => `${r2(qx)} ${r2(qy)}`).join('L')}Z`;
+    const s = (size * this.camera.tile) / 8.25; // the tile's 24-box, around its middle
+    const seed = seedOf(x, y, 11);
+    // each point of the drawing nudged a hair, so no two are alike (the
+    // same point the same way in the outline, its fill and the tip)
+    const q = (px, py) => {
+      const rnd = mulberry32(seedOf(px, py, seed));
+      const jx = (rnd() - 0.5) * 0.5, jy = (rnd() - 0.5) * 0.5;
+      return `${r2(cx + (px + jx - 12.15) * s)} ${r2(cy + (py + jy - 13.65) * s)}`;
+    };
+    const path = (pts) => pts.map(([c, ...n]) => c + (n.length ? q(...n.slice(0, 2)) + (n.length > 2 ? ' ' + q(...n.slice(2)) : '') : '')).join('');
+    const rim = [['M', 4.38, 15.39], ['Q', 9.12, 10.91, 13.51, 6.07], ['Q', 14.61, 5.12, 15.71, 6.31], ['Q', 17.51, 8.25, 19.42, 10.08],
+      ['Q', 20.54, 10.89, 19.34, 12.09], ['Q', 14.78, 16.31, 10.49, 20.8], ['Q', 9.39, 22.19, 8.54, 20.83], ['Q', 6.64, 19.04, 4.61, 17.39],
+      ['Q', 3.66, 16.23, 4.78, 15.38], ['L', 3.9, 15.1]];
+    const outline = path(rim);
+    const band = path([['M', 9.17, 10.51], ['Q', 11.95, 13.5, 14.99, 16.23]]);
+    const fill = path(rim.slice(0, -1)) + 'Z';
+    const tip = path([['M', 9.17, 10.51], ['Q', 11.95, 13.5, 14.99, 16.23], ['L', 10.49, 20.8], ['Q', 9.39, 22.19, 8.54, 20.83],
+      ['Q', 6.64, 19.04, 4.61, 17.39], ['Q', 3.66, 16.23, 4.78, 15.38]]) + 'Z';
+    // the tip's hatching: strokes across the box round it, cut to its shape
+    const [x0, y0] = [cx + (3.4 - 12.15) * s, cy + (10.2 - 13.65) * s];
+    const [x1, y1] = [cx + (15.3 - 12.15) * s, cy + (22.4 - 13.65) * s];
+    const hatch = sketchHatch(x0, y0, x1 - x0, y1 - y0, seed + 7, { gap: Math.max(3.2, s * 1.6) });
+    const clip = `eraser-tip-${seed}`;
     // data-anim: it pops up once where it lands, not again on every redraw
     // of a pan, and shrinks away when it goes (Renderer.keepAnimating, letGo)
     return `<g class="eraser-mark" data-anim="erase-${seed}">`
+      + `<clipPath id="${clip}"><path d="${tip}"/></clipPath>`
       + `<path class="cross-halo" d="${outline}"/><path class="eraser-body" d="${fill}"/>`
-      + `<path class="eraser-tip" d="${tip}"/><path class="eraser" d="${outline}"/></g>`;
+      + `<path class="eraser-hatch" clip-path="url(#${clip})" d="${hatch}"/><path class="eraser" d="${outline}${band}"/></g>`;
   }
 
   steep(node, size) {
@@ -157,6 +180,36 @@ export class OverlayKit {
   }
 
   // points: world coordinates; curve: { cornerRadius, curveSamples } or null for straight
+  // A way as it's being drawn: a pencil line along `points` (world), not
+  // ruled – it wanders a little either side, slowly, as a hand does, in
+  // two passes of the pencil. Seeded by where it starts, so it holds still
+  // while the pointer moves on.
+  sketchPath(points, cls) {
+    if (points.length < 2) return '';
+    const k = 1 / this.camera.zoom, seed = seedOf(...points[0]);
+    const scr = points.map(([x, y]) => this.project(x, y));
+    // evenly along the screen line, a sample every few pixels
+    const step = 5 * k, pts = [scr[0]];
+    for (let i = 1; i < scr.length; i++) {
+      const [ax, ay] = scr[i - 1], [bx, by] = scr[i], len = Math.hypot(bx - ax, by - ay);
+      for (let d = step; d < len; d += step) pts.push([ax + ((bx - ax) * d) / len, ay + ((by - ay) * d) / len]);
+      pts.push(scr[i]);
+    }
+    const pass = (n, amp) => {
+      const rnd = mulberry32((seed + n * 7919) >>> 0), f1 = 0.035 + 0.02 * rnd(), f2 = 0.11 + 0.05 * rnd(), p1 = rnd() * 6.3, p2 = rnd() * 6.3;
+      let along = 0, d = '';
+      pts.forEach(([x, y], i) => {
+        const [px, py] = pts[Math.max(0, i - 1)], [qx, qy] = pts[Math.min(pts.length - 1, i + 1)];
+        const len = Math.hypot(qx - px, qy - py) || 1, nx = -(qy - py) / len, ny = (qx - px) / len;
+        if (i) along += Math.hypot(x - pts[i - 1][0], y - pts[i - 1][1]) / k;
+        const w = amp * k * (0.65 * Math.sin(along * f1 + p1) + 0.35 * Math.sin(along * f2 + p2));
+        d += `${i ? 'L' : 'M'}${r2(x + nx * w)} ${r2(y + ny * w)}`;
+      });
+      return d;
+    };
+    return `<path class="${cls}" d="${pass(0, 0.9)}"/><path class="${cls} again" d="${pass(1, 1.3)}"/>`;
+  }
+
   path(points, cls, curve = this.config.road) {
     const pts = curve ? smoothPolyline(points, curve.cornerRadius, curve.curveSamples) : points;
     const d = pts.map(([x, y], i) => {
@@ -173,6 +226,32 @@ export class OverlayKit {
   // footprint's middle, so the animated one scales about the building's
   // base; data-anim keeps the animation going across overlay redraws
   // (Renderer.keepAnimating) and plays the exit (Renderer.letGo).
+  // A structure as it would stand placed freely (World.freePlacement): its
+  // middle at (x, y), its front along `angle`.
+  ghostAt(def, x, y, angle, seed = 1, { blocked = false, data = {} } = {}) {
+    const [ax, ay] = freeAnchor(def, x, y, angle);
+    const node = this.world.grid.nodeAt(ax, ay);
+    const rotation = Math.round(angle / (Math.PI / 2)) & 3;
+    const instance = { type: def.id, x, y, angle, free: true, node, rotation, seed, data };
+    const painter = new Painter(this.camera, { x: ax, y: ay, z: this.world.terrain.heightAt(ax, ay) }, rotation, drawSeed(instance));
+    painter.rigid = [x, y];
+    if (def.site) {
+      painter.follow = true;
+      painter.setSite(fitSite(this.world, this.config, this.world.siteAreaOf(instance)));
+      painter.setSitePaths(siteEdges(this.world, this.config, this.world.sitePaths({ ...instance, id: -1 })));
+    }
+    painter.setTilt(freeTilt(instance), true);
+    painter.roadGap = 1;
+    def.draw(painter, instance);
+    const [sx, sy] = this.camera.project(x, y, this.world.terrain.heightAt(x, y)).map(r2);
+    // (not keyed by where it stands: following the pointer it's the same
+    // ghost, so its entrance plays once – Renderer.keepAnimating – and no
+    // faded copy is left behind at every step – Renderer.letGo)
+    const key = `ghost:${def.id}:free:${seed}:${data.kind ?? ''}:${blocked ? 1 : 0}`;
+    return `<g transform="translate(${sx} ${sy})"><g class="ghost-anim" data-anim="${key}">`
+      + `<g class="ghost${blocked ? ' blocked' : ''}" transform="translate(${-sx} ${-sy})">${painter.toGroundSVG()}${painter.toSVG()}</g></g></g>`;
+  }
+
   ghost(def, node, rotation = 0, seed = 1, { blocked = false, data = {} } = {}) {
     const [x, y] = this.world.grid.xy(node);
     const instance = { type: def.id, node, rotation, seed, data };

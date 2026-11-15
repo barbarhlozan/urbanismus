@@ -207,6 +207,7 @@ export class Camera {
   // Turn the view by `da` radians around the ground under the screen point
   // (px, py), which stays where it is.
   turnAt(px, py, da) {
+    if (Camera.FIXED) return;
     const [wx, wy] = this.unprojectFlat(...this.clientToScene(px, py));
     this.angle += da;
     const [rx, ry] = this.toView(wx - this.cx, wy - this.cy);
@@ -220,6 +221,7 @@ export class Camera {
   // a step of the view's turn (Camera.STEP), where the map keeps its
   // drawings ready (Renderer.turnFrame) – however slowly it was let go.
   letGo(at, v) {
+    if (Camera.FIXED) return;
     const { min, max, ease } = Camera.SPIN;
     v = Math.abs(v) > min ? Math.sign(v) * Math.min(max, Math.abs(v)) : 0;
     const to = Math.round((this.angle + v * ease) / Camera.STEP) * Camera.STEP;
@@ -341,3 +343,8 @@ Camera.SPIN = { ease: 0.22, min: 0.05, max: 6, near: 0.0005 };
 // The view comes to rest on steps of its turn this far apart (2°): a
 // quarter turn is a whole number of them.
 Camera.STEP = Math.PI / 90;
+
+// The view looks from one side only for now (2026-11-14): turning it was
+// redrawn badly, and buildings can be turned before they're built instead.
+// true: turnAt and letGo do nothing, and a reload comes back to angle 0.
+Camera.FIXED = true;

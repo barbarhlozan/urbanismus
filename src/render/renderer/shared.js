@@ -64,3 +64,9 @@ export const TREE_SWAY = { most: 60, minZoom: 1.2, fps: 12 };
 
 // Half-size of a building's ground area around each of its dots.
 export const STRUCTURE_PAD = 0.45;
+
+// Where a structure stands and which way it faces, from its position
+// (s.x, s.y, s.angle – see World.poseStructure). Previews from the build
+// tool have none yet, so those fall back to the dots.
+export const quarterOf = (world, s) => (s.angle == null ? world.drawnRotation(s) : Math.round(s.angle / (Math.PI / 2)) & 3);
+export const centerOf = (world, s) => (s.x == null ? world.centerOf(s) : [s.x, s.y]);

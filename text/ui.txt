@@ -181,6 +181,10 @@ import.newer
   cs: Obec uložila novější verze hry.
   en: The town was saved by a newer version of the game.
 
+import.older
+  cs: Tahle obec je ze starší verze Dědiny. Založ nový svět.
+  en: This town was made in an older version of Dědina. Start a new world.
+
 import.damaged
   cs: Soubor s obcí je poškozený a nedá se otevřít.
   en: The town's file is damaged and can't be opened.
@@ -393,6 +397,18 @@ group.heritage
   cs: Památky
   en: Monuments
 
+tab.buildings
+  cs: Stavby
+  en: Buildings
+
+tab.roads
+  cs: Cesty
+  en: Roads
+
+tab.parks
+  cs: Parky a náměstí
+  en: Parks and squares
+
 # ---------- Tools ----------
 
 tool.select
@@ -447,6 +463,22 @@ tool.fence.blurb
   cs: Uzavřená dokola je pastvina
   en: Closed all round, a pasture
 
+tool.grain
+  cs: Obilí
+  en: Grain
+
+tool.grain.blurb
+  cs: Uzavřené dokola je pole
+  en: Closed all round, a field
+
+tool.potatoes
+  cs: Brambory
+  en: Potatoes
+
+tool.potatoes.blurb
+  cs: Uzavřené dokola je pole
+  en: Closed all round, a field
+
 tool.erase
   cs: Vymazat
   en: Erase
@@ -492,6 +524,14 @@ network.stop.rail
 network.stop.fence
   cs: Ukončit ohradu
   en: End the fence
+
+network.stop.grain
+  cs: Ukončit pole
+  en: End the field
+
+network.stop.potatoes
+  cs: Ukončit pole
+  en: End the field
 
 # while placing buildings
 
@@ -767,6 +807,10 @@ reason.crosses-another-line
 reason.runs-along-another-line
   cs: Vede po jiné trati
   en: Runs along another line
+
+reason.too-shallow-a-crossing
+  cs: Příliš ostré křížení
+  en: Too shallow a crossing
 
 reason.too-sharp-a-bend-for-trains
   cs: Na vlaky příliš ostrý oblouk

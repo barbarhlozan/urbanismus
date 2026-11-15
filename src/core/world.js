@@ -15,6 +15,7 @@
 // class whose methods are copied onto World.prototype (at the end), so all
 // share `this`.
 
+import { Land } from './land.js';
 import { EventBus } from './events.js';
 import { CONFIG } from '../config.js';
 import { townName } from './townName.js';
@@ -23,20 +24,37 @@ import { Terrain } from '../terrain/terrain.js';
 import { findHills } from '../terrain/hills.js';
 import { RoadNetwork } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
-import { STRUCTURE_TYPES, footprintOffsets } from '../../structures/index.js';
-import { upgrade, upgradeMarks, unretire, regroup, rehouse, refarm, repub, repark, reshop } from './legacy.js';
+import { Ways } from '../roads/ways.js';
+import { STRUCTURE_TYPES, footprintOffsets, joinSides, courtSides } from '../../structures/index.js';
 import { FEATURE_TYPES } from '../../features/index.js';
 import { History } from './history.js';
+import { SpatialIndex, rectOutline } from './spatial.js';
 import { WorldNetworks } from './world/networks.js';
-import { WorldPlacement } from './world/placement.js';
+import { WorldPlacement, COURT_TO } from './world/placement.js';
 import { WorldAccess } from './world/access.js';
 import { WorldStructures } from './world/structures.js';
 
-const SAVE_VERSION = 10; // 3: railways on the fine grid; 4: no building levels (legacy.js); 5: parks regrouped; 6: houses regrouped; 7: farmstead layouts; 8: pub kinds; 9: parks and squares cut; 10: shop kinds
+// 11: positions and angles (free placement). Older saves aren't converted:
+// the game says so and starts a new map (OldSaveError).
+const SAVE_VERSION = 12; // 12: the ways graph (roads/ways.js) instead of dot networks
+
+// A save from before SAVE_VERSION: not loaded (the town was laid out on
+// dots that are going away).
+export class OldSaveError extends Error {
+  constructor(version) {
+    super(`Save is from an older version (${version})`);
+    this.code = 'old-save';
+  }
+}
+
+// _rebodyAround(): how near a free house's middle another's body comes
+// for the two to share a wall or a court to give way
+const REBODY_REACH = 1.6;
 
 export class World {
-  constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1 }) {
+  constructor({ width, height, seed = 1, name, hilliness = 1, rockiness = 1, land = 'square' }) {
     this.seed = seed;
+    this.land = new Land(width, height, seed, land); // the map's own shape inside the grid (core/land.js)
     this.hilliness = hilliness; // scales the seed's hills (terrain/elevation.js)
     this.rockiness = rockiness; // 0–1, how much of the steep ground is rock (terrain/rocks.js)
     this.name = name || townName(seed); // what the player calls the town (older saves: from the seed)
@@ -44,8 +62,16 @@ export class World {
     this.grid = new Grid(width, height);
     this.fine = new Grid(2 * width - 1, 2 * height - 1);
     this.terrain = new Terrain(this.grid);
-    this.structures = new Map();      // id -> { id, type, node, rotation, seed, data }
-    this.features = new Map();        // id -> { id, type, node, ox, oy, variant, scale }
+    // Structures and features have a position in world units (x, y; for a
+    // structure the middle of its footprint) and structures an angle
+    // (radians, the way the front looks: rotation r = r·π/2, front
+    // (sin a, -cos a)), kept up to date as they're indexed (poseStructure).
+    // For now they're still placed on the dots (node, rotation), and only
+    // the placement rules should read those – see docs/free-placement-plan.md.
+    this.structures = new Map();      // id -> { id, no, type, x, y, angle, node, rotation, seed, data }
+    this.features = new Map();        // id -> { id, type, x, y, node, ox, oy, variant, scale }
+    this.structureIndex = new SpatialIndex(); // structure id by outline (outlineOf)
+    this.featureIndex = new SpatialIndex();   // feature id by a small square round it
     this.structureAtNode = new Map(); // node -> structure id (every footprint node)
     this.featureAtNode = new Map();   // node -> feature id
     this.nextId = 1;
@@ -56,6 +82,12 @@ export class World {
     this.chronicle = { entries: [], marks: [] }; // the town's chronicle (src/sim/chronicle.js)
     this.history = new History(this); // undo and redo of the player's changes; every change below calls history.touch() first
 
+    // All the ways – roads, footpaths, railways, fences – as one graph
+    // (roads/ways.js), the only truth about them. The layers below, and
+    // the street sets, are its dot view (roads/dotView.js), rebuilt by
+    // syncWays / refreshNetwork whenever it changes, for what still reads
+    // dots (stage D of docs/free-placement-plan.md).
+    this.ways = new Ways();
     this.sidewalks = new Set(); // edgeKey of road segments that are streets (have sidewalks)
     this.lanes = new Set();     // edgeKey of road segments that are single-track lanes (never streets)
     this.laneWalks = new Map(); // edgeKey of lanes -> sides with a sidewalk: bit 1 left of the way from
@@ -68,10 +100,9 @@ export class World {
         scale: 1,
         isBlocked: (n) => this.isRoadBlocked(n),
         conflicts: (a, b) => this.railAlong(a, b),
+        occupied: (a, b) => this.freeBuildingOn('road', a, b, CONFIG.road.kerb),
         steep: (a, b, { lane = false } = {}) => this.grade(this.networks.road, a, b) > (lane ? CONFIG.steep.lane : CONFIG.steep.road),
         coarseOf: (n) => n,
-        // drivers weigh a lane by the time it takes (CONFIG.lane.speed)
-        cost: (a, b) => this.grid.distance(a, b) / (this.isLane(a, b) ? CONFIG.lane.speed : 1),
         event: 'roads:changed',
         bridge: this.bridgeRule(2, (n) => this.railNear(n)),
       }),
@@ -84,6 +115,7 @@ export class World {
         grid: this.fine,
         scale: 0.5,
         isBlocked: (f) => this.isRailBlocked(f),
+        occupied: (f, g) => this.freeBuildingOn('rail', f, g, 0.12),
         conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.paths.hasEdge(f, g),
         steep: (f, g) => this.grade(this.networks.rail, f, g) > CONFIG.steep.rail,
         maxTurn: Math.PI / 4,
@@ -101,6 +133,7 @@ export class World {
         grid: this.fine,
         scale: 0.5,
         isBlocked: (f) => this.isPathBlocked(f),
+        occupied: (f, g) => this.freeBuildingOn('path', f, g, CONFIG.path.edge),
         // (not along a road: sidewalks come with streets, the Street tool)
         conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
         coarseOf: (f) => this.fineToCoarse(f),
@@ -126,9 +159,24 @@ export class World {
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'fences:changed',
       }),
+      // The edges of crop fields (sim/fields.js), laid as fences are but
+      // not drawn: a field closed all round grows its crop.
+      field: new NetworkLayer({
+        id: 'field',
+        grid: this.fine,
+        scale: 0.5,
+        isBlocked: (f) => this.isPathBlocked(f),
+        conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
+        coarseOf: (f) => this.fineToCoarse(f),
+        event: 'fields:changed',
+      }),
     };
-    this.networks.rail.pos = (f) => this.railPos(f);
-    this.networks.path.pos = (f) => this.pathPos(f);
+    // a bus stop always faces its road: as the roads change, so may it
+    this.events.on('roads:changed', () => {
+      for (const s of this.structures.values()) if (STRUCTURE_TYPES[s.type]?.facesRoad) this.poseStructure(s);
+    });
+    this.networks.rail.pos = (f) => this.networks.rail.curvePos?.get(f) ?? this.railPos(f);
+    this.networks.path.pos = (f) => this.networks.path.curvePos?.get(f) ?? this.pathPos(f);
   }
 
   get roads() {
@@ -190,6 +238,29 @@ export class World {
 
   // ---------- queries ----------
 
+  // The building under a point in world units (the pointer), placed freely
+  // or on the dots: the one whose outline holds it – the nearest, if
+  // outlines touch – or else the nearest within `reach` (a click on its
+  // roof lands on the ground just behind it), or else the one on the dot
+  // there. null if none.
+  structureAtPoint(x, y, reach = 0.3) {
+    const pick = (ids) => {
+      let best = null, bd = Infinity;
+      for (const id of ids) {
+        const s = this.structures.get(id);
+        const d = s ? Math.hypot(s.x - x, s.y - y) : Infinity;
+        if (d < bd) [best, bd] = [s, d];
+      }
+      return best;
+    };
+    const under = pick(this.structureIndex.at(x, y));
+    if (under) return under;
+    const near = pick(this.structureIndex.near(x, y, reach));
+    if (near) return near;
+    const n = this.grid.nodeAt(x, y);
+    return n < 0 ? null : this.structureAt(n);
+  }
+
   structureAt(node) {
     const id = this.structureAtNode.get(node);
     return id === undefined ? null : this.structures.get(id);
@@ -235,10 +306,52 @@ export class World {
 
   // ---------- persistence ----------
 
+  // A structure's outline: the rectangle round its footprint, in world
+  // units ([[x, y], …]; a one-dot house a 1×1 square round its middle),
+  // turned with it.
+  outlineOf(s) {
+    return this.outlineAt(s.type, s.x, s.y, s.angle);
+  }
+
+  // A structure's body: what others and ways keep off (structureIndex).
+  // Placed freely, its walls (bodyBox), out to its outline's side where it
+  // shares a wall with a neighbour (or a court between them) and over its
+  // own court; on the dots, its whole outline.
+  bodyOf(s) {
+    if (!s.free) return this.outlineOf(s);
+    const def = STRUCTURE_TYPES[s.type];
+    let [x0, y0, x1, y1] = this.bodyBox(s.type);
+    if (def?.join) {
+      const [w] = this.outlineSize(s.type);
+      const join = joinSides(this, s), court = courtSides(this, s);
+      if (join.left) x0 = -w / 2;
+      if (join.right) x1 = w / 2;
+      if (court.left === 'own') x0 = Math.min(x0, -COURT_TO);
+      if (court.right === 'own') x1 = Math.max(x1, COURT_TO);
+    }
+    return this.bodyAt(s.type, s.x, s.y, s.angle, [x0, y0, x1, y1]);
+  }
+
+  // Sets s.x, s.y (the footprint's middle) and s.angle (the way it's drawn
+  // facing, drawnRotation) from where it stands on the dots. A structure
+  // placed freely (s.free, placeStructureAt) keeps its own.
+  poseStructure(s) {
+    if (s.free) return;
+    const pts = this.nodesOf(s).map((n) => this.grid.xy(n));
+    s.x = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+    s.y = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    s.angle = (this.drawnRotation(s) * Math.PI) / 2;
+  }
+
   _insertStructure(s) {
     this.structureVersion = (this.structureVersion ?? 0) + 1;
     this.structures.set(s.id, s);
     for (const n of this.nodesOf(s)) this.structureAtNode.set(n, s.id);
+    if (s.x == null || !s.free) this.poseStructure(s);
+    // (its walls first: whether it shares one, or has a court, goes by
+    // its neighbours' – and theirs by its)
+    this.structureIndex.insert(s.id, s.free ? this.bodyAt(s.type, s.x, s.y, s.angle) : this.outlineOf(s));
+    this._rebodyAround(s);
   }
 
   _unindexStructure(s) {
@@ -246,11 +359,34 @@ export class World {
     for (const n of this.nodesOf(s)) {
       if (this.structureAtNode.get(n) === s.id) this.structureAtNode.delete(n);
     }
+    this.structureIndex.remove(s.id);
+    this._rebodyAround(s);
+  }
+
+  // A free structure placed or taken away near `s`: its body, and those of
+  // the free houses that join beside it, again (bodyOf – walls shared or
+  // not, courts there or not).
+  _rebodyAround(s) {
+    if (!s.free) return;
+    const ids = this.structureIndex.near(s.x, s.y, REBODY_REACH);
+    for (const id of ids) {
+      const o = this.structures.get(id);
+      if (o?.free && STRUCTURE_TYPES[o.type]?.join) this.structureIndex.insert(id, this.bodyOf(o));
+    }
   }
 
   _insertFeature(f) {
+    const [x, y] = this.grid.xy(f.node);
+    f.x = x + (f.ox ?? 0);
+    f.y = y + (f.oy ?? 0);
     this.features.set(f.id, f);
     this.featureAtNode.set(f.node, f.id);
+    this.featureIndex.insert(f.id, rectOutline(f.x, f.y, 0.2, 0.2));
+  }
+
+  _unindexFeature(f) {
+    if (this.featureAtNode.get(f.node) === f.id) this.featureAtNode.delete(f.node);
+    this.featureIndex.remove(f.id);
   }
 
   rename(name) {
@@ -267,15 +403,13 @@ export class World {
       name: this.name,
       hilliness: this.hilliness,
       rockiness: this.rockiness,
+      land: this.land.kind,
       width: this.grid.width,
       height: this.grid.height,
       nextId: this.nextId,
       nextNo: this.nextNo,
       terrain: this.terrain.toJSON(),
-      networks: Object.fromEntries(Object.entries(this.networks).map(([k, l]) => [k, l.graph.toJSON()])),
-      sidewalks: [...this.sidewalks],
-      lanes: [...this.lanes],
-      laneWalks: [...this.laneWalks],
+      ways: this.ways.toJSON(),
       structures: [...this.structures.values()],
       features: [...this.features.values()],
       time: Math.round(this.time),
@@ -287,55 +421,22 @@ export class World {
 
   static fromJSON(data) {
     if (data.version > SAVE_VERSION) throw new Error(`Save is from a newer version (${data.version})`);
+    if ((data.version ?? 1) < SAVE_VERSION) throw new OldSaveError(data.version ?? 1);
     const world = new World({ ...data, rockiness: data.rockiness ?? 0 }); // (older saves: no rock, their ground stays as built on)
     world.terrain.load(data.terrain);
 
-    const networks = data.networks ?? { road: data.roads ?? [] }; // v1 had only roads
-    // before v3 railways were on the main dots: each segment spans three dense ones
-    if ((data.version ?? 1) < 3 && networks.rail) networks.rail = networks.rail.flatMap((e) => world.fineSegment(...e));
-    for (const [kind, edges] of Object.entries(networks)) {
-      if (world.networks[kind]) {
-        world.networks[kind].graph = RoadNetwork.fromJSON(edges);
-        world.networks[kind].version++;
-      }
-    }
-
-    for (const key of data.lanes ?? []) {
-      const [a, b] = key.split('-').map(Number);
-      if (world.roads.hasEdge(a, b)) world.lanes.add(key);
-    }
-    for (const key of data.sidewalks ?? []) {
-      const [a, b] = key.split('-').map(Number);
-      if (world.roads.hasEdge(a, b) && !world.lanes.has(key)) world.sidewalks.add(key);
-    }
-    for (const [key, sides] of data.laneWalks ?? []) if (world.lanes.has(key)) world.laneWalks.set(key, sides);
+    world.ways = Ways.fromJSON(data.ways);
+    for (const kind of Object.keys(world.networks)) world.refreshNetwork(kind);
 
     for (const s of data.structures) {
       s.rotation ??= 0;
       s.seed ??= Math.imul(s.id, 2654435761) >>> 0;
       s.data ??= {};
-      if ((data.version ?? 1) < 4) upgrade(s); // buildings with levels: the structure each level is now
-      if ((data.version ?? 1) < 5) regroup(s); // parks: each look to the tool it belongs to now
-      if ((data.version ?? 1) < 6) rehouse(s); // houses: village houses and family houses apart
-      if ((data.version ?? 1) < 7) refarm(s); // farmsteads: the layout they had
-      if ((data.version ?? 1) < 8) repub(s); // pubs: the kind they had, the town pub a village one
-      if ((data.version ?? 1) < 9) repark(s); // parks and squares: the kinds cut, the squares one náměstí
-      if ((data.version ?? 1) < 10) reshop(s); // Jednota: the kind it had, pavilions and townhouses cut
-      unretire(s); // buildings taken out of the game: what replaced them
       if (!STRUCTURE_TYPES[s.type]) continue;
-      // Stations saved facing away from their track: turn them round.
-      const rule = STRUCTURE_TYPES[s.type].canPlace;
-      const fits = rule?.(world, world.footprintNodes(s.type, s.node, s.rotation), s.rotation);
-      if (rule && (!fits.ok || fits.lay)) {
-        const at = world.placementFor(s.type, s.node, s.rotation);
-        if (at.check.ok) [s.node, s.rotation] = [at.node, at.rotation];
-      }
       // Footprints may have grown since the save was made; skip what no longer fits.
       if (world.fitsStructure(s.type, s.node, s.rotation).ok) world._insertStructure(s);
       else console.warn(`Dropped ${s.type} #${s.id}: no longer fits`);
     }
-    // towns saved before buildings kept their facing: as they stand now
-    for (const s of world.structures.values()) if (s.data.face == null) world.faceOnce(s);
     for (const f of data.features) {
       if (FEATURE_TYPES[f.type] && !world.structureAt(f.node)) world._insertFeature(f);
     }
@@ -349,7 +450,7 @@ export class World {
     if (data.weather) world.weather = { kind: data.weather.kind, from: data.weather.from, since: data.weather.since, until: data.weather.until, n: data.weather.n ?? 0 }; // (older saves start fair; without `from` or `since`, WeatherSystem works them out)
     world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [], places: data.story?.places ?? {} };
     const marks = data.chronicle?.marks ?? [];
-    world.chronicle = { entries: data.chronicle?.entries ?? [], marks: (data.version ?? 1) < 4 ? upgradeMarks(marks) : marks };
+    world.chronicle = { entries: data.chronicle?.entries ?? [], marks };
     // how many of the entries have been read, and the book's tab last open
     // (older saves: everything read, the book at its chronicle)
     world.chronicle.seen = data.chronicle?.seen ?? world.chronicle.entries.length;

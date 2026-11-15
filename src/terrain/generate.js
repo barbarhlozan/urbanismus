@@ -378,6 +378,7 @@ function generateLakes(world, rng, opts) {
   for (const { lake } of candidates) {
     if (count >= wanted) break;
     if (lake.some((n) => taken[n])) continue;
+    if (lake.some((n) => !world.land.inside(...grid.xy(n), 1.2))) continue; // (on the land, a shore's width in)
     for (const n of lake) {
       terrain.water[n] = 1;
       taken[n] = 1;
@@ -499,6 +500,8 @@ function generateTrees(world, rng, opts) {
       const [wx, wy] = grid.xy(m);
       return terrain.isWater(m) && Math.hypot(x + ox - wx, y + oy - wy) < 0.85;
     })) continue;
+    // on the land, thinning out unevenly towards its edge
+    if (world.land.depth(x + ox, y + oy) < 0.3 + world.land.fray(x * 2.3, y * 2.3)) continue;
     world.addFeature('tree', i, { ox, oy, variant, scale });
   }
 }

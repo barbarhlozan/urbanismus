@@ -6,7 +6,7 @@ import { STYLE } from './render/style.js';
 import { makeWarp, makeLift } from './render/warp.js';
 import { ELEVATION } from './terrain/elevation.js';
 import { Annotations } from './ui/annotations.js';
-import { Dialogue } from './ui/dialogue.js';
+import { Bubbles } from './ui/bubbles.js';
 import { ChronicleBook } from './ui/chronicleBook.js';
 import { Chronicle } from './sim/chronicle.js';
 import { Storyteller } from './story/storyteller.js';
@@ -33,6 +33,7 @@ import { TrainSystem } from './sim/trains.js';
 import { BoatSystem } from './sim/boats.js';
 import { DeerSystem } from './sim/deer.js';
 import { LivestockSystem } from './sim/livestock.js';
+import { fieldsOf, CROPS } from './sim/fields.js';
 import { ToolManager } from './tools/manager.js';
 import { createInspectTool } from './tools/inspect.js';
 import { createNetworkTool } from './tools/network.js';
@@ -89,6 +90,12 @@ if (!probe) {
 // Set up in the New map menu, handed over across the reload (see newMap).
 const PENDING_KEY = 'urbanismus.pendingMap';
 
+// A town saved by a version before free placement can't be loaded: it's
+// kept under OLD_SAVE_KEY (once – an earlier copy isn't overwritten), the
+// game starts on a new map and says so (see the end of the set-up).
+const OLD_SAVE_KEY = `${CONFIG.storageKey}.old`;
+let oldSave = false;
+
 function loadWorld() {
   let pending = null;
   try {
@@ -102,11 +109,19 @@ function loadWorld() {
       const raw = localStorage.getItem(CONFIG.storageKey);
       if (raw) return World.fromJSON(JSON.parse(raw));
     } catch (err) {
+      if (err.code === 'old-save') {
+        oldSave = true;
+        try {
+          if (!localStorage.getItem(OLD_SAVE_KEY)) localStorage.setItem(OLD_SAVE_KEY, localStorage.getItem(CONFIG.storageKey));
+        } catch {
+          // storage full or unavailable: the old town can't be kept aside
+        }
+      }
       console.warn('Could not load save, starting fresh.', err);
     }
   }
   const seed = pending?.seed ?? CONFIG.seed ?? Math.floor(Math.random() * 1e9);
-  const world = new World({ ...CONFIG.grid, seed, name: pending?.name, hilliness: pending?.hilliness });
+  const world = new World({ ...CONFIG.grid, seed, name: pending?.name, hilliness: pending?.hilliness, land: 'round' });
   generateWorld(world, { ...CONFIG, terrain: { ...CONFIG.terrain, ...pending?.terrain } });
   return world;
 }
@@ -183,7 +198,7 @@ camera.lift = makeLift(world.elevation, ELEVATION.relief, STYLE.relief,
 camera.setViewport(innerWidth, innerHeight); // (keeps the map in view, see Camera.pan)
 camera.centerOn(camera.cx, camera.cy, innerWidth, innerHeight);
 if (resumed) {
-  camera.angle = resumed.angle;
+  camera.angle = Camera.FIXED ? 0 : resumed.angle;
   camera.zoom = Math.min(camera.maxZoom, Math.max(camera.minZoom, resumed.zoom));
   camera.centerOn(resumed.x, resumed.y, innerWidth, innerHeight);
 }
@@ -255,7 +270,19 @@ agents.log = growth.log = trains.log = (text, pos) => annotations.log(text, pos)
 // the town's chronicle, and the story told along the way (story/story.txt)
 UNLOCKS.setWorld(world); // (what may be built: story/unlocks.txt, read with the story)
 const chronicle = new Chronicle(world, CONFIG);
-const dialogue = new Dialogue(uiRoot, { typing: CONFIG.story.typing, avoid: '.build-menu' });
+// what's said shows over the building it's said at (ui/bubbles.js): its
+// roof, as drawn, in client px
+const dialogue = new Bubbles(uiRoot, {
+  typing: CONFIG.story.typing,
+  avoid: '.build-menu',
+  roofOf: (s) => {
+    if (!world.structures.has(s.id)) return null;
+    const top = renderer.objs.get(`s${s.id}`)?.at?.top ?? 1;
+    const [ax, ay] = world.anchorOf(s), [cx, cy] = world.centerOf(s);
+    const [x, y] = camera.project(cx, cy, world.terrain.heightAt(ax, ay) + top, [cx, cy]);
+    return [x * camera.zoom + camera.panX, y * camera.zoom + camera.panY];
+  },
+});
 const story = new Storyteller({ world, agents, fires, trains, dialogue, chronicle, config: CONFIG });
 // (read with the opening, below: openIntro)
 
@@ -273,6 +300,8 @@ tools.register(createNetworkTool(ctx, { kind: 'path', fineGrid: true, group: 'tr
 tools.register(createNetworkTool(ctx, { kind: 'rail', fineGrid: true, group: 'transport' }));
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createNetworkTool(ctx, { kind: 'fence', fineGrid: true, group: 'farming' }));
+// fields: their edges drawn as a fence is, closed all round they grow the crop (sim/fields.js)
+for (const crop of CROPS) tools.register(createNetworkTool(ctx, { kind: 'field', id: crop, crop, fineGrid: true, group: 'farming' }));
 tools.register(createBulldozeTool(ctx));
 // while a print is out, photo mode rests (see the input below): no menu
 // left open on the map, the dock and the camera put by
@@ -437,7 +466,7 @@ const followUnlocks = () => {
   // cars, trucks and buses: off the map if locked, and the car parks follow
   agents.followVehicles();
   renderer.dirty.add('parked');
-  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act="terrain"], .bm-camera, .hud .chron')) {
+  for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act="terrain"], .hud .hud-photo')) {
     btn.classList.toggle('locked', !UNLOCKS.allowsControl(btn.dataset.act ?? 'chronicle'));
   }
   const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu };
@@ -510,6 +539,12 @@ const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"
 const assetsPage = new AssetsPage(uiRoot);
 const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMap"]'), { onCreate: newMap, onExport: () => exportCity(world) });
 UNLOCKS.onChange(followUnlocks); // (once the panels it closes exist)
+if (oldSave) {
+  const at = uiRoot.querySelector('.controls').getBoundingClientRect();
+  popup.show(innerWidth, at.bottom, t('import.older'), [
+    { label: t('control.newMap'), action: () => newMapMenu.toggle() },
+  ]);
+}
 followUnlocks();
 // pen-drawn frames on every UI box, to match the sketched map
 // (the corner menu has none: words on the paper)
@@ -534,6 +569,10 @@ tools.onChange((tool) => {
     : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: ['road', 'lane', 'street'].includes(tool.id) };
   contours.lend(!!dots && tool.id !== 'bulldoze' && UNLOCKS.allowsControl('terrain'));
 });
+// Ways and buildings are placed freely now (docs/free-placement-plan.md):
+// the dots are shown only for what still stands on them – stations, whose
+// track runs on the dots.
+const dotsShown = () => !!dots?.building && !!STRUCTURE_TYPES[dots.building.type]?.canPlace;
 tools.use('inspect');
 
 // ---------- input ----------
@@ -546,12 +585,13 @@ function pickUp() {
   const p = tools.point;
   const node = tools.hoverNode;
   if (!p || node < 0) return;
-  const s = world.structureAt(node);
+  const s = world.structureAtPoint(...p);
   let tool = null, params = {};
   if (s) [tool, params] = [buildToolFor(s.type), { type: s.type, rotation: s.rotation, turn: s.data?.turn ?? 0, kind: kindShown(STRUCTURE_TYPES[s.type], s) }];
   else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
   else if (world.rails.hasNode(world.networks.rail.nodeAt(...p))) tool = tools.registry.get('rail');
   else if (world.fences.hasNode(world.networks.fence.nodeAt(...p))) tool = tools.registry.get('fence');
+  else if (fieldsOf(world).at(...p) >= 0) tool = tools.registry.get(fieldsOf(world).list[fieldsOf(world).at(...p)].crop); // (in a field: its crop's tool)
   else if (world.hasRoad(node)) tool = tools.registry.get(world.laneOnly(node) ? 'lane' : [...world.roads.neighbors(node)].some((m) => world.hasSidewalk(node, m)) ? 'street' : 'road');
   if (!tool) return;
   tools.use(tool.id, params);
@@ -585,6 +625,15 @@ attachInput(document.getElementById('input'), {
   },
   // middle click works like Tab: rotate what's being placed, flip a line's bend
   onMiddle: () => { if (!photoPrint.open) tools.key({ key: 'Tab', preventDefault() {} }); },
+  onWheel: (e) => !photoPrint.open && tools.wheel(e),
+  // a way tool in hand: dragging draws the way (tools/network.js)
+  sketch: {
+    wants: () => !photoPrint.open && !!tools.active?.sketch,
+    start: (x, y) => { tools.active?.sketch?.start(x, y); tools.pointer(x, y); },
+    move: (x, y) => { tools.active?.sketch?.move(x, y); tools.pointer(x, y); },
+    end: () => { tools.active?.sketch?.end(); tools.resnap(); },
+    cancel: () => tools.active?.sketch?.cancel(),
+  },
 });
 
 window.addEventListener('keydown', (e) => {
@@ -768,10 +817,10 @@ function loop(now) {
     // the building under the pointer, with nothing in hand, gives a little
     // squash as the pointer comes onto it (Renderer.markHovered): there's
     // something to click; its name is on the card that opens
-    const hovered = tools.active?.id === 'inspect' && !popup.open && !photoPrint.open && tools.hoverNode >= 0
-      ? world.structureAt(tools.hoverNode) : null;
+    const hovered = tools.active?.id === 'inspect' && !popup.open && !photoPrint.open && tools.point
+      ? world.structureAtPoint(...tools.point) : null;
     renderer.hovered = hovered ? `s${hovered.id}` : null;
-    renderer.frame((dots ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
+    renderer.frame((dotsShown() ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
     const sky = weather.sky();
     // (no sun at night, so no cloud shadows: they fade away)
     cloudShadows.frame(simDt, camera, renderer.dark ? 0 : sky.cover, { hatch: SUN.hatch, stroke: renderer.strokeK });
@@ -790,6 +839,7 @@ function loop(now) {
     hud.update();
     chronicle.update(dt);
     if (!opening) story.update(dt); // (the story waits for the map to be drawn)
+    dialogue.frame();
   } catch (err) {
     if (!reported) console.error('Frame failed:', err);
     reported = true;

@@ -2,7 +2,7 @@
 // numbered, set on fire, burnt, removed, restyled and converted; trees
 // and other features added and cleared.
 
-import { STRUCTURE_TYPES, newSeed, isNumbered } from '../../../structures/index.js';
+import { STRUCTURE_TYPES, newSeed, isNumbered, freeAnchor } from '../../../structures/index.js';
 import { FEATURE_TYPES } from '../../../features/index.js';
 
 export class WorldStructures {
@@ -17,6 +17,29 @@ export class WorldStructures {
     this.faceOnce(s);
     this.nodesOf(s).forEach((n) => this.clearFeaturesAt(n));
     STRUCTURE_TYPES[type].placed?.(this, s); // e.g. a station lays its track
+    this.events.emit('structure:added', s);
+    return s;
+  }
+
+  // Free placement (docs/free-placement-plan.md, stage B): a structure with
+  // its middle at (x, y), its front looking along `angle`, wherever its
+  // outline fits (fitsOutline). It's marked s.free and keeps that position;
+  // s.node and s.rotation are the nearest dot and quarter turn, for what
+  // still goes by the dots (roads kept off it, the way to its door) until
+  // the ways come off them too.
+  placeStructureAt(type, x, y, angle = 0, { seed = newSeed(), data = {} } = {}) {
+    if (!this.fitsOutline(type, x, y, angle).ok) return null;
+    const node = this.grid.nodeAt(...freeAnchor(STRUCTURE_TYPES[type], x, y, angle));
+    if (node < 0) return null;
+    this.history.touch();
+    const rotation = Math.round(angle / (Math.PI / 2)) & 3;
+    const s = { id: this.nextId++, type, x, y, angle, free: true, node, rotation, seed, data };
+    this.numberStructure(s);
+    this._insertStructure(s);
+    for (const id of this.featureIndex.overlapping(this.outlineOf(s))) {
+      const f = this.features.get(id);
+      if (f && FEATURE_TYPES[f.type]?.clearable !== false) this.removeFeature(id);
+    }
     this.events.emit('structure:added', s);
     return s;
   }
@@ -147,7 +170,7 @@ export class WorldStructures {
     if (!f) return false;
     this.history.touch();
     this.features.delete(id);
-    this.featureAtNode.delete(f.node);
+    this._unindexFeature(f);
     this.events.emit('feature:removed', f);
     return true;
   }

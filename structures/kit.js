@@ -623,10 +623,10 @@ export function wagons(g, x0, y, n, big = false) {
 }
 
 // Heap of coal or gravel.
-export function heap(g, x, y, r = 0.08) {
-  if (!g.isFree(x, y, r)) return;
-  g.detailed(1, () => mound(g, x, y, r, r * 0.8));
-}
+// Heaps and haystacks are left out for now (they didn't look good): the
+// calls stay, to come back after a closer look. The mine's spoil heap is
+// drawn with mound() itself and stays.
+export function heap() {}
 
 // A mound drawn freehand: a smooth screen-facing outline with a few strokes
 // down its flanks, r = radius on the ground, h = height. Heaps, spoil tips.
@@ -979,10 +979,7 @@ export function tractor(g, x, y, alongX = g.chance(0.5)) {
 }
 
 // Haystack: a rounded stack.
-export function haystack(g, x, y, r = 0.06) {
-  if (!g.isFree(x, y, r)) return;
-  g.detailed(1, () => mound(g, x, y, r, r * 1.6));
-}
+export function haystack() {}
 
 // ----- round bodies (towers, silos): details on a curved wall -----
 

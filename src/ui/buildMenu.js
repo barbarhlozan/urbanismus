@@ -1,10 +1,10 @@
-// The Build menu, in the middle of the bottom edge: a row of tabs for the groups (CATEGORIES),
-// each shown by a drawing (a road, a house, a park, a chapel), over a grid
+// The Build menu, in the middle of the bottom edge: a row of tabs (TABS),
+// each shown by a drawing (a house, a road, a park), over a grid
 // of that group's tools – the building's own drawing, its name, its key –
 // and, along the bottom, a box of loose things, each a small drawing with
 // its name: Zpět (Undo) and, right after an undo, Znovu (Redo), then Erase,
-// Terrain (the contour lines, a setting: tools/terrain.js) and last the
-// camera (photo mode, also P). It folds away to the dock: a Build button,
+// and Terrain (the contour lines, a setting: tools/terrain.js); the camera
+// (photo mode, also P) is by the town's name (hud.js). It folds away to the dock: a Build button,
 // or, while a tool is in hand, that tool's drawing and name with its
 // options (size, rotate, another look…) beside it and an × to put it down.
 // The dock serves photo mode too, but leads with what it's for instead of
@@ -13,10 +13,9 @@
 // lens and Move. Terrain has a small box in its corner, crossed while it's on
 // (penMarks.js); Zpět is struck through while there is nothing to take
 // back (historyOffer.js decides what is offered); Terrain and the history
-// are left out in photo mode, while the camera stays, boxed, to put it
-// down again. Zpět and Znovu run the same code as ⌘Z (main.js takeBack).
-// On a narrow screen the box is the panel's bottom row with Erase, Terrain
-// and the camera only, the panel being folded most of the time: Zpět and
+// are left out in photo mode. Zpět and Znovu run the same code as ⌘Z (main.js takeBack).
+// On a narrow screen the box is the panel's bottom row with Erase and
+// Terrain only, the panel being folded most of the time: Zpět and
 // Znovu stand in the dock there instead, beside the Build button or before
 // the × of the tool in hand. The tool in hand has its name boxed in the
 // thick pen, the chosen tab and tile are boxed in the thin pen
@@ -40,8 +39,7 @@
 // hand. Picking a tool folds the drawer, and it stays folded when the tool
 // is put down: the rail is enough to come back.
 
-import { CATEGORIES } from '../../structures/index.js';
-import { toolIcon, cameraIcon } from './icons.js';
+import { toolIcon } from './icons.js';
 import { iconSvg, drawing } from './uiIcons.js';
 import { historyOffer } from './historyOffer.js';
 import { isNarrow, isWide } from './device.js';
@@ -49,15 +47,20 @@ import { keyLabel, GROUP_KEYS, slotKey } from './keys.js';
 import { corner, drawer, fadeIn, cascade } from './motion.js';
 import { t } from '../core/text.js';
 
-// a group's name on screen (its own `label` is what story/unlocks.txt matches)
-const groupName = (c) => t(`group.${c.id}`);
+// The menu's tabs. Few buildings are offered for now, so the groups
+// (structures/index.js CATEGORIES, still what story/unlocks.txt names) share
+// three tabs: every building, the lines drawn on the ground (roads, paths,
+// the railway, the fence), and parks and squares.
+const TABS = [{ id: 'buildings', icon: 'housing' }, { id: 'roads', icon: 'transport' }, { id: 'parks', icon: 'spaces' }];
+const tabOf = (tool) => (!tool?.group ? null : !tool.defs ? 'roads' : tool.group === 'spaces' ? 'parks' : 'buildings');
+const groupName = (c) => t(`tab.${c.id}`);
 
 const FOLD_KEY = 'urbanismus.buildMenuFolded';
 const GROUP_KEY = 'urbanismus.buildMenuGroup';
 
-// Each group's tab shows its sprite, icons/ui/tab-<group>.svg; without
-// one, the drawing of the tool here
-const TAB_ICON = { transport: 'road', housing: 'build:house', work: 'build:textilka', farming: 'build:jzd', amenities: 'build:jednota', spaces: 'build:green', heritage: 'build:chapel' };
+// Each tab shows a group's sprite, icons/ui/tab-<icon>.svg; without one,
+// the drawing of the tool here
+const TAB_ICON = { buildings: 'build:house', roads: 'road', parks: 'build:green' };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -86,13 +89,13 @@ export class BuildMenu {
     this.tools = tools;
     this.history = history;
     const shown = tools.list().filter((t) => t.toolbar !== false);
-    this.groups = CATEGORIES.filter((c) => shown.some((t) => t.group === c.id));
+    this.groups = TABS.filter((c) => shown.some((t) => tabOf(t) === c.id));
     let saved = null;
     try { saved = localStorage.getItem(GROUP_KEY); } catch { /* storage unavailable */ }
     this.group = this.groups.some((g) => g.id === saved) ? saved : this.groups[0]?.id;
 
     const tile = (t) => `
-      <button class="bm-tool" data-tool="${t.id}" data-group="${t.group ?? ''}" title="${esc(t.label)}${t.hotkey ? ` (${esc(keyLabel(t.hotkey))})` : ''}" data-label="${esc(t.label)}">
+      <button class="bm-tool" data-tool="${t.id}" data-group="${tabOf(t) ?? ''}" title="${esc(t.label)}${t.hotkey ? ` (${esc(keyLabel(t.hotkey))})` : ''}" data-label="${esc(t.label)}">
         <span class="bm-icon">${toolIcon(t)}</span>
         <span class="bm-name">${esc(t.label)}</span>
         <span class="key">${esc(t.hotkey ? keyLabel(t.hotkey) : '')}</span>
@@ -104,9 +107,9 @@ export class BuildMenu {
         <span class="bm-name">${esc(label)}</span>
       </button>`;
     const tabIcon = (c) => {
-      const d = drawing(`tab-${c.id}`, '');
+      const d = drawing(`tab-${c.icon}`, '');
       if (d.file) return `<svg class="icon sprite" viewBox="${d.viewBox}" aria-hidden="true">${d.art}</svg>`;
-      const t = tools.list().find((x) => x.id === TAB_ICON[c.id]) ?? shown.find((x) => x.group === c.id);
+      const t = tools.list().find((x) => x.id === TAB_ICON[c.id]) ?? shown.find((x) => tabOf(x) === c.id);
       return t ? toolIcon(t) : '';
     };
 
@@ -125,17 +128,13 @@ export class BuildMenu {
         <div class="bm-body">
           <div class="bm-caption"></div>
           ${this.groups.map((c) => `
-            <div class="bm-tools hidden" data-group="${c.id}">${shown.filter((t) => t.group === c.id).map(tile).join('')}</div>`).join('')}
+            <div class="bm-tools hidden" data-group="${c.id}">${shown.filter((t) => tabOf(t) === c.id).map(tile).join('')}</div>`).join('')}
         </div>
         <div class="bm-loose">
           ${act('undo', 'undo', t('undo'), 'disabled', 'bm-hist')}
           ${act('redo', 'redo', t('redo'), 'hidden', 'bm-hist')}
           ${shown.filter((t) => !t.group).map(tile).join('')}
           ${act('terrain', 'terrain', t('terrain'), 'aria-pressed="false"')}
-          <button class="bm-camera" data-act="photo" title="${t('control.photo')} (P)" aria-label="${t('control.photo')}" aria-pressed="false">
-            <span class="bm-icon">${cameraIcon()}</span>
-            <span class="bm-name">${t('control.photo')}</span>
-          </button>
         </div>
       </div>
       <div class="bm-dock">
@@ -158,7 +157,6 @@ export class BuildMenu {
     this.terrainEl = this.el.querySelector('.bm-loose [data-act="terrain"]');
     this.looseUndoEl = this.el.querySelector('.bm-loose [data-act="undo"]');
     this.looseRedoEl = this.el.querySelector('.bm-loose [data-act="redo"]');
-    this.cameraEl = this.el.querySelector('.bm-camera');
     this.captionEl = this.el.querySelector('.bm-caption');
     this.titleEl = this.el.querySelector('.bm-title');
     this.bodyEl = this.el.querySelector('.bm-body');
@@ -202,15 +200,13 @@ export class BuildMenu {
 
     tools.onChange((tool) => {
       this.showHistory();
-      if (tool.group) this.openGroup(tool.group, false);
+      if (tabOf(tool)) this.openGroup(tabOf(tool), false);
       for (const b of this.el.querySelectorAll('.bm-tool')) {
         b.classList.toggle('active', b.dataset.tool === tool.id);
         b.setAttribute('aria-pressed', String(b.dataset.tool === tool.id));
       }
       // (photo mode isn't in the menu, but it's held in the dock all the same)
       const picked = tool.id !== tools.defaultId;
-      this.cameraEl.classList.toggle('on', tool.id === 'photo');
-      this.cameraEl.setAttribute('aria-pressed', String(tool.id === 'photo'));
       this.labelEl.textContent = tool.lead?.label ?? (picked ? tool.label : t('build'));
       this.el.classList.toggle('has-lead', !!tool.lead);
       this.toggleEl.setAttribute('aria-label', tool.lead?.label ?? t('build.open'));
@@ -436,7 +432,7 @@ export class BuildMenu {
     this.group = id;
     try { localStorage.setItem(GROUP_KEY, id); } catch { /* storage unavailable */ }
     const active = this.tools.active;
-    if (active?.group && active.group !== id) this.tools.use(this.tools.defaultId);
+    if (tabOf(active) && tabOf(active) !== id) this.tools.use(this.tools.defaultId);
     this.showGroup(animate);
   }
 

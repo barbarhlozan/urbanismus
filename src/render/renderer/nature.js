@@ -72,8 +72,7 @@ export class NatureDrawing {
     if (e.key[0] === 'f') {
       const f = this.world.features.get(Number(e.key.slice(1)));
       if (!f) return;
-      const [nx, ny] = this.world.grid.xy(f.node);
-      unit(e.g, this.project(nx + f.ox, ny + f.oy), e);
+      unit(e.g, this.project(f.x, f.y), e);
     } else if (e.key[0] === 's') {
       for (const el of e.g.querySelectorAll('g.sway')) unit(el, el.dataset.foot.split(' ').map(Number));
     }

@@ -198,9 +198,9 @@
     const arrow = (g, m, n, len = 0.14) => {
       const l = Math.hypot(...n), u = n.map((k) => k / l), tip = m.map((k, i) => k + u[i] * len);
       const [s0, s1] = [S(g, m), S(g, tip)], d = [s1[0] - s0[0], s1[1] - s0[1]], dl = Math.hypot(...d), k = 7 / dl;
-      const head = [[s1[0] - d[0] * k + d[1] * k * 0.6, s1[1] - d[1] * k - d[0] * k * 0.6], s1, [s1[0] - d[0] * k - d[1] * k * 0.6, s1[1] - d[1] * k + d[0] * k * 0.6]];
+      //const head = [[s1[0] - d[0] * k + d[1] * k * 0.6, s1[1] - d[1] * k - d[0] * k * 0.6], s1, [s1[0] - d[0] * k - d[1] * k * 0.6, s1[1] - d[1] * k + d[0] * k * 0.6]];
       const cls = g.facing(u) ? 'guide' : 'away';
-      return [{ line: [s0, s1], cls }, { line: head, cls }];
+      return [{ line: [s0, s1], cls }];
     };
     const normals = (g) => corners.flatMap((a, i) => {
       const b = corners[(i + 1) % 4];

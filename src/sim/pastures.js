@@ -20,7 +20,13 @@ import { edgeKey } from '../roads/network.js';
 const N = 0, E = 1, S = 2, W = 3;
 
 export function findPastures(world) {
-  const fine = world.fine, fences = world.fences;
+  return findEnclosures(world, world.fences);
+}
+
+// The same for any line on the dense dots that closes ground off (the
+// fences; the edges of crop fields, sim/fields.js): `fences` its graph.
+export function findEnclosures(world, fences) {
+  const fine = world.fine;
   const cw = fine.width - 1, ch = fine.height - 1;
   const at = (i, j) => fine.index(i, j);
   // a fence between two dense dots that still stands closed (no road or

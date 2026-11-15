@@ -22,6 +22,7 @@ import { PerspectiveCamera } from './perspective.js';
 import { meadowGround, plant } from './meadow.js';
 import { mulberry32 } from '../core/random.js';
 import { freeTest } from './lots.js';
+import { centerOf } from './renderer/shared.js';
 import { BRIDGE } from './bridges.js';
 import { VEHICLES, vehicleSVGIn, modelFor, truckFor } from './vehicles.js';
 import { signsAt, signSVGIn, flashSVGIn, litLight } from './crossings.js';
@@ -154,11 +155,10 @@ export function takePhoto(renderer, shot) {
   };
   for (const s of world.structures.values()) {
     const nodes = world.nodesOf(s);
-    if (seen(...world.centerOf(s), Math.sqrt(nodes.length) + 1.5)) take(renderer.paintStructure(s, cam));
+    if (seen(...centerOf(world, s), Math.sqrt(nodes.length) + 1.5)) take(renderer.paintStructure(s, cam));
   }
   for (const f of world.features.values()) {
-    const [nx, ny] = world.grid.xy(f.node);
-    if (seen(nx + f.ox, ny + f.oy, 0.6)) take(renderer.paintFeature(f, cam));
+    if (seen(f.x, f.y, 0.6)) take(renderer.paintFeature(f, cam));
   }
   for (const key of world.sidewalks.keys()) {
     const [a] = key.split('-').map(Number);
@@ -523,9 +523,14 @@ function groundMarks(world, config, cam, bands, seen, onGround, groundAt, wetAt)
   for (let cy = Math.max(0, Math.floor(cam.ey - reach)); cy <= Math.min(grid.height - 1, cam.ey + reach); cy++) {
     for (let cx = Math.max(0, Math.floor(cam.ex - reach)); cx <= Math.min(grid.width - 1, cam.ex + reach); cx++) {
       if (!seen(cx, cy, 1)) continue;
-      for (const { x, y, tier, parts } of plant(world, open, cx, cy)) {
+      for (const { x, y, tier, parts, ground: lying } of plant(world, open, cx, cy)) {
         const ahead = cam.ahead(x, y);
         if (ahead < cam.near || Math.hypot(x - cam.ex, y - cam.ey) > reach) continue;
+        // (lines on the ground: a potato ridge)
+        for (const [lines, pen] of lying ?? []) {
+          const d = lines.filter((pts) => pts.every(([px, py]) => cam.ahead(px, py) > cam.near)).map((pts) => pts.map((q, i) => `${i ? 'L' : 'M'}${pt(onGround(...q))}`).join('')).join('');
+          if (d) bands.add(bands.of(ahead), 'meadow', `<path class="t${tier} ${pen}" d="${d}"/>`);
+        }
         const [sx, sy] = onGround(x, y);
         const t = cam.focal / Math.max(ahead, PHOTO.tuft);
         for (const [lines, pen] of parts) {

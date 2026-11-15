@@ -16,11 +16,11 @@ První verze k úpravám. Beaty: [scenar.md](scenar.md), postavy: [postavy.md](p
 
 DĚDA: Tady někde. Zpomal… ne, jeď, ještě kousek.
 DĚDA: Tam nahoře byla taková ves a jezdil jsem tam na prázdniny.
-DĚDA: Vem si to, tady je to nakreslený. Zbylo to u babičky ve skříni, pod ubrusama.
+DĚDA: Vem si to. Tohle zbylo to u prababičky ve skříni.
 
 *[List ze skicáku: chalupa se studnou, perem.]*
 
-> Kdo to teda kreslil?
+> Kdo to kreslil?
 DĚDA: To právě nevím. Ale je tam nakreslená ta vesnice kam jsem jezdil jako malej.
 
 > To je ta chalupa?

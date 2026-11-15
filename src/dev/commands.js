@@ -5,6 +5,7 @@
 import { exportCity } from '../ui/saveFile.js';
 import { STRUCTURE_TYPES } from '../../structures/index.js';
 import { planRoute } from '../roads/routing.js';
+import { easeBends } from '../roads/curves.js';
 import { eraseTarget } from '../tools/erase.js';
 import { SUN, DAY, sunAt, stepAt, holdDay, goOnDay, dayLength } from '../render/shadows.js';
 
@@ -101,16 +102,40 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     return world.placeStructure(type, at.node, { rotation: at.rotation });
   }
 
-  const NETWORKS = { street: ['road', false, true], road: ['road', false], lane: ['road', true], path: ['path', false], rail: ['rail', false], fence: ['fence', false] };
+  // Placed freely, as the build tool does with the pointer at (x, y): by
+  // a road, facing it and set back (World.freePlacement).
+  function place(type, x, y, { rotation = 0, turn = 0, seed } = {}) {
+    if (!STRUCTURE_TYPES[type]) throw new Error(`Unknown structure '${type}' (cmd.types() lists them)`);
+    seed ??= Math.floor(Math.random() * 2 ** 31);
+    const p = world.freePlacement(type, x, y, { rotation, turn, seed });
+    if (!p.check.ok) return fail(`Can't place ${type} at ${x}, ${y}`, p.check.reason);
+    return world.placeStructureAt(type, p.x, p.y, p.angle, { seed, data: turn ? { turn } : {} });
+  }
+
+  const NETWORKS = { street: ['road', false, true], road: ['road', false], lane: ['road', true], path: ['path', false], rail: ['rail', false], fence: ['fence', false], grain: ['field', false, false, 'grain'], potatoes: ['field', false, false, 'potatoes'] };
 
   // A straight (or diagonal, then straight) run from one dot to another.
   function road(kind, [x0, y0], [x1, y1]) {
     const entry = NETWORKS[kind];
     if (!entry) throw new Error(`cmd.road(${Object.keys(NETWORKS).map((k) => `'${k}'`).join(' | ')}, [x, y], [x, y])`);
-    const [layerKind, lane, street] = entry, layer = world.networks[layerKind];
+    const [layerKind, lane, street, crop] = entry, layer = world.networks[layerKind];
     const a = layer.nodeAt(x0, y0), b = layer.nodeAt(x1, y1);
     if (a < 0 || b < 0 || a === b) return fail(`Can't lay ${kind}`, 'off the map, or both ends the same');
-    const result = world.buildNetwork(layerKind, planRoute(layer.grid, a, b), { lane, street });
+    const route = planRoute(layer.grid, a, b);
+    // (a field's edge: laid as a way, so it carries its crop)
+    const result = crop ? world.layWay(layerKind, route.map((n) => layer.dot(n)), { crop }) : world.buildNetwork(layerKind, route, { lane, street });
+    return result.ok ? true : fail(`Can't lay ${kind}`, result.reason);
+  }
+
+  // A way through points, as the drawing tool lays it (its bends eased
+  // to radius r).
+  function way(kind, points, r = kind === 'rail' ? 2.5 : kind === 'path' ? 0.3 : kind === 'fence' || kind === 'grain' || kind === 'potatoes' ? 0.15 : kind === 'lane' ? 0.7 : 1) {
+    const entry = NETWORKS[kind];
+    if (!entry) throw new Error(`cmd.way(${Object.keys(NETWORKS).map((k) => `'${k}'`).join(' | ')}, [[x, y], …])`);
+    const [layerKind, lane, street, crop] = entry;
+    const line = easeBends(points, r);
+    if (!line) return fail(`Can't lay ${kind}`, 'too sharp a bend');
+    const result = world.layWay(layerKind, line, { lane, street, crop });
     return result.ok ? true : fail(`Can't lay ${kind}`, result.reason);
   }
 
@@ -132,7 +157,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
   function house(no) {
     const about = (s) => {
       const def = STRUCTURE_TYPES[s.type];
-      const [x, y] = world.grid.xy(s.node);
+      const { x, y } = s;
       return { no: s.no, type: s.type, name: def.name, x, y, residents: def.stats?.residents ?? 0, served: world.isServed(s), id: s.id };
     };
     if (no === undefined) return [...world.structures.values()].filter((s) => s.no != null).sort((a, b) => a.no - b.no).map(about);
@@ -223,6 +248,8 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     burn,
     build,
     road,
+    way,
+    world, renderer, agents, trains, // (for poking at from the console)
     tree,
     erase,
     undo: () => world.history.undo(), // the player's last change (each cmd that builds or erases is one too)
@@ -275,6 +302,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
       }
       return { on: DAY.on, ...DAY.steps[renderer?.dayStep ?? stepAt(hour ?? 12)], day: DAY.day };
     },
+    place,
     save: () => save(world), // downloads the town as a file: a backup outside the page
     help() {
       const lines = [
@@ -282,12 +310,14 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         `cmd.weather(${config.weather.kinds.map((k) => `'${k}'`).join(' | ')})   now: '${world.weather.kind}'`,
         `cmd.time('pause' | 'play' | 0..${clock.speeds.length - 1})`,
         'cmd.jump(minutes)         run the town ahead, up to 60',
+        "cmd.place('house', x, y)  build off the dots, as the pointer would (by a road: facing it)",
         "cmd.clear('deer' | 'boats' | 'cows' | 'sheep')",
         "cmd.unlock(name) / cmd.lock(name)   as in story/unlocks.txt",
         "cmd.story.play('Branch') / .reset() / .reload()",
         'cmd.log(n)               the last things the systems reported',
         "cmd.build('house', x, y, { rotation: 0..3 })   see cmd.types()",
-        "cmd.road('street' | 'road' | 'lane' | 'path' | 'rail' | 'fence', [x, y], [x, y])",
+        "cmd.road('street' | 'road' | 'lane' | 'path' | 'rail' | 'fence' | 'grain' | 'potatoes', [x, y], [x, y])",
+        "cmd.way('street', [[x, y], [x, y], …])   a curved way through points, as drawn",
         'cmd.tree(x, y)',
         'cmd.house(4)              the building č. p. 4; cmd.house() every one',
         'cmd.send([1, 2, 3], 7)    the people of č. p. 1, 2, 3 go to č. p. 7, stay and come home',

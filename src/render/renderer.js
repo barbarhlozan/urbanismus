@@ -88,7 +88,7 @@ const TOP = ['mist', 'objects', 'overlay']; // in the #objects <svg>, see the co
 
 // The squash of a building pointed at (Renderer.markHovered): how long, the
 // share of it spent going down, and how much it's pressed down and spread.
-const SQUASH = { ms: 300, down: 0.3, press: 0.07, spread: 0.035 };
+const SQUASH = { ms: 260, down: 0.3, press: 0.03, spread: 0.015 };
 
 export class Renderer {
   constructor(svg, ground, { world, camera, agents, trains, boats, deer, livestock, parking, config }) {
@@ -239,10 +239,10 @@ export class Renderer {
     for (const type of ['feature:added', 'feature:removed']) {
       world.events.on(type, (f) => {
         this.objsDirty.add(`f${f.id}`);
-        this.touchAround([world.grid.xy(f.node)], 2, true); // gardens spreading round it
+        this.touchAround([[f.x, f.y]], 2, true); // gardens spreading round it
         this.forests = null; // found again (forestState)
         this.dirty.add('forest');
-        this.touchMeadow([world.grid.xy(f.node)]);
+        this.touchMeadow([[f.x, f.y]]);
       });
     }
     for (const k of ['s', 'f']) {
@@ -298,6 +298,10 @@ export class Renderer {
         }
       });
     }
+    // a field closed or opened: the whole of it grows its crop again
+    // (render/meadow.js) – its edges alone say little of where it is
+    world.events.on('fields:changed', () => this.dirty.add('meadow'));
+    for (const type of ['roads:changed', 'rails:changed']) world.events.on(type, () => { if (world.networks.field.graph.edgeCount) this.dirty.add('meadow'); });
     // a car parking redraws only its own lot (renderParked)
     world.events.on('parking:changed', (s) => this.parkedDirty.add(s.id));
     on('terrain:changed', 'terrain', 'meadow', 'paths', 'rails', 'roads', 'fences');
@@ -451,6 +455,7 @@ export class Renderer {
       for (const layer of this.dirty) this[`render${layer[0].toUpperCase()}${layer.slice(1)}`]?.();
       this.dirty.clear();
       if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
+      this.growFields(); // (a field just closed coming up)
       if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
       // a new level of detail: the objects in sight, as many as fit in
       // config.render.rebuildBudget ms by what they took so far (rebandObjects),

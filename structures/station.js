@@ -117,14 +117,21 @@ function track(...pts) {
 // shorter than drawn in `tracks`.
 const SWITCH = 2.2;
 
+// The frame a station's own coordinates (footprint, `tracks`) are in: its
+// anchor (World.anchorOf) and quarter turn r. (Stations are all wider than
+// a dot, so they face the way they were placed.)
+function frameOf(world, s) {
+  const [ox, oy] = world.anchorOf(s);
+  return { ox, oy, r: s.angle == null ? s.rotation : Math.round(s.angle / (Math.PI / 2)) & 3 };
+}
+
 // How far (local x, towards `dir` ±1) the line runs on straight from the
 // station's front: its dense dots along the axis, while they're joined and
 // still on the line (the smoothing in World.railPos can pull them off).
-function straightTo(world, s, track, dir) {
+function straightTo(world, { ox, oy, r }, track, dir) {
   const rail = world.networks.rail;
-  const [ox, oy] = world.grid.xy(s.node);
-  const [ax, ay] = rotateQuarter(dir, 0, s.rotation);
-  const [nx, ny] = rotateQuarter(0, 1, s.rotation);
+  const [ax, ay] = rotateQuarter(dir, 0, r);
+  const [nx, ny] = rotateQuarter(0, 1, r);
   const [lx, ly] = rail.pos(track[dir > 0 ? track.length - 1 : 0]);
   const across = (lx - ox) * nx + (ly - oy) * ny; // the line's local y
   let f = track[dir > 0 ? track.length - 1 : 0], reach = (lx - ox) * ax + (ly - oy) * ay;
@@ -146,9 +153,9 @@ function straightTo(world, s, track, dir) {
 // off the line are drawn as long as the line allows (SWITCH).
 export function stationTracks(world, s, def) {
   if (!def.tracks) return [];
-  const [ox, oy] = world.grid.xy(s.node);
-  const front = trackAlong(world, world.nodesOf(s), s.rotation);
-  const reach = front ? [-1, 1].map((dir) => straightTo(world, s, front, dir)) : null;
+  const frame = frameOf(world, s), { ox, oy, r } = frame;
+  const front = trackAlong(world, world.nodesOf(s), s.rotation); // (the track is on the dots: stage C)
+  const reach = front ? [-1, 1].map((dir) => straightTo(world, frame, front, dir)) : null;
   return def.tracks.map(({ via, buffer }) => {
     const pts = via.map((p) => [...p]);
     if (reach) {
@@ -160,7 +167,7 @@ export function stationTracks(world, s, def) {
     return {
       buffer,
       line: track(...pts).map(([x, y]) => {
-        const [rx, ry] = rotateQuarter(x, y, s.rotation);
+        const [rx, ry] = rotateQuarter(x, y, r);
         return [ox + rx, oy + ry];
       }),
     };

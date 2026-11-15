@@ -191,6 +191,7 @@ export function fieldsOf(def, s) {
 // or one of its type's `yards` picked by seed. null = none. Without a road
 // (cars: false) styles for cars (parking, garages) are left out.
 export function yardOf(def, s, { cars = true } = {}) {
+  if (!def.yards?.length) return null; // (a choice kept from when it had some)
   const chosen = s.data?.yard;
   if (chosen === 'none') return null;
   if (chosen && YARDS[chosen] && (cars || !YARDS[chosen].cars)) return chosen;
@@ -210,6 +211,7 @@ export function yardOf(def, s, { cars = true } = {}) {
 // would swing it off (walkways running out across the road). Without
 // `world` (no road known) only the small turn.
 export function tiltOf(def, s, join = { left: false, right: false }, world = null) {
+  if (s.free) return freeTilt(s); // placed freely: as far off its quarter turn as it stands
   if ((def.footprint ?? [[0, 0]]).length !== 1 || join.left || join.right || def.site) return 0;
   const road = world ? roadFront(world, s).tilt : 0;
   if (Math.abs(road) > 1e-6) return road;
@@ -228,6 +230,7 @@ export function tiltOf(def, s, join = { left: false, right: false }, world = nul
 // beside a diagonal), for the drawing to keep its distance (g.roadGap).
 export function roadFront(world, s) {
   const none = { tilt: 0, gap: 1 };
+  if (s.free) return { tilt: freeTilt(s), gap: 1 }; // it was set square to its road as placed
   // squares: their paving joins their neighbours' on the grid, never turned
   if (STRUCTURE_TYPES[s.type]?.keepsGrid) return none;
   const rot = world.frontRotation(s);
@@ -291,8 +294,16 @@ function joinedNeighbour(world, s, dir, roll = true) {
   const join = def?.join;
   if (!join || world.nodesOf(s).length !== 1) return null;
   if (s.data?.turn) return null; // turned away from the street front
+  if (s.free) {
+    // placed freely: one standing wall to wall on that side, turned the same
+    const o = freeSideBy(world, s, dir);
+    if (!o || o.data?.turn) return null;
+    const ojoin = STRUCTURE_TYPES[o.type]?.join;
+    if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return null;
+    return !roll || joinRoll(s, o, join, ojoin) ? o : null;
+  }
   const rot = world.frontRotation(s);
-  const [x, y] = world.grid.xy(s.node);
+  const { x, y } = s; // one dot: its middle is the dot
   const side = (dir) => {
     const [dx, dy] = rotateQuarter(dir, 0, rot);
     const n = world.grid.nodeAt(x + dx, y + dy);
@@ -303,11 +314,36 @@ function joinedNeighbour(world, s, dir, roll = true) {
     if (!ojoin || ojoin.group !== join.group || world.nodesOf(o).length !== 1) return null;
     if (o.data?.turn || world.frontRotation(o) !== rot) return null;
     if (!roll) return o;
-    const [a, b] = s.id < o.id ? [s, o] : [o, s];
-    const r = mulberry32((drawSeed(a) ^ Math.imul(drawSeed(b), 0x85ebca6b) ^ 0x10ad) >>> 0)();
-    return r < Math.min(join.chance ?? 1, ojoin.chance ?? 1) ? o : null;
+    return joinRoll(s, o, join, ojoin) ? o : null;
   };
   return side(dir);
+}
+
+// Whether two neighbours that could share a wall do: a roll seeded by
+// both, under the lower of their chances.
+function joinRoll(s, o, join, ojoin) {
+  const [a, b] = s.id < o.id ? [s, o] : [o, s];
+  const r = mulberry32((drawSeed(a) ^ Math.imul(drawSeed(b), 0x85ebca6b) ^ 0x10ad) >>> 0)();
+  return r < Math.min(join.chance ?? 1, ojoin.chance ?? 1);
+}
+
+// The freely placed structure standing wall to wall with free structure s
+// on its local -x (dir -1) or +x (dir 1) side – its middle a width along
+// that side (within JOIN_GAP), turned the same (within JOIN_TURN) – or null.
+const JOIN_GAP = 0.1;
+const JOIN_TURN = (3 * Math.PI) / 180;
+export function freeSideBy(world, s, dir) {
+  const [w] = world.outlineSize(s.type);
+  const ax = Math.cos(s.angle), ay = Math.sin(s.angle);
+  for (const id of world.structureIndex.near(s.x + dir * ax * w, s.y + dir * ay * w, 0.6)) {
+    const o = world.structures.get(id);
+    if (!o?.free || o.id === s.id) continue;
+    const turn = Math.abs(Math.atan2(Math.sin(o.angle - s.angle), Math.cos(o.angle - s.angle)));
+    if (turn > JOIN_TURN) continue;
+    const [ow] = world.outlineSize(o.type), d = (w + ow) / 2;
+    if (Math.hypot(o.x - (s.x + dir * ax * d), o.y - (s.y + dir * ay * d)) <= JOIN_GAP) return o;
+  }
+  return null;
 }
 
 // The courts beside a village house (structures/courts.js): shared with a
@@ -315,7 +351,9 @@ function joinedNeighbour(world, s, dir, roll = true) {
 export function courtSides(world, s) {
   const def = STRUCTURE_TYPES[s.type];
   if (!def?.court) return { left: null, right: null };
-  return courtOf(def, s, drawSeed(s), joinSides(world, s), (dir) => !!joinedNeighbour(world, s, dir, false));
+  // (placed freely, nor where another building or a way leaves no room)
+  const others = (dir) => !!joinedNeighbour(world, s, dir, false) || (!!s.free && world.courtBlocked(s, dir));
+  return courtOf(def, s, drawSeed(s), joinSides(world, s), others);
 }
 
 // Footprint offsets relative to the anchor dot, after rotation.
@@ -330,4 +368,20 @@ export function footprintCenter(def, rotation = 0) {
     offs.reduce((s, o) => s + o[0], 0) / offs.length,
     offs.reduce((s, o) => s + o[1], 0) / offs.length,
   ];
+}
+
+// A freely placed structure's angle past its quarter turn (radians, within
+// ±π/4): what Painter.setTilt turns its drawing by.
+export function freeTilt(s) {
+  return s.angle - (Math.round(s.angle / (Math.PI / 2)) * Math.PI) / 2;
+}
+
+// Where a structure of `def` placed freely with its middle at (x, y),
+// turned by `angle`, has the anchor its own coordinates start from (its
+// footprint's [0, 0]): the middle, less the footprint's centre turned by
+// the whole angle (the drawing turns about the anchor by its quarter turn
+// and tilt together).
+export function freeAnchor(def, x, y, angle) {
+  const [cx, cy] = footprintCenter(def, 0), c = Math.cos(angle), sn = Math.sin(angle);
+  return [x - (cx * c - cy * sn), y - (cx * sn + cy * c)];
 }

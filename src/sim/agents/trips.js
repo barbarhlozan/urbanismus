@@ -3,8 +3,8 @@
 
 import { STRUCTURE_TYPES, matches, codeOf, statsOf } from '../../../structures/index.js';
 import { compass } from '../../ui/annotations.js';
-import { findPath } from '../../roads/pathfinding.js';
 import { can, between } from './shared.js';
+import { centerOf } from '../pose.js';
 
 // A random key of { key: weight }, or null when none is left.
 function pickWeighted(weights) {
@@ -21,15 +21,16 @@ export class AgentTrips {
   planDeparture(a) {
     const { world } = this;
     const dest = world.structures.get(a.trip.dest);
-    const from = dest && world.accessInfo(dest);
+    const from = dest && this.drivePlace(dest);
     const exit = this.pickExit();
     if (!from || !exit) return false;
-    const nodes = findPath(world.networks.road, from.road, exit.node);
-    if (!nodes) return false;
-    const leave = this.buildTrip({ mode: 'drive', nodes, fromDoor: from.door, toPoint: this.offMap(exit) }, null);
+    const way = this.driveWay(from.place, exit.node);
+    if (!way) return false;
+    const leave = this.buildTrip({ mode: 'drive', ...way, fromDoor: from.door, toPoint: this.offMap(exit) }, null);
     a.trip.back = leave.out;
-    a.trip.nodes = nodes;
-    if (!a.truck) this.log(`V-${a.id.slice(1).padStart(3, '0')} leaves · exit ${compass(exit.dir)}`, world.grid.xy(exit.node));
+    a.trip.ways = leave.ways;
+    a.trip.wayPts = leave.wayPts;
+    if (!a.truck) this.log(`V-${a.id.slice(1).padStart(3, '0')} leaves · exit ${compass(exit.dir)}`, exit.pos);
     return true;
   }
 
@@ -38,11 +39,11 @@ export class AgentTrips {
     const cfg = this.config.trucks;
     if (Math.random() < cfg.exportShare) {
       const exit = this.pickExit();
-      const from = this.world.accessInfo(home);
-      const nodes = exit && from && findPath(this.world.networks.road, from.road, exit.node);
-      if (nodes) {
-        this.log(`${codeOf(home)} truck exports goods · exit ${compass(exit.dir)}`, this.world.grid.xy(home.node));
-        return this.begin(a, { mode: 'drive', nodes, fromDoor: from.door, toPoint: this.offMap(exit), outside: true, exit, truck: true }, null);
+      const from = this.drivePlace(home);
+      const way = exit && from && this.driveWay(from.place, exit.node);
+      if (way) {
+        this.log(`${codeOf(home)} truck exports goods · exit ${compass(exit.dir)}`, centerOf(this.world, home));
+        return this.begin(a, { mode: 'drive', ...way, fromDoor: from.door, toPoint: this.offMap(exit), outside: true, exit, truck: true }, null);
       }
     }
     const places = this.candidates(home, [cfg.destinations[Math.floor(Math.random() * cfg.destinations.length)]]);
@@ -123,9 +124,9 @@ export class AgentTrips {
         return loop && this.begin(a, { mode: 'stroll', purpose: 'stroll', ...loop }, null);
       }
       case 'park': {
-        const [hx, hy] = this.world.grid.xy(home.node);
+        const [hx, hy] = centerOf(this.world, home);
         const near = (s) => {
-          const [x, y] = this.world.grid.xy(s.node);
+          const [x, y] = centerOf(this.world, s);
           return Math.hypot(x - hx, y - hy);
         };
         const places = this.candidates(home, sim.leisure ?? this.config.activities.leisure)
@@ -159,7 +160,7 @@ export class AgentTrips {
       }
       case 'forest': {
         const { forestReach } = this.config.village;
-        const route = this.walk.toward(home, (n) => this.byWood(n), 1, forestReach);
+        const route = this.walk.toward(home, (p) => this.byWood(p), 1, forestReach);
         if (!route) return null;
         const next = this.begin(a, { mode: 'stroll', purpose: 'forest', linger: true, ...route }, null);
         if (next) a.carry = 'basket';
@@ -214,7 +215,7 @@ export class AgentTrips {
         a.timer = between(...this.config.dwell.setOff);
         n++;
       }
-      if (n) this.log(`č. p. ${home.no ?? codeOf(home)} sent to č. p. ${dest.no ?? codeOf(dest)} · ${n}`, this.world.grid.xy(home.node));
+      if (n) this.log(`č. p. ${home.no ?? codeOf(home)} sent to č. p. ${dest.no ?? codeOf(dest)} · ${n}`, centerOf(this.world, home));
       else missed.push({ home, why: 'nobody in' });
       sent += n;
     }

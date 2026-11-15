@@ -7,6 +7,10 @@ import { Grid, rotateQuarter } from '../src/core/grid.js';
 import { makeLift } from '../src/render/warp.js';
 import { isoSort } from '../src/render/order.js';
 
+// (the game keeps the view from one side for now – Camera.FIXED – but the
+// turning itself is kept working, and tested, for when it comes back)
+Camera.FIXED = false;
+
 // The view's four quarter turns, and some turns between them (radians).
 const TURNS = [0, 1, 2, 3].map((r) => (r * Math.PI) / 2).concat([0.4, 2.2, 3.9, 5.5]);
 
@@ -198,4 +202,13 @@ test('the painter keeps the one behind behind, at any turn', () => {
     assert.equal(order[1], nearer, `turned ${angle.toFixed(2)}: ${order}`);
   }
   assert.ok(overlapping >= 4, `${overlapping}`); // (the test still tests something)
+});
+
+test('the game\'s view is fixed to one side for now', async () => {
+  const { Camera: C } = await import('../src/render/camera.js?fixed');
+  assert.equal(C.FIXED, true);
+  const cam = new C(new Grid(10, 10));
+  cam.setViewport(800, 600);
+  cam.turnAt(400, 300, 0.5);
+  assert.equal(cam.angle, 0);
 });

@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <title>Dědina – press kit</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { overflow: auto; height: auto; position: static; }
+    body { background: var(--bg); color: var(--fg); font: 13px var(--ui-font); margin: 16px 20px 80px; }
+    h1 { font-weight: 500; font-size: 20px; margin: 0 0 4px; }
+    h2 { font-weight: 500; font-size: 15px; margin: 26px 0 6px; }
+    p.note { margin: 0 0 8px; color: var(--detail); max-width: 64em; line-height: 1.45; }
+    .grid { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+    figure { margin: 0; border: 1px solid color-mix(in srgb, var(--detail) 35%, var(--bg)); }
+    figure > svg { display: block; width: auto; height: auto; max-width: min(100%, 900px); max-height: 420px; }
+    figcaption { padding: 3px 6px; color: var(--detail); display: flex; gap: 8px; }
+    figcaption a { color: var(--fg); }
+  </style>
+</head>
+<body>
+  <h1>Press kit</h1>
+  <p class="note">Pieces drawn by the game's own code, for banners and the itch.io page: the twin church (after Skoky), houses, trees, chat bubbles, and a village scene. All at one scale, so they fit together. Each can be saved as SVG or as a transparent PNG (<code>?scale=</code> px per unit, default 10; <code>?line=</code> pen weight, default 2.2; <code>?scheme=</code> 0–3, default Countryside; <code>?rot=</code> 0–3). <code>tools/press-kit.mjs</code> saves them all to <code>press/</code>.</p>
+  <div id="out"></div>
+
+  <script type="module">
+    import { mapPatterns } from './src/lab/page.js';
+    import { applyTheme } from './src/theme.js';
+    import { Camera } from './src/render/camera.js';
+    import { Painter } from './src/render/painter.js';
+    import { sunFor, shadowSVG } from './src/render/shadows.js';
+    import { smooth } from './src/render/people.js';
+    import { seedOf } from './src/render/sketch.js';
+    import { mulberry32 } from './src/core/random.js';
+    import { STRUCTURE_TYPES } from './structures/index.js';
+    import { drawTree, drawClump } from './features/trees.js';
+
+    mapPatterns();
+    const q = new URLSearchParams(location.search);
+    applyTheme(q.has('scheme') ? +q.get('scheme') : 2); // (Countryside)
+    await document.fonts.load('14px Basteleur'); // (the bubbles are measured in it)
+    const SCALE = +(q.get('scale') ?? 10), LINE = +(q.get('line') ?? 2.2);
+    const NS = 'http://www.w3.org/2000/svg';
+    const out = document.getElementById('out');
+    const css = getComputedStyle(document.documentElement);
+    const INK = css.getPropertyValue('--main').trim(), PAPER = css.getPropertyValue('--bg').trim(), DETAIL = css.getPropertyValue('--detail').trim();
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    const cam = new Camera({ width: 1, height: 1 }, { tile: 64 });
+    cam.rotation = +(q.get('rot') ?? 2); // (from the street: the fronts face us)
+
+    // ---------- the pieces ----------
+
+    // [type, kind, x, y, data] drawn as the map draws them: ground, the
+    // shadows, then the buildings back to front
+    function townSVG(list, extra = []) {
+      const out = list.map(([type, kind, x, y, data], i) => {
+        const g = new Painter(cam, { x, y }, 0, seedOf(i + 3, x * 10, y * 10));
+        if (type === 'tree') drawTree(g, 0, 0, kind, data?.h ?? 0.55);
+        else if (type === 'clump') drawClump(g, 0, 0, kind);
+        else {
+          const def = STRUCTURE_TYPES[type];
+          def.draw(g, { type, seed: seedOf(i + 3, x, y), id: i, node: 0, rotation: 0, data: { ...(kind ? { kind } : {}), ...data } });
+        }
+        return { g, depth: cam.depth(x, y) };
+      }).sort((a, b) => a.depth - b.depth);
+      const sun = sunFor(cam);
+      return out.map((b) => b.g.toGroundSVG()).join('')
+        + out.map((b) => shadowSVG({ feet: b.g.feet, casts: b.g.casts, project: b.g.groundProjector() }, sun)).join('')
+        + out.map((b) => b.g.toSVG()).join('') + extra.join('');
+    }
+
+    // The chat bubble: a rounded box in one pen line, its ends crossing
+    // where it closes, paper inside; the tail leaning in (-1 from the left
+    // lane, 0 down, 1 from the right). (x, y) its top left, in user units
+    // of `u` px.
+    function bubbleSVG({ x = 0, y = 0, name = '', lines = [], width = null, tail = 0, u = 1, seed = 11 }) {
+      const pad = 14 * u, nameH = name ? 15 * u : 0, lh = 18 * u;
+      const tw = Math.max(name ? measure(name, 10.5 * u, 1.4 * u) : 0, ...lines.map((l) => measure(l, 14 * u)), 0);
+      const w = width ?? tw + pad * 2, h = 14 * u + nameH + lines.length * lh + (lines.length ? 0 : 20 * u);
+      const rnd = mulberry32(seed), N = 34, a0 = Math.PI * 0.62, e = 3.6;
+      const ring = (open) => {
+        const pts = [];
+        for (let i = 0; i <= (open ? N + 3 : N - 1); i++) {
+          const a = a0 + (i / N) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+          const j = 1 + (rnd() - 0.5) * 0.02 - (i > N ? 0.012 * (i - N) : 0);
+          pts.push([x + w / 2 + Math.sign(c) * Math.abs(c) ** (2 / e) * (w / 2) * j, y + h / 2 + Math.sign(s) * Math.abs(s) ** (2 / e) * (h / 2) * j]);
+        }
+        return smooth(pts, !open);
+      };
+      const sw = 1.5 * u;
+      let s = `<path d="${ring(false)}" fill="${PAPER}"/><path d="${ring(true)}" fill="none" stroke="${INK}" stroke-width="${sw}" stroke-linecap="round"/>`;
+      if (tail != null) {
+        const tx = x + w / 2 + tail * -w * 0.22, by = y + h - 0.6 * u, a = [tx - 6 * u, by], c = [tx + 6 * u, by];
+        const tip = [tx - tail * 7 * u, by + 13 * u];
+        s += `<path d="M${a[0]} ${a[1] - 3 * u}L${tip[0]} ${tip[1]}L${c[0]} ${c[1] - 3 * u}Z" fill="${PAPER}"/>`
+          + `<path d="M${a[0]} ${a[1]}Q${(a[0] + tip[0]) / 2} ${(a[1] + tip[1]) / 2 - 1.5 * u} ${tip[0]} ${tip[1]}Q${(c[0] + tip[0]) / 2} ${(c[1] + tip[1]) / 2 - 1.5 * u} ${c[0]} ${c[1]}" fill="none" stroke="${INK}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      }
+      let ty = y + 21 * u;
+      if (name) { s += `<text x="${x + pad}" y="${ty - u}" font-family="Basteleur" font-size="${10.5 * u}" letter-spacing="${1.4 * u}" fill="${DETAIL}">${esc(name)}</text>`; ty += 15 * u; }
+      lines.forEach((l, i) => { if (l) s += `<text x="${x + pad}" y="${ty + i * lh}" font-family="Basteleur" font-size="${14 * u}" fill="${INK}">${esc(l)}</text>`; });
+      return { svg: `<g>${s}</g>`, w, h: h + (tail != null ? 13 * u : 0) };
+    }
+    const ctx = document.createElement('canvas').getContext('2d');
+    function measure(text, size, spacing = 0) {
+      ctx.font = `${size}px Basteleur`;
+      return ctx.measureText(text).width + spacing * text.length;
+    }
+
+    // A chat stack over a point (cx, bottom), the newest lowest: a lane a
+    // speaker, the name only when it changes, a tail under each run's end.
+    function stackSVG(cx, bottom, talk, { u = 1, col = 380 } = {}) {
+      const order = [];
+      for (const t of talk) if (!order.includes(t.who)) order.push(t.who);
+      const LANES = [[0.5], [0.2, 0.8], [0.17, 0.83, 0.5], [0.14, 0.86, 0.38, 0.62]][Math.min(4, order.length) - 1];
+      let s = '', y = bottom;
+      for (let i = talk.length - 1; i >= 0; i--) {
+        const t = talk[i], lane = LANES[order.indexOf(t.who)];
+        const named = i === 0 || talk[i - 1].who !== t.who, tailed = i === talk.length - 1 || talk[i + 1].who !== t.who;
+        const probe = bubbleSVG({ name: named ? t.who : '', lines: t.lines, tail: tailed ? 0 : null, u });
+        const lx = cx + (lane - 0.5) * col * u;
+        let x = Math.max(cx - (col * u) / 2, Math.min(cx + (col * u) / 2 - probe.w, lx - probe.w / 2));
+        y -= probe.h;
+        const lean = lane < 0.45 ? -1 : lane > 0.55 ? 1 : 0;
+        const b = bubbleSVG({ x, y, name: named ? t.who : '', lines: t.lines, tail: tailed ? lean : null, u, seed: 11 + i * 7 });
+        const fade = [1, 0.8, 0.62, 0.48][talk.length - 1 - i] ?? 0.4;
+        s = `<g opacity="${fade}">${b.svg}</g>` + s;
+        y -= 6 * u;
+      }
+      return s;
+    }
+
+    const P = [];
+    const piece = (group, name, svg, opts = {}) => P.push({ group, name, svg, ...opts });
+
+    // the churches
+    piece('Church', 'church-twin', townSVG([['church', 'twin', 0, 0, { grounds: 'none' }]]));
+    piece('Church', 'church-twin-graves', townSVG([['church', 'twin', 0, 0, { grounds: 'graves' }]]));
+    piece('Church', 'church-onion', townSVG([['church', 'onion', 0, 0, { grounds: 'none' }]]));
+    // houses
+    for (const k of ['street', 'farmstead', 'farm']) piece('Houses', `house-${k}`, townSVG([['house', k, 0, 0]]));
+    for (const k of ['longhouse', 'barn']) piece('Houses', `house-wide-${k}`, townSVG([['house-wide', k, 0, 0]]));
+    for (const k of ['cube', 'villa']) piece('Houses', `family-house-${k}`, townSVG([['family-house', k, 0, 0]]));
+    piece('Houses', 'hospoda', townSVG([['hospoda', 'village', 0, 0]]));
+    piece('Houses', 'vymenek', townSVG([['smallholding', null, 0, 0]]));
+    // trees
+    for (const [k, h] of [['spreading', 0.6], ['spreading', 0.5], ['spruce', 0.62], ['spruce', 0.5], ['sapling', 0.45]]) piece('Trees', `tree-${k}-${Math.round(h * 100)}`, townSVG([['tree', k, 0, 0, { h }]]));
+    piece('Trees', 'trees-clump', townSVG([['clump', [{ x: -0.3, y: 0.1, kind: 'spreading', height: 0.65 }, { x: 0.25, y: -0.15, kind: 'spruce', height: 0.7 }, { x: 0.05, y: 0.3, kind: 'spreading', height: 0.5 }], 0, 0]]));
+
+    // bubbles: empty ones to write into, and some with the story's lines
+    const U = 1;
+    for (const [n, w, t] of [['bubble-empty-left', 220, -1], ['bubble-empty-middle', 160, 0], ['bubble-empty-right', 260, 1], ['bubble-empty-wide', 360, 0], ['bubble-empty-notail', 220, null]]) {
+      piece('Bubbles', n, bubbleSVG({ width: w * U, lines: ['', ''], tail: t, u: U, seed: w }).svg, { px: 4 });
+    }
+    for (const [n, who, lines, t] of [
+      ['bubble-bartos', 'BARTOŠ', ['Ty nevíš o Němce?', 'Hudáku, on neví o Němce.'], -1],
+      ['bubble-hudak', 'HUDÁK', ['Šak sa nepýtaj.'], 1],
+      ['bubble-host', 'HOST', ['Mně se stalo.', 'Žena mi odešla.'], 0],
+      ['bubble-jarka', 'JARKA', ['Ty jsi ten od Marie?', 'Umíš plavat?'], -1],
+      ['bubble-wenzlova', 'WENZLOVÁ', ['Weg da! Runter!'], 1],
+    ]) piece('Bubbles', n, bubbleSVG({ name: who, lines, tail: t, u: U, seed: n.length * 13 }).svg, { px: 4 });
+    piece('Bubbles', 'bubble-stack-hospoda', stackSVG(0, 0, [
+      { who: 'BARTOŠ', lines: ['Bydlí nahoře nad kostelem.', 'Sama. Od války.'] },
+      { who: 'HUDÁK', lines: ['Otrávila. Ja to viem.'] },
+      { who: 'BARTOŠ', lines: ['Kdo ji v poledne potká,', 'tomu se do večera něco stane.'] },
+      { who: 'HOST', lines: ['Mně se stalo.', 'Žena mi odešla.'] },
+    ]), { px: 4 });
+
+    // the scene: the twin church over a few houses on a street, trees
+    // round, the pub talking
+    // (seen with rot 2: +x goes up the page to the left, +y up to the right;
+    // the church and the houses face -y, down to the left, at us)
+    const PUB = [1.5, -1.7];
+    const sceneList = [
+      ['church', 'twin', 0, 0, { grounds: 'graves' }],
+      // the street in front of it, the pub at its far end
+      ['hospoda', 'village', ...PUB], ['house', 'street', 0.3, -1.75], ['house', 'farmstead', -0.9, -1.7], ['house', 'farm', -2.1, -1.8],
+      // the výměnek up behind the church, in the trees
+      ['smallholding', null, 1.0, 2.5],
+      ['tree', 'spruce', 2.0, 2.9, { h: 0.66 }], ['tree', 'spruce', 0.1, 3.1, { h: 0.6 }], ['tree', 'spreading', 2.4, 1.7, { h: 0.6 }],
+      ['tree', 'spreading', -1.3, 1.5, { h: 0.62 }], ['tree', 'spruce', -0.9, 2.5, { h: 0.64 }], ['tree', 'spreading', -2.4, 0.4, { h: 0.55 }],
+      ['tree', 'sapling', 0.9, -2.75, { h: 0.45 }], ['tree', 'spreading', -1.6, -2.9, { h: 0.5 }], ['tree', 'spreading', 2.7, -0.4, { h: 0.55 }],
+    ];
+    const pub = new Painter(cam, { x: PUB[0], y: PUB[1] }, 0, 1);
+    STRUCTURE_TYPES.hospoda.draw(pub, { type: 'hospoda', seed: 1, id: 0, node: 0, rotation: 0, data: { kind: 'village' } });
+    const fp = STRUCTURE_TYPES.hospoda.footprint, fcx = fp.reduce((s, p) => s + p[0], 0) / fp.length, fcy = fp.reduce((s, p) => s + p[1], 0) / fp.length;
+    const [px, py] = pub._project(...pub._world(fcx, fcy, pub.top));
+    const talk = stackSVG(px, py - 14, [
+      { who: 'BARTOŠ', lines: ['Ty nevíš o Němce?'] },
+      { who: 'HUDÁK', lines: ['Šak sa nepýtaj.'] },
+      { who: 'BARTOŠ', lines: ['Bydlí nahoře nad kostelem.', 'Sama. Od války.'] },
+    ], { u: 0.55, col: 280 });
+    piece('Scene', 'scene-village', townSVG(sceneList), { paper: true });
+    piece('Scene', 'scene-village-talk', townSVG(sceneList, [talk]), { paper: true });
+
+    // ---------- shown, then saved ----------
+
+    let group = null;
+    for (const p of P) {
+      if (p.group !== group) { group = p.group; out.insertAdjacentHTML('beforeend', `<h2>${group}</h2><div class="grid"></div>`); }
+      const fig = document.createElement('figure');
+      fig.innerHTML = `<svg xmlns="${NS}"><g class="scene layer-objects lod-0">${p.svg}</g></svg><figcaption>${p.name} <a href="#" data-k="svg">svg</a> <a href="#" data-k="png">png</a></figcaption>`;
+      out.lastElementChild.appendChild(fig);
+      const svg = fig.querySelector('svg'), b = svg.querySelector('g').getBBox(), pad = p.paper ? 24 : 6;
+      p.box = { x: b.x - pad, y: b.y - pad, w: b.width + 2 * pad, h: b.height + 2 * pad };
+      svg.setAttribute('viewBox', `${p.box.x} ${p.box.y} ${p.box.w} ${p.box.h}`);
+      // pen lines as wide on the PNG as `line` px a pen width
+      const k = p.px ?? SCALE;
+      svg.style.setProperty('--stroke', (LINE / k).toFixed(4));
+      svg.setAttribute('width', Math.round(p.box.w * Math.min(k, 3)));
+      p.el = svg;
+      fig.querySelector('figcaption').addEventListener('click', async (e) => {
+        const a = e.target.closest('a');
+        if (!a) return;
+        e.preventDefault();
+        const file = a.dataset.k === 'svg' ? new Blob([await standalone(p)], { type: 'image/svg+xml' }) : await (await fetch(await png(p))).blob();
+        const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(file), download: `${p.name}.${a.dataset.k}` });
+        link.click();
+      });
+    }
+
+    // The drawing on its own: every element's look written onto it (the map's
+    // classes and variables don't go with it), the patterns it fills with,
+    // and the font.
+    const PROPS = ['fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-linecap', 'stroke-linejoin',
+      'stroke-dasharray', 'stroke-dashoffset', 'opacity', 'display', 'visibility', 'paint-order', 'mix-blend-mode'];
+    let fontData = null;
+    async function font() {
+      if (fontData) return fontData;
+      const buf = new Uint8Array(await (await fetch('fonts/Basteleur-Moonlight.woff2')).arrayBuffer());
+      let s = '';
+      for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      return (fontData = btoa(s));
+    }
+    function inline(src, dst, refs) {
+      if (src.nodeType !== 1) return;
+      const cs = getComputedStyle(src);
+      const style = [];
+      for (const k of PROPS) {
+        const v = cs.getPropertyValue(k);
+        if (!v || v === 'normal' && k !== 'mix-blend-mode') continue;
+        if (k === 'mix-blend-mode' && v === 'normal') continue;
+        style.push(`${k}:${v}`);
+        const m = /url\("?#([^")]+)"?\)/.exec(v);
+        if (m) refs.add(m[1]);
+      }
+      dst.removeAttribute('class');
+      dst.setAttribute('style', style.join(';'));
+      for (let i = 0; i < src.children.length; i++) inline(src.children[i], dst.children[i], refs);
+    }
+    async function standalone(p) {
+      const clone = p.el.cloneNode(true), refs = new Set();
+      inline(p.el, clone, refs);
+      const defs = document.createElementNS(NS, 'defs');
+      const done = new Set();
+      while (refs.size) {
+        const id = refs.values().next().value;
+        refs.delete(id);
+        if (done.has(id)) continue;
+        done.add(id);
+        const src = document.getElementById(id);
+        if (!src) continue;
+        const c = src.cloneNode(true);
+        inline(src, c, refs);
+        c.removeAttribute('style');
+        defs.appendChild(c);
+      }
+      if (p.el.querySelector('text')) defs.insertAdjacentHTML('afterbegin', `<style>@font-face{font-family:"Basteleur";src:url(data:font/woff2;base64,${await font()}) format("woff2");}</style>`);
+      clone.prepend(defs);
+      const k = p.px ?? SCALE;
+      clone.setAttribute('width', Math.round(p.box.w * k));
+      clone.setAttribute('height', Math.round(p.box.h * k));
+      clone.removeAttribute('style');
+      if (p.paper) clone.insertAdjacentHTML('afterbegin', `<rect x="${p.box.x}" y="${p.box.y}" width="${p.box.w}" height="${p.box.h}" fill="${PAPER}"/>`);
+      return new XMLSerializer().serializeToString(clone);
+    }
+    async function png(p) {
+      const text = await standalone(p);
+      const k = p.px ?? SCALE, W = Math.round(p.box.w * k), H = Math.round(p.box.h * k);
+      const img = new Image();
+      img.src = URL.createObjectURL(new Blob([text], { type: 'image/svg+xml' }));
+      await img.decode();
+      await new Promise((r) => setTimeout(r, 50)); // (the font in it)
+      const c = Object.assign(document.createElement('canvas'), { width: W, height: H });
+      c.getContext('2d').drawImage(img, 0, 0, W, H);
+      return c.toDataURL('image/png');
+    }
+    await document.fonts.ready;
+    window.press = { pieces: P.map((p) => p.name), svg: (n) => standalone(P.find((p) => p.name === n)), png: (n) => png(P.find((p) => p.name === n)) };
+  </script>
+</body>
+</html>

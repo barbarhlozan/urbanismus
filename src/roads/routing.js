@@ -135,6 +135,9 @@ export function validateRoute(layer, nodes, opts = {}) {
     if (crossesDiagonal(layer, nodes[i], nodes[i + 1])) {
       reason = 'Crosses another line';
       block(other, nodes[i], nodes[i + 1]);
+    } else if (layer.occupied(nodes[i], nodes[i + 1])) {
+      reason = 'Occupied';
+      block(other, nodes[i], nodes[i + 1]);
     } else if (layer.conflicts(nodes[i], nodes[i + 1])) {
       reason = 'Runs along another line';
       block(other, nodes[i], nodes[i + 1]);

@@ -8,6 +8,16 @@ import { validateRoute } from '../../roads/routing.js';
 import { STRUCTURE_TYPES } from '../../../structures/index.js';
 import { smoothLine } from '../geom2d.js';
 import { meanderPaths } from '../../roads/meander.js';
+import { traceWays, traceLine } from '../../roads/dotView.js';
+import { pointAt, subPolyline } from '../../roads/geometry.js';
+
+// How near a node a new way's end takes it, moving it to meet the stroke
+// (Ways.insert `refit`): about three road widths for roads, less for
+// footpaths; railways and fences don't bend what's there.
+const REFIT = { road: 0.7, path: 0.35 };
+// A way's line may run this far past the land's edge (an end snapped onto
+// it, eased a little outward).
+const EDGE_SLACK = 0.08;
 
 export class WorldNetworks {
   // Where a footpath runs at dense dot f: wandering a little off its dots,
@@ -179,6 +189,224 @@ export class WorldNetworks {
     return gone;
   }
 
+  // ---------- the ways and their dot view ----------
+
+  // Rebuilds a layer's dots (and, for roads, the street sets) from the
+  // ways – see world.js, `ways`. Dots a drawn curve passes keep where it
+  // runs (`curvePos`, read by the layer's pos): agents and the drawing
+  // follow the curve, not the dots.
+  refreshNetwork(kind) {
+    const layer = this.networks[kind];
+    const view = traceWays(this.ways, kind, layer.grid, layer.scale);
+    layer.graph = view.graph;
+    // a drawn curve's dots sit on it, and each dot step is drawn as its
+    // piece of the curve (`stepLines`, geometry.js edgeCurve)
+    layer.curvePos = new Map();
+    layer.stepLines = new Map();
+    // one place per dot: a junction's own if one lies there, else where the
+    // first curve through it passes; every curve's piece ends there, so
+    // ways sharing a dot meet
+    const curves = [];
+    const nodeAt = new Map();
+    for (const e of this.ways.edges.values()) {
+      if (e.kind !== kind) continue;
+      for (const id of [e.a, e.b]) {
+        const n = this.ways.nodes.get(id), d = layer.nodeAt(n.x, n.y);
+        const [dx, dy] = layer.dot(d), off = Math.hypot(n.x - dx, n.y - dy);
+        if (!nodeAt.has(d) || off < nodeAt.get(d).off) nodeAt.set(d, { p: [n.x, n.y], off });
+      }
+      if (e.pts.length <= 2) continue;
+      const poly = this.ways.measured(e);
+      const dots = traceLine(e.pts, layer.grid, layer.scale);
+      dots.forEach((d, i) => { d.s = i === 0 ? 0 : i === dots.length - 1 ? poly.total : d.s; });
+      curves.push({ poly, dots });
+    }
+    for (const { poly, dots } of curves) {
+      for (const d of dots) if (!layer.curvePos.has(d.n)) layer.curvePos.set(d.n, nodeAt.get(d.n)?.p ?? pointAt(poly, d.s));
+    }
+    for (const { poly, dots } of curves) {
+      for (let i = 1; i < dots.length; i++) {
+        const pts = subPolyline(poly, dots[i - 1].s, dots[i].s).map((p) => [...p]);
+        pts[0] = layer.curvePos.get(dots[i - 1].n);
+        pts[pts.length - 1] = layer.curvePos.get(dots[i].n);
+        layer.stepLines.set(edgeKey(dots[i - 1].n, dots[i].n), { from: dots[i - 1].n, pts });
+      }
+    }
+    layer.version++;
+    if (kind === 'road') {
+      this.sidewalks = view.sidewalks;
+      this.lanes = view.lanes;
+      this.laneWalks = view.laneWalks;
+    }
+  }
+
+  // Makes the ways of a kind what its dots (and street sets) now say –
+  // for the changes still worked out dot by dot (building and removing
+  // with the dot tool, streets): a way whose dots and attributes all still
+  // hold stays as it is; one that lost a dot step, or had part of it
+  // changed (a stretch made a street), goes, and every dot step no way
+  // covers becomes an edge of its own, its street, lane and kerbs as the
+  // edge's attributes. Then the dot view is rebuilt from the ways, so the
+  // two can't drift apart.
+  syncWays(kind) {
+    const layer = this.networks[kind], ways = this.ways, graph = layer.graph;
+    const same = (p, q) => (p.lane ?? false) === (q.lane ?? false) && (p.street ?? false) === (q.street ?? false) && (p.walks ?? 0) === (q.walks ?? 0);
+    const covered = new Set(), nodeAt = new Map();
+    for (const e of [...ways.edges.values()]) {
+      if (e.kind !== kind) continue;
+      const dots = traceLine(e.pts, layer.grid, layer.scale).map((d) => d.n);
+      let holds = dots.length > 1;
+      for (let i = 1; holds && i < dots.length; i++) holds = graph.hasEdge(dots[i - 1], dots[i]);
+      if (!holds) { ways.removeEdge(e.id); continue; }
+      const wants = dots.slice(1).map((b, i) => this.stepAttrs(kind, dots[i], b));
+      if (!wants.every((w) => same(w, wants[0]))) { ways.removeEdge(e.id); continue; }
+      if (!same(e, wants[0])) {
+        delete e.lane; delete e.street; delete e.walks;
+        Object.assign(e, wants[0]);
+        ways.version++;
+      }
+      for (let i = 1; i < dots.length; i++) covered.add(edgeKey(dots[i - 1], dots[i]));
+      for (const id of [e.a, e.b]) {
+        const n = ways.nodes.get(id), d = layer.nodeAt(n.x, n.y), [dx, dy] = layer.dot(d);
+        if (Math.hypot(dx - n.x, dy - n.y) < 1e-6) nodeAt.set(d, id);
+      }
+    }
+    const nodeFor = (d) => {
+      const id = nodeAt.get(d);
+      if (id && ways.nodes.has(id)) return id;
+      const n = ways.addNode(...layer.dot(d));
+      nodeAt.set(d, n.id);
+      return n.id;
+    };
+    for (const [a, b] of graph.edges()) {
+      if (covered.has(edgeKey(a, b))) continue;
+      ways.addEdge(nodeFor(a), nodeFor(b), [layer.dot(a), layer.dot(b)], { kind, ...this.stepAttrs(kind, a, b) });
+    }
+    this.refreshNetwork(kind);
+  }
+
+  // Checks a way to be laid along `line` (its centre line, from
+  // roads/curves.js) by the dots it passes, with the same rules as a dot
+  // route (validateRoute: buildings, water and bridges, slope, other
+  // lines): { ok, blocked, steep, reason, dots }.
+  checkWay(kind, line, { lane = false } = {}) {
+    const layer = this.networks[kind];
+    const dots = traceLine(line, layer.grid, layer.scale).map((d) => d.n);
+    // on the land: up to its edge, where it runs on off the map (an end
+    // drawn near the edge is snapped onto it: tools/network.js)
+    const off = line.filter(([x, y]) => !this.land.inside(x, y, -EDGE_SLACK));
+    if (off.length) return { ok: false, reason: 'Off the map', blocked: off.map(([x, y]) => layer.nodeAt(x, y)).filter((n) => n >= 0), dots };
+    return { ...validateRoute(layer, dots, { lane }), dots };
+  }
+
+  // Lays a way along `line` – checked as above, then Ways.insert:
+  // joining, splitting and crossing what it meets – and rebuilds the dots
+  // of every kind it touched. Drawn over a way of its kind that's there
+  // already (a road made a street), it goes dot by dot instead
+  // (buildNetwork), which knows how to convert one into the other.
+  layWay(kind, line, { lane = false, street = false, crop = null } = {}) {
+    const check = this.checkWay(kind, line, { lane });
+    if (!check.ok) return check;
+    const layer = this.networks[kind], dots = check.dots;
+    // drawn over a way of its kind: the whole of it along that way converts
+    // it (a road to a lane, a street); running along one for a stretch and
+    // off it – two ways on top of each other – can't be laid (only its
+    // first or last step may lie on one: setting off from a junction)
+    const along = [];
+    for (let i = 1; i < dots.length; i++) if (layer.graph.hasEdge(dots[i - 1], dots[i])) along.push(i);
+    if (along.length === dots.length - 1) {
+      const done = this.buildNetwork(kind, dots, { lane, street });
+      // a field's edge drawn over with the other crop: the edges along it take it
+      if (crop && done.ok) {
+        const on = new Set(dots);
+        for (const e of this.ways.edges.values()) {
+          if (e.kind === kind && e.crop !== crop && traceLine(e.pts, layer.grid, layer.scale).every((d) => on.has(d.n))) {
+            e.crop = crop;
+            this.ways.version++;
+          }
+        }
+      }
+      return done;
+    }
+    if (along.some((i) => i !== 1 && i !== dots.length - 1) || (along.length && dots.length <= 3)) {
+      return { ok: false, reason: 'Runs along another line', blocked: along.flatMap((i) => [dots[i - 1], dots[i]]) };
+    }
+    this.history.touch();
+    const props = { kind, ...(lane ? { lane: true } : street ? { street: true } : {}), ...(crop ? { crop } : {}) };
+    const before = new Map([...this.ways.edges.values()].map((e) => [e.id, e.kind]));
+    const result = this.ways.insert(line, props, { refit: REFIT[kind] ?? 0 });
+    if (!result.ok) return { ...result, blocked: [] };
+    for (const n of dots) {
+      // trees along it go (a railway's, also between dots)
+      if (kind === 'rail') this.coarseAround(n).forEach((c) => this.clearFeaturesAt(c));
+      const c = layer.coarseOf(n);
+      if (c >= 0) this.clearFeaturesAt(c);
+    }
+    const kinds = new Set([kind]);
+    for (const [id, k] of before) if (!this.ways.edges.has(id)) kinds.add(k);
+    for (const id of result.moved ?? []) kinds.add(this.ways.edges.get(id)?.kind);
+    for (const k of kinds) {
+      if (!this.networks[k]) continue;
+      this.refreshNetwork(k);
+      const l = this.networks[k];
+      this.events.emit(l.event, { layer: l, nodes: [...l.graph.nodes()], ...(k === 'road' ? { sidewalks: true } : {}) });
+    }
+    return result;
+  }
+
+  // Takes way edge `id` away (the eraser), and its ends if nothing else
+  // meets there; where only two edges of one way are left meeting, they
+  // join again. A bridge it cut goes too.
+  removeWay(id) {
+    const e = this.ways.edges.get(id);
+    if (!e) return false;
+    this.history.touch();
+    this.ways.removeEdge(id);
+    for (const n of [e.a, e.b]) if (this.ways.nodes.has(n)) this.ways.joinAt(n);
+    this.afterWayChange(e);
+    return true;
+  }
+
+  // Changes a way edge's street, lane or kerbs (`attrs`: false or 0 takes
+  // one away) – the eraser taking a street's sidewalks.
+  setWayAttrs(id, attrs) {
+    const e = this.ways.edges.get(id);
+    if (!e) return false;
+    this.history.touch();
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === false || v === 0 || v == null) delete e[k];
+      else e[k] = v;
+    }
+    this.ways.version++;
+    for (const n of [e.a, e.b]) if (this.ways.nodes.has(n)) this.ways.joinAt(n);
+    this.afterWayChange(e, true);
+    return true;
+  }
+
+  // After a way edge changed: its dots again, bridges left hanging gone,
+  // and everyone told.
+  afterWayChange(e, sidewalks = false) {
+    const layer = this.networks[e.kind];
+    if (!layer) return;
+    const dots = traceLine(e.pts, layer.grid, layer.scale).map((d) => d.n);
+    this.refreshNetwork(e.kind);
+    const gone = this.pruneBridges(layer, dots.flatMap((n) => [n, ...layer.graph.neighbors(n)]));
+    if (gone.length) this.syncWays(e.kind);
+    this.events.emit(layer.event, { layer, nodes: [...dots, ...gone], ...(sidewalks ? { sidewalks: true } : {}) });
+  }
+
+  // A road step's attributes from the street sets, seen from dot a to b.
+  stepAttrs(kind, a, b) {
+    if (kind !== 'road') return {};
+    const key = edgeKey(a, b), out = {};
+    if (this.lanes.has(key)) {
+      out.lane = true;
+      const sides = this.laneWalks.get(key);
+      if (sides) out.walks = a < b ? sides : ((sides & 1) << 1) | ((sides & 2) >> 1);
+    } else if (this.sidewalks.has(key)) out.street = true;
+    return out;
+  }
+
   hasRoad(node) {
     return this.roads.hasNode(node);
   }
@@ -252,7 +480,7 @@ export class WorldNetworks {
       if (street) this.sidewalks.add(key);
       else this.sidewalks.delete(key);
     }
-    layer.version++;
+    this.syncWays(kind);
     this.events.emit(layer.event, { layer, nodes, sidewalks: walks || undefined });
     return check;
   }
@@ -270,7 +498,7 @@ export class WorldNetworks {
         for (const k of [...set.keys()]) if (!this.roads.hasEdge(...k.split('-').map(Number))) set.delete(k);
       }
     }
-    layer.version++;
+    this.syncWays(kind);
     this.events.emit(layer.event, { layer, nodes });
     return true;
   }
@@ -335,7 +563,7 @@ export class WorldNetworks {
     }
     if (!changed) return false;
     const layer = this.networks.road;
-    layer.version++;
+    this.syncWays('road');
     this.events.emit(layer.event, { layer, nodes: edges.flat(), sidewalks: true });
     return true;
   }

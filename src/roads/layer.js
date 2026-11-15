@@ -1,6 +1,6 @@
 // A network layer = a graph on its own grid. Roads use the main dot grid;
 // footpaths use a grid twice as dense (scale 0.5). Tools, routing, curve
-// geometry and pathfinding all work on layers, so a new network type
+// geometry and drawing work on layers, so a new network type
 // (tram, rail, canal…) is mostly a new entry in World's `networks`.
 //
 // `bridge` (optional): how the layer crosses water (see routing.js) –
@@ -11,17 +11,17 @@
 import { RoadNetwork } from './network.js';
 
 export class NetworkLayer {
-  constructor({ id, grid, scale = 1, isBlocked, conflicts = () => false, steep = () => false, maxTurn = null, coarseOf, cost = null, event, bridge = null }) {
+  constructor({ id, grid, scale = 1, isBlocked, conflicts = () => false, occupied = () => false, steep = () => false, maxTurn = null, coarseOf, event, bridge = null }) {
     this.id = id;
     this.grid = grid;
     this.scale = scale;
     this.isBlocked = isBlocked;   // (node) -> bool
     this.conflicts = conflicts;   // (a, b) -> bool: this segment may not be built (e.g. taken by another network)
+    this.occupied = occupied;     // (a, b) -> bool: a building stands on this segment (one placed freely)
     this.steep = steep;           // (a, b, { lane }) -> bool: this segment climbs too steeply to be built (as a lane)
     this.maxTurn = maxTurn;       // sharpest bend allowed at a dot, in radians (null = any)
     this.coarseOf = coarseOf;     // (node) -> main-grid node on the same spot, or -1
     this.bridge = bridge;
-    this.cost = cost ?? ((a, b) => this.distance(a, b)); // (a, b) -> route cost of the segment
     this.event = event;
     this.graph = new RoadNetwork();
     this.version = 0; // bumped on every change, for caches
@@ -33,9 +33,10 @@ export class NetworkLayer {
     return [x * this.scale, y * this.scale];
   }
 
-  // Where the network is drawn and travelled at this node.
+  // Where the network is drawn and travelled at this node: on the curve
+  // drawn through it, if one was (World.refreshNetwork), else the dot.
   pos(n) {
-    return this.dot(n);
+    return this.curvePos?.get(n) ?? this.dot(n);
   }
 
   distance(a, b) {

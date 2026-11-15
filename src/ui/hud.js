@@ -1,10 +1,11 @@
-// Screen furniture: the town's name and its chronicle book (top-left),
+// Screen furniture: the town's name and the camera beside it (top-left),
 // the Menu (top-right), the Build menu (bottom centre, or a rail on the
-// right; see buildMenu.js). Zpět / Znovu (undo, redo), Terrain
-// (tools/terrain.js) and the camera (photo mode) stand in the Build menu,
+// right; see buildMenu.js). Zpět / Znovu (undo, redo) and Terrain
+// (tools/terrain.js) stand in the Build menu,
 // beside Erase; the Menu keeps what's set now and then (colours, files,
 // language…).
-// The name can be edited in place; the book beside it opens the chronicle.
+// The name can be edited in place; the camera beside it is photo mode (P),
+// hatched while it's on. (The chronicle's book is gone from here for now.)
 // The Menu folds into its ≡ button: it starts folded and opens, on a wide
 // screen, as a line of drawings along the top edge, left of the button
 // (clear of the Build menu's rail below); narrower, as a column of them
@@ -23,7 +24,7 @@
 // turned, and a click on it turns the view back, north up.
 
 import { BuildMenu } from './buildMenu.js';
-import { statIcon, menuIcon } from './icons.js';
+import { statIcon, menuIcon, cameraIcon } from './icons.js';
 import { drawing } from './uiIcons.js';
 import { resize, shrink } from './motion.js';
 import { CONFIG } from '../config.js';
@@ -107,7 +108,7 @@ export class Hud {
 
     root.insertAdjacentHTML('beforeend', `
       <div class="hud">
-        <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="${t('town.name')}"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close chron" title="${t('hud.chronicle')}">${statIcon('book')}</button></div>
+        <div class="title"><label class="name-label"><span class="name-box"><input class="name" value="${esc(world.name)}" maxlength="40" spellcheck="false" autocomplete="off" aria-label="${t('town.name')}"><span class="name sizer" aria-hidden="true"></span></span>${statIcon('pen')}</label><button class="close hud-photo" data-act="photo" title="${t('control.photo')} (P)" aria-label="${t('control.photo')}" aria-pressed="false">${cameraIcon()}</button></div>
       </div>
       <div class="controls">
         ${control('colors')}
@@ -125,8 +126,12 @@ export class Hud {
     this.northEl = root.querySelector('.north-box .north-art');
     root.querySelector('.north-box').addEventListener('click', () => actions.northUp());
 
-    this.chronEl = root.querySelector('.hud .chron');
-    this.chronEl.addEventListener('click', () => actions.chronicle());
+    this.photoEl = root.querySelector('.hud .hud-photo');
+    this.photoEl.addEventListener('click', () => actions.photo());
+    tools.onChange((tool) => {
+      this.photoEl.classList.toggle('on', tool.id === 'photo');
+      this.photoEl.setAttribute('aria-pressed', String(tool.id === 'photo'));
+    });
 
     // the town's name: typed over in place, kept in the save
     const nameEl = root.querySelector('.hud input.name');
@@ -213,9 +218,6 @@ export class Hud {
       this.northTurn = turn;
       setNorth(this.northEl, this.camera);
     }
-    // a dot on the book while there's something new in it
-    const unread = !!this.chronicle?.unread;
-    if (unread !== this.unread) this.chronEl.classList.toggle('new', (this.unread = unread));
     // the options of the tool in hand (photo mode's too): in the dock
     this.buildMenu.dock(this.tools.actions());
   }

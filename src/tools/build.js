@@ -28,8 +28,36 @@ export function createBuildTool(ctx, defs) {
   // those that always face it (def.facesRoad: no turning at all)
   const single = () => (def().footprint ?? [[0, 0]]).length === 1;
   const turnable = () => !def().facesRoad;
+  // turned smoothly (not parks and squares: they keep to quarter turns)
+  const smooth = () => turnable() && !def().site;
   const turn = () => (single() && turnable() ? rotation : 0);
-  const rotate = () => { if (turnable()) rotation = (rotation + 1) % 4; };
+  // placed freely (World.freePlacement, docs/free-placement-plan.md):
+  // everything without a rule of its own (stations stay on the dots);
+  // parks and squares turn only by quarters (World.freePlacement)
+  const free = () => !def().canPlace;
+  let point = null; // the pointer's world position (snap)
+  // A building placed freely faces its road (or, with none near, the
+  // viewer) and is turned from there by `twist` (radians): the scroll
+  // wheel turns it smoothly, Tab or the Turn button by TURN_STEP.
+  let twist = 0;
+  const TURN_STEP = Math.PI / 12;
+  const WHEEL_TURN = 0.004; // radians per wheel pixel
+  const norm = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const freeAt = () => point && (smooth()
+    ? world.freePlacement(def().id, point[0], point[1], { rotation: placed(), seed, twist })
+    : world.freePlacement(def().id, point[0], point[1], { rotation: placed(), turn: turn(), seed }));
+  const rotate = () => {
+    if (!turnable()) return;
+    if (free() && smooth()) twist = norm(twist + TURN_STEP);
+    else rotation = (rotation + 1) % 4;
+  };
+  // what's kept with a building placed freely: the quarter turns away from
+  // its road its twist comes to (joined walls skip turned houses)
+  const freeData = () => {
+    if (!smooth()) return data();
+    const q = Math.round(twist / (Math.PI / 2)) & 3;
+    return { ...(q ? { turn: q } : {}), ...(kind ? { kind } : {}) };
+  };
   const data = () => ({ ...(turn() ? { turn: turn() } : {}), ...(kind ? { kind } : {}) });
   const reroll = () => {
     const kinds = kindsOf(def());
@@ -70,14 +98,29 @@ export function createBuildTool(ctx, defs) {
     },
 
     snap(x, y) {
+      point = [x, y];
+      if (free()) return world.grid.nodeAt(x, y);
       const [cx, cy] = footprintCenter(def(), placed());
       return world.grid.nodeAt(x - cx, y - cy);
     },
 
     click(node) {
       if (!UNLOCKS.allows(def().id)) return;
+      if (free()) {
+        const p = freeAt();
+        if (p?.check.ok && world.placeStructureAt(def().id, p.x, p.y, p.angle, { seed, data: freeData() })) seed = newSeed();
+        return;
+      }
       const at = world.placementFor(def().id, node, placed());
       if (world.placeStructure(def().id, at.node, { rotation: at.rotation, seed, data: data() })) seed = newSeed();
+    },
+
+    // the scroll wheel turns a building placed freely (else the map zooms)
+    wheel(e) {
+      if (!free() || !smooth()) return false;
+      const px = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+      twist = norm(twist + (e.deltaY + e.deltaX) * px * WHEEL_TURN);
+      return true;
     },
 
     key(e) {
@@ -97,6 +140,13 @@ export function createBuildTool(ctx, defs) {
     overlay(kit, hover) {
       if (hover < 0) return '';
       const d = def();
+      if (free()) {
+        const p = freeAt();
+        if (!p) return '';
+        // where it can't stand: faded, with a cross – or the steep-hill sign
+        const mark = p.check.ok ? '' : p.check.reason === 'Too steep' ? kit.steepAt(p.x, p.y) : kit.crossAt(p.x, p.y);
+        return kit.ghostAt(d, p.x, p.y, p.angle, seed, { blocked: !p.check.ok, data: freeData() }) + mark;
+      }
       const at = world.placementFor(d.id, hover, placed());
       if (at.check.ok) {
         let out = kit.ghost(d, at.node, world.facingRotation(d.id, at.node, at.rotation, turn()), seed, { data: data() });

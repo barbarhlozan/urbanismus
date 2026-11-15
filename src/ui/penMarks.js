@@ -35,7 +35,7 @@
 //
 // penMarks(root) marks every control under root, and the ones added later.
 
-import { sketchLine, sketchBox, sketchHatch, seedOf } from '../render/sketch.js';
+import { sketchLine, sketchRoundBox, sketchHatch, seedOf } from '../render/sketch.js';
 import { press } from './motion.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -43,15 +43,15 @@ const CONTROLS = 'button, [role="slider"]';
 // cells packed against their neighbours and the frame (tabs, tiles, the
 // dock's buttons, the × in a heading): their marks sit just inside, not
 // over the next cell
-const CELLS = '.close, .bm-tab, .bm-tool, .bm-act, .bm-toggle, .bm-opts button, .bm-drop, .bm-camera, .chron-tab';
+const CELLS = '.close, .bm-tab, .bm-tool, .bm-act, .bm-toggle, .bm-opts button, .bm-drop, .hud-photo, .chron-tab';
 // what can be chosen, by the mark it gets (styles.css shows it)
-const CHOSEN = '.bm-tab, .bm-tool, .bm-camera, .controls button, .chron-tab';
+const CHOSEN = '.bm-tab, .bm-tool, .hud-photo, .controls button, .chron-tab';
 const TICKED = '.scheme';
 const SETTING = '.bm-opts button[aria-pressed], .bm-act[aria-pressed]';
 const STRUCK = '.popup button, .bm-act';
 // not part of the word that's underlined (a key, a value, a number, a Menu
 // item's name written beside its drawing)
-const ASIDE = '.pm, .key, .note, .dlg-n, .controls .label';
+const ASIDE = '.pm, .key, .note, .cap-n, .controls .label';
 const OUT = 3;  // px the crop marks stand off a control…
 const IN = -3;  // …or inside a cell, or a box that would clip them
 const ARM = 6;  // px: each arm of a crop mark
@@ -186,10 +186,10 @@ function draw(el) {
   const tilt = ((s % 3) - 1) * 0.5;
   if (getComputedStyle(el).writingMode.startsWith('vertical')) {
     const side = Math.max(c.x - 2.5, cell ? 4 : 1.5);
-    set('u', sketchLine([side, c.y - 1], [side + tilt, c.y + c.h + 1], s, { over: 2 + (s % 4), bow: 1.3 }));
+    set('u', sketchLine([side, c.y - 1], [side + tilt, c.y + c.h + 1], s, { over: 0.5 + (s % 3) * 0.3, bow: 1.3 }));
   } else {
     const base = Math.min(c.y + c.h + 2.5, h - (cell ? 4 : 1.5)); // (clear of a cell's rule)
-    set('u', sketchLine([c.x - 1, base], [c.x + c.w + 1, base + tilt], s, { over: 2 + (s % 4), bow: 1.3 }));
+    set('u', sketchLine([c.x - 1, base], [c.x + c.w + 1, base + tilt], s, { over: 0.5 + (s % 3) * 0.3, bow: 1.3 }));
   }
 
   if (el.matches(CHOSEN)) {
@@ -204,12 +204,12 @@ function draw(el) {
   }
   if (el.matches(SETTING)) {
     const z = 7, x = 6, y = 6; // (clear of the dock's frame along the edge)
-    set('box', sketchBox(x, y, z, z, s, { over: 1.2, waver: 0.4, slip: 0.5 }));
+    set('box', sketchRoundBox(x, y, z, z, s, { radius: 2, waver: 0.2, slip: 0.4, lap: 2 }));
     set('x', sketchLine([x - 1, y - 1], [x + z + 1.5, y + z + 1], s, { over: 0.8 }) + sketchLine([x + z + 1, y - 1.5], [x - 1, y + z + 1], s + 3, { over: 0.8 }));
   }
   if (el.matches(STRUCK)) {
     const label = el.querySelector('.label');
     const b = label ? { x: label.offsetLeft, y: label.offsetTop, w: label.offsetWidth, h: label.offsetHeight } : c;
-    set('strike', sketchLine([b.x - 3, b.y + b.h * 0.6], [b.x + b.w + 3, b.y + b.h * 0.47], s, { over: 3, bow: 1.2 }));
+    set('strike', sketchLine([b.x - 3, b.y + b.h * 0.6], [b.x + b.w + 3, b.y + b.h * 0.47], s, { over: 1, bow: 1.2 }));
   }
 }

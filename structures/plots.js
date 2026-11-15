@@ -75,6 +75,12 @@ const PLOT_STYLES = {
     [4, 0.045, (g, x, y) => g.chance(GARDEN_BUSHES) && bush(g, x, y, g.range(0.03, 0.045))],
     [1, 0.09, (g, x, y) => shed(g, x, y), 1],
   ],
+  // a house's plot: maybe a fruit tree, maybe a shed, and grass – no
+  // fence (the player draws those) and nothing else
+  house: [
+    [3, 0.07, (g, x, y) => g.chance(0.75) && tree(g, x, y, g.range(0.8, 1.05)), 1],
+    [2, 0.09, (g, x, y) => g.chance(0.5) && shed(g, x, y), 1],
+  ],
   green: [
     [5, 0.07, (g, x, y) => g.chance(PLOT_TREES) && tree(g, x, y, g.range(0.85, 1.1))],
     [3, 0.045, (g, x, y) => g.chance(PLOT_BUSHES) && bush(g, x, y, 0.04)],

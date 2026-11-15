@@ -32,8 +32,7 @@ export function findForests(world, cfg, ways = null) {
   const trees = [];
   for (const f of world.features.values()) {
     if (f.type !== 'tree') continue;
-    const [x, y] = world.grid.xy(f.node);
-    trees.push({ id: f.id, x: x + (f.ox ?? 0), y: y + (f.oy ?? 0) });
+    trees.push({ id: f.id, x: f.x, y: f.y });
   }
   const cells = buckets(trees, cfg.link);
 

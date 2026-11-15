@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-  <!-- Zbourat / Demolish: the Erase tool's eraser, tilted, with the smudge it leaves -->
-  <path d="M6 22 L20.1 7.9 L26.5 14.3 L12.4 28.4 Z M10.9 17.1 L17.3 23.5"/>
-  <path d="M16 29 H28" stroke-dasharray="2 2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Zbourat / Demolish: the Erase tool's rubber (tool-erase.svg), tilted, with its band and the smudge it leaves -->
+  <path d="M4.38 15.39Q9.12 10.91 13.51 6.07Q14.61 5.12 15.71 6.31Q17.51 8.25 19.42 10.08Q20.54 10.89 19.34 12.09Q14.78 16.31 10.49 20.8Q9.39 22.19 8.54 20.83Q6.64 19.04 4.61 17.39Q3.66 16.23 4.78 15.38Q4.55 15.33 4.32 15.31l-0.53 -0.31"/>
+  <path d="M9.17 10.51Q11.95 13.5 14.99 16.23"/>
+  <path d="M14.17 21.01Q15.9 20.23 18 21.17Q19.86 22.38 21.8 20.94"/>
 </svg>
