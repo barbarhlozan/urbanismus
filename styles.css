@@ -113,6 +113,15 @@ html, body {
    renderer) */
 .shade-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: var(--sun); transition: --sun 4s; }
 /* a grey sky's shade over the whole map (config.weather.gloom) */
+/* the paper the map is drawn on (src/render/paper.js): multiplied over it,
+   fixed to the ground – paper.js moves and sizes the tiles with the camera */
+#paper {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  background: url("textures/paper.webp") 0 0 / 750px 750px repeat;
+}
 #gloom { position: fixed; inset: 0; pointer-events: none; background: var(--detail); opacity: 0; transition: opacity 4s; }
 /* mist in the valleys (src/render/mist.js): on the map the paper's strokes
    in the paper's colour over what is under it (the url() only marks the
