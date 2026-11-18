@@ -468,16 +468,16 @@ tool.grain
   en: Grain
 
 tool.grain.blurb
-  cs: Uzavřené dokola je pole
-  en: Closed all round, a field
+  cs: Táhni štětcem po zemi
+  en: Paint it on the ground
 
 tool.potatoes
   cs: Brambory
   en: Potatoes
 
 tool.potatoes.blurb
-  cs: Uzavřené dokola je pole
-  en: Closed all round, a field
+  cs: Táhni štětcem po zemi
+  en: Paint it on the ground
 
 tool.erase
   cs: Vymazat
@@ -525,13 +525,13 @@ network.stop.fence
   cs: Ukončit ohradu
   en: End the fence
 
-network.stop.grain
-  cs: Ukončit pole
-  en: End the field
+crop.sow
+  cs: Sít
+  en: Sow
 
-network.stop.potatoes
-  cs: Ukončit pole
-  en: End the field
+crop.clear
+  cs: Gumovat
+  en: Clear
 
 # while placing buildings
 

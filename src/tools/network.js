@@ -227,20 +227,23 @@ export function createNetworkTool(ctx, options) {
       if (refused) out += kit.crossAt(...refused.at, size) + (refused.reason ? kit.noteAt(...refused.at, reasonText(refused.reason)) : '');
       const p = plan();
       if (!p) return out;
-      // why it can't go, by the pointer (the cross after a click says it)
-      if (!p.check.ok && !refused && p.check.reason) out += kit.noteAt(...at, reasonText(p.check.reason));
       out += kit.sketchPath(p.line, `${cls}${p.check.ok ? '' : ' invalid'}`);
-      if (p.sharp) return out + kit.crossAt(...at, size);
+      // why it can't go, by the first cross on it (not again after a click: that cross says it)
+      const note = (x, y) => (refused || !p.check.reason ? '' : kit.noteAt(x, y, reasonText(p.check.reason)));
+      if (p.sharp) return out + kit.crossAt(...at, size) + note(...at);
       // little crosses along the line itself where it can't go (too steep,
       // water, something in the way) – not on the dots the check went by
       const bad = [...new Set(p.check.blocked ?? [])].map((n) => layer.pos(n));
-      if (!bad.length) return out;
+      if (!bad.length) return p.check.ok ? out : out + note(...at);
       const poly = measurePolyline(p.line), near = MARK_NEAR * Math.max(layer.scale, 0.5);
+      let first = null;
       for (let d = MARK_STEP / 2; d < poly.total; d += MARK_STEP) {
         const [x, y] = pointAt(poly, d);
-        if (bad.some(([bx, by]) => Math.hypot(bx - x, by - y) < near)) out += kit.crossAt(x, y, size * 0.5);
+        if (!bad.some(([bx, by]) => Math.hypot(bx - x, by - y) < near)) continue;
+        out += kit.crossAt(x, y, size * 0.5);
+        first ??= [x, y];
       }
-      return out;
+      return out + note(...(first ?? at));
     },
   };
 }

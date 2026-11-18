@@ -37,6 +37,7 @@ import { fieldsOf, CROPS } from './sim/fields.js';
 import { ToolManager } from './tools/manager.js';
 import { createInspectTool } from './tools/inspect.js';
 import { createNetworkTool } from './tools/network.js';
+import { createCropBrush } from './tools/cropBrush.js';
 import { createBuildTool } from './tools/build.js';
 import { createBulldozeTool } from './tools/bulldoze.js';
 import { createPhotoTool } from './tools/photo.js';
@@ -301,7 +302,7 @@ tools.register(createNetworkTool(ctx, { kind: 'rail', fineGrid: true, group: 'tr
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createNetworkTool(ctx, { kind: 'fence', fineGrid: true, group: 'farming' }));
 // fields: their edges drawn as a fence is, closed all round they grow the crop (sim/fields.js)
-for (const crop of CROPS) tools.register(createNetworkTool(ctx, { kind: 'field', id: crop, crop, fineGrid: true, group: 'farming' }));
+for (const crop of CROPS) tools.register(createCropBrush(ctx, { crop, group: 'farming' }));
 tools.register(createBulldozeTool(ctx));
 // while a print is out, photo mode rests (see the input below): no menu
 // left open on the map, the dock and the camera put by
