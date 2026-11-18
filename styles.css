@@ -1631,7 +1631,15 @@ body.at-menu #ui > .popup { z-index: 26; }
 }
 #ui .mm-list .note { font-size: 11px; color: var(--detail); }
 #ui .mm-list .mm-quiet { margin-top: 10px; min-height: 36px; font-size: 14px; color: var(--detail); }
-.main-menu .settings-panel { width: 100%; flex: 0 0 auto; }
+/* Settings: its frame drawn round the panel itself (not round whatever box
+   it stands in), and when the screen is too short for all of it, only the
+   settings in the middle scroll – the name and Hotovo stay in sight */
+.settings-panel { position: relative; display: flex; flex-direction: column; }
+.settings-panel .panel-body { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--detail) transparent; }
+/* in the main menu: in the column, under the game's name, no taller than
+   what's left of it */
+.main-menu .settings-panel { width: 100%; flex: 0 1 auto; min-height: 0; }
+.mm-column:has(> .settings-panel:not(.hidden)) { overflow: visible; gap: 18px; }
 /* Settings opened from the Menu in the town: hanging under it, as the
    Colours panel does */
 .settings-panel.floating {
@@ -1640,7 +1648,6 @@ body.at-menu #ui > .popup { z-index: 26; }
   top: calc(60px + var(--safe-t));
   width: min(320px, calc(100vw - 24px));
   max-height: calc(100vh - 80px - var(--safe-t) - var(--safe-b));
-  overflow-y: auto;
   z-index: 21;
 }
 /* the printer's line, as at the end of the Menu */

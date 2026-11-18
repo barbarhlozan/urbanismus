@@ -68,18 +68,7 @@ export function reveal(el, show, { from = [0, 4], force = false, rows = null, fa
       { opacity: 1, transform: 'none' },
     ], { duration: MOTION.in, easing: fade ? MOTION.easeIn : MOTION.land }));
     if (rows) {
-      const list = [...el.querySelectorAll(rows)], moving = follow(list);
-      anims.push(...moving);
-      // rows still rising stick out below a scrolling box's end: it would
-      // show its scrollbar for that moment, so it doesn't scroll till they land
-      const boxes = new Set();
-      for (const row of list) {
-        for (let p = row.parentElement; p && p !== el.parentElement; p = p.parentElement) {
-          if (/auto|scroll/.test(getComputedStyle(p).overflowY)) { boxes.add(p); break; }
-        }
-      }
-      for (const b of boxes) b.style.overflowY = 'hidden';
-      Promise.allSettled(moving.map((a) => a.finished)).then(() => { for (const b of boxes) b.style.overflowY = ''; });
+      anims.push(...follow(el.querySelectorAll(rows)));
     }
     // the frame is drawn a little slower than the contents arrive: a pen going round
     if (frame) anims.push(frame.animate([{ strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }],
@@ -107,10 +96,43 @@ export function cascade(rows) {
   return still() ? [] : follow(rows);
 }
 function follow(rows) {
-  return [...rows].slice(0, 16).map((row, i) => row.animate(
+  const list = [...rows].slice(0, 16);
+  const moving = list.map((row, i) => row.animate(
     [{ opacity: 0, transform: 'translateY(7px)' }, { opacity: 1, transform: 'none' }],
     { duration: MOTION.in * 0.8, delay: 40 + i * MOTION.stagger, easing: MOTION.land, fill: 'backwards' },
   ));
+  holdScroll(list, moving);
+  return moving;
+}
+
+// Rows still rising stick out below a scrolling box's end: it would show
+// its scrollbar for that moment – and a scrollbar takes room, so a box of
+// tiles three across (the Build menu) fits only two, grows a row taller and
+// drops back when they land. So the box doesn't scroll till they have.
+// (Counted, for rows of a second cascade starting before the first is done.)
+const holding = new Map(); // box -> rows' cascades running in it
+function holdScroll(rows, moving) {
+  if (!moving.length) return;
+  const boxes = new Set();
+  for (const row of rows) {
+    for (let p = row.parentElement; p && p !== document.body; p = p.parentElement) {
+      if (holding.has(p) || /auto|scroll/.test(getComputedStyle(p).overflowY)) { boxes.add(p); break; }
+    }
+  }
+  for (const b of boxes) {
+    holding.set(b, (holding.get(b) ?? 0) + 1);
+    b.style.overflowY = 'hidden';
+  }
+  Promise.allSettled(moving.map((a) => a.finished)).then(() => {
+    for (const b of boxes) {
+      const n = holding.get(b) - 1;
+      if (n > 0) holding.set(b, n);
+      else {
+        holding.delete(b);
+        b.style.overflowY = '';
+      }
+    }
+  });
 }
 
 // A pen line drawn on along its length, once (its path has pathLength 1).
