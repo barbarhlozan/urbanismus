@@ -23,6 +23,16 @@ const swatches = (s) => {
   return `<span class="swatches">${MENU_COLORS.map((n) => `<i data-c="${n}" style="background:${all[n]}"></i>`).join('')}</span>`;
 };
 
+// The schemes to pick from, one button each – its colours and its name –
+// the one in use `chosen` (theme.js schemeChoice: an index or 'custom').
+// Here as .scheme, in the main menu's Settings as .choice (mainMenu.js):
+// either way ticked by the pen when picked (penMarks.js).
+export const schemeChoices = (chosen, cls = 'scheme') =>
+  [...SCHEMES.map((s, i) => [String(i), s]), ['custom', CUSTOM]].map(([c, s]) => {
+    const on = c === String(chosen);
+    return `<button class="${cls}${on ? ' on' : ''}" data-choice="${c}" aria-pressed="${on}">${swatches(s)}${schemeName(s)}</button>`;
+  }).join('');
+
 export class ColorMenu {
   constructor(root, button) {
     this.button = button;
@@ -31,8 +41,7 @@ export class ColorMenu {
     this.el.className = 'color-panel hidden';
     this.el.innerHTML = `
       <div class="color-head"><span>${t('control.colors')}</span><button class="close" aria-label="${t('close')}">×</button></div>
-      ${SCHEMES.map((s, i) => `<button class="scheme" data-choice="${i}">${swatches(s)}${schemeName(s)}</button>`).join('')}
-      <button class="scheme" data-choice="custom">${swatches(CUSTOM)}${schemeName(CUSTOM)}</button>
+      ${schemeChoices(schemeChoice)}
       <div class="custom-fields">
         ${MENU_COLORS.map((n) => `
           <label data-c="${n}">

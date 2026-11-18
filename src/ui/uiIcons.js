@@ -24,6 +24,7 @@ export const ICONS = {
   export: 'Menu: Uložit do souboru / Save to a file',
   import: 'Menu: Otevřít ze souboru / Open from a file',
   newmap: 'Menu: Nová mapa / New map',
+  'main-menu': 'Menu: Hlavní menu / Main menu, last before the imprint (the cover: a sheet with the name underlined)',
   fullscreen: 'Menu: Celá obrazovka / Full screen, going in',
   'fullscreen-exit': 'Menu: Celá obrazovka / Full screen, coming back',
   sound: 'Menu: Zvuk / Sound, while it\'s on (the village loudspeaker calling out)',

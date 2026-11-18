@@ -17,7 +17,8 @@
 // small in the pen beside it, shows while the pointer is on it or, on a
 // touch screen, after a long press, which then doesn't press it. The
 // drawings stand in groups: Colours, then the files (save, open, a new
-// map), then the screen and the language. Last stands the imprint, the
+// map), then the screen and the language, then the way back to the main
+// menu (mainMenu.js). Last stands the imprint, the
 // app's name, version and author, small and quiet like a printer's line.
 // In the bottom-left corner, as in a map's margin, the north arrow: drawn by
 // pen, it points where the map's north lies on screen as the view is
@@ -118,6 +119,7 @@ export class Hud {
         ${control('sound', t('sound.off'), t('sound.off'))}
         ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
         ${control('language', `${t('control.language')}: ${LANGUAGES[otherLanguage()]}`, LANGUAGES[otherLanguage()], `flag${otherLanguage()}`)}
+        ${control('mainMenu')}
         <span class="imprint"><span>${CONFIG.app.name} v${CONFIG.app.version}</span> <span>${CONFIG.app.author}</span> <button data-act="credits" class="credits-link">${t('credits')}</button></span>
         <button class="close menu-toggle" aria-expanded="true">${menuButtonIcon()}</button>
       </div>

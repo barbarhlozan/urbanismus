@@ -15,6 +15,10 @@
 //   onCreate(settings)  called with { name, seed, hilliness, terrain } –
 //                       `terrain` overrides CONFIG.terrain for generateWorld
 //   onExport()          saves the current town to a file (saveFile.js)
+//
+// It opens from the Menu's New map drawing, or from the main menu's Nová hra
+// (openFrom(button, { ask })): `ask` false when there is no town to lose (a
+// first visit), and "Create" then goes straight on.
 
 import { townName } from '../core/townName.js';
 import { reveal, isShown, bump } from './motion.js';
@@ -70,8 +74,10 @@ const STORE_KEY = 'urbanismus.newMap';
 const randomSeed = () => Math.floor(Math.random() * 1e9);
 
 export class NewMapMenu {
-  constructor(root, button, { onCreate, onExport }) {
-    this.button = button;
+  constructor(root, button, { onCreate, onExport, onClose = () => {} }) {
+    this.button = this.menuButton = button;
+    this.asks = true; // (the question before the town goes: openFrom())
+    this.onClose = onClose;
     this.onCreate = onCreate;
     this.onExport = onExport;
     this.choice = Object.fromEntries(SETTINGS.map((s) => [s.key, s.pick]));
@@ -90,12 +96,12 @@ export class NewMapMenu {
     root.appendChild(this.scrim);
 
     this.el = document.createElement('div');
-    this.el.className = 'newmap-panel hidden';
+    this.el.className = 'panel newmap-panel hidden';
     this.el.setAttribute('role', 'dialog');
     this.el.setAttribute('aria-label', t('control.newMap'));
     this.el.innerHTML = `
-      <div class="newmap-head"><span>${t('control.newMap')}</span><button class="close" aria-label="${t('close')}">×</button></div>
-      <div class="newmap-body">
+      <div class="panel-head"><span>${t('control.newMap')}</span><button class="close" aria-label="${t('close')}">×</button></div>
+      <div class="panel-body">
         <label class="newmap-name">
           <span class="field-name">${t('newmap.name')}</span>
           <input class="name-field" maxlength="40" spellcheck="false" autocomplete="off" aria-label="${t('town.name')}">
@@ -103,13 +109,13 @@ export class NewMapMenu {
         </label>
         <div class="scene-slot"></div>
         ${SETTINGS.map((s) => `
-          <div class="newmap-row${s.pictured ? ' pictured' : ''}" data-key="${s.key}">
+          <div class="setting-row${s.pictured ? ' pictured' : ''}" data-key="${s.key}">
             <span class="field-name">${controlIcon(s.icon)}${s.pictured ? '' : settingName(s)}</span>
             <span class="slot"></span>
             ${s.pictured ? '' : '<span class="value"></span>'}
           </div>`).join('')}
       </div>
-      <div class="newmap-foot"><button class="cancel">${t('cancel')}</button><button class="create">${t('newmap.create')}</button></div>`;
+      <div class="panel-foot"><button class="cancel">${t('cancel')}</button><button class="create main">${t('newmap.create')}</button></div>`;
     root.appendChild(this.el);
     this.nameEl = this.el.querySelector('.name-field');
 
@@ -168,16 +174,16 @@ export class NewMapMenu {
       e.preventDefault(); // not a click on the label's input
       this.rollName();
     });
-    this.el.querySelector('.create').addEventListener('click', () => this.ask(true));
+    this.el.querySelector('.create').addEventListener('click', () => (this.asks ? this.ask(true) : this.create()));
     this.el.addEventListener('keydown', (e) => {
       e.stopPropagation(); // no hotkeys while typing
       if (e.key === 'Escape') this.toggle(false);
-      if (e.key === 'Enter' && e.target === this.nameEl) this.ask(true);
+      if (e.key === 'Enter' && e.target === this.nameEl) (this.asks ? this.ask(true) : this.create());
     });
 
     // a click anywhere else closes it (beside the question: just that)
     document.addEventListener('pointerdown', (e) => {
-      if (!this.open || this.el.contains(e.target) || button.contains(e.target)) return;
+      if (!this.open || this.el.contains(e.target) || this.button?.contains(e.target)) return;
       if (this.asking) {
         if (!this.confirmEl.contains(e.target)) this.ask(false);
         return;
@@ -202,12 +208,28 @@ export class NewMapMenu {
     if (refocus) (show ? this.confirmEl.querySelector('.export-go') : this.el.querySelector('.create')).focus({ preventScroll: true });
   }
 
+  // Open it from another button (the main menu's Nová hra); `ask`: whether
+  // there's a town to lose, and so the question before it goes.
+  openFrom(button, { ask = true } = {}) {
+    if (this.open) return;
+    this.button = button;
+    this.asks = ask;
+    this.toggle(true);
+  }
+
   toggle(open = !this.open) {
     if (!open) this.ask(false, false);
+    const was = this.open;
     reveal(this.scrim, open, { fade: true });
-    reveal(this.el, open, { from: [0, 10], rows: '.newmap-name, .newmap-scene, .newmap-row' });
-    this.button.classList.toggle('on', open);
-    this.button.setAttribute('aria-expanded', String(open));
+    reveal(this.el, open, { from: [0, 10], rows: '.newmap-name, .newmap-scene, .setting-row' });
+    this.button?.classList.toggle('on', open);
+    this.button?.setAttribute('aria-expanded', String(open));
+    if (was && !open) {
+      // (back to the Menu's drawing, and its question, for the next time)
+      this.button = this.menuButton;
+      this.asks = true;
+      this.onClose();
+    }
     if (open) {
       this.rollName();
       this.refresh();

@@ -28,7 +28,8 @@
   <script>
     // colours and name for the cover, from the last visit (no modules yet);
     // a new map or a first visit has no town yet: the game's own name comes
-    // first, and main.js turns it into the town's (introTitle)
+    // first, and main.js turns it into the town's (introTitle) – unless the
+    // game opens on the main menu, which goes under the game's name
     window.introTitle = true;
     // this tab's game loaded again (main.js, keepSaved): plain paper, no name
     try {
@@ -38,7 +39,10 @@
       const p = JSON.parse(localStorage.getItem('urbanismus.palette'));
       if (p) for (const k of ['bg', 'main', 'detail']) document.documentElement.style.setProperty(`--${k}`, p[k]);
       const save = localStorage.getItem('urbanismus.save.v1');
-      const name = !localStorage.getItem('urbanismus.pendingMap') && save && JSON.parse(save).name;
+      // (the town's name only going straight into it: otherwise the game
+      // opens on the main menu, under the game's own name)
+      const straightIn = sessionStorage.getItem('urbanismus.enter') === '1';
+      const name = straightIn && !localStorage.getItem('urbanismus.pendingMap') && save && JSON.parse(save).name;
       if (name) {
         document.querySelector('.intro-name').textContent = name;
         window.introTitle = false;

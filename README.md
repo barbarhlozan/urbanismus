@@ -10,6 +10,24 @@ python3 serve.py
 
 Then open http://localhost:8173. The city saves itself in the browser; **New map** starts over, after you pick the new town's name, lakes, forests, hills and water (none, a stream, a river, or a river with streams).
 
+The game opens on the **main menu** (`src/ui/mainMenu.js`): the game's name underlined by the
+pen, as on the cover, and a column of words at the left (at the bottom on a phone) over the map,
+which drifts slowly behind it – the saved town, or on a first visit a little village with a
+church put up for the picture (never saved). **Pokračovat** goes back into the saved town (its
+name, people and buildings written under it), **Nová hra** opens the New map dialog, **Otevřít ze
+souboru** opens a town from a file, **Nastavení** has the sound's three levels (all of it, the
+nature, the pencil and buttons – pen-drawn sliders, as in New map), the language, the colours
+and full screen, and **Poděkování** the credits. From the town, **Hlavní menu** in the Menu (≡),
+or **Esc** with nothing left to put away, goes back to it. A new map, a town opened from a file
+and another language picked from the Menu go straight into the town.
+
+The UI's boxes and controls are built from shared pieces, so a change in one place reaches them
+all: boxes come and go with `src/ui/motion.js`, have pen frames from `sketchFrame.js` and marks
+on their controls from `penMarks.js` (underlined when pointed at, crop marks in keyboard focus,
+`.choice` ticked when picked, `.toggle` boxed and crossed while on); a box of settings is a
+`.panel` with a `.panel-head`, `.setting-row`s and a `.panel-foot` (`styles.css`, Panels), its
+sliders `sketchSlider.js`.
+
 ## Controls
 
 Everything you can build is in the **Build** menu, bottom right, in the groups the planners of
@@ -36,7 +54,7 @@ hand) and **Znovu** after an undo. Neither is shown in photo mode. **⌘Z** / **
 do the same. If something now stands in the way of a step, it says so and the step is dropped.
 
 The **≡** at the top right opens the Menu: Colours, Save to a file, Open from a file, New map,
-Full screen and the other language, each a small drawing. Point at one (or, on a phone, hold
+Full screen, the other language and Hlavní menu (back to the main menu), each a small drawing. Point at one (or, on a phone, hold
 a finger on it) and its name is written beside it; on a computer they stand in a line along the
 top edge, on a phone in a column down from the ≡. These drawings, and the UI's others (the ≡
 itself, the camera, the chronicle book, the tool options, the New map settings…), are SVG files

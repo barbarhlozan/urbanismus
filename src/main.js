@@ -50,6 +50,8 @@ import { DebugPanel } from './ui/debugPanel.js'; // TEMPORARY
 import { DevMenus } from './ui/devMenus.js'; // TEMPORARY
 import { ColorMenu } from './ui/colorMenu.js';
 import { NewMapMenu } from './ui/newMapMenu.js';
+import { MainMenu } from './ui/mainMenu.js';
+import { tally } from './ui/ledger.js';
 import { askLanguage } from './ui/languages.js';
 import { loadIcons } from './ui/uiIcons.js';
 import { AssetsPage } from './ui/assetsPage.js';
@@ -95,6 +97,10 @@ const PENDING_KEY = 'urbanismus.pendingMap';
 // game starts on a new map and says so (see the end of the set-up).
 const OLD_SAVE_KEY = `${CONFIG.storageKey}.old`;
 let oldSave = false;
+// how the town came: from its save (and not empty: there is a town to go
+// back into), or made new with the New map menu's settings
+let loadedSave = false;
+let fromPending = false;
 
 function loadWorld() {
   let pending = null;
@@ -104,10 +110,15 @@ function loadWorld() {
   } catch {
     // storage unavailable or garbled: no settings
   }
+  fromPending = !!pending;
   if (!pending) {
     try {
       const raw = localStorage.getItem(CONFIG.storageKey);
-      if (raw) return World.fromJSON(JSON.parse(raw));
+      if (raw) {
+        const saved = World.fromJSON(JSON.parse(raw));
+        loadedSave = true;
+        return saved;
+      }
     } catch (err) {
       if (err.code === 'old-save') {
         oldSave = true;
@@ -127,6 +138,25 @@ function loadWorld() {
 }
 
 const world = loadWorld();
+const hasSave = loadedSave && world.structures.size > 0;
+
+// Going straight into the town, past the main menu (ui/mainMenu.js), after
+// a reload that was the player's own doing inside the game: a town opened
+// from a file, another language picked from the Menu (set before the
+// reload, read once here). A new map goes straight in too (fromPending).
+const ENTER_KEY = 'urbanismus.enter';
+const enterGame = (() => {
+  try {
+    const on = sessionStorage.getItem(ENTER_KEY) === '1';
+    sessionStorage.removeItem(ENTER_KEY);
+    return on;
+  } catch {
+    return false;
+  }
+})();
+const goStraightIn = () => {
+  try { sessionStorage.setItem(ENTER_KEY, '1'); } catch { /* storage unavailable: the main menu again */ }
+};
 
 let saveTimer = null;
 function saveNow() {
@@ -162,7 +192,7 @@ scheduleSave();
 const VIEW_KEY = 'urbanismus.view';
 let savedAt = world.time;
 const keepView = () => {
-  if (!autosave || opening) return;
+  if (!autosave || opening || atMenu) return;
   const [x, y] = camera.unprojectFlat(...camera.clientToScene(innerWidth / 2, innerHeight / 2));
   try {
     sessionStorage.setItem(VIEW_KEY, JSON.stringify({ x, y, zoom: camera.zoom, angle: camera.angle }));
@@ -185,6 +215,37 @@ setInterval(() => {
 const resumed = (() => {
   try { return JSON.parse(sessionStorage.getItem(VIEW_KEY)); } catch { return null; }
 })();
+// The game opens on the main menu, but for the reloads above and a tab the
+// browser let go and loaded again (resumed: it comes back where it was).
+const toMenu = !resumed && !enterGame && !fromPending;
+let atMenu = toMenu;
+document.body.classList.toggle('at-menu', atMenu);
+// No town to go back into: the main menu stands over a little village put
+// up for the picture – the church and a few cottages round it, as on the
+// game's cover – on the map just made, which is never saved (Nová hra
+// makes the real one).
+if (toMenu && !hasSave) {
+  stopAutosave();
+  demoVillage(world);
+}
+function demoVillage(world) {
+  const [cx, cy] = [(world.grid.width - 1) / 2, (world.grid.height - 1) / 2];
+  // what stands where (dots from the middle), the nearest free spot taken
+  const plan = [
+    ['church', 0, 0], ['house', -2.5, 2], ['house-wide', 2, 2.5], ['farmstead', 3, -1.5],
+    ['house', -2, -2.5], ['house', 0.5, 4], ['house-wide', -3.5, 0], ['house', 3.5, 1],
+  ];
+  const rings = [[0, 0], [0.5, 0], [0, 0.5], [-0.5, 0], [0, -0.5], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+  plan.forEach(([type, dx, dy], i) => {
+    if (!STRUCTURE_TYPES[type]) return;
+    for (const [ox, oy] of rings) {
+      const p = world.freePlacement(type, cx + dx + ox, cy + dy + oy, { rotation: i % 4, seed: 101 + i });
+      if (!p.check.ok) continue;
+      world.placeStructureAt(type, p.x, p.y, p.angle, { seed: 101 + i });
+      return;
+    }
+  });
+}
 
 // ---------- systems ----------
 
@@ -357,6 +418,7 @@ const actions = {
   fullscreen: () => toggleFullscreen(),
   sound: () => ambience.toggle(),
   credits: () => showCredits(),
+  mainMenu: () => backToMenu(),
   chronicle: () => { if (UNLOCKS.allowsControl('chronicle')) chronicleBook.toggle(); },
   language: () => switchLanguage(Object.keys(LANGUAGES).find((code) => code !== language())),
 };
@@ -366,6 +428,8 @@ const actions = {
 // straight away and the game loads again (behind the opening cover).
 function switchLanguage(code) {
   saveLanguage(code);
+  if (!atMenu) goStraightIn();
+  else if (!hasSave && !opening) return location.reload(); // (the village for the picture isn't saved)
   stopAutosave();
   try {
     localStorage.setItem(CONFIG.storageKey, JSON.stringify(world.toJSON()));
@@ -425,9 +489,10 @@ async function newMap(settings) {
 
 // Replace this city with one from a file (see saveFile.js): it goes in as the
 // autosave and the reload picks it up, as after newMap.
-async function importCity() {
-  const at = uiRoot.querySelector('.controls').getBoundingClientRect();
-  const say = (title, items) => popup.show(innerWidth, at.bottom, title, items);
+async function importCity(from = null) {
+  // (beside the main menu's word, or under the Menu)
+  const at = from ?? uiRoot.querySelector('.controls').getBoundingClientRect();
+  const say = (title, items) => (from ? popup.show(at.right + 16, at.top, title, items) : popup.show(innerWidth, at.bottom, title, items));
   let city;
   try {
     city = await pickCity();
@@ -451,6 +516,7 @@ async function importCity() {
       return say(t('import.failed'), [{ label: t('import.storage'), info: true }]);
     }
     await putPrints(city);
+    goStraightIn();
     location.reload();
   }
 }
@@ -513,14 +579,14 @@ world.history.onStep((step) => ambience.built(step));
 
 // Who made what the game uses (the Menu's Credits, under the imprint): the
 // recordings, each with its author, its name on Freesound and its licence.
-function showCredits() {
-  const at = uiRoot.querySelector('.controls .imprint').getBoundingClientRect();
+function showCredits(from = null) {
+  const at = from ?? uiRoot.querySelector('.controls .imprint').getBoundingClientRect();
   const esc = (v) => String(v).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const link = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
   const sounds = Object.values(SOUNDS).map((s) => ({
     block: `<span class="credit"><b>${esc(t(s.what))}</b><span>${link(sourceOf(s), s.title)}, ${esc(s.author)}, ${link(LICENCES[s.licence], s.licence)}</span></span>`,
   }));
-  popup.show(at.left, at.top, t('credits'), [{ section: t('credits.sounds') }, ...sounds]);
+  popup.show(from ? at.right + 16 : at.left, at.top, t('credits'), [{ section: t('credits.sounds') }, ...sounds]);
 }
 
 // the Sound button: its icon and name following whether there is sound
@@ -537,7 +603,102 @@ function showCredits() {
 const debugPanel = new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
 const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"]'));
 const assetsPage = new AssetsPage(uiRoot);
-const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMap"]'), { onCreate: newMap, onExport: () => exportCity(world) });
+const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMap"]'), {
+  onCreate: newMap,
+  onExport: () => exportCity(world),
+  onClose: () => { if (atMenu) mainMenu.list.querySelector('[data-mm="newGame"]')?.focus({ preventScroll: true }); },
+});
+// The main menu (ui/mainMenu.js): what the game opens on, and where the
+// Menu's Hlavní menu (and Esc, with nothing else to put away) goes back to.
+const townNow = () => {
+  let residents = 0;
+  try { residents = tally(world).residents; } catch { /* not counted yet */ }
+  return { name: world.name, residents, buildings: world.structures.size };
+};
+const mainMenu = new MainMenu(uiRoot, {
+  hasSave,
+  town: hasSave ? townNow() : null,
+  ambience,
+  fullscreen: { can: () => fs.enabled() && !fs.app(), on: () => !!fs.element() },
+  actions: {
+    play: () => enterTown(),
+    newGame: (btn) => newMapMenu.openFrom(btn, { ask: mainMenu.hasSave }),
+    open: (btn) => importCity(btn.getBoundingClientRect()),
+    credits: (btn) => showCredits(btn.getBoundingClientRect()),
+    language: (code) => switchLanguage(code),
+    scheme: (choice) => { applyTheme(choice); colorMenu.refresh(); },
+    fullscreen: () => toggleFullscreen(),
+  },
+});
+
+// Into the town from the main menu: the menu goes, the game's panels come
+// in, one after another, as after the opening.
+function enterTown() {
+  if (!atMenu) return;
+  popup.hide();
+  mainMenu.hide();
+  atMenu = false;
+  document.body.classList.remove('at-menu');
+  showPanels();
+}
+
+// Back to the main menu from the town (the Menu's Hlavní menu, or Esc):
+// the town saved, whatever was open put away, the panels gone, the menu
+// over the map with this town to go back into.
+function backToMenu() {
+  if (atMenu || opening) return;
+  if (autosave) saveNow();
+  popup.hide();
+  if (photoPrint.open) photoPrint.hide();
+  if (chronicleBook.open) chronicleBook.toggle(false);
+  if (colorMenu.open) colorMenu.toggle(false);
+  if (newMapMenu.open) newMapMenu.toggle(false);
+  tools.use(tools.defaultId);
+  if (world.structures.size) mainMenu.setTown(townNow());
+  atMenu = true;
+  document.body.classList.add('at-menu');
+  mainMenu.show();
+}
+
+// The game's panels coming in, each in turn (after the opening, and on
+// leaving the main menu).
+function showPanels() {
+  // (the Build menu's own box is centred with a transform: its panel and dock move instead)
+  const panels = [...uiRoot.querySelectorAll('.hud, .controls, .bm-panel, .bm-dock')];
+  // each stays out of sight until its own entrance starts (else it shows, blinks out, comes in)
+  for (const el of panels) el.style.opacity = '0';
+  panels.forEach((el, i) => setTimeout(() => {
+    el.style.opacity = '';
+    reveal(el, true, { force: true, from: [0, el.closest('.build-menu') ? 14 : -8] });
+  }, i * 70));
+}
+
+// While the main menu is up the map drifts, slowly, a little this way and
+// that; the town stands to the right of the column (below it on a narrow
+// screen). Leaving it, the map eases back to where it was. (Applied to the
+// camera's pan each frame: loop.)
+const DRIFT = { x: 40, y: 18, speed: [0.045, 0.031], ease: 1.6 };
+const drift = { t: 0, x: 0, y: 0 };
+const menuAim = () => {
+  if (!atMenu) return [0, 0];
+  const wide = innerWidth > 640;
+  return [
+    (wide ? innerWidth * 0.16 : 0) + Math.sin(drift.t * DRIFT.speed[0]) * DRIFT.x,
+    (wide ? 0 : -innerHeight * 0.14) + Math.sin(drift.t * DRIFT.speed[1]) * DRIFT.y,
+  ];
+};
+function driftFrame(dt, jump = false) {
+  if (atMenu) drift.t += dt;
+  const [ax, ay] = menuAim();
+  const k = jump ? 1 : Math.min(1, dt * DRIFT.ease);
+  const nx = drift.x + (ax - drift.x) * k, ny = drift.y + (ay - drift.y) * k;
+  if (Math.abs(nx - drift.x) + Math.abs(ny - drift.y) < 0.01) return;
+  camera.panX += nx - drift.x;
+  camera.panY += ny - drift.y;
+  drift.x = nx;
+  drift.y = ny;
+}
+driftFrame(0, true); // (the map already where the menu wants it, under the cover)
 UNLOCKS.onChange(followUnlocks); // (once the panels it closes exist)
 if (oldSave) {
   const at = uiRoot.querySelector('.controls').getBoundingClientRect();
@@ -549,7 +710,7 @@ followUnlocks();
 // pen-drawn frames on every UI box, to match the sketched map
 // (the corner menu has none: words on the paper)
 sketchFrames(uiRoot, '.hud', HANDS.steady);
-sketchFrames(uiRoot, '.controls, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .newmap-panel, .newmap-confirm');
+sketchFrames(uiRoot, '.controls, .bm-panel, .bm-dock, .bm-rail-box, .debug-panel, .color-panel, .panel, .newmap-confirm');
 sketchFrames(uiRoot, '.popup', HANDS.loose);
 // what a control is doing drawn on it in the pen: pressed, in keyboard focus
 penMarks(uiRoot);
@@ -637,6 +798,13 @@ attachInput(document.getElementById('input'), {
 });
 
 window.addEventListener('keydown', (e) => {
+  // the main menu up: its keys only (the New map dialog keeps its own)
+  if (atMenu) {
+    if (opening) return;
+    if (e.key === 'Escape' && popup.open) popup.hide();
+    else mainMenu.key(e);
+    return;
+  }
   // ⌘Z / Ctrl+Z takes back the last change to the town, ⇧⌘Z / Ctrl+Y puts
   // it back (core/history.js); in a text field, the field's own
   if ((e.metaKey || e.ctrlKey) && !e.altKey && /^[zy]$/i.test(e.key) && !e.target.closest?.('input, textarea')) {
@@ -664,6 +832,8 @@ window.addEventListener('keydown', (e) => {
     if (popup.open) popup.hide();
     // nothing in hand: Esc folds the open Build menu away
     else if (tools.active?.id === tools.defaultId && !hud.buildMenu.folded) hud.buildMenu.fold(true);
+    // nothing left to put away: back to the main menu
+    else if (tools.active?.id === tools.defaultId) backToMenu();
     else tools.cancel();
     return;
   }
@@ -741,17 +911,17 @@ async function openIntro() {
     window.introShownAt = performance.now();
   };
   if (card && !card.classList.contains('shown')) show();
-  if (window.introTitle && name) {
+  if (window.introTitle && name && !toMenu) {
     // the game's name a while, then the new town's in its place
     await wait(Math.max(0, window.introShownAt + INTRO.title - performance.now()));
     card.classList.replace('shown', 'out');
     await wait(INTRO.swap);
     name.textContent = world.name;
     show();
-  } else if (name && name.textContent !== world.name) {
+  } else if (name && !toMenu && name.textContent !== world.name) {
     name.textContent = world.name;
   }
-  await wait(Math.max(0, window.introShownAt + (window.introTitle ? INTRO.named : INTRO.underline) - performance.now()));
+  await wait(Math.max(0, window.introShownAt + (window.introTitle && !toMenu ? INTRO.named : INTRO.underline) - performance.now()));
   // never picked a language: asked here, under the name, before the map
   // opens (the guess it's loaded in, from the browser, comes ticked)
   if (card && needsLanguage()) {
@@ -774,14 +944,9 @@ async function openIntro() {
   intro?.classList.add('opening');
   setTimeout(() => {
     document.body.classList.remove('loading');
-    // (the Build menu's own box is centred with a transform: its panel and dock move instead)
-    const panels = [...uiRoot.querySelectorAll('.hud, .controls, .bm-panel, .bm-dock')];
-    // each stays out of sight until its own entrance starts (else it shows, blinks out, comes in)
-    for (const el of panels) el.style.opacity = '0';
-    panels.forEach((el, i) => setTimeout(() => {
-      el.style.opacity = '';
-      reveal(el, true, { force: true, from: [0, el.closest('.build-menu') ? 14 : -8] });
-    }, i * 70));
+    // the main menu, or (a new map, a reload from inside the game) the panels
+    if (atMenu) mainMenu.show();
+    else showPanels();
   }, INTRO.panels);
   setTimeout(() => {
     intro?.remove();
@@ -814,6 +979,7 @@ function loop(now) {
     livestock.update(simDt);
     growth.update(simDt);
     camera.coast(dt); // (a turn let go: in real time, whatever the clock)
+    driftFrame(dt); // (the main menu's drift)
     // the building under the pointer, with nothing in hand, gives a little
     // squash as the pointer comes onto it (Renderer.markHovered): there's
     // something to click; its name is on the card that opens
@@ -838,7 +1004,7 @@ function loop(now) {
     renderer.fireFrame(world.time, { wind, rain: sky.rain });
     hud.update();
     chronicle.update(dt);
-    if (!opening) story.update(dt); // (the story waits for the map to be drawn)
+    if (!opening && !atMenu) story.update(dt); // (the story waits for the map to be drawn, and for the player)
     dialogue.frame();
   } catch (err) {
     if (!reported) console.error('Frame failed:', err);

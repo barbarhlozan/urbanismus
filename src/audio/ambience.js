@@ -9,7 +9,10 @@
 // A browser lets a page make sound only after the player has done something
 // on it, so nothing is set up until the first click or key. Whether there
 // is sound at all is the player's (the Menu's Sound button), remembered in
-// this browser; it's on unless they turned it off.
+// this browser; it's on unless they turned it off. How loud is theirs too
+// (the main menu's Settings, mainMenu.js): the whole of it, the nature (the
+// birds, the rain, the wind) and the pencil and the buttons, each 0 … 1,
+// remembered apart (SOUND.levels).
 
 import { Birds, birdsAt } from './birds.js';
 import { Bed } from './bed.js';
@@ -19,7 +22,9 @@ import { load } from './sounds.js';
 const SOUND = {
   key: 'urbanismus.sound',
   byDefault: true,
-  volume: 0.5,
+  volume: 0.5, // the whole of it at its loudest setting
+  // the player's levels, 0 … 1: all of it, the nature, the pencil and buttons
+  levels: { key: 'urbanismus.volume', all: 1, nature: 1, effects: 1 },
   // how often the levels are set (s), and how fast each setting is eased to
   every: 0.1,
   ease: 0.3,
@@ -42,6 +47,15 @@ export class Ambience {
       if (saved !== null) this.on = saved === '1';
     } catch {
       // storage unavailable: the choice just won't be remembered
+    }
+    this.volume = { all: SOUND.levels.all, nature: SOUND.levels.nature, effects: SOUND.levels.effects };
+    try {
+      const saved = JSON.parse(localStorage.getItem(SOUND.levels.key) ?? '{}');
+      for (const k of Object.keys(this.volume)) {
+        if (typeof saved[k] === 'number') this.volume[k] = Math.min(1, Math.max(0, saved[k]));
+      }
+    } catch {
+      // storage unavailable or garbled: the defaults
     }
     this.ctx = null;
     this.wait = 0;
@@ -96,7 +110,24 @@ export class Ambience {
     clearTimeout(this.resting);
     this.ctx.resume();
     this.levels(true);
-    this.master.gain.setTargetAtTime(SOUND.volume, this.ctx.currentTime, 0.4);
+    this.master.gain.setTargetAtTime(SOUND.volume * this.volume.all, this.ctx.currentTime, 0.4);
+  }
+
+  // One of the player's levels (all, nature, effects), 0 … 1: heard at once,
+  // eased over a moment, and remembered.
+  setVolume(which, v) {
+    if (!(which in this.volume)) return;
+    this.volume[which] = Math.min(1, Math.max(0, v));
+    try {
+      localStorage.setItem(SOUND.levels.key, JSON.stringify(this.volume));
+    } catch {
+      // storage unavailable: the level just won't be remembered
+    }
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    if (which === 'all' && this.on) this.master.gain.setTargetAtTime(SOUND.volume * this.volume.all, now, 0.08);
+    if (which === 'nature') this.nature.gain.setTargetAtTime(this.volume.nature, now, 0.08);
+    if (which === 'effects') this.fx.gain.setTargetAtTime(this.volume.effects, now, 0.08);
   }
 
   // Each frame: the real seconds since the last, what is seen of the weather
@@ -123,11 +154,18 @@ export class Ambience {
     limit.threshold.value = -12;
     limit.ratio.value = 6;
     this.master.connect(limit).connect(ctx.destination);
-    this.birds = new Birds(ctx, this.master);
+    // the player's two levels under the whole (setVolume)
+    this.nature = ctx.createGain();
+    this.nature.gain.value = this.volume.nature;
+    this.nature.connect(this.master);
+    this.fx = ctx.createGain();
+    this.fx.gain.value = this.volume.effects;
+    this.fx.connect(this.master);
+    this.birds = new Birds(ctx, this.nature);
     const woods = load(ctx, 'rain');
-    this.rain = new Bed(ctx, this.master, woods, SOUND.rain);
-    this.wind = new Bed(ctx, this.master, woods, SOUND.wind);
-    this.effects = new Effects(ctx, this.master);
+    this.rain = new Bed(ctx, this.nature, woods, SOUND.rain);
+    this.wind = new Bed(ctx, this.nature, woods, SOUND.wind);
+    this.effects = new Effects(ctx, this.fx);
   }
 
   // A button pressed (`knock`: one of the bigger ones), at screen x 0 … 1.

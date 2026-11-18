@@ -77,6 +77,10 @@ control.newMap
   cs: Nová mapa
   en: New map
 
+control.mainMenu
+  cs: Hlavní menu
+  en: Main menu
+
 control.language
   cs: Jazyk
   en: Language
@@ -1127,3 +1131,48 @@ vehicle.train
 vehicle.train.blurb
   cs: lokálka, motorový vůz M 152.0
   en: a local railcar, the M 152.0
+
+# ---------- The main menu (src/ui/mainMenu.js) ----------
+
+# back into the saved town; its name, people and buildings written small under it
+mainmenu.continue
+  cs: Pokračovat
+  en: Continue
+
+mainmenu.residents
+  cs: {n} obyvatel | {n} obyvatelé | {n} obyvatel
+  en: {n} resident | {n} residents
+
+mainmenu.new
+  cs: Nová hra
+  en: New game
+
+mainmenu.settings
+  cs: Nastavení
+  en: Settings
+
+# the Settings' groups
+mainmenu.sound
+  cs: Zvuk
+  en: Sound
+
+mainmenu.language
+  cs: Jazyk
+  en: Language
+
+mainmenu.screen
+  cs: Obrazovka
+  en: Screen
+
+# the sound's three sliders: all of it, the birds, rain and wind, the pencil and the buttons
+mainmenu.volume.all
+  cs: Celkem
+  en: All
+
+mainmenu.volume.nature
+  cs: Příroda
+  en: Nature
+
+mainmenu.volume.effects
+  cs: Stavění
+  en: Building

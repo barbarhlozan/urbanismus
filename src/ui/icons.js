@@ -241,6 +241,8 @@ const CONTROLS = {
   debug: '<path d="M5.5 6.6 C5.5 3.8 10.5 3.8 10.5 6.6 V10 C10.5 13.6 5.5 13.6 5.5 10 Z M8 6.6 V13.2 M5.5 8.2 H2.6 M10.5 8.2 H13.4 M5.5 10.8 L3.2 12.6 M10.5 10.8 L12.8 12.6 M6.4 4.8 L4.6 2.8 M9.6 4.8 L11.4 2.8"/>',
   // a painter's palette: its thumb hole and three dabs, the three colours of a scheme
   colors: '<path d="M8.2 2 C4.3 2 1.7 4.7 1.9 8.1 C2.1 11.6 5.1 14 8.5 13.8 C9.8 13.7 10.2 12.8 9.7 11.9 C9.1 11 9.6 10 10.8 10.1 C12.3 10.1 14.2 9.5 14.1 7.1 C14.1 4.1 11.4 2.1 8.2 2 Z"/><circle cx="6.8" cy="10.8" r="0.9"/><circle cx="4.7" cy="7" r="0.8"/><circle cx="7.1" cy="4.4" r="0.8"/><circle cx="10.4" cy="4.9" r="0.8"/>',
+  // back to the main menu: a sheet with the game's name underlined on it
+  mainMenu: '<path d="M3 2.5 H13 V13.5 H3 Z M5.2 6 H10.8 M5.6 8.2 C7.4 7.8 9 8.4 10.4 8 M5.2 11 H8"/>',
   // an arrow coming up out of an open box, or going down into it
   export: '<path d="M2.4 7.4 V13.7 H13.6 V7.4 M2.4 7.4 L1.2 5.8 M13.6 7.4 L14.8 5.8 M8 11 V2 M5.6 4.4 L8 2 L10.4 4.4"/>',
   import: '<path d="M2.4 7.4 V13.7 H13.6 V7.4 M2.4 7.4 L1.2 5.8 M13.6 7.4 L14.8 5.8 M8 2 V11 M5.6 8.6 L8 11 L10.4 8.6"/>',
@@ -285,6 +287,7 @@ const MENU_FILES = {
   export: ['export', 'export'],
   import: ['import', 'import'],
   newMap: ['newmap', 'newMap'],
+  mainMenu: ['main-menu', 'mainMenu'],
   fullscreen: ['fullscreen', 'fullscreen'],
   fullscreenExit: ['fullscreen-exit', 'fullscreen'],
   sound: ['sound', 'sound'],

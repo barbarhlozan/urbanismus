@@ -20,9 +20,10 @@
 //                    drawing and word stay over the hatching, the word
 //                    haloed in the paper's colour as a name on a map is
 //   picked line      a tick at the right of the line of words picked (a
-//                    colour scheme)
+//                    colour scheme; any .choice: a language in Settings)
 //   setting          a small box in the corner, crossed while it's on
-//                    (Terrain, beside Erase)
+//                    (Terrain, beside Erase); before the word of a
+//                    .toggle (Settings: Full screen)
 //   can't            struck through (a popup's choice, Zpět with nothing
 //                    to take back)
 //   keyboard focus   crop marks at the four corners, as a printer marks
@@ -46,8 +47,8 @@ const CONTROLS = 'button, [role="slider"]';
 const CELLS = '.close, .bm-tab, .bm-tool, .bm-act, .bm-toggle, .bm-opts button, .bm-drop, .hud-photo, .chron-tab';
 // what can be chosen, by the mark it gets (styles.css shows it)
 const CHOSEN = '.bm-tab, .bm-tool, .hud-photo, .controls button, .chron-tab';
-const TICKED = '.scheme';
-const SETTING = '.bm-opts button[aria-pressed], .bm-act[aria-pressed]';
+const TICKED = '.scheme, .choice';
+const SETTING = '.bm-opts button[aria-pressed], .bm-act[aria-pressed], .toggle[aria-pressed]';
 const STRUCK = '.popup button, .bm-act';
 // not part of the word that's underlined (a key, a value, a number, a Menu
 // item's name written beside its drawing)
@@ -203,7 +204,8 @@ function draw(el) {
     set('tick', sketchLine([x, y], [x + 4, y + 5], s, { over: 0.5 }) + sketchLine([x + 4, y + 5], [x + 13, y - 7], s + 1, { over: 1.5, bow: 1.5 }));
   }
   if (el.matches(SETTING)) {
-    const z = 7, x = 6, y = 6; // (clear of the dock's frame along the edge)
+    // (clear of the dock's frame along the edge; level with a toggle's word)
+    const z = 7, x = 6, y = el.matches('.toggle') ? Math.round((h - z) / 2) : 6;
     set('box', sketchRoundBox(x, y, z, z, s, { radius: 2, waver: 0.2, slip: 0.4, lap: 2 }));
     set('x', sketchLine([x - 1, y - 1], [x + z + 1.5, y + z + 1], s, { over: 0.8 }) + sketchLine([x + z + 1, y - 1.5], [x - 1, y + z + 1], s + 3, { over: 0.8 }));
   }
