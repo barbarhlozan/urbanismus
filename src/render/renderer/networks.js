@@ -14,7 +14,7 @@ import { wander } from '../../../structures/plots.js';
 import { pathIndex } from '../lots.js';
 import { zebraCrossings } from '../../roads/furniture.js';
 import { wayOutlines } from '../../roads/wayOutline.js';
-import { trodden } from '../dirtPath.js';
+import { trodden, ROAD } from '../dirtPath.js';
 import { findBridges, makeDeck, bridgeLines } from '../bridges.js';
 import { hashKey, COS30, STRUCTURE_PAD } from './shared.js';
 
@@ -468,7 +468,7 @@ export class NetworkDrawing {
       add(`d${s.id}`, 'driveway', [[dx + (rx - dx) * t, dy + (ry - dy) * t], [dx + (rx - dx) * u, dy + (ry - dy) * u]]);
     }
 
-    this.groundLines('roadLines', ink, (add) => {
+    this.groundLines('roadLines', ink, (add, addRuns) => {
       // The road as its two edges, with corners at junctions, rounded dead
       // ends, and at map exits carried on past the edge, then faded out.
       // Lanes are narrower, and widen into the road where they meet one.
@@ -482,9 +482,12 @@ export class NetworkDrawing {
         keep: (e) => e.kind === 'road', width: (e) => (e.lane ? lane.edge : curve.edge),
         exitDir: exits, capAt: (n) => !joins.has(dot(n)), taper: lane.taper, dot,
       })) {
-        add(`r${key}`, kind === 'fade' ? 'road-exit' : 'road', line, a, b);
+        // the edges in the road's hand (dirtPath.js ROAD), the rounded
+        // dead ends in one stroke, the fade at a map exit dashed
+        if (kind === 'edge' || kind === 'corner') addRuns(`r${key}`, 'road', trodden(line, hashKey(`r${key}`), ROAD), a, b);
+        else add(`r${key}`, kind === 'fade' ? 'road-exit' : 'road', line, a, b);
       }
-      for (const [n, { line }] of joins) line.forEach((pts, i) => add(`rj${n}:${i}`, 'road', pts, n, n));
+      for (const [n, { line }] of joins) line.forEach((pts, i) => addRuns(`rj${n}:${i}`, 'road', trodden(pts, hashKey(`rj${n}:${i}`), ROAD), n, n));
       // its centre lines, for the painted schemes' wash (gl/lines.js)
       for (const e of world.ways.edges.values()) if (e.kind === 'road') add(`rw${e.id}`, 'road-wash', e.pts);
       // …carried on off the map at its exits, fading out (as the edges' 'road-exit')
@@ -496,7 +499,7 @@ export class NetworkDrawing {
       const paths = pathIndex(world, this.config);
       const open = (q) => paths.distance(q, this.config.path.edge + PATH_OPENING) === Infinity;
       for (const { key, line, a, b } of streetKerbs(world, curve, lane, joins)) {
-        keepRuns(line, open).forEach((run, j) => add(`k${key}${j ? `:${j}` : ''}`, 'kerb', run, a, b));
+        keepRuns(line, open).forEach((run, j) => { const k = `k${key}${j ? `:${j}` : ''}`; addRuns(k, 'kerb', trodden(run, hashKey(k), ROAD), a, b); });
       }
       // zebra crossings where streets meet a junction
       for (const { node, a, b, stripes } of zebraCrossings(world, curve)) {

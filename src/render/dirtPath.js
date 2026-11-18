@@ -5,22 +5,44 @@
 // the grass grows over – and the edge itself wanders in and out a little,
 // so the path is never quite the same width. Worked out on the ground, the
 // same each time for the same line and seed.
+//
+// A road's edges and kerbs are drawn by the same hand, only steadier
+// (ROAD): longer strokes, the breaks short and rare, the edge hardly
+// straying, and now and then a stroke gone over twice, a hair beside the
+// first – a road drawn by hand along a ruler that wasn't there.
 
 import { mulberry32 } from '../core/random.js';
 
-const STEP = 0.04;          // grid units between the points of a stroke
-const STROKE = [0.2, 0.85]; // a stroke's length, shortest to longest
-const OVER = 0.35;          // how often the next one starts back over its end…
-const OVERLAP = [0.02, 0.07];
-const GAP = [0.02, 0.09];   // …or after a break…
-const BARE = 0.12;          // …or, this often, a longer one
-const BARE_GAP = [0.15, 0.35];
-const LIFT = 0.008;         // how far a stroke may sit to either side of the last
-const WANDER = 0.018;       // how far the edge strays in and out
-const WANDER_LEN = 0.35;    // over about this length
+// grid units throughout
+export const PATH = {
+  step: 0.04,           // between the points of a stroke
+  stroke: [0.2, 0.85],  // a stroke's length, shortest to longest
+  over: 0.35,           // how often the next one starts back over its end…
+  overlap: [0.02, 0.07],
+  gap: [0.02, 0.09],    // …or after a break…
+  bare: 0.12,           // …or, this often, a longer one
+  bareGap: [0.15, 0.35],
+  lift: 0.008,          // how far a stroke may sit to either side of the last
+  wander: 0.018,        // how far the edge strays in and out
+  wanderLen: 0.35,      // over about this length
+  twice: 0,             // how often a stroke is gone over again…
+  twiceOff: [0, 0],     // …this far beside the first
+};
 
-// The strokes along `line` ([[x, y]…], grid units) as polylines.
-export function trodden(line, seed) {
+export const ROAD = {
+  ...PATH,
+  stroke: [0.45, 1.5],
+  over: 0.55, overlap: [0.03, 0.1],
+  gap: [0.01, 0.04],
+  bare: 0.05, bareGap: [0.05, 0.12],
+  lift: 0.006,
+  wander: 0.008, wanderLen: 0.6,
+  twice: 0.18, twiceOff: [0.008, 0.016],
+};
+
+// The strokes along `line` ([[x, y]…], grid units) as polylines, in the
+// hand `h` (PATH or ROAD).
+export function trodden(line, seed, h = PATH) {
   const rand = mulberry32(seed >>> 0);
   const between = ([lo, hi]) => lo + rand() * (hi - lo);
   // the line measured, and a point and its side at any length along it
@@ -37,10 +59,10 @@ export function trodden(line, seed) {
     const t = Math.min(1, Math.max(0, (s - cum[seg - 1]) / l));
     return [ax + (bx - ax) * t, ay + (by - ay) * t, -(by - ay) / l, (bx - ax) / l];
   };
-  // the edge's straying: a smooth run between random heights WANDER_LEN apart
-  const knots = Array.from({ length: Math.ceil(total / WANDER_LEN) + 2 }, () => (rand() * 2 - 1) * WANDER);
+  // the edge's straying: a smooth run between random heights wanderLen apart
+  const knots = Array.from({ length: Math.ceil(total / h.wanderLen) + 2 }, () => (rand() * 2 - 1) * h.wander);
   const stray = (s) => {
-    const u = s / WANDER_LEN, i = Math.floor(u), f = u - i;
+    const u = s / h.wanderLen, i = Math.floor(u), f = u - i;
     return knots[i] + (knots[i + 1] - knots[i]) * f * f * (3 - 2 * f);
   };
   const point = (s, lift) => {
@@ -48,22 +70,31 @@ export function trodden(line, seed) {
     const d = stray(s) + lift;
     return [x + nx * d, y + ny * d];
   };
+  const stroke = (from, to, lift) => {
+    const pts = [];
+    for (let q = from; q < to; q += h.step) pts.push(point(q, lift));
+    pts.push(point(to, lift));
+    out.push(pts);
+  };
 
   const out = [];
   // (starts somewhere in a stroke or a gap, so neighbouring edges don't line up)
-  let s = -rand() * STROKE[1];
+  let s = -rand() * h.stroke[1];
   while (s < total) {
-    const len = between(STROKE);
+    const len = between(h.stroke);
     const from = Math.max(0, s), to = Math.min(total, s + len);
-    const lift = (rand() * 2 - 1) * LIFT;
+    const lift = (rand() * 2 - 1) * h.lift;
     if (to - from > 0.03) {
-      const pts = [];
-      for (let q = from; q < to; q += STEP) pts.push(point(q, lift));
-      pts.push(point(to, lift));
-      out.push(pts);
+      stroke(from, to, lift);
+      // gone over again, a hair to one side, not quite end to end
+      if (h.twice && rand() < h.twice) { // (footpaths: the same strokes as ever)
+        const side = (rand() < 0.5 ? -1 : 1) * between(h.twiceOff);
+        const a = from + (to - from) * rand() * 0.3, b = to - (to - from) * rand() * 0.3;
+        if (b - a > 0.1) stroke(a, b, lift + side);
+      }
     }
     const r = rand();
-    s += len + (r < BARE ? between(BARE_GAP) : r < BARE + OVER ? -between(OVERLAP) : between(GAP));
+    s += len + (r < h.bare ? between(h.bareGap) : r < h.bare + h.over ? -between(h.overlap) : between(h.gap));
   }
   return out;
 }

@@ -86,6 +86,9 @@ a Czech or German layout.
 - Draw a footpath **along a road** (on it or right beside it) to make it a street with sidewalks (kerb lines on both
   sides, street lamps, zebra crossings at junctions). People only walk along streets and footpaths; cyclists and
   cars use every road. Erasing a street removes its sidewalks first.
+- Roads are drawn by hand, as footpaths are, only with a steadier pen: each edge (and a street's kerb) in
+  long strokes that overlap where the pen was set down again, now and then gone over twice. Footpaths
+  are lighter, broken and wander in and out.
 - **Lanes** (**1 W**) – single-track roads, narrower than a road. Cars drive them slowly (and avoid
   them when a road will do); people walk and cycle on them as on a footpath, so they get no
   sidewalks. Draw a lane over a road or footpath to turn it into a lane, a road over a lane
