@@ -17,20 +17,11 @@
 import { measurePolyline, pointAt, subPolyline } from './geometry.js';
 import { MinHeap } from '../core/heap.js';
 import { crossingsOf } from './curves.js';
+import { crossRule } from './rules.js';
 
-// What happens where a way of one kind meets one of another (the new
-// one's kind first, either order gives the same): 'join' – a junction,
-// shared by both (two roads; a footpath onto a road; a level crossing,
-// where a road or footpath crosses a railway); 'gap' – they cross
-// without meeting (a fence or a field's edge leaves a gap); 'refuse' – not allowed.
-const FAMILY = { road: 'road', lane: 'road', path: 'path', rail: 'rail', fence: 'fence', field: 'field' };
-export function crossRule(k1, k2) {
-  const [a, b] = [FAMILY[k1] ?? k1, FAMILY[k2] ?? k2].sort();
-  if (a === 'fence' || b === 'fence' || a === 'field' || b === 'field') return a === b ? 'join' : 'gap';
-  if (a === 'rail' && b === 'rail') return 'refuse';
-  return 'join';
-}
-
+// What happens where a way of one kind meets one of another: crossRule
+// (roads/rules.js, the table of the kinds of way).
+export { crossRule };
 
 // The point of a measured polyline nearest (x, y): { s, dist }.
 function nearestOn({ points, cum }, x, y) {

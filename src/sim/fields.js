@@ -17,11 +17,13 @@
 // or what cuts them changed.
 
 import { findEnclosures } from './pastures.js';
+import { kindsWhere } from '../roads/rules.js';
 
 export const CROPS = ['grain', 'potatoes'];
 
-// The ways that cut a field, and the ground each keeps (World.wayClear).
-const CUTS = ['road', 'rail', 'path', 'fence'];
+// The ways that cut a field (roads/rules.js), each with the ground it
+// keeps (World.wayClear).
+const CUTS = kindsWhere('cutsFields');
 
 export function fieldsOf(world) {
   const nw = world.networks;

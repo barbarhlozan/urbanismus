@@ -12,6 +12,7 @@ import { rectOutline, distanceToPolygon, boxOf } from '../spatial.js';
 import { segmentDistance } from '../geom2d.js';
 import { detourAround } from '../../roads/detour.js';
 import { crossingsOf } from '../../roads/curves.js';
+import { WAY_KINDS, kindsWhere } from '../../roads/rules.js';
 import { mulberry32 } from '../random.js';
 
 // fitsOutline(): how far a building keeps from a way's centre line, past
@@ -19,9 +20,9 @@ import { mulberry32 } from '../random.js';
 // ground under it is sampled for water and slope (world units)
 const WAY_CLEAR = 0.04;
 // fitsOutline's reasons that are a way in the body's way, and the ways a
-// building put down across them bends round (detoursFor)
-const WAY_REASONS = new Set(['Road', 'Railway', 'Footpath']);
-const DETOUR_KINDS = new Set(['road', 'rail', 'path']);
+// building put down across them bends round (detoursFor) – roads/rules.js
+const WAY_REASONS = new Set(Object.values(WAY_KINDS).map((k) => k.blocks).filter(Boolean));
+const DETOUR_KINDS = new Set(kindsWhere('goesRound'));
 const SAMPLE = 0.5;
 // nearestRoadPoint(): how far from a road's centre line a point is still
 // by it (a building's yard reaches it). freePlacement(): a building taken
@@ -449,8 +450,9 @@ export class WorldPlacement {
   // its half width (a street's kerb) and WAY_CLEAR – as wayAcross keeps a
   // building off the way.
   wayClear(kind, { lane = false, street = false } = {}) {
+    const own = WAY_KINDS[kind]?.half ?? 0;
     const half = kind === 'road' ? (lane ? CONFIG.lane.edge : street ? CONFIG.road.kerb : CONFIG.road.edge)
-      : kind === 'rail' ? 0.12 : kind === 'path' ? CONFIG.path.edge : kind === 'fence' ? 0.03 : 0;
+      : own === 'path' ? CONFIG.path.edge : own;
     return half + WAY_CLEAR;
   }
 
