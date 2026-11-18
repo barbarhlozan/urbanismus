@@ -181,9 +181,17 @@
 # the chronicle waits for a part in the game's story; it keeps writing meanwhile
 # lock chronicle
 #
-# As it is, everything is open.
+# As it is, everything is open but what the story of Dědina has no use for
+# (a sandbox can unlock it again).
 
 lock assets
+# no train comes to Dědina
+lock railway
+# the parks that belong to a town, not to a village by a church
+lock summer_cinema
+lock playground
+lock flower_beds
+lock forest_park
 #lock all
 #unlock road
 #unlock footpath

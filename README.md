@@ -70,6 +70,12 @@ itself, the camera, the chronicle book, the tool options, the New map settings�
 of their own in `icons/ui/`, read when the game starts: replace a file to change a drawing. Its
 README says how to draw one and lists them all, and `icons/ui/index.html` shows them side by side.
 
+The Build menu offers what the story of Dědina needs and nothing more: the houses and family
+houses, the pub, the chapel and the church, the bus stop, the roads and footpaths, the fields,
+meadow and fence, greenery, the sports ground, the village pond and the squares. No train comes
+to Dědina, and the summer cinema, playground, flower beds and forest park belong to a town:
+`story/unlocks.txt` locks them, and a sandbox can unlock them again.
+
 Shortcuts come in two steps that follow the Build menu: the **number row** opens a group
 (**1** Doprava, **2** Bydlení, **3** Občanská vybavenost, **4** Výroba, **5** Prostranství,
 **6** Památky – the numbers are on the tabs), and the **letter rows** pick a tool in the

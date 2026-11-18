@@ -114,7 +114,7 @@ export const BUILD_FAMILIES = [
 // Buildings through the one-by-one review: only their tools are offered
 // for now. The rest stay registered (saves still load and draw them) but
 // can't be picked up until their turn comes.
-export const REVIEWED = new Set(['house', 'house-wide', 'family-house', 'family-house-wide', 'chapel', 'church',
+export const REVIEWED = new Set(['bus-stop', 'house', 'house-wide', 'family-house', 'family-house-wide', 'chapel', 'church',
   'green', 'meadow', 'playground', 'playground-large', 'pitch', 'sports-ground', 'garden-park', 'forest-park', 'pond-park', 'summer-cinema',
   'plaza', 'market-square',
   'hospoda', 'hospoda-wide']);
