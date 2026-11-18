@@ -156,7 +156,13 @@ const entering = (() => {
     return null;
   }
 })();
-const enterGame = entering === '1';
+// ?testing in the address (?testing=0 not): never the main menu, the town
+// straight away, as before there was one – for trying things out quickly
+const testing = (() => {
+  const v = new URLSearchParams(location.search).get('testing');
+  return v !== null && v !== '0' && v !== 'false';
+})();
+const enterGame = entering === '1' || testing;
 const backToSettings = entering === 'settings';
 const goStraightIn = (where = '1') => {
   try { sessionStorage.setItem(ENTER_KEY, where); } catch { /* storage unavailable: the main menu again */ }

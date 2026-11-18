@@ -20,7 +20,10 @@ it), **Nová hra** opens the New map dialog, **Otevřít ze souboru** opens a to
 go from word to word, **Enter** picks one. From the town, **Hlavní menu** in the Menu (≡), or
 **Esc** with nothing left to put away, goes back to it. A new map, a town opened from a file and
 another language picked in the town go straight into the town; another language picked in the
-main menu comes back to its Settings.
+main menu comes back to its Settings. With **`?testing`** in the address
+(http://localhost:8173/?testing) the main menu is skipped altogether and the game opens straight
+in the town, as it did before there was one (a first visit plays the new map at once); Hlavní
+menu in the Menu still opens it.
 
 **Settings** (`src/ui/settingsPanel.js`) is one panel, in the main menu or under the Menu's
 Nastavení in the town: the sound's three levels (all of it – down to nothing, the sound off –

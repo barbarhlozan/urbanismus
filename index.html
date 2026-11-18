@@ -42,7 +42,9 @@
       const save = localStorage.getItem('urbanismus.save.v1');
       // (the town's name only going straight into it: otherwise the game
       // opens on the main menu, under the game's own name)
-      const straightIn = sessionStorage.getItem('urbanismus.enter') === '1';
+      // (?testing: always straight in, main.js)
+      const testing = new URLSearchParams(location.search).get('testing');
+      const straightIn = sessionStorage.getItem('urbanismus.enter') === '1' || (testing !== null && testing !== '0' && testing !== 'false');
       const name = straightIn && !localStorage.getItem('urbanismus.pendingMap') && save && JSON.parse(save).name;
       if (name) {
         document.querySelector('.intro-name').textContent = name;
