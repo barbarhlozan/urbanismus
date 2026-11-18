@@ -49,14 +49,22 @@ export function detourAround(pts, box, clear, { pad = 0.35, side = 0 } = {}) {
   const [tA, dA] = polar(A), [tB, dB] = polar(B);
   let sweep = Math.atan2(Math.sin(tB - tA), Math.cos(tB - tA)); // the shorter way round
   if (side && Math.sign(sweep) !== side) sweep += side * 2 * Math.PI;
+  // not a drawn half-circle but a way trodden round: its widest point off
+  // the middle (the sweep run unevenly), and a slow waver outwards – never
+  // in, so it keeps clear of the walls. Seeded by where the building
+  // stands, so the preview and the laid way are the same.
+  const rnd = seeded(box.x, box.y);
+  const lean = 0.7 + 0.6 * rnd(), w1 = 0.12 + 0.1 * rnd(), w2 = 0.05 + 0.06 * rnd();
+  const p1 = 6.28 * rnd(), p2 = 6.28 * rnd(), k1 = 1.5 + rnd(), k2 = 3 + 2 * rnd();
   const bend = [];
   for (let k = 1; k < STEPS; k++) {
-    const f = k / STEPS, t = tA + sweep * f;
+    const g = k / STEPS, f = g ** lean, t = tA + sweep * f;
     const ends = dA * (1 - f) + dB * f;
     // out onto the squircle (never inside it) and eased back to the way's
     // own line at both ends
     const ease = Math.sin(Math.PI * f) ** 0.6;
-    const r = ends + Math.max(0, rim(t) - ends) * Math.min(1, 2.2 * ease);
+    const waver = 1 + ease * (w1 * (0.5 + 0.5 * Math.sin(k1 * Math.PI * g + p1)) + w2 * (0.5 + 0.5 * Math.sin(k2 * Math.PI * g + p2)));
+    const r = (ends + Math.max(0, rim(t) - ends) * Math.min(1, 2.2 * ease)) * waver;
     bend.push([mx + Math.cos(t) * r, my + Math.sin(t) * r]);
   }
   const raw = measurePolyline([...subPolyline(poly, 0, s0), ...bend, ...subPolyline(poly, s1, poly.total)]);
@@ -76,4 +84,15 @@ export function detourAround(pts, box, clear, { pad = 0.35, side = 0 } = {}) {
     line = next;
   }
   return line.map(toWorld);
+}
+
+// A small seeded random source (0–1) from a position.
+function seeded(x, y) {
+  let h = (Math.imul(Math.round(x * 1000) + 7919, 374761393) ^ Math.imul(Math.round(y * 1000) + 104729, 668265263)) >>> 0;
+  return () => {
+    h = (h + 0x6d2b79f5) >>> 0;
+    let v = Math.imul(h ^ (h >>> 15), 1 | h);
+    v ^= v + Math.imul(v ^ (v >>> 7), 61 | v);
+    return ((v ^ (v >>> 14)) >>> 0) / 4294967296;
+  };
 }
