@@ -30,7 +30,7 @@ import { SVGNS, TERRAIN_LINES, COS30, r2 } from './shared.js';
 // `gap` apart, only those at least `room` from the shore, a share `keep`
 // of them; about `len` long (grid units, shorter where the shore is near),
 // as high as `rise` of their length, `tilt` askew of level at most.
-const WATER = { radius: 0.75, soft: 5, metres: 6, step: 0.08, ripple: { gap: 0.2, room: 0.06, keep: 0.6, len: 0.14, rise: 0.12, tilt: 0.12 } };
+const WATER = { radius: 0.75, soft: 5, metres: 6, step: 0.08, ripple: { gap: 0.14, room: 0.3, keep: 0.6, len: 0.09, rise: 0.12, tilt: 0.12 } };
 
 // A field just closed comes up plant by plant: each starts within `spread`
 // ms of the field closing (meadow.js `late`) and takes `each` ms to grow,
