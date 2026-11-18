@@ -1,7 +1,9 @@
 // Crop fields: the ground painted with a crop (world.crops, world/crops.js
 // – the Grain and Potatoes tools' brush), in pieces. What's built on it
 // cuts it: a road, railway, footpath or fence and the squares it runs
-// over, a building and those under it, water. Each piece of one crop left
+// over, water. A building in a field leaves it whole, the crop kept off a
+// clearing round it – an uneven ring, not the squares it stands on
+// (clearing()). Each piece of one crop left
 // whole is a field – a road across a field makes two, and when the road
 // goes they are one again (the crop was under it all along). Fields are
 // drawn only as their crop (render/meadow.js grows it), rows along their
@@ -61,7 +63,7 @@ function findFields(world) {
   if (!list.length) return empty;
   const at = (x, y) => {
     const cell = world.cropCellAt(x, y);
-    return cell < 0 ? -1 : region[cell];
+    return cell < 0 || region[cell] < 0 || clearing(world, x, y) ? -1 : region[cell];
   };
   return { list, at };
 }
@@ -93,13 +95,25 @@ function cutCells(world) {
       }
     }
   }
-  // buildings: the squares their bodies (or, on the dots, outlines) stand on
-  for (let c = 0; c < crops.length; c++) {
-    if (!crops[c] || cut[c]) continue;
-    const [x0, y0, x1, y1] = square(c);
-    if (world.structureIndex.overlapping([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]).length) cut[c] = 1;
-  }
   return cut;
+}
+
+// The clearing a building keeps in a field round it: an uneven ring, its
+// radius the body's reach plus CLEAR, wavering by a few slow waves round
+// it (seeded by the building, so it keeps its shape).
+const CLEAR = 0.3;
+export function clearing(world, x, y) {
+  for (const id of world.structureIndex.near(x, y, 3)) {
+    const s = world.structures.get(id), poly = world.structureIndex.outline(id);
+    if (!s || !poly) continue;
+    const reach = Math.max(...poly.map(([px, py]) => Math.hypot(px - s.x, py - s.y)));
+    const d = Math.hypot(x - s.x, y - s.y);
+    if (d > (reach + CLEAR) * 1.3) continue;
+    const a = Math.atan2(y - s.y, x - s.x), k = (s.seed ?? s.id) >>> 0;
+    const wave = 0.13 * Math.sin(3 * a + (k % 628) / 100) + 0.08 * Math.sin(5 * a + ((k >>> 10) % 628) / 100) + 0.05 * Math.sin(7 * a + ((k >>> 20) % 628) / 100);
+    if (d < (reach + CLEAR) * (1 + wave)) return true;
+  }
+  return false;
 }
 
 // How near segment a–b comes to the square [x0, y0, x1, y1]: 0 where it
