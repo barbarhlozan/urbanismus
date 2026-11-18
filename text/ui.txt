@@ -836,6 +836,14 @@ reason.too-sharp-a-bend
   cs: Příliš ostrý oblouk
   en: Too sharp a bend
 
+reason.a-junction-is-in-the-way
+  cs: V cestě je křižovatka
+  en: A junction is in the way
+
+reason.too-tight-to-go-round
+  cs: Cesta to nemá kudy objet
+  en: Too tight to go round
+
 reason.a-bridge-has-to-be-straight
   cs: Most musí být rovný
   en: A bridge has to be straight

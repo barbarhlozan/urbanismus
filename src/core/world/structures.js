@@ -27,8 +27,19 @@ export class WorldStructures {
   // s.node and s.rotation are the nearest dot and quarter turn, for what
   // still goes by the dots (roads kept off it, the way to its door) until
   // the ways come off them too.
+  // Put down across a way, the way bends round it (World.detoursFor), in
+  // the same step; if it can't, nothing changes.
   placeStructureAt(type, x, y, angle = 0, { seed = newSeed(), data = {} } = {}) {
-    if (!this.fitsOutline(type, x, y, angle).ok) return null;
+    if (!this.fitsOutline(type, x, y, angle).ok) {
+      const around = this.detoursFor(type, x, y, angle);
+      if (!around.ok || !around.detours.length) return null;
+      const was = around.detours.map(({ edge }) => ({ edge, pts: this.ways.edges.get(edge).pts }));
+      this.layDetours(around.detours);
+      if (!this.fitsOutline(type, x, y, angle).ok) {
+        this.layDetours(was); // (as they were)
+        return null;
+      }
+    }
     const node = this.grid.nodeAt(...freeAnchor(STRUCTURE_TYPES[type], x, y, angle));
     if (node < 0) return null;
     this.history.touch();

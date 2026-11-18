@@ -164,7 +164,7 @@ test('a wider building placed freely: its anchor turns with it about its middle'
 test('a road, railway or footpath may not be laid through a free building', async () => {
   const { run, fineRun } = await import('./helpers.js');
   const w = flatWorld();
-  const s = w.placeStructureAt('house', 6.5, 8, 0.3);
+  const s = w.placeStructureAt('house', 6.5, 8, 0.3, { seed: 1 }); // (one look: its walls' size goes with it)
   assert.ok(s);
   const across = w.buildNetwork('road', run(w, [6, 3], [6, 14]));
   assert.equal(across.ok, false);

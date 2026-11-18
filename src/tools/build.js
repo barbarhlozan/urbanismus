@@ -8,7 +8,7 @@
 import { footprintCenter, newSeed, categoryOf, kindsOf, kindShown } from '../../structures/index.js';
 import { keyOf } from '../ui/keys.js';
 import { UNLOCKS } from '../story/unlocks.js';
-import { t } from '../core/text.js';
+import { t, reasonText } from '../core/text.js';
 import { nameOf, blurbOf, sizeOf } from '../ui/names.js';
 
 
@@ -144,8 +144,11 @@ export function createBuildTool(ctx, defs) {
         const p = freeAt();
         if (!p) return '';
         // where it can't stand: faded, with a cross – or the steep-hill sign
-        const mark = p.check.ok ? '' : p.check.reason === 'Too steep' ? kit.steepAt(p.x, p.y) : kit.crossAt(p.x, p.y);
-        return kit.ghostAt(d, p.x, p.y, p.angle, seed, { blocked: !p.check.ok, data: freeData() }) + mark;
+        // (and why, by the cross)
+        const mark = p.check.ok ? '' : p.check.reason === 'Too steep' ? kit.steepAt(p.x, p.y) : kit.crossAt(p.x, p.y) + kit.noteAt(p.x, p.y, reasonText(p.check.reason));
+        // across a way: the bend it will take round the building, sketched
+        const bends = (p.check.detours ?? []).map(({ edge, pts }) => kit.sketchPath(pts, `preview ${world.ways.edges.get(edge)?.kind ?? 'path'}`)).join('');
+        return bends + kit.ghostAt(d, p.x, p.y, p.angle, seed, { blocked: !p.check.ok, data: freeData() }) + mark;
       }
       const at = world.placementFor(d.id, hover, placed());
       if (at.check.ok) {

@@ -10,12 +10,18 @@ import { FEATURE_TYPES } from '../../../features/index.js';
 import { BODIES } from '../../../structures/bodies.js';
 import { rectOutline, distanceToPolygon, boxOf } from '../spatial.js';
 import { segmentDistance } from '../geom2d.js';
+import { detourAround } from '../../roads/detour.js';
+import { crossingsOf } from '../../roads/curves.js';
 import { mulberry32 } from '../random.js';
 
 // fitsOutline(): how far a building keeps from a way's centre line, past
 // the way's own half width (its kerb for a street), and how finely the
 // ground under it is sampled for water and slope (world units)
 const WAY_CLEAR = 0.04;
+// fitsOutline's reasons that are a way in the body's way, and the ways a
+// building put down across them bends round (detoursFor)
+const WAY_REASONS = new Set(['Road', 'Railway', 'Footpath']);
+const DETOUR_KINDS = new Set(['road', 'rail', 'path']);
 const SAMPLE = 0.5;
 // nearestRoadPoint(): how far from a road's centre line a point is still
 // by it (a building's yard reaches it). freePlacement(): a building taken
@@ -215,7 +221,8 @@ export class WorldPlacement {
   // width, and the ground under it be dry, not too steep and free of what
   // can't be cleared. Types with a rule of their own (stations and their track)
   // still stand on the dots. { ok, reason }.
-  fitsOutline(type, x, y, angle = 0, ignoreId = null) {
+  // `ways: false`: the ways are left out (detoursFor sees to them).
+  fitsOutline(type, x, y, angle = 0, ignoreId = null, { ways = true } = {}) {
     const def = STRUCTURE_TYPES[type];
     if (!def) return { ok: false, reason: 'Unknown type' };
     if (def.canPlace) return { ok: false, reason: 'On the grid only' };
@@ -230,7 +237,7 @@ export class WorldPlacement {
     for (const id of this.featureIndex.overlapping(body)) {
       if (FEATURE_TYPES[this.features.get(id)?.type]?.clearable === false) return { ok: false, reason: 'Blocked' };
     }
-    const way = this.wayAcross(body);
+    const way = ways && this.wayAcross(body);
     if (way) return { ok: false, reason: way };
     // the ground: points over the outline, its corners pulled in a little
     const [w, h] = this.outlineSize(type), c = Math.cos(angle), sn = Math.sin(angle);
@@ -299,7 +306,96 @@ export class WorldPlacement {
     // once the player has turned it away)
     const flush = Math.abs(twist) < JOIN_TWIST && this.joinSnap(type, x, y, angle);
     if (flush) [x, y, angle] = flush;
-    return { x, y, angle, road, check: this.fitsOutline(type, x, y, angle) };
+    let check = this.fitsOutline(type, x, y, angle);
+    // across a way: the way bent round it, if it can be (detoursFor)
+    if (WAY_REASONS.has(check.reason)) {
+      const around = this.detoursFor(type, x, y, angle);
+      check = around.ok ? { ok: true, detours: around.detours } : { ok: false, reason: around.reason ?? check.reason };
+    }
+    return { x, y, angle, road, check };
+  }
+
+  // A structure of `type` put down at (x, y, angle) across ways: each way
+  // that would run over its body (with the way's width) bent round it
+  // (roads/detour.js), the rest of the ground as fitsOutline wants it.
+  // { ok, detours: [{ edge (id), pts }], reason }. Nothing changes here:
+  // placeStructureAt lays them.
+  detoursFor(type, x, y, angle = 0) {
+    const fits = this.fitsOutline(type, x, y, angle, null, { ways: false });
+    if (!fits.ok) return fits;
+    const body = this.bodyAt(type, x, y, angle);
+    const [x0, y0, x1, y1] = this.bodyBox(type);
+    const box = { x, y, angle, x0, y0, x1, y1 };
+    const crossing = (e, pts) => {
+      const r = this.wayClear(e.kind, e);
+      for (let k = 1; k < pts.length; k++) if (segmentPolygonDistance(pts[k - 1], pts[k], body) < r) return true;
+      return false;
+    };
+    const planned = new Map(); // edge id -> its new line
+    const lineOf = (e) => planned.get(e.id) ?? e.pts;
+    const hits = [...this.ways.edges.values()].filter((e) => DETOUR_KINDS.has(e.kind) && crossing(e, e.pts));
+    if (!hits.length) return { ok: true, detours: [] };
+    for (const e of hits) {
+      const r = this.wayClear(e.kind, e);
+      let found = null, why = 'A junction is in the way';
+      // the shorter way round first, a little wider each time
+      for (const [grow, pad] of [[0.06, 0.35], [0.14, 0.55], [0.25, 0.8]]) {
+        for (const side of [0, 1, -1]) {
+          const pts = detourAround(e.pts, box, r + grow, { pad, side });
+          if (!pts) continue;
+          const check = this.detourCheck(e, pts, body, (o) => lineOf(o));
+          if (check.ok) { found = pts; break; }
+          why = check.reason;
+        }
+        if (found) break;
+      }
+      if (!found) return { ok: false, reason: why };
+      planned.set(e.id, found);
+    }
+    return { ok: true, detours: [...planned].map(([edge, pts]) => ({ edge, pts })) };
+  }
+
+  // May way edge `e` run along `pts` instead, round a building to stand on
+  // `body`: clear of it and of other buildings, crossing no other way
+  // (`lineOf(edge)`: their lines, as planned), and up to the kind's own
+  // rules (checkWay: slope, water, bends). { ok, reason }.
+  detourCheck(e, pts, body, lineOf) {
+    const r = this.wayClear(e.kind, e);
+    for (let k = 1; k < pts.length; k++) if (segmentPolygonDistance(pts[k - 1], pts[k], body) < r) return { ok: false, reason: 'Too tight to go round' };
+    const check = this.checkWay(e.kind, pts, { lane: !!e.lane, street: !!e.street });
+    if (!check.ok) return check;
+    const ends = [this.ways.nodes.get(e.a), this.ways.nodes.get(e.b)];
+    for (const o of this.ways.edges.values()) {
+      if (o.id === e.id) continue;
+      for (const c of crossingsOf(pts, lineOf(o))) {
+        if (ends.some((n) => Math.hypot(n.x - c.point[0], n.y - c.point[1]) < 0.05)) continue; // (where they meet anyway)
+        return { ok: false, reason: 'Crosses another line' };
+      }
+    }
+    return { ok: true };
+  }
+
+  // Lays planned detours (detoursFor): each edge's line replaced, the
+  // dots and everyone told.
+  layDetours(detours) {
+    if (!detours?.length) return;
+    this.history.touch();
+    const kinds = new Map();
+    for (const { edge, pts } of detours) {
+      const e = this.ways.edges.get(edge);
+      if (!e) continue;
+      e.pts = pts.map((p) => [...p]);
+      const na = this.ways.nodes.get(e.a), nb = this.ways.nodes.get(e.b);
+      e.pts[0] = [na.x, na.y];
+      e.pts[e.pts.length - 1] = [nb.x, nb.y];
+      kinds.set(e.kind, true);
+    }
+    this.ways.version++;
+    for (const kind of kinds.keys()) {
+      this.refreshNetwork(kind);
+      const layer = this.networks[kind];
+      this.events.emit(layer.event, { layer, nodes: [...layer.graph.nodes()], ...(kind === 'road' ? { sidewalks: true } : {}) });
+    }
   }
 
   // For a structure of a type that joins (def.join) about to stand at
