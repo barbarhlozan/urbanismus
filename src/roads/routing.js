@@ -119,6 +119,8 @@ function spanProblem(layer, nodes, i, j) {
 // `steep`: the blocked dots that are only blocked for climbing too steeply
 // (shown by a sign rather than a cross, render/overlay.js steepAt).
 // `opts.lane`: roads built as lanes, which may climb steeper.
+// `opts.geometric`: buildings placed freely are checked by the caller
+// against the drawn line itself (World.checkWay), not segment by segment.
 export function validateRoute(layer, nodes, opts = {}) {
   const blocked = [];
   const steep = new Set(), other = new Set();
@@ -135,7 +137,7 @@ export function validateRoute(layer, nodes, opts = {}) {
     if (crossesDiagonal(layer, nodes[i], nodes[i + 1])) {
       reason = 'Crosses another line';
       block(other, nodes[i], nodes[i + 1]);
-    } else if (layer.occupied(nodes[i], nodes[i + 1])) {
+    } else if (!opts.geometric && layer.occupied(nodes[i], nodes[i + 1])) {
       reason = 'Occupied';
       block(other, nodes[i], nodes[i + 1]);
     } else if (layer.conflicts(nodes[i], nodes[i + 1])) {

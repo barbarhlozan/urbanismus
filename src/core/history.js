@@ -227,12 +227,19 @@ export class History {
     for (const s of comingS) {
       if (w.nodesOf(s).some((n) => n < 0 || foreign(n) !== undefined)) return { ok: false, reason: 'Occupied' };
     }
+    // (buildings placed freely by their bodies, World.buildingsOnLine; the
+    // rest by their dots)
+    const onDots = (n) => {
+      const id = foreign(n);
+      return id !== undefined && !w.structures.get(id)?.free ? id : undefined;
+    };
     for (const e of coming) {
       const layer = w.networks[e.kind];
       if (!layer) continue;
+      if (w.buildingsOnLine(e.kind, e.pts, e, (id) => ours.has(id)).length) return { ok: false, reason: 'Occupied' };
       const blocked = (n) => {
-        if (e.kind === 'road') return foreign(n) !== undefined;
-        const around = w.coarseAround(n).map(foreign);
+        if (e.kind === 'road') return onDots(n) !== undefined;
+        const around = w.coarseAround(n).map(onDots);
         // railways keep clear of buildings; footpaths and fences only of
         // the inside of one (as World.isRailBlocked / isPathBlocked)
         return e.kind === 'rail' ? around.some((id) => id !== undefined) : around[0] !== undefined && around.every((id) => id === around[0]);

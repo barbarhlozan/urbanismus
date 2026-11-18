@@ -287,16 +287,22 @@ export class WorldNetworks {
 
   // Checks a way to be laid along `line` (its centre line, from
   // roads/curves.js) by the dots it passes, with the same rules as a dot
-  // route (validateRoute: buildings, water and bridges, slope, other
-  // lines): { ok, blocked, steep, reason, dots }.
-  checkWay(kind, line, { lane = false } = {}) {
+  // route (validateRoute: water and bridges, slope, other lines) – and
+  // buildings placed freely by the line itself, its width kept off their
+  // bodies (buildingsOnLine), so it may run close by a house:
+  // { ok, blocked, steep, reason, dots }.
+  checkWay(kind, line, { lane = false, street = false } = {}) {
     const layer = this.networks[kind];
     const dots = traceLine(line, layer.grid, layer.scale).map((d) => d.n);
     // on the land: up to its edge, where it runs on off the map (an end
     // drawn near the edge is snapped onto it: tools/network.js)
     const off = line.filter(([x, y]) => !this.land.inside(x, y, -EDGE_SLACK));
     if (off.length) return { ok: false, reason: 'Off the map', blocked: off.map(([x, y]) => layer.nodeAt(x, y)).filter((n) => n >= 0), dots };
-    return { ...validateRoute(layer, dots, { lane }), dots };
+    const check = { ...validateRoute(layer, dots, { lane, geometric: true }), dots };
+    const hits = this.buildingsOnLine(kind, line, { lane, street });
+    if (!hits.length) return check;
+    const at = hits.map((h) => layer.nodeAt(...h.at)).filter((n) => n >= 0);
+    return { ...check, ok: false, reason: check.ok ? 'A building is in the way' : check.reason, blocked: [...check.blocked, ...at], at: hits.map((h) => h.at) };
   }
 
   // Lays a way along `line` – checked as above, then Ways.insert:
@@ -305,7 +311,7 @@ export class WorldNetworks {
   // already (a road made a street), it goes dot by dot instead
   // (buildNetwork), which knows how to convert one into the other.
   layWay(kind, line, { lane = false, street = false, crop = null } = {}) {
-    const check = this.checkWay(kind, line, { lane });
+    const check = this.checkWay(kind, line, { lane, street });
     if (!check.ok) return check;
     const layer = this.networks[kind], dots = check.dots;
     // drawn over a way of its kind: the whole of it along that way converts

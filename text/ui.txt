@@ -828,6 +828,14 @@ reason.too-wide-to-bridge
   cs: Příliš široké na most
   en: Too wide to bridge
 
+reason.a-building-is-in-the-way
+  cs: V cestě stojí stavení
+  en: A building is in the way
+
+reason.too-sharp-a-bend
+  cs: Příliš ostrý oblouk
+  en: Too sharp a bend
+
 reason.a-bridge-has-to-be-straight
   cs: Most musí být rovný
   en: A bridge has to be straight

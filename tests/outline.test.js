@@ -170,7 +170,9 @@ test('a road, railway or footpath may not be laid through a free building', asyn
   assert.equal(across.ok, false);
   assert.equal(across.reason, 'Occupied');
   assert.equal(w.buildNetwork('road', run(w, [4, 3], [4, 14])).ok, true); // clear of it
-  assert.equal(w.buildNetwork('path', fineRun(w, [7, 3], [7, 14])).ok, false);
+  assert.equal(w.buildNetwork('path', fineRun(w, [6.5, 3], [6.5, 14])).ok, false);
+  // (a footpath may run close by its walls: by the body, not the dots)
+  assert.equal(w.checkWay('path', [[7, 3], [7, 14]]).ok, true);
 });
 
 test('turned by the player: from facing its road, or the viewer, by any angle', () => {

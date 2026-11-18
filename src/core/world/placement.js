@@ -95,9 +95,12 @@ export class WorldPlacement {
     return this._relief;
   }
 
+  // (A building placed freely doesn't block by its dots: ways are kept off
+  // its body, freeBuildingOn / buildingsOnLine, so they may pass close by.)
   isRoadBlocked(node) {
     if (this.terrain.isWater(node)) return true;
-    if (this.structureAt(node)) return true;
+    const s = this.structureAt(node);
+    if (s && !s.free) return true;
     const f = this.featureAt(node);
     return !!f && FEATURE_TYPES[f.type]?.blocksRoad === true;
   }
@@ -115,9 +118,8 @@ export class WorldPlacement {
     // so paths can squeeze between neighbouring buildings.
     const ids = around.map((c) => this.structureAtNode.get(c));
     if (ids[0] === undefined || !ids.every((id) => id === ids[0])) return false;
-    // (a park or square placed freely: its outline decides, freeBuildingOn)
-    const s = this.structures.get(ids[0]);
-    return !(s?.free && STRUCTURE_TYPES[s.type]?.site);
+    // (one placed freely: its body decides, freeBuildingOn / buildingsOnLine)
+    return !this.structures.get(ids[0])?.free;
   }
 
   // Free ground for the footprint, plus the type's own rule (def.canPlace,
@@ -345,6 +347,43 @@ export class WorldPlacement {
       if (segmentPolygonDistance(pa, pb, this.structureIndex.outline(id)) < r) return true;
     }
     return false;
+  }
+
+  // How far a way of `kind` keeps its centre line from a building's body:
+  // its half width (a street's kerb) and WAY_CLEAR – as wayAcross keeps a
+  // building off the way.
+  wayClear(kind, { lane = false, street = false } = {}) {
+    const half = kind === 'road' ? (lane ? CONFIG.lane.edge : street ? CONFIG.road.kerb : CONFIG.road.edge)
+      : kind === 'rail' ? 0.12 : kind === 'path' ? CONFIG.path.edge : kind === 'fence' ? 0.03 : 0;
+    return half + WAY_CLEAR;
+  }
+
+  // The buildings placed freely that a way of `kind` drawn along `line`
+  // (its centre line, as laid) would run into: [{ id, at: [x, y] (the
+  // line's point nearest it) }]. `skip(id)`: ones not to count. The same
+  // rule as freeBuildingOn, on the line itself rather than its dots.
+  buildingsOnLine(kind, line, attrs = {}, skip = () => false) {
+    const r = this.wayClear(kind, attrs), out = [], seen = new Set();
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i];
+      const box = [[Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r], [Math.max(a[0], b[0]) + r, Math.min(a[1], b[1]) - r],
+        [Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r], [Math.min(a[0], b[0]) - r, Math.max(a[1], b[1]) + r]];
+      for (const id of this.structureIndex.overlapping(box)) {
+        const s = this.structures.get(id);
+        if (seen.has(id) || !s?.free || skip(id)) continue;
+        let hit;
+        // a footpath may come up to a park or square, only not through its middle
+        if (kind === 'path' && STRUCTURE_TYPES[s.type]?.site) {
+          const [w, h] = this.outlineSize(s.type);
+          hit = segmentPolygonDistance(a, b, rectOutline(s.x, s.y, Math.max(0.1, w - 0.7), Math.max(0.1, h - 0.7), s.angle)) < 1e-6;
+        } else hit = segmentPolygonDistance(a, b, this.structureIndex.outline(id)) < r;
+        if (!hit) continue;
+        seen.add(id);
+        const da = Math.hypot(a[0] - s.x, a[1] - s.y), db = Math.hypot(b[0] - s.x, b[1] - s.y);
+        out.push({ id, at: da < db ? a : b });
+      }
+    }
+    return out;
   }
 
   // The first way whose width the polygon would stand on: 'Road',
