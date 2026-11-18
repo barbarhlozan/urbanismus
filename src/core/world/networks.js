@@ -215,9 +215,13 @@ export class WorldNetworks {
         const [dx, dy] = layer.dot(d), off = Math.hypot(n.x - dx, n.y - dy);
         if (!nodeAt.has(d) || off < nodeAt.get(d).off) nodeAt.set(d, { p: [n.x, n.y], off });
       }
-      if (e.pts.length <= 2) continue;
-      const poly = this.ways.measured(e);
+      // (a straight way runs through its dots too when it was laid dot to
+      // dot; one drawn between other points passes beside them, and keeps
+      // its own line like a curve – or a bridge on it would stand between
+      // the dots, off the road)
       const dots = traceLine(e.pts, layer.grid, layer.scale);
+      if (e.pts.length <= 2 && dots.every((d) => d.d < 1e-6)) continue;
+      const poly = this.ways.measured(e);
       dots.forEach((d, i) => { d.s = i === 0 ? 0 : i === dots.length - 1 ? poly.total : d.s; });
       curves.push({ poly, dots });
     }

@@ -81,3 +81,36 @@ test('a bridge reaches from bank to bank: shorter and lower over a stream', () =
   assert.ok(stream.deck(10, 5) > 0);
   assert.equal(stream.deck(9.4, 5), 0);
 });
+
+// A way drawn freehand across a river, pressed on one bank and let go on
+// the other: the bridge stands where the drawn line crosses the water, not
+// between the grid dots beside it.
+test('a road sketched over a river has its bridge on the road', async () => {
+  const { createNetworkTool } = await import('../src/tools/network.js');
+  const w = flatWorld();
+  river(w, 10);
+  const tool = createNetworkTool({ world: w, config: {} }, { kind: 'road' });
+  const a = [6.3, 5.4], b = [14.2, 5.45];
+  tool.sketch.start(...a);
+  for (let i = 1; i <= 60; i++) tool.sketch.move(a[0] + ((b[0] - a[0]) * i) / 60, a[1] + ((b[1] - a[1]) * i) / 60);
+  tool.sketch.end();
+  const [edge] = [...w.ways.edges.values()];
+  assert.ok(edge, 'the road is laid');
+  const [br] = findBridges(w);
+  assert.ok(br, 'it has a bridge');
+  // both ends of the bridge on the drawn line
+  const off = ([x, y]) => {
+    let best = Infinity;
+    for (let i = 1; i < edge.pts.length; i++) {
+      const [p, q] = [edge.pts[i - 1], edge.pts[i]], vx = q[0] - p[0], vy = q[1] - p[1];
+      const t = Math.max(0, Math.min(1, ((x - p[0]) * vx + (y - p[1]) * vy) / (vx * vx + vy * vy)));
+      best = Math.min(best, Math.hypot(p[0] + vx * t - x, p[1] + vy * t - y));
+    }
+    return best;
+  };
+  assert.ok(off(br.a) < 1e-3 && off(br.b) < 1e-3, `bridge ${br.a} – ${br.b} off the road`);
+  // and the road over the water is up on its deck
+  const deck = makeDeck([br], null);
+  const y = edge.pts[0][1] + ((edge.pts.at(-1)[1] - edge.pts[0][1]) * (10 - edge.pts[0][0])) / (edge.pts.at(-1)[0] - edge.pts[0][0]);
+  assert.ok(deck(10, y) > 0);
+});
