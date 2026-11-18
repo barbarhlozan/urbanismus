@@ -622,7 +622,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 /* the groups: Colours | save, open, a new map | the screen, the language –
    a wider gap before each, not an even row */
 #ui .controls [data-act="export"] { margin-top: 7px; }
-#ui .controls [data-act="fullscreen"] { margin-top: 5px; }
+#ui .controls [data-act="settings"] { margin-top: 5px; }
 
 /* the column: each row the column's full width, its drawing at the right */
 #ui .controls button:not(.menu-toggle) { align-self: stretch; justify-content: flex-end; }
@@ -691,7 +691,7 @@ body:not(.touch) .controls button:hover > .label, .controls button.telling > .la
   .controls .imprint span + span::before { content: "· "; }
   #ui .controls button:not(.menu-toggle) { margin-top: 0; align-self: center; justify-content: center; }
   #ui .controls [data-act="export"] { margin-left: 9px; }
-  #ui .controls [data-act="fullscreen"] { margin-left: 6px; }
+  #ui .controls [data-act="settings"] { margin-left: 6px; }
   .controls .label { right: auto; left: 50%; top: calc(100% + 9px); transform: translateX(-50%); }
 }
 
@@ -1411,6 +1411,7 @@ body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 4
 /* the panels hanging from the top bar open beside the rail, not over it
    (the drawer folds for them: BuildMenu.makeRoom) */
 #ui:has(.build-menu.rail) .color-panel,
+#ui:has(.build-menu.rail) .settings-panel.floating,
 #ui:has(.build-menu.rail) .debug-panel { right: calc(20px + var(--safe-r) + var(--bar-h) + 2 * var(--line) + 8px); }
 #ui .build-menu.rail.has-tool > .bm-dock { display: flex; }
 /* (there the dock keeps only the tool in hand: Terrain and Zpět are beside Erase) */
@@ -1533,6 +1534,149 @@ body.touch #ui .color-panel .scheme, body.touch .color-panel .custom-fields labe
 body.touch .color-panel input[type="color"] { width: 36px; height: 28px; }
 body.touch .color-panel .hex { min-height: 36px; }
 
+/* ---------- Panels: one look for every box of settings ----------
+   (the New map dialog, the main menu's Settings – newMapMenu.js,
+   mainMenu.js): the paper, a pen frame (main.js sketchFrames), a head
+   with its name and the × in the corner, rows of settings, a foot of
+   buttons. Change them here and every panel follows. */
+.panel {
+  box-sizing: border-box;
+  background: var(--bg);
+  border: var(--line) solid var(--fg);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+.panel-head {
+  display: flex;
+  align-items: stretch;
+  padding-left: 14px;
+  border-bottom: var(--line) solid var(--fg);
+  font-weight: 700;
+  font-size: 13px;
+}
+.panel-head > span { flex: 1; padding: 9px 0; align-self: center; }
+.panel-body { padding: 12px 14px 6px; }
+/* a group of rows under a small heading (Settings: Sound, Language…) */
+.panel-group + .panel-group { margin-top: 10px; }
+.panel-group > .group-name { display: block; padding: 0 0 3px; color: var(--detail); font-size: 11px; }
+/* a setting: its drawing and name, the slider (sketchSlider.js) or the
+   choices, what it's set to */
+.setting-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+.setting-row .field-name { flex: 0 0 76px; display: flex; align-items: center; gap: 7px; color: var(--detail); }
+.setting-row .ctl-icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--fg); }
+.setting-row .ctl-icon path { stroke-width: calc(1.1px * var(--stroke, 1)); fill: none; }
+.setting-row .slot { flex: 1; min-width: 0; }
+.setting-row .value { flex: 0 0 44px; position: relative; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* a value just picked, underlined for a moment (motion.js bump) */
+.setting-row .value .bump { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.setting-row .value .bump path { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
+/* words to pick one of (a language, a colour scheme): the one picked
+   ticked (penMarks.js .choice), the rest quieter */
+.choices { display: flex; flex-wrap: wrap; gap: 0 4px; }
+#ui .choice { display: flex; align-items: center; gap: 6px; padding: 5px 30px 5px 2px; min-height: 30px; text-align: left; color: var(--detail); }
+#ui .choice.on { color: var(--fg); }
+/* a setting switched on or off: its word, and a box crossed while on
+   (penMarks.js .toggle) */
+#ui .toggle { padding: 5px 2px 5px 22px; min-height: 30px; text-align: left; }
+body.touch #ui :is(.choice, .toggle) { min-height: 44px; }
+.panel-foot { display: flex; border-top: var(--line) solid var(--fg); }
+#ui .panel-foot button { flex: 1; padding: 9px 0; }
+#ui .panel-foot button + button { border-left: var(--line) solid var(--fg); }
+#ui .panel-foot .main { font-weight: 700; }
+
+/* ---------- Main menu (src/ui/mainMenu.js) ---------- */
+
+/* The game opens on it: the map behind, the game's own panels away
+   (body.at-menu) and the map taking no clicks; what may stand over it –
+   the New map dialog, a popup (Credits, a file opened) – stays. */
+body.at-menu #ui > :not(.main-menu, .popup, .newmap-scrim, .newmap-panel, .newmap-confirm) { visibility: hidden; }
+body.at-menu #input { pointer-events: none; cursor: default; }
+body.at-menu #ui > .popup { z-index: 26; }
+.main-menu { position: fixed; inset: 0; z-index: 25; pointer-events: none; }
+/* the paper the column is written on, thinning out towards the town */
+.main-menu .mm-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--bg) 0, var(--bg) min(330px, 28vw),
+    color-mix(in srgb, var(--bg) 72%, transparent) min(460px, 40vw), transparent min(660px, 58vw));
+}
+.mm-column {
+  position: absolute;
+  left: calc(max(28px, 6vw) + var(--safe-l));
+  top: calc(max(36px, 10vh) + var(--safe-t));
+  bottom: calc(48px + var(--safe-b));
+  width: min(330px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+/* the game's name, underlined by the pen as on the cover (.intro-card) */
+.mm-title { align-items: flex-start; gap: 6px; flex: 0 0 auto; }
+.mm-title .intro-name { font-size: clamp(44px, 6.2vw, 76px); line-height: 1; color: var(--main); }
+/* what to do: words on the paper, one under another, no box and no rules;
+   the one pointed at underlined (penMarks.js), the rest as any button */
+.mm-list { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+#ui .mm-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 44px;
+  padding: 6px 2px;
+  text-align: left;
+  font-size: 22px;
+  background: none;
+}
+#ui .mm-list .note { font-size: 11px; color: var(--detail); }
+#ui .mm-list .mm-quiet { margin-top: 10px; min-height: 36px; font-size: 14px; color: var(--detail); }
+.main-menu .settings-panel { width: 100%; flex: 0 0 auto; }
+/* Settings opened from the Menu in the town: hanging under it, as the
+   Colours panel does */
+.settings-panel.floating {
+  position: fixed;
+  right: calc(20px + var(--safe-r));
+  top: calc(60px + var(--safe-t));
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100vh - 80px - var(--safe-t) - var(--safe-b));
+  overflow-y: auto;
+  z-index: 21;
+}
+/* the printer's line, as at the end of the Menu */
+.mm-imprint {
+  position: absolute;
+  left: calc(max(28px, 6vw) + var(--safe-l));
+  bottom: calc(18px + var(--safe-b));
+  font-size: 10px;
+  color: var(--detail);
+  font-variant-numeric: tabular-nums;
+}
+/* a narrow screen: the name at the top, the town in the middle, the words
+   at the bottom under the thumb, all centred */
+@media (max-width: 640px) {
+  .main-menu .mm-veil {
+    background:
+      linear-gradient(180deg, var(--bg) 0, var(--bg) calc(14vh + var(--safe-t)), transparent calc(26vh + var(--safe-t))),
+      linear-gradient(0deg, var(--bg) 0, var(--bg) 40%, transparent 60%);
+  }
+  .mm-column {
+    left: calc(16px + var(--safe-l));
+    right: calc(16px + var(--safe-r));
+    width: auto;
+    top: calc(24px + var(--safe-t));
+    bottom: calc(34px + var(--safe-b));
+    align-items: center;
+    justify-content: space-between;
+  }
+  .mm-title { align-items: center; }
+  .mm-title .intro-name { font-size: 44px; }
+  .mm-list { align-items: center; }
+  #ui .mm-list button { align-items: center; text-align: center; font-size: 20px; }
+  .main-menu .settings-panel { max-width: 380px; }
+  .mm-imprint { left: 0; right: 0; bottom: calc(10px + var(--safe-b)); text-align: center; }
+}
+
 /* ---------- New map menu (src/ui/newMapMenu.js) ---------- */
 
 /* the game behind the dialog, faded under a sheet of the paper */
@@ -1550,23 +1694,8 @@ body.touch .color-panel .hex { min-height: 36px; }
   margin: auto;
   width: min(440px, calc(100vw - 24px));
   height: fit-content;
-  box-sizing: border-box;
   z-index: 31;
-  background: var(--bg);
-  border: var(--line) solid var(--fg);
-  border-radius: var(--radius);
-  font-size: 12px;
 }
-.newmap-panel .newmap-head {
-  display: flex;
-  align-items: stretch;
-  padding-left: 14px;
-  border-bottom: var(--line) solid var(--fg);
-  font-weight: 700;
-  font-size: 13px;
-}
-.newmap-panel .newmap-head > span { flex: 1; padding: 9px 0; align-self: center; }
-.newmap-panel .newmap-body { padding: 12px 14px 6px; }
 .newmap-panel .newmap-name { display: flex; align-items: center; gap: 8px; padding: 0 0 12px; }
 .newmap-panel .newmap-name .field-name { display: none; }
 .newmap-panel .name-field {
@@ -1587,20 +1716,10 @@ body.touch .color-panel .hex { min-height: 36px; }
 .newmap-panel .name-field:focus { border-bottom-color: var(--fg); }
 #ui .newmap-panel .dice { display: flex; align-items: center; padding: 4px; }
 #ui .newmap-panel .dice svg { width: 18px; height: 18px; }
-/* a setting: its drawing and name, the slider, what it's set to */
-.newmap-panel .newmap-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
-.newmap-panel .newmap-row .field-name { flex: 0 0 76px; display: flex; align-items: center; gap: 7px; color: var(--detail); }
-.newmap-panel .newmap-row .ctl-icon { width: 16px; height: 16px; flex: 0 0 16px; color: var(--fg); }
-.newmap-panel .newmap-row .ctl-icon path { stroke-width: calc(1.1px * var(--stroke, 1)); fill: none; }
-.newmap-panel .slot { flex: 1; min-width: 0; }
-.newmap-panel .value { flex: 0 0 44px; position: relative; text-align: right; font-weight: 700; }
-/* a value just picked, underlined for a moment (motion.js bump) */
-.newmap-panel .value .bump { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.newmap-panel .value .bump path { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
 /* hills, lakes and forests: a picture (landscapePreview.js) over their
    sliders, each with just its drawing (the words in its tooltip) */
-.newmap-panel .newmap-row.pictured .field-name { flex: 0 0 auto; }
-.newmap-panel .newmap-row.pictured { gap: 12px; }
+.setting-row.pictured .field-name { flex: 0 0 auto; }
+.setting-row.pictured { gap: 12px; }
 .newmap-scene { margin: 2px 0 8px; }
 .newmap-scene svg { display: block; width: 100%; height: auto; overflow: visible; }
 .newmap-scene .lp-fill { fill: var(--bg); stroke: none; }
@@ -1654,9 +1773,6 @@ body.touch .color-panel .hex { min-height: 36px; }
 #ui .newmap-confirm button { display: block; width: 100%; padding: 10px 14px; text-align: left; border-top: var(--line) solid var(--fg); }
 #ui .newmap-confirm .export-go { font-weight: 700; }
 body.touch #ui .newmap-confirm button { min-height: 44px; }
-.newmap-panel .newmap-foot { display: flex; border-top: var(--line) solid var(--fg); }
-#ui .newmap-panel .newmap-foot button { flex: 1; padding: 9px 0; }
-#ui .newmap-panel .newmap-foot .create { font-weight: 700; border-left: var(--line) solid var(--fg); }
 @media (max-width: 640px) {
   .newmap-panel .name-field { font-size: 18px; } /* (16px+: no zoom-in on focus in iOS) */
 }
@@ -1703,9 +1819,9 @@ body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
 /* chosen: boxed */
 #ui :is(.bm-tab.on, .bm-tool.active, .hud-photo.on, .controls button.on, .chron-tab.on) > .pm .pm-chosen { display: inline; }
 /* the line of words picked: ticked */
-#ui .scheme.on > .pm .pm-tick { display: inline; }
+#ui :is(.scheme, .choice).on > .pm .pm-tick { display: inline; }
 /* a setting: its box, crossed while on */
-#ui :is(.bm-opts, .bm-loose) [aria-pressed="true"] > .pm .pm-x { display: inline; }
+#ui :is(.bm-opts, .bm-loose, .panel) [aria-pressed="true"] > .pm .pm-x { display: inline; }
 /* an action leading the dock (photo mode's Take a picture) is a word like
    the options beside it, not a tool held */
 #ui .build-menu.has-lead .bm-toggle { padding: 0 14px; font-weight: normal; }

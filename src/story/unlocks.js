@@ -79,6 +79,7 @@ const CONTROLS = {
   import: ['import'],
   newMap: ['new_map', 'newmap'],
   fullscreen: ['fullscreen', 'full_screen'],
+  settings: ['settings'],
 };
 // Traffic (src/sim/agents.js): `all` leaves it be; `vehicles` is all of it.
 const VEHICLES = {

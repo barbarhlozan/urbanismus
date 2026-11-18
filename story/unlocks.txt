@@ -140,7 +140,8 @@
 #   export
 #   import
 #   new_map
-#   fullscreen
+#   fullscreen           (in Settings)
+#   settings             the Settings in the Menu (the main menu keeps its own)
 #   controls             all of the buttons above
 #
 # Traffic (`all` leaves it be)

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Settings: three sliders drawn by pen, each with its knob somewhere along it -->
+  <path d="M3.6 6.2Q11.9 5.8 20.4 6.1M3.5 12.1Q7.6 11.8 20.5 12.2M3.7 18Q12 17.7 20.3 18.1"/>
+  <circle cx="14.6" cy="6.1" r="2.1"/>
+  <circle cx="8.1" cy="12" r="2.1"/>
+  <circle cx="16.9" cy="18" r="2.1"/>
+</svg>

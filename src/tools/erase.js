@@ -1,6 +1,6 @@
 // What the eraser takes at a point (x, y in main-dot units): building, then
 // footpath, then a street's sidewalks, then road, then railway, then fence,
-// then a field's edge, then trees. null if there is nothing. Used by the eraser tool and by cmd.erase.
+// then a field's crop, then trees. null if there is nothing. Used by the eraser tool and by cmd.erase.
 // { key, at, size, run }: `key` is the drawing that turns to the secondary
 // colour, `at` and `size` where the eraser pops up, `run` removes it.
 
@@ -25,8 +25,9 @@ export function eraseTarget(world, point) {
   if (rail) return { at: rail.point, size: 0.16, run: () => world.removeWay(rail.edge.id) };
   const fence = way('fence', 0.2);
   if (fence) return { at: fence.point, size: 0.12, run: () => world.removeWay(fence.edge.id) };
-  const field = way('field', 0.2); // (a field's edge, not drawn: the field opens)
-  if (field) return { at: field.point, size: 0.12, run: () => world.removeWay(field.edge.id) };
+  // a field: its crop cleared round the point, as the crop brush clears it
+  const cell = world.cropCellAt(...point);
+  if (cell >= 0 && world.crops[cell]) return { at: point, size: 0.2, run: () => world.paintCrops([point], 0.6, null) };
   const f = world.featureAt(node);
   if (f) return { key: `f${f.id}`, at: [f.x, f.y], size: 0.2, run: () => world.removeFeature(f.id) };
   return null;

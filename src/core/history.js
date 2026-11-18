@@ -168,6 +168,7 @@ export class History {
       structures: new Map([...w.structures.values()].map((s) => [s.id, record(s)])),
       features: new Map(w.features), // (never changed in place: kept as they are)
       ways: this.waysNow(),
+      crops: w.crops.slice(),
       entries: w.chronicle.entries.length,
       marks: new Set(w.chronicle.marks),
     };
@@ -202,9 +203,12 @@ export class History {
     for (const f of w.features.values()) if (!before.features.has(f.id)) features.push({ id: f.id, before: null, after: f });
     const now = this.waysNow();
     const ways = { nodes: mapDiff(before.ways.nodes, now.nodes), edges: mapDiff(before.ways.edges, now.edges), nextId: [before.ways.nextId, now.nextId] };
-    if (!structures.length && !features.length && !ways.nodes.length && !ways.edges.length) return null;
+    // the crops: the squares sown or cleared, [cell, before, after]
+    const crops = [];
+    for (let c = 0; c < w.crops.length; c++) if (w.crops[c] !== before.crops[c]) crops.push([c, before.crops[c], w.crops[c]]);
+    if (!structures.length && !features.length && !ways.nodes.length && !ways.edges.length && !crops.length) return null;
     return {
-      structures, features, ways,
+      structures, features, ways, crops,
       entries: w.chronicle.entries.slice(before.entries),
       marks: w.chronicle.marks.filter((m) => !before.marks.has(m)),
     };
@@ -227,12 +231,19 @@ export class History {
     for (const s of comingS) {
       if (w.nodesOf(s).some((n) => n < 0 || foreign(n) !== undefined)) return { ok: false, reason: 'Occupied' };
     }
+    // (buildings placed freely by their bodies, World.buildingsOnLine; the
+    // rest by their dots)
+    const onDots = (n) => {
+      const id = foreign(n);
+      return id !== undefined && !w.structures.get(id)?.free ? id : undefined;
+    };
     for (const e of coming) {
       const layer = w.networks[e.kind];
       if (!layer) continue;
+      if (w.buildingsOnLine(e.kind, e.pts, e, (id) => ours.has(id)).length) return { ok: false, reason: 'Occupied' };
       const blocked = (n) => {
-        if (e.kind === 'road') return foreign(n) !== undefined;
-        const around = w.coarseAround(n).map(foreign);
+        if (e.kind === 'road') return onDots(n) !== undefined;
+        const around = w.coarseAround(n).map(onDots);
         // railways keep clear of buildings; footpaths and fences only of
         // the inside of one (as World.isRailBlocked / isPathBlocked)
         return e.kind === 'rail' ? around.some((id) => id !== undefined) : around[0] !== undefined && around.every((id) => id === around[0]);
@@ -319,6 +330,7 @@ export class History {
       if (!undo) ways.nextId = Math.max(ways.nextId, now);
       else if (ways.nextId === now) ways.nextId = was;
       for (const kind of kinds.keys()) w.refreshNetwork(kind);
+      if (step.crops?.length) w.setCrops(step.crops.map(([c, was, now]) => [c, undo ? was : now]));
 
       // and tell everyone, now that the town is whole again
       removed.forEach((s) => w.events.emit('structure:removed', s));
