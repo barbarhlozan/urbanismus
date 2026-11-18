@@ -81,6 +81,10 @@ control.mainMenu
   cs: Hlavní menu
   en: Main menu
 
+control.settings
+  cs: Nastavení
+  en: Settings
+
 control.language
   cs: Jazyk
   en: Language
@@ -1134,14 +1138,10 @@ vehicle.train.blurb
 
 # ---------- The main menu (src/ui/mainMenu.js) ----------
 
-# back into the saved town; its name, people and buildings written small under it
+# back into the saved town; its name written small under it
 mainmenu.continue
   cs: Pokračovat
   en: Continue
-
-mainmenu.residents
-  cs: {n} obyvatel | {n} obyvatelé | {n} obyvatel
-  en: {n} resident | {n} residents
 
 mainmenu.new
   cs: Nová hra

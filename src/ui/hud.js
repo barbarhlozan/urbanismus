@@ -3,7 +3,7 @@
 // right; see buildMenu.js). Zpět / Znovu (undo, redo) and Terrain
 // (tools/terrain.js) stand in the Build menu,
 // beside Erase; the Menu keeps what's set now and then (colours, files,
-// language…).
+// the settings…).
 // The name can be edited in place; the camera beside it is photo mode (P),
 // hatched while it's on. (The chronicle's book is gone from here for now.)
 // The Menu folds into its ≡ button: it starts folded and opens, on a wide
@@ -17,7 +17,8 @@
 // small in the pen beside it, shows while the pointer is on it or, on a
 // touch screen, after a long press, which then doesn't press it. The
 // drawings stand in groups: Colours, then the files (save, open, a new
-// map), then the screen and the language, then the way back to the main
+// map), then the Settings (the main menu's own panel: sound, language,
+// colours, the screen – settingsPanel.js) and the way back to the main
 // menu (mainMenu.js). Last stands the imprint, the
 // app's name, version and author, small and quiet like a printer's line.
 // In the bottom-left corner, as in a map's margin, the north arrow: drawn by
@@ -29,7 +30,7 @@ import { statIcon, menuIcon, cameraIcon } from './icons.js';
 import { drawing } from './uiIcons.js';
 import { resize, shrink } from './motion.js';
 import { CONFIG } from '../config.js';
-import { t, language, LANGUAGES } from '../core/text.js';
+import { t } from '../core/text.js';
 import { sketchLine } from '../render/sketch.js';
 
 // The north arrow, pen-drawn: a needle pointing where the map's north (-y)
@@ -98,9 +99,6 @@ const control = (act, title = t(`control.${act}`), label = title, icon = act) =>
 const LONG_PRESS = 450;
 const TOLD = 1600;
 
-// The language button names the language it switches to (not the one in use),
-// with that language's flag.
-const otherLanguage = () => Object.keys(LANGUAGES).find((code) => code !== language());
 
 export class Hud {
   constructor(root, { world, camera, tools, chronicle, actions }) {
@@ -116,9 +114,7 @@ export class Hud {
         ${control('export')}
         ${control('import')}
         ${control('newMap')}
-        ${control('sound', t('sound.off'), t('sound.off'))}
-        ${control('fullscreen', t('fullscreen'), t('fullscreen'))}
-        ${control('language', `${t('control.language')}: ${LANGUAGES[otherLanguage()]}`, LANGUAGES[otherLanguage()], `flag${otherLanguage()}`)}
+        ${control('settings')}
         ${control('mainMenu')}
         <span class="imprint"><span>${CONFIG.app.name} v${CONFIG.app.version}</span> <span>${CONFIG.app.author}</span> <button data-act="credits" class="credits-link">${t('credits')}</button></span>
         <button class="close menu-toggle" aria-expanded="true">${menuButtonIcon()}</button>

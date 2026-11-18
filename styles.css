@@ -613,7 +613,7 @@ body.touch .hud .name-label .stat-icon { opacity: 1; }
 /* the groups: Colours | save, open, a new map | the screen, the language –
    a wider gap before each, not an even row */
 #ui .controls [data-act="export"] { margin-top: 7px; }
-#ui .controls [data-act="fullscreen"] { margin-top: 5px; }
+#ui .controls [data-act="settings"] { margin-top: 5px; }
 
 /* the column: each row the column's full width, its drawing at the right */
 #ui .controls button:not(.menu-toggle) { align-self: stretch; justify-content: flex-end; }
@@ -682,7 +682,7 @@ body:not(.touch) .controls button:hover > .label, .controls button.telling > .la
   .controls .imprint span + span::before { content: "· "; }
   #ui .controls button:not(.menu-toggle) { margin-top: 0; align-self: center; justify-content: center; }
   #ui .controls [data-act="export"] { margin-left: 9px; }
-  #ui .controls [data-act="fullscreen"] { margin-left: 6px; }
+  #ui .controls [data-act="settings"] { margin-left: 6px; }
   .controls .label { right: auto; left: 50%; top: calc(100% + 9px); transform: translateX(-50%); }
 }
 
@@ -1402,6 +1402,7 @@ body.touch #ui :is(.bm-opts button, .bm-history button, .bm-drop) { min-width: 4
 /* the panels hanging from the top bar open beside the rail, not over it
    (the drawer folds for them: BuildMenu.makeRoom) */
 #ui:has(.build-menu.rail) .color-panel,
+#ui:has(.build-menu.rail) .settings-panel.floating,
 #ui:has(.build-menu.rail) .debug-panel { right: calc(20px + var(--safe-r) + var(--bar-h) + 2 * var(--line) + 8px); }
 #ui .build-menu.rail.has-tool > .bm-dock { display: flex; }
 /* (there the dock keeps only the tool in hand: Terrain and Zpět are beside Erase) */
@@ -1621,7 +1622,18 @@ body.at-menu #ui > .popup { z-index: 26; }
 }
 #ui .mm-list .note { font-size: 11px; color: var(--detail); }
 #ui .mm-list .mm-quiet { margin-top: 10px; min-height: 36px; font-size: 14px; color: var(--detail); }
-.mm-settings { width: 100%; flex: 0 0 auto; }
+.main-menu .settings-panel { width: 100%; flex: 0 0 auto; }
+/* Settings opened from the Menu in the town: hanging under it, as the
+   Colours panel does */
+.settings-panel.floating {
+  position: fixed;
+  right: calc(20px + var(--safe-r));
+  top: calc(60px + var(--safe-t));
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100vh - 80px - var(--safe-t) - var(--safe-b));
+  overflow-y: auto;
+  z-index: 21;
+}
 /* the printer's line, as at the end of the Menu */
 .mm-imprint {
   position: absolute;
@@ -1652,7 +1664,7 @@ body.at-menu #ui > .popup { z-index: 26; }
   .mm-title .intro-name { font-size: 44px; }
   .mm-list { align-items: center; }
   #ui .mm-list button { align-items: center; text-align: center; font-size: 20px; }
-  .mm-settings { max-width: 380px; }
+  .main-menu .settings-panel { max-width: 380px; }
   .mm-imprint { left: 0; right: 0; bottom: calc(10px + var(--safe-b)); text-align: center; }
 }
 

@@ -51,7 +51,7 @@ import { DevMenus } from './ui/devMenus.js'; // TEMPORARY
 import { ColorMenu } from './ui/colorMenu.js';
 import { NewMapMenu } from './ui/newMapMenu.js';
 import { MainMenu } from './ui/mainMenu.js';
-import { tally } from './ui/ledger.js';
+import { SettingsPanel } from './ui/settingsPanel.js';
 import { askLanguage } from './ui/languages.js';
 import { loadIcons } from './ui/uiIcons.js';
 import { AssetsPage } from './ui/assetsPage.js';
@@ -140,22 +140,26 @@ function loadWorld() {
 const world = loadWorld();
 const hasSave = loadedSave && world.structures.size > 0;
 
-// Going straight into the town, past the main menu (ui/mainMenu.js), after
-// a reload that was the player's own doing inside the game: a town opened
-// from a file, another language picked from the Menu (set before the
-// reload, read once here). A new map goes straight in too (fromPending).
+// Where a reload that was the player's own doing goes (set before it, read
+// once here): '1' straight into the town, past the main menu
+// (ui/mainMenu.js) – a town opened from a file, another language picked in
+// the town; 'settings' straight back to the main menu's Settings, without
+// the cover's name – another language picked there. A new map goes
+// straight in too (fromPending).
 const ENTER_KEY = 'urbanismus.enter';
-const enterGame = (() => {
+const entering = (() => {
   try {
-    const on = sessionStorage.getItem(ENTER_KEY) === '1';
+    const where = sessionStorage.getItem(ENTER_KEY);
     sessionStorage.removeItem(ENTER_KEY);
-    return on;
+    return where;
   } catch {
-    return false;
+    return null;
   }
 })();
-const goStraightIn = () => {
-  try { sessionStorage.setItem(ENTER_KEY, '1'); } catch { /* storage unavailable: the main menu again */ }
+const enterGame = entering === '1';
+const backToSettings = entering === 'settings';
+const goStraightIn = (where = '1') => {
+  try { sessionStorage.setItem(ENTER_KEY, where); } catch { /* storage unavailable: the main menu again */ }
 };
 
 let saveTimer = null;
@@ -419,6 +423,10 @@ const actions = {
   sound: () => ambience.toggle(),
   credits: () => showCredits(),
   mainMenu: () => backToMenu(),
+  settings: () => {
+    settingsPanel.toggle({ opener: uiRoot.querySelector('.controls [data-act="settings"]') });
+    if (settingsPanel.open) hud.buildMenu.makeRoom();
+  },
   chronicle: () => { if (UNLOCKS.allowsControl('chronicle')) chronicleBook.toggle(); },
   language: () => switchLanguage(Object.keys(LANGUAGES).find((code) => code !== language())),
 };
@@ -428,8 +436,8 @@ const actions = {
 // straight away and the game loads again (behind the opening cover).
 function switchLanguage(code) {
   saveLanguage(code);
-  if (!atMenu) goStraightIn();
-  else if (!hasSave && !opening) return location.reload(); // (the village for the picture isn't saved)
+  goStraightIn(atMenu ? 'settings' : '1');
+  if (atMenu && !hasSave) return location.reload(); // (the village for the picture isn't saved)
   stopAutosave();
   try {
     localStorage.setItem(CONFIG.storageKey, JSON.stringify(world.toJSON()));
@@ -465,7 +473,7 @@ function toggleFullscreen() {
 // iPhone: no full screen for pages, but the game added to the home screen
 // opens without Safari's bars – say how, under the button.
 function explainHomeScreen() {
-  const at = uiRoot.querySelector('[data-act="fullscreen"]').getBoundingClientRect();
+  const at = settingsPanel.el.querySelector('[data-st="fullscreen"]').getBoundingClientRect();
   popup.show(at.left, at.bottom, t('fullscreen'), [
     { label: t('fullscreen.iphone'), info: true },
     { label: t('fullscreen.iphone.share'), info: true },
@@ -535,7 +543,7 @@ const followUnlocks = () => {
   for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act="terrain"], .hud .hud-photo')) {
     btn.classList.toggle('locked', !UNLOCKS.allowsControl(btn.dataset.act ?? 'chronicle'));
   }
-  const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu };
+  const panels = { chronicle: chronicleBook, debug: debugPanel, assets: assetsPage, colors: colorMenu, newMap: newMapMenu, settings: settingsPanel };
   for (const [id, panel] of Object.entries(panels)) {
     if (panel?.open && !UNLOCKS.allowsControl(id)) (panel.hide ? panel.hide() : panel.toggle(false));
   }
@@ -556,19 +564,6 @@ function fileScheme() {
   try { localStorage.setItem(FILE_SCHEME_KEY, value); } catch { /* storage unavailable */ }
 }
 story.onScheme = () => colorMenu.refresh();
-// the full-screen button: its icon and name following the state; hidden
-// when the game already runs as an app from the home screen
-{
-  const btn = uiRoot.querySelector('[data-act="fullscreen"]');
-  if (fs.app()) btn.hidden = true;
-  const show = () => {
-    const full = !!fs.element();
-    btn.classList.toggle('full', full);
-    btn.title = btn.querySelector('.label').textContent = t(full ? 'fullscreen.leave' : 'fullscreen');
-  };
-  document.addEventListener('fullscreenchange', show);
-  document.addEventListener('webkitfullscreenchange', show);
-}
 // The sound of the buttons (a tap of wood; a knock for opening the Menu and
 // folding the Build menu), and of building: the pencil (audio/ambience.js).
 uiRoot.addEventListener('click', (e) => {
@@ -589,17 +584,6 @@ function showCredits(from = null) {
   popup.show(from ? at.right + 16 : at.left, at.top, t('credits'), [{ section: t('credits.sounds') }, ...sounds]);
 }
 
-// the Sound button: its icon and name following whether there is sound
-{
-  const btn = uiRoot.querySelector('[data-act="sound"]');
-  const show = (on) => {
-    btn.classList.toggle('off', !on);
-    btn.title = btn.querySelector('.label').textContent = t(on ? 'sound.off' : 'sound.on');
-    btn.setAttribute('aria-label', btn.title);
-  };
-  ambience.changed = show;
-  show(ambience.on);
-}
 const debugPanel = new DebugPanel(uiRoot, { renderer, camera }); // TEMPORARY
 const colorMenu = new ColorMenu(uiRoot, uiRoot.querySelector('[data-act="colors"]'));
 const assetsPage = new AssetsPage(uiRoot);
@@ -610,24 +594,28 @@ const newMapMenu = new NewMapMenu(uiRoot, uiRoot.querySelector('[data-act="newMa
 });
 // The main menu (ui/mainMenu.js): what the game opens on, and where the
 // Menu's Hlavní menu (and Esc, with nothing else to put away) goes back to.
-const townNow = () => {
-  let residents = 0;
-  try { residents = tally(world).residents; } catch { /* not counted yet */ }
-  return { name: world.name, residents, buildings: world.structures.size };
-};
+// Settings (ui/settingsPanel.js): one panel, in the main menu's column or
+// hanging under the Menu in the town. (Full screen: where the browser has
+// it, or on an iPhone, where it says how to get the game on the home
+// screen; not when it already runs from there.)
+const settingsPanel = new SettingsPanel(uiRoot, {
+  ambience,
+  fullscreen: { can: () => !fs.app() && UNLOCKS.allowsControl('fullscreen'), on: () => !!fs.element() },
+  actions: {
+    language: (code) => switchLanguage(code),
+    scheme: (choice) => { applyTheme(choice); colorMenu.refresh(); },
+    fullscreen: () => toggleFullscreen(),
+  },
+});
 const mainMenu = new MainMenu(uiRoot, {
   hasSave,
-  town: hasSave ? townNow() : null,
-  ambience,
-  fullscreen: { can: () => fs.enabled() && !fs.app(), on: () => !!fs.element() },
+  town: hasSave ? world.name : null,
+  settings: settingsPanel,
   actions: {
     play: () => enterTown(),
     newGame: (btn) => newMapMenu.openFrom(btn, { ask: mainMenu.hasSave }),
     open: (btn) => importCity(btn.getBoundingClientRect()),
     credits: (btn) => showCredits(btn.getBoundingClientRect()),
-    language: (code) => switchLanguage(code),
-    scheme: (choice) => { applyTheme(choice); colorMenu.refresh(); },
-    fullscreen: () => toggleFullscreen(),
   },
 });
 
@@ -653,8 +641,9 @@ function backToMenu() {
   if (chronicleBook.open) chronicleBook.toggle(false);
   if (colorMenu.open) colorMenu.toggle(false);
   if (newMapMenu.open) newMapMenu.toggle(false);
+  settingsPanel.hide();
   tools.use(tools.defaultId);
-  if (world.structures.size) mainMenu.setTown(townNow());
+  if (world.structures.size) mainMenu.setTown(world.name);
   atMenu = true;
   document.body.classList.add('at-menu');
   mainMenu.show();
@@ -894,8 +883,13 @@ async function openIntro() {
   await frames();
   // this tab's game loaded again (the browser let it go, see keepSaved):
   // no name and no pen, just the paper lifted off the map as it was
-  if (resumed) {
+  if (resumed || backToSettings) {
     document.body.classList.remove('loading');
+    // (another language picked in the main menu's Settings: back there)
+    if (backToSettings && atMenu) {
+      mainMenu.show();
+      mainMenu.openSettings();
+    }
     intro?.classList.add('lifted');
     setTimeout(() => {
       intro?.remove();
@@ -972,12 +966,14 @@ function loop(now) {
     world.time = clock.elapsed;
     weather.update();
     agents.update(simDt);
-    fires.update(simDt);
+    // (at the main menu the town is looked at, not played: nothing is built
+    // and nothing burns, while its people go about as ever)
+    if (!atMenu) fires.update(simDt);
     trains.update(simDt);
     boats.update(simDt);
     deer.update(simDt);
     livestock.update(simDt);
-    growth.update(simDt);
+    if (!atMenu) growth.update(simDt);
     camera.coast(dt); // (a turn let go: in real time, whatever the clock)
     driftFrame(dt); // (the main menu's drift)
     // the building under the pointer, with nothing in hand, gives a little

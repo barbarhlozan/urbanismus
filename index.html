@@ -33,7 +33,8 @@
     window.introTitle = true;
     // this tab's game loaded again (main.js, keepSaved): plain paper, no name
     try {
-      if (sessionStorage.getItem('urbanismus.view')) document.getElementById('intro').classList.add('resuming');
+      // (or back to the main menu's Settings after picking another language there)
+      if (sessionStorage.getItem('urbanismus.view') || sessionStorage.getItem('urbanismus.enter') === 'settings') document.getElementById('intro').classList.add('resuming');
     } catch { /* storage unavailable */ }
     try {
       const p = JSON.parse(localStorage.getItem('urbanismus.palette'));
