@@ -33,6 +33,8 @@ import { WorldNetworks } from './world/networks.js';
 import { WorldPlacement, COURT_TO } from './world/placement.js';
 import { WorldAccess } from './world/access.js';
 import { WorldStructures } from './world/structures.js';
+import { WorldCrops } from './world/crops.js';
+import { fieldEdgesToCrops } from '../sim/fields.js';
 
 // 11: positions and angles (free placement). Older saves aren't converted:
 // the game says so and starts a new map (OldSaveError).
@@ -61,6 +63,7 @@ export class World {
     this.events = new EventBus();
     this.grid = new Grid(width, height);
     this.fine = new Grid(2 * width - 1, 2 * height - 1);
+    this.initCrops(); // crop fields, painted on the squares between the dense dots (world/crops.js)
     this.terrain = new Terrain(this.grid);
     // Structures and features have a position in world units (x, y; for a
     // structure the middle of its footprint) and structures an angle
@@ -155,6 +158,7 @@ export class World {
         grid: this.fine,
         scale: 0.5,
         isBlocked: (f) => this.isPathBlocked(f),
+        occupied: (f, g) => this.freeBuildingOn('fence', f, g, 0.03),
         conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'fences:changed',
@@ -166,6 +170,7 @@ export class World {
         grid: this.fine,
         scale: 0.5,
         isBlocked: (f) => this.isPathBlocked(f),
+        occupied: (f, g) => this.freeBuildingOn('field', f, g, 0),
         conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'fields:changed',
@@ -410,6 +415,7 @@ export class World {
       nextNo: this.nextNo,
       terrain: this.terrain.toJSON(),
       ways: this.ways.toJSON(),
+      crops: this.cropsToJSON(),
       structures: [...this.structures.values()],
       features: [...this.features.values()],
       time: Math.round(this.time),
@@ -427,6 +433,8 @@ export class World {
 
     world.ways = Ways.fromJSON(data.ways);
     for (const kind of Object.keys(world.networks)) world.refreshNetwork(kind);
+    world.cropsFromJSON(data.crops);
+    fieldEdgesToCrops(world); // (older saves: fields closed in by drawn edges)
 
     for (const s of data.structures) {
       s.rotation ??= 0;
@@ -461,7 +469,7 @@ export class World {
 
 // World's methods are kept by topic in ./world/ – each file a class
 // whose methods are copied onto World.prototype here (all share `this`).
-for (const part of [WorldNetworks, WorldPlacement, WorldAccess, WorldStructures]) {
+for (const part of [WorldNetworks, WorldPlacement, WorldAccess, WorldStructures, WorldCrops]) {
   for (const key of Object.getOwnPropertyNames(part.prototype)) {
     if (key !== 'constructor') Object.defineProperty(World.prototype, key, Object.getOwnPropertyDescriptor(part.prototype, key));
   }

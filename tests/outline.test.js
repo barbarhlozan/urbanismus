@@ -164,13 +164,15 @@ test('a wider building placed freely: its anchor turns with it about its middle'
 test('a road, railway or footpath may not be laid through a free building', async () => {
   const { run, fineRun } = await import('./helpers.js');
   const w = flatWorld();
-  const s = w.placeStructureAt('house', 6.5, 8, 0.3);
+  const s = w.placeStructureAt('house', 6.5, 8, 0.3, { seed: 1 }); // (one look: its walls' size goes with it)
   assert.ok(s);
   const across = w.buildNetwork('road', run(w, [6, 3], [6, 14]));
   assert.equal(across.ok, false);
   assert.equal(across.reason, 'Occupied');
   assert.equal(w.buildNetwork('road', run(w, [4, 3], [4, 14])).ok, true); // clear of it
-  assert.equal(w.buildNetwork('path', fineRun(w, [7, 3], [7, 14])).ok, false);
+  assert.equal(w.buildNetwork('path', fineRun(w, [6.5, 3], [6.5, 14])).ok, false);
+  // (a footpath may run close by its walls: by the body, not the dots)
+  assert.equal(w.checkWay('path', [[7, 3], [7, 14]]).ok, true);
 });
 
 test('turned by the player: from facing its road, or the viewer, by any angle', () => {

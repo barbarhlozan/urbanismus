@@ -68,6 +68,15 @@ export class OverlayKit {
     return `<path class="cross-halo" d="${d}"/><path class="cross" d="${d}"/>`;
   }
 
+  // A short note in the UI font beside a point, haloed like the cross
+  // (.tag in styles.css): why a way can't go there. Constant screen size.
+  noteAt(x, y, text) {
+    if (!text) return '';
+    const [sx, sy] = this.project(x, y), z = this.camera.zoom, size = 13;
+    const esc = String(text).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    return `<text class="tag" x="${r2(sx)}" y="${r2(sy - 14 / z)}" font-size="${r2(size / z)}" text-anchor="middle">${esc}</text>`;
+  }
+
   cross(node, size) {
     return node < 0 ? '' : this.crossAt(...this.world.grid.xy(node), size);
   }

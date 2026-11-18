@@ -119,11 +119,12 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     const entry = NETWORKS[kind];
     if (!entry) throw new Error(`cmd.road(${Object.keys(NETWORKS).map((k) => `'${k}'`).join(' | ')}, [x, y], [x, y])`);
     const [layerKind, lane, street, crop] = entry, layer = world.networks[layerKind];
+    // (a crop: painted along, as the brush paints it)
+    if (crop) return world.paintCrops([[x0, y0], [x1, y1]], 0.6, crop) ? true : fail(`Can't sow ${kind}`, 'nothing to sow there');
     const a = layer.nodeAt(x0, y0), b = layer.nodeAt(x1, y1);
     if (a < 0 || b < 0 || a === b) return fail(`Can't lay ${kind}`, 'off the map, or both ends the same');
     const route = planRoute(layer.grid, a, b);
-    // (a field's edge: laid as a way, so it carries its crop)
-    const result = crop ? world.layWay(layerKind, route.map((n) => layer.dot(n)), { crop }) : world.buildNetwork(layerKind, route, { lane, street });
+    const result = world.buildNetwork(layerKind, route, { lane, street });
     return result.ok ? true : fail(`Can't lay ${kind}`, result.reason);
   }
 
@@ -133,6 +134,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     const entry = NETWORKS[kind];
     if (!entry) throw new Error(`cmd.way(${Object.keys(NETWORKS).map((k) => `'${k}'`).join(' | ')}, [[x, y], …])`);
     const [layerKind, lane, street, crop] = entry;
+    if (crop) return world.paintCrops(points, 0.6, crop) ? true : fail(`Can't sow ${kind}`, 'nothing to sow there');
     const line = easeBends(points, r);
     if (!line) return fail(`Can't lay ${kind}`, 'too sharp a bend');
     const result = world.layWay(layerKind, line, { lane, street, crop });

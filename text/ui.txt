@@ -476,16 +476,16 @@ tool.grain
   en: Grain
 
 tool.grain.blurb
-  cs: Uzavřené dokola je pole
-  en: Closed all round, a field
+  cs: Táhni štětcem po zemi
+  en: Paint it on the ground
 
 tool.potatoes
   cs: Brambory
   en: Potatoes
 
 tool.potatoes.blurb
-  cs: Uzavřené dokola je pole
-  en: Closed all round, a field
+  cs: Táhni štětcem po zemi
+  en: Paint it on the ground
 
 tool.erase
   cs: Vymazat
@@ -533,13 +533,13 @@ network.stop.fence
   cs: Ukončit ohradu
   en: End the fence
 
-network.stop.grain
-  cs: Ukončit pole
-  en: End the field
+crop.sow
+  cs: Sít
+  en: Sow
 
-network.stop.potatoes
-  cs: Ukončit pole
-  en: End the field
+crop.clear
+  cs: Gumovat
+  en: Clear
 
 # while placing buildings
 
@@ -835,6 +835,22 @@ reason.bridges-only-cross-rivers
 reason.too-wide-to-bridge
   cs: Příliš široké na most
   en: Too wide to bridge
+
+reason.a-building-is-in-the-way
+  cs: V cestě stojí stavení
+  en: A building is in the way
+
+reason.too-sharp-a-bend
+  cs: Příliš ostrý oblouk
+  en: Too sharp a bend
+
+reason.a-junction-is-in-the-way
+  cs: V cestě je křižovatka
+  en: A junction is in the way
+
+reason.too-tight-to-go-round
+  cs: Cesta to nemá kudy objet
+  en: Too tight to go round
 
 reason.a-bridge-has-to-be-straight
   cs: Most musí být rovný

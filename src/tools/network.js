@@ -15,7 +15,7 @@
 
 import { easeBends } from '../roads/curves.js';
 import { measurePolyline, pointAt } from '../roads/geometry.js';
-import { t } from '../core/text.js';
+import { t, reasonText } from '../core/text.js';
 import { EXIT_REACH } from '../core/world/access.js';
 
 // The tightest bend each kind takes (radius, world units).
@@ -39,7 +39,7 @@ export function createNetworkTool(ctx, options) {
 
   let points = [];   // clicked so far
   let at = null;     // the pointer, snapped
-  let refused = null; // the last point it couldn't take, for a moment
+  let refused = null; // the last point it couldn't take, for a moment: { at, reason }
 
   // The pointer snapped: a junction, else a way, else square to the last
   // leg, else as it is.
@@ -96,27 +96,28 @@ export function createNetworkTool(ctx, options) {
       line.forEach(([x, y], i) => { const d = Math.hypot(x - lx, y - ly); if (d < best) [k, best] = [i, d]; });
       return { line: line.slice(k), check: { ok: true, blocked: [] } };
     }
-    return { line, check: world.checkWay(kind, line, { lane }) };
+    return { line, check: world.checkWay(kind, line, { lane, street }) };
   };
 
   // the undo step of the way laid so far (null: nothing laid yet)
   let laidStep = null;
   const history = world.history;
   // Lays the way through `pts`, in place of the one laid at the last click.
+  // { ok, reason }.
   const relay = (pts) => {
     const line = lineThrough(pts);
-    if (!line) return false;
+    if (!line) return { ok: false, reason: 'Too sharp a bend' };
     history.commit();
     const mine = laidStep && history.done[history.done.length - 1] === laidStep;
-    if (mine && !history.undo().ok) return false;
+    if (mine && !history.undo().ok) return { ok: false };
     const result = world.layWay(kind, line, { lane, street, crop });
     if (result?.ok) {
       history.commit();
       laidStep = history.done[history.done.length - 1] ?? null;
-      return true;
+      return { ok: true };
     }
     if (mine) history.redo(); // (the way as it was)
-    return false;
+    return { ok: false, reason: result?.reason };
   };
   const stop = () => { points = []; laidStep = null; };
 
@@ -153,11 +154,15 @@ export function createNetworkTool(ctx, options) {
       if (raw.length < 2) return;
       raw[raw.length - 1] = snapPoint(...raw.at(-1));
       // looser and looser, until the bends are ones the kind can take
+      let reason = 'Too sharp a bend';
       for (const tol of [0.12, 0.25, 0.5]) {
         const pts = thin(raw, tol);
-        if (pts.length >= 2 && lineThrough(pts) && relay(pts)) { stop(); return; }
+        if (pts.length < 2 || !lineThrough(pts)) continue;
+        const done = relay(pts);
+        if (done.ok) { stop(); return; }
+        reason = done.reason ?? reason;
       }
-      refused = raw.at(-1);
+      refused = { at: raw.at(-1), reason };
       stop();
     },
     cancel() { stroke = null; },
@@ -195,12 +200,13 @@ export function createNetworkTool(ctx, options) {
       if (same(at, last)) { stop(); return; } // the last point again: done
       if (!points.length) {
         const n = layer.nodeAt(...at);
-        if (n >= 0 && layer.isBlocked(n) && !world.ways.nodeNear(...at, 1e-6)) { refused = at; return; }
+        if (n >= 0 && layer.isBlocked(n) && !world.ways.nodeNear(...at, 1e-6)) { refused = { at, reason: 'Something is in the way' }; return; }
         points = [at];
         laidStep = null;
         return;
       }
-      if (!relay([...points, at])) { refused = at; return; }
+      const done = relay([...points, at]);
+      if (!done.ok) { refused = { at, reason: done.reason }; return; }
       points = [...points, at];
     },
 
@@ -218,21 +224,26 @@ export function createNetworkTool(ctx, options) {
       if (stroke) return out + (stroke.length > 1 ? kit.sketchPath(stroke, cls) : '');
       if (at && !points.length) out += kit.ringAt(...at, hoverRadius * layer.scale);
       for (const p of points) out += kit.ringAt(...p, 0.18 * layer.scale, 'anchor');
-      if (refused) out += kit.crossAt(...refused, size);
+      if (refused) out += kit.crossAt(...refused.at, size) + (refused.reason ? kit.noteAt(...refused.at, reasonText(refused.reason)) : '');
       const p = plan();
       if (!p) return out;
       out += kit.sketchPath(p.line, `${cls}${p.check.ok ? '' : ' invalid'}`);
-      if (p.sharp) return out + kit.crossAt(...at, size);
+      // why it can't go, by the first cross on it (not again after a click: that cross says it)
+      const note = (x, y) => (refused || !p.check.reason ? '' : kit.noteAt(x, y, reasonText(p.check.reason)));
+      if (p.sharp) return out + kit.crossAt(...at, size) + note(...at);
       // little crosses along the line itself where it can't go (too steep,
       // water, something in the way) – not on the dots the check went by
       const bad = [...new Set(p.check.blocked ?? [])].map((n) => layer.pos(n));
-      if (!bad.length) return out;
+      if (!bad.length) return p.check.ok ? out : out + note(...at);
       const poly = measurePolyline(p.line), near = MARK_NEAR * Math.max(layer.scale, 0.5);
+      let first = null;
       for (let d = MARK_STEP / 2; d < poly.total; d += MARK_STEP) {
         const [x, y] = pointAt(poly, d);
-        if (bad.some(([bx, by]) => Math.hypot(bx - x, by - y) < near)) out += kit.crossAt(x, y, size * 0.5);
+        if (!bad.some(([bx, by]) => Math.hypot(bx - x, by - y) < near)) continue;
+        out += kit.crossAt(x, y, size * 0.5);
+        first ??= [x, y];
       }
-      return out;
+      return out + note(...(first ?? at));
     },
   };
 }
