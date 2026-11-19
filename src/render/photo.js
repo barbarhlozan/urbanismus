@@ -89,7 +89,7 @@ const TREE = /class="[^"]*\b(tree|crown-line|leaf|hedge)\b/;
 const TUFT = /class="[^"]*\btuft\b/;
 const pt = (p) => `${r2(p[0])} ${r2(p[1])}`;
 // how ink items are layered, back to front (as on the map)
-const NET_ORDER = ['photo-shore', 'footpath', 'fence-post', 'fence-pillar', 'fence', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
+const NET_ORDER = ['photo-shore', 'footpath', 'fence-post', 'fence-pillar', 'fence', 'grave', 'grave-stone', 'wall-stone', 'wall', 'wall-cap', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
 
 // shot: { x, y, yaw (radians), fov (degrees), eye? }
 export function takePhoto(renderer, shot) {
@@ -177,7 +177,7 @@ export function takePhoto(renderer, shot) {
   let items;
   renderer.camera = deep;
   try {
-    items = [...renderer.pathItems(), ...renderer.fenceItems(), ...renderer.railItems(), ...renderer.roadItems(false)];
+    items = [...renderer.pathItems(), ...renderer.fenceItems(), ...renderer.wallItems(), ...renderer.railItems(), ...renderer.roadItems(false)];
   } finally {
     renderer.camera = base;
   }

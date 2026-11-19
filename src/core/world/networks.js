@@ -24,8 +24,8 @@ export class WorldNetworks {
   // with the lie of the ground (roads/meander.js), found again whenever
   // what it keeps to changes.
   pathPos(f) {
-    const { path, road, rail, fence } = this.networks;
-    const key = `${path.version}|${road.version}|${rail.version}|${fence.version}|${this.structureVersion ?? 0}|${this.lanes.size}`;
+    const { path, road, rail, fence, wall } = this.networks;
+    const key = `${path.version}|${road.version}|${rail.version}|${fence.version}|${wall.version}|${this.structureVersion ?? 0}|${this.lanes.size}`;
     if (this._pathPos?.key !== key) this._pathPos = { key, pos: meanderPaths(this) };
     return this._pathPos.pos.get(f) ?? path.dot(f);
   }

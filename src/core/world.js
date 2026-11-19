@@ -163,6 +163,18 @@ export class World {
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'fences:changed',
       }),
+      // Churchyard walls (sim/churchyards.js), laid as fences are: closed
+      // all round, the ground inside fills with graves.
+      wall: new NetworkLayer({
+        id: 'wall',
+        grid: this.fine,
+        scale: 0.5,
+        isBlocked: (f) => this.isPathBlocked(f),
+        occupied: (f, g) => this.freeBuildingOn('wall', f, g, 0.04),
+        conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
+        coarseOf: (f) => this.fineToCoarse(f),
+        event: 'walls:changed',
+      }),
       // The edges of crop fields (sim/fields.js), laid as fences are but
       // not drawn: a field closed all round grows its crop.
       field: new NetworkLayer({
@@ -198,6 +210,10 @@ export class World {
 
   get fences() {
     return this.networks.fence.graph;
+  }
+
+  get walls() {
+    return this.networks.wall.graph;
   }
 
   // ---------- fine grid ----------

@@ -7,8 +7,8 @@ import { tree, bench, door, star } from './kit.js';
 // ----- cemetery -----
 
 // Graves in rows between x0 and x1, from y0 to y1: a mound outline on the
-// ground and, close up, a headstone at the head of each. (The churchyard
-// round a village church has them too, heritage.js.)
+// ground and, close up, a headstone at the head of each. (A churchyard the
+// player walls in has graves drawn after these: sim/churchyards.js.)
 export function graves(g, x0, x1, y0, y1) {
   for (let y = y0; y < y1 - 0.06; y += 0.14) {
     for (let x = x0; x < x1 - 0.03; x += 0.08) {

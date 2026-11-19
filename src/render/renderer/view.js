@@ -17,7 +17,7 @@ const OVERSCAN = 0.25;
 // of paper, drawn anew once it rests, and the lines on the ground drawn at
 // the turning angle every frame. Buildings, trees and lamps go their own way.
 const SHEET = ['forest', 'mist', 'hillshade'];
-const LINES = ['roads', 'paths', 'rails', 'fences'];
+const LINES = ['roads', 'paths', 'rails', 'fences', 'walls'];
 const VIEWS = 12;
 const PREPARE_REST = 1500;
 const SETTLE_FADE = 260;

@@ -197,6 +197,22 @@ export const CONFIG = {
     gate: 0.07,          // grid steps from a gate's middle to its pillars, either side of the footpath through it
   },
 
+  // churchyard walls (the 'wall' network, render/renderer/networks.js
+  // wallItems): a low plastered wall under a pitched capping, stepping
+  // with the ground; where a footpath goes through, an arched gateway
+  wall: {
+    cornerRadius: 0,
+    curveSamples: 1,
+    wander: 0.02,        // how far it drifts off true: laid by hand, but a mason's hand
+    height: 0.1,         // to the capping (a walker is about 0.08)
+    thick: 0.05,
+    cap: 0.014,          // the capping's ridge above the wall's top
+    gate: 0.07,          // half the gateway's opening
+    pier: 0.04,          // the gateway's piers either side of it
+    gateHeight: 0.2,     // the gateway's top
+    stones: 0.35,        // close up, a patch of bare stone where the plaster fell off, about this often
+  },
+
   // cows and sheep in fenced pastures (sim/livestock.js)
   livestock: {
     steep: 6,                       // average slope (World.slopeAt) from which a pasture keeps sheep, below it cows

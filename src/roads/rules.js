@@ -22,6 +22,7 @@ export const WAY_KINDS = {
   path: { family: 'path', meets: 'join', self: 'join', cutsFields: true, goesRound: true, blocks: 'Footpath', half: 'path' },
   rail: { family: 'rail', meets: 'join', self: 'refuse', cutsFields: true, goesRound: true, blocks: 'Railway', half: 0.12 },
   fence: { family: 'fence', meets: 'gap', self: 'join', cutsFields: true, goesRound: false, blocks: null, half: 0.03 },
+  wall: { family: 'wall', meets: 'gap', self: 'join', cutsFields: true, goesRound: false, blocks: null, half: 0.04 },
   field: { family: 'field', meets: 'gap', self: 'join', cutsFields: false, goesRound: false, blocks: null, half: 0 },
 };
 

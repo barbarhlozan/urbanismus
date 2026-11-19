@@ -23,7 +23,7 @@ export function bareOf(band) {
 export const BAND_HOLD = 0.02;
 // The network layers (LINES in view.js) are on the ground in world space
 // (gl/lines.js): the camera turns them
-export const GL_LINES = ['paths', 'rails', 'roads', 'fences'];
+export const GL_LINES = ['paths', 'rails', 'roads', 'fences', 'walls'];
 // The terrain's lines on the GPU as well, in world space (renderGlTerrain),
 // back to front, and the classes the SVG had for them, whose pens and
 // colours they take (terrainStyles). The brows, worked out for the view,

@@ -166,7 +166,7 @@ const LINES = {
 };
 
 // the tools drawn from a file of their own, icons/ui/tool-…
-const TOOL_FILES = { street: 'tool-street', road: 'tool-road', lane: 'tool-lane', path: 'tool-path', rail: 'tool-rail', fence: 'tool-fence', grain: 'tool-grain', potatoes: 'tool-potatoes', bulldoze: 'tool-erase' };
+const TOOL_FILES = { street: 'tool-street', road: 'tool-road', lane: 'tool-lane', path: 'tool-path', rail: 'tool-rail', fence: 'tool-fence', wall: 'tool-wall', grain: 'tool-grain', potatoes: 'tool-potatoes', bulldoze: 'tool-erase' };
 
 export function toolIcon(tool) {
   if (tool.defs) return structureIcon(tool.defs[0]);

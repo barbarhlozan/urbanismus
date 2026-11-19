@@ -35,7 +35,7 @@ export function meanderPaths(world) {
   const graph = layer.graph;
   const { fine } = world;
   const height = world.elevation;
-  const touches = (f) => world.roadAtFine(f) || world.rails.hasNode(f) || world.fences.hasNode(f);
+  const touches = (f) => world.roadAtFine(f) || world.rails.hasNode(f) || world.fences.hasNode(f) || world.walls.hasNode(f);
   const site = (f) => world.coarseAround(f).some((c) => STRUCTURE_TYPES[world.structureAt(c)?.type]?.site);
   const free = (f) => graph.degree(f) === 2 && !touches(f) && !fine.neighbors(f).some(touches) && !layer.bridge.water(f) && !site(f);
 

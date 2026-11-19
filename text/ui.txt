@@ -471,6 +471,14 @@ tool.fence.blurb
   cs: Uzavřená dokola je pastvina
   en: Closed all round, a pasture
 
+tool.wall
+  cs: Zídka
+  en: Churchyard wall
+
+tool.wall.blurb
+  cs: Uzavřená dokola je hřbitov
+  en: Closed all round, a churchyard
+
 tool.grain
   cs: Obilí
   en: Grain
@@ -532,6 +540,10 @@ network.stop.rail
 network.stop.fence
   cs: Ukončit ohradu
   en: End the fence
+
+network.stop.wall
+  cs: Ukončit zídku
+  en: End the wall
 
 crop.sow
   cs: Sít
@@ -694,38 +706,6 @@ inspect.yard
 inspect.yard.none
   cs: Žádné
   en: None
-
-grounds.graves
-  cs: Hřbitov
-  en: Churchyard
-
-grounds.few
-  cs: Pár hrobů
-  en: A few graves
-
-grounds.none
-  cs: Bez hrobů
-  en: No graves
-
-inspect.wall
-  cs: Ohrada
-  en: Enclosure
-
-wall.none
-  cs: Žádná
-  en: None
-
-wall.straight
-  cs: Zeď
-  en: Wall
-
-wall.rounded
-  cs: Oblá zeď
-  en: Rounded wall
-
-wall.fence
-  cs: Plot
-  en: Fence
 
 inspect.demolish
   cs: Zbourat

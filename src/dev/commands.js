@@ -112,7 +112,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
     return world.placeStructureAt(type, p.x, p.y, p.angle, { seed, data: turn ? { turn } : {} });
   }
 
-  const NETWORKS = { street: ['road', false, true], road: ['road', false], lane: ['road', true], path: ['path', false], rail: ['rail', false], fence: ['fence', false], grain: ['field', false, false, 'grain'], potatoes: ['field', false, false, 'potatoes'] };
+  const NETWORKS = { street: ['road', false, true], road: ['road', false], lane: ['road', true], path: ['path', false], rail: ['rail', false], fence: ['fence', false], wall: ['wall', false], grain: ['field', false, false, 'grain'], potatoes: ['field', false, false, 'potatoes'] };
 
   // A straight (or diagonal, then straight) run from one dot to another.
   function road(kind, [x0, y0], [x1, y1]) {
@@ -130,7 +130,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
 
   // A way through points, as the drawing tool lays it (its bends eased
   // to radius r).
-  function way(kind, points, r = kind === 'rail' ? 2.5 : kind === 'path' ? 0.3 : kind === 'fence' || kind === 'grain' || kind === 'potatoes' ? 0.15 : kind === 'lane' ? 0.7 : 1) {
+  function way(kind, points, r = kind === 'rail' ? 2.5 : kind === 'path' ? 0.3 : kind === 'fence' || kind === 'wall' || kind === 'grain' || kind === 'potatoes' ? 0.15 : kind === 'lane' ? 0.7 : 1) {
     const entry = NETWORKS[kind];
     if (!entry) throw new Error(`cmd.way(${Object.keys(NETWORKS).map((k) => `'${k}'`).join(' | ')}, [[x, y], …])`);
     const [layerKind, lane, street, crop] = entry;
@@ -318,7 +318,7 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
         "cmd.story.play('Branch') / .reset() / .reload()",
         'cmd.log(n)               the last things the systems reported',
         "cmd.build('house', x, y, { rotation: 0..3 })   see cmd.types()",
-        "cmd.road('street' | 'road' | 'lane' | 'path' | 'rail' | 'fence' | 'grain' | 'potatoes', [x, y], [x, y])",
+        "cmd.road('street' | 'road' | 'lane' | 'path' | 'rail' | 'fence' | 'wall' | 'grain' | 'potatoes', [x, y], [x, y])",
         "cmd.way('street', [[x, y], [x, y], …])   a curved way through points, as drawn",
         'cmd.tree(x, y)',
         'cmd.house(4)              the building č. p. 4; cmd.house() every one',

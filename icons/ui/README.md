@@ -88,6 +88,7 @@ drawing written in the code, the one each file was first exported from.
 | `tool-path.svg` | Build menu tile: Pěšina / Footpath (a path winding in short dashes) |
 | `tool-rail.svg` | Build menu tile: Železnice / Railway (two rails on their sleepers) |
 | `tool-fence.svg` | Build menu tile: Ohrada / Fence (posts and two rails) |
+| `tool-wall.svg` | Build menu tile: Zídka / Churchyard wall (a low capped wall, a cross over it) |
 | `tool-erase.svg` | Build menu: Vymazat / Erase (a rubber and its smudge) |
 
 The list is the loader's own (`ICONS` in `src/ui/uiIcons.js`): a new file is only read once

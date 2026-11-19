@@ -228,6 +228,8 @@ html, body {
 /* fences round pastures: a rail along the top, short posts close together */
 .fence, .fence-post { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; } /* as the garden fences (.layer-objects .ln) */
 /* a gate's pillars, either side of a footpath through the fence */
+.wall, .grave-stone { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; } /* churchyard walls and headstones (wallItems) */
+.wall-cap, .wall-stone, .grave { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2, 0.6px) * var(--stroke, 1)); stroke-linecap: round; }
 .fence-pillar { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-5) * var(--stroke, 1)); stroke-linecap: butt; }
 /* railways: the map symbol – a solid line with dashes of background
    colour inside it; faded dashes past the map edge, a bar at dead ends */

@@ -6,6 +6,7 @@
 import { THEME, mixColour } from '../../theme.js';
 import { wobble } from '../painter.js';
 import { fenceGates } from '../../sim/pastures.js';
+import { churchyards, GRAVE } from '../../sim/churchyards.js';
 import { edgeCurve, fillet, measurePolyline, pointAt, subPolyline, streetKerbs, pathJoins, JOIN_REACH, railParts, roadEdges, roadway, keepRuns, offsetPolyline } from '../../roads/geometry.js';
 import { edgeKey } from '../../roads/network.js';
 import { stationTracks } from '../../../structures/station.js';
@@ -268,6 +269,224 @@ export class NetworkDrawing {
     }
     for (const [n, ends] of sides) if (ends.length >= 2) leaf(`g${n}`, ends[0], ends[1], n, n);
     return items;
+  }
+
+  renderWalls() {
+    this.inkUpdate('walls', () => this.wallItems(), this.world.networks.wall);
+  }
+
+  // The churchyard walls' ink items (the 'wall' network): a low wall, its
+  // top two lines under a pitched capping (a ridge between them), the
+  // foot only on the side in sight, an upright where it turns away and at
+  // its ends. Where a road or railway crosses there's a gap; where a
+  // footpath does, an arched gateway a little taller than the wall
+  // (sim/pastures.js fenceGates). Close up, here and there a patch of
+  // bare stone where the plaster has come off. Then the graves of every
+  // churchyard closed all round (sim/churchyards.js), each a mound
+  // outlined on the ground and a headstone, a cross or a rounded stone at
+  // its head.
+  wallItems() {
+    const { world, camera } = this, layer = world.networks.wall, graph = layer.graph, C = this.config.wall;
+    const { items, add } = this.inkItems(true);
+    const gap = (f) => world.roadAtFine(f) || world.rails.hasNode(f);
+    const ok = (a, b) => !gap(a) && !gap(b);
+    const gates = fenceGates(world, graph);
+    const sees = ([nx, ny]) => camera.facing([nx, ny, 0]);
+    const t = C.thick / 2, h = C.height, G = C.gate, P = C.pier, gh = C.gateHeight;
+    const z = (pts, zz) => pts.map(([x, y]) => [x, y, zz]);
+
+    // the wall in chains of dot steps, unbroken where two meet end to end
+    const deg = (n) => [...graph.neighbors(n)].filter((m) => ok(n, m)).length;
+    const done = new Set(), chains = [];
+    const follow = (start, next) => {
+      const chain = [start];
+      let [prev, n] = [start, next];
+      for (;;) {
+        done.add(edgeKey(prev, n));
+        chain.push(n);
+        if (n === start || deg(n) !== 2) break;
+        const m = [...graph.neighbors(n)].find((m) => ok(n, m) && !done.has(edgeKey(n, m)));
+        if (m == null) break;
+        [prev, n] = [n, m];
+      }
+      chains.push(chain);
+    };
+    const starts = [...graph.nodes()].filter((n) => !gap(n));
+    for (const n of starts) if (deg(n) !== 2) for (const m of graph.neighbors(n)) if (ok(n, m) && !done.has(edgeKey(n, m))) follow(n, m);
+    // (what's left goes round: start it away from a gateway, if it can)
+    for (const n of [...starts.filter((n) => !gates.at.has(n)), ...starts]) {
+      for (const m of graph.neighbors(n)) if (ok(n, m) && !done.has(edgeKey(n, m))) follow(n, m);
+    }
+
+    chains.forEach((chain, ci) => {
+      // its line, drifting a little, and how far along it each dot is
+      const raw = [], at = [];
+      for (let i = 1; i < chain.length; i++) {
+        const part = edgeCurve(layer, C, chain[i - 1], chain[i]);
+        for (const p of i === 1 ? part : part.slice(1)) raw.push(p);
+        at.push(raw.length - 1);
+      }
+      const dense = [raw[0]];
+      for (let k = 1; k < raw.length; k++) {
+        const [p, q] = [raw[k - 1], raw[k]];
+        const n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / 0.1));
+        for (let i = 1; i <= n; i++) dense.push([p[0] + ((q[0] - p[0]) * i) / n, p[1] + ((q[1] - p[1]) * i) / n]);
+      }
+      const curve = measurePolyline(dense.map((p) => wander(p, C.wander)));
+      const len = curve.total;
+      const closed = chain[0] === chain[chain.length - 1];
+      const sAt = (i) => {
+        if (i === 0) return 0;
+        const r = measurePolyline(raw.slice(0, at[i - 1] + 1));
+        return (r.total / (measurePolyline(raw).total || 1)) * len;
+      };
+      // the gateways: [from, to, middle] along it
+      const gatesHere = [];
+      chain.forEach((n, i) => {
+        if (closed && i === chain.length - 1) return;
+        if (gates.at.has(n)) gatesHere.push(sAt(i));
+      });
+      for (let i = 1; i < chain.length; i++) if (gates.across.has(edgeKey(chain[i - 1], chain[i]))) gatesHere.push((sAt(i - 1) + sAt(i)) / 2);
+      const blocks = gatesHere.map((s) => [Math.max(0, s - G - P), Math.min(len, s + G + P), s]).sort((p, q) => p[0] - q[0]);
+      // the wall between them
+      const runs = [];
+      let s0 = 0, joined0 = false;
+      for (const [b0, b1] of blocks) {
+        if (b0 - s0 > 0.02) runs.push([s0, b0, joined0, true]);
+        [s0, joined0] = [b1, true];
+      }
+      if (len - s0 > 0.02) runs.push([s0, len, joined0, false]);
+      const [a, b] = [chain[0], chain[chain.length - 1]];
+      const key = `w${ci}.${a}.${b}`;
+      runs.forEach(([r0, r1, gateBefore, gateAfter], k) => {
+        const loop = closed && !blocks.length;
+        this.wallRun(add, `${key}.${k}`, subPolyline(curve, r0, r1), { loop, startEnd: !loop && !gateBefore, endEnd: !loop && !gateAfter, a, b, sees, z });
+      });
+      blocks.forEach(([b0, b1, s], k) => {
+        const p0 = pointAt(curve, b0), p1 = pointAt(curve, b1);
+        const ux0 = p1[0] - p0[0], uy0 = p1[1] - p0[1], ul = Math.hypot(ux0, uy0) || 1;
+        const u = [ux0 / ul, uy0 / ul], nl = [-u[1], u[0]];
+        const f = sees(nl) ? 1 : -1, n = [nl[0] * f, nl[1] * f];
+        const off = (p, d, along = 0) => [p[0] + n[0] * d + u[0] * along, p[1] + n[1] * d + u[1] * along];
+        const m = pointAt(curve, s), c0 = off(m, t + 0.005, -G), c1 = off(m, t + 0.005, G);
+        const gk = `${key}.g${k}`, T = t + 0.005;
+        // its top under the capping, and the capping's ends
+        add(`${gk}t`, 'wall', z([off(p0, T), off(p1, T)], gh), a, b);
+        add(`${gk}u`, 'wall', z([off(p0, -T), off(p1, -T)], gh), a, b);
+        add(`${gk}r`, 'wall-cap', z([p0, p1], gh + C.cap), a, b);
+        for (const [p, e] of [[p0, 0], [p1, 1]]) add(`${gk}e${e}`, 'wall-cap', [[...off(p, T), gh], [...p, gh + C.cap], [...off(p, -T), gh]], a, b);
+        // its face: the ends above the wall either side, the foot, the way through
+        const lowAt = (bb) => (bb > 0.02 && bb < len - 0.02) || closed ? h : 0;
+        add(`${gk}l`, 'wall', [[...off(p0, T), lowAt(b0)], [...off(p0, T), gh]], a, b);
+        add(`${gk}m`, 'wall', [[...off(p1, T), lowAt(b1)], [...off(p1, T), gh]], a, b);
+        const spring = gh - 0.025 - G;
+        const arch = (d, cls, id) => add(`${gk}${id}`, cls, [
+          [...off(m, d, -G), 0],
+          ...Array.from({ length: 9 }, (_, i) => {
+            const ang = Math.PI - (i / 8) * Math.PI;
+            return [...off(m, d, Math.cos(ang) * G), spring + Math.sin(ang) * G];
+          }),
+          [...off(m, d, G), 0],
+        ], a, b);
+        arch(T, 'wall', 'a');
+        arch(-T, 'wall-cap', 'b');
+        add(`${gk}f0`, 'wall', [[...off(p0, T), 0], [...c0, 0]], a, b);
+        add(`${gk}f1`, 'wall', [[...c1, 0], [...off(p1, T), 0]], a, b);
+      });
+    });
+
+    // the graves
+    const { w, d } = GRAVE;
+    for (const g of churchyards(world).graves) {
+      const n = layer.nodeAt(g.x, g.y), k = `gr${Math.round(g.x * 100)}.${Math.round(g.y * 100)}`;
+      const { x, y } = g, yh = y + d - 0.004, xm = x + w / 2;
+      add(k, 'grave', z([[x, y], [x + w, y], [x + w, y + d], [x, y + d], [x, y]], 0), n, n);
+      if (g.kind === 'cross') {
+        add(`${k}s`, 'grave-stone', [[xm, yh, 0], [xm, yh, g.h + 0.012]], n, n);
+        add(`${k}c`, 'grave-stone', [[xm - 0.012, yh, g.h - 0.004], [xm + 0.012, yh, g.h - 0.004]], n, n);
+      } else {
+        const [l, r] = [x + 0.008, x + w - 0.008];
+        const top = g.kind === 'round'
+          ? Array.from({ length: 7 }, (_, i) => {
+            const ang = Math.PI - (i / 6) * Math.PI;
+            return [xm + Math.cos(ang) * (r - xm), yh, g.h - 0.01 + Math.sin(ang) * 0.012];
+          })
+          : [[l, yh, g.h], [r, yh, g.h]];
+        add(`${k}s`, 'grave-stone', [[l, yh, 0], ...(g.kind === 'round' ? [[l, yh, g.h - 0.01]] : []), ...top, ...(g.kind === 'round' ? [[r, yh, g.h - 0.01]] : []), [r, yh, 0]], n, n);
+      }
+    }
+    return items;
+  }
+
+  // One stretch of churchyard wall along `pts` (wallItems): its two top
+  // lines and the capping's ridge, the foot on the side in sight, the
+  // uprights where it turns away from the viewer and at its ends (unless
+  // a gateway stands there), and close up its bare stones.
+  wallRun(add, key, pts, { loop, startEnd, endEnd, a, b, sees, z }) {
+    if (pts.length < 2) return;
+    const C = this.config.wall, t = C.thick / 2, h = C.height;
+    const dir = (i) => {
+      const [p, q] = [pts[i], pts[i + 1]], l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+      return [(q[0] - p[0]) / l, (q[1] - p[1]) / l];
+    };
+    const segs = pts.length - 1;
+    const dirs = Array.from({ length: segs }, (_, i) => dir(i));
+    // the offset line, mitred where it bends (at most twice as far out)
+    const side = (s) => pts.map((p, i) => {
+      const u0 = dirs[Math.max(0, i - 1)], u1 = dirs[Math.min(segs - 1, i)];
+      let [mx, my] = [-(u0[1] + u1[1]) / 2, (u0[0] + u1[0]) / 2];
+      const ml = Math.hypot(mx, my) || 1, cos = Math.max(0.5, (mx / ml) * -u1[1] + (my / ml) * u1[0]);
+      return [p[0] + (mx / ml) * ((s * t) / cos), p[1] + (my / ml) * ((s * t) / cos)];
+    });
+    const L = side(1), R = side(-1);
+    const close = (ps) => (loop ? [...ps, ps[0]] : ps);
+    add(`${key}tl`, 'wall', z(close(L), h), a, b);
+    add(`${key}tr`, 'wall', z(close(R), h), a, b);
+    add(`${key}r`, 'wall-cap', z(close(pts), h + C.cap), a, b);
+    // the foot, on the side in sight, segment by segment
+    const front = dirs.map(([ux, uy]) => (sees([-uy, ux]) ? 1 : -1));
+    let run = null, k = 0;
+    const flush = () => { if (run && run.pts.length > 1) add(`${key}f${k++}`, 'wall', z(run.pts, 0), a, b); run = null; };
+    for (let i = 0; i < segs; i++) {
+      const S = front[i] > 0 ? L : R;
+      if (!run || run.side !== front[i]) { flush(); run = { side: front[i], pts: [S[i]] }; }
+      run.pts.push(S[i + 1]);
+    }
+    if (loop && run && run.side === front[0]) run.pts.push((front[0] > 0 ? L : R)[1]);
+    flush();
+    // uprights: where it turns away (the outer corner in sight)
+    for (let i = 1; i < segs; i++) {
+      const [u, v] = [dirs[i - 1], dirs[i]], cross = u[0] * v[1] - u[1] * v[0];
+      if (Math.abs(cross) < 0.3 && front[i - 1] === front[i]) continue;
+      const outer = cross < 0 ? L : R;
+      if ((cross < 0 ? 1 : -1) !== front[i - 1] && (cross < 0 ? 1 : -1) !== front[i]) continue;
+      add(`${key}v${i}`, 'wall', [[...outer[i], 0], [...outer[i], h]], a, b);
+    }
+    // its ends: the capping's gable, and the end face if it's in sight
+    for (const [end, i, u] of [[startEnd, 0, dirs[0].map((c) => -c)], [endEnd, pts.length - 1, dirs[segs - 1]]]) {
+      if (!end) continue;
+      const e = i ? 'e1' : 'e0';
+      add(`${key}${e}c`, 'wall-cap', [[...L[i], h], [...pts[i], h + C.cap], [...R[i], h]], a, b);
+      const fs = i ? front[segs - 1] : front[0];
+      if (sees(u)) {
+        add(`${key}${e}`, 'wall', [[...L[i], h], [...L[i], 0], [...R[i], 0], [...R[i], h]], a, b);
+      } else {
+        const S = fs > 0 ? L : R;
+        add(`${key}${e}`, 'wall', [[...S[i], 0], [...S[i], h]], a, b);
+      }
+    }
+    // close up, bare stones on the face in sight, hand-placed
+    const curve = measurePolyline(pts), n = Math.floor(curve.total / C.stones);
+    for (let j = 0; j < n; j++) {
+      const s = (j + 0.5) * C.stones, p = pointAt(curve, s);
+      const r = Math.abs(Math.sin(p[0] * 12.9898 + p[1] * 78.233) * 43758.5453) % 1;
+      if (r < 0.4) continue;
+      const i = Math.min(segs - 1, Math.max(0, pts.findIndex((_, m) => m > 0 && measurePolyline(pts.slice(0, m + 1)).total >= s) - 1));
+      const [ux, uy] = dirs[i], f = front[i], o = [p[0] - uy * f * (t + 0.003), p[1] + ux * f * (t + 0.003)];
+      const at = (along, zz) => [o[0] + ux * along, o[1] + uy * along, zz];
+      const z0 = 0.015 + r * 0.025, wd = 0.012 + r * 0.01;
+      add(`${key}s${j}`, 'wall-stone', [at(-wd, z0), at(wd * 0.8, z0 + 0.003), at(wd, z0 + 0.016), at(-wd * 0.7, z0 + 0.019), at(-wd, z0)], a, b);
+    }
   }
 
   renderRails() {

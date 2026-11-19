@@ -133,12 +133,12 @@ function flood(queue, region, around, label) {
   return queue;
 }
 
-// Gates: where a footpath goes through a fence. Walkers pass, the pasture
-// stays closed. { at: fence dots a path runs through (it has a path step
+// Gates: where a footpath goes through a fence (or a churchyard wall,
+// `fences` the walls' graph). Walkers pass, the pasture stays closed. { at: fence dots a path runs through (it has a path step
 // that isn't along the fence), across: edgeKeys of diagonal fence pieces a
 // diagonal path crosses in the middle of their square }.
-export function fenceGates(world) {
-  const fences = world.fences, paths = world.paths, fine = world.fine;
+export function fenceGates(world, fences = world.fences) {
+  const paths = world.paths, fine = world.fine;
   const at = new Set(), across = new Set();
   for (const n of fences.nodes()) {
     if (paths.hasNode(n) && [...paths.neighbors(n)].some((m) => !fences.hasEdge(n, m))) at.add(n);

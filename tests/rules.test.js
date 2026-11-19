@@ -15,6 +15,6 @@ test('roads, footpaths and railways join; fences and field edges leave a gap; tw
 });
 
 test('what cuts a field and what goes round a building', () => {
-  assert.deepEqual(kindsWhere('cutsFields').sort(), ['fence', 'lane', 'path', 'rail', 'road']);
+  assert.deepEqual(kindsWhere('cutsFields').sort(), ['fence', 'lane', 'path', 'rail', 'road', 'wall']);
   assert.ok(!kindsWhere('goesRound').includes('fence'));
 });

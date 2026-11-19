@@ -1,4 +1,4 @@
-// Drawing tool for any kind of way (roads, footpaths, railways, fences),
+// Drawing tool for any kind of way (roads, footpaths, railways, fences, walls),
 // point by point (docs/free-placement-plan.md, stage C): click where it
 // starts, then click along – the way is built as you go, from the first
 // point to the last one clicked, one smooth curve through them all, its
@@ -19,7 +19,7 @@ import { t, reasonText } from '../core/text.js';
 import { EXIT_REACH } from '../core/world/access.js';
 
 // The tightest bend each kind takes (radius, world units).
-const RADIUS = { road: 1, path: 0.3, rail: 2.5, fence: 0.15, field: 0.15 };
+const RADIUS = { road: 1, path: 0.3, rail: 2.5, fence: 0.15, wall: 0.15, field: 0.15 };
 const LANE_RADIUS = 0.7;
 const SNAP = 0.35;               // onto a junction or a way
 const ANGLE_SNAP = Math.PI / 30; // 6°: onto the last leg's line, or square to it

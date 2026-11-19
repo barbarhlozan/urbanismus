@@ -73,7 +73,7 @@ README says how to draw one and lists them all, and `icons/ui/index.html` shows 
 The Build menu offers what the story of Dědina needs and nothing more: the houses and family
 houses, the výměnek (a farmer's little cottage to retire to, as Wenzlová's above the
 church: a room and a kitchen, gable or eaves to the street, a fenced yard), the pub, the chapel and the church, the bus stop, the roads and footpaths, the fields,
-meadow and fence, greenery, the sports ground, the village pond, the well and the squares. No train comes
+meadow, fence and churchyard wall, greenery, the sports ground, the village pond, the well and the squares. No train comes
 to Dědina, and the summer cinema, playground, flower beds and forest park belong to a town:
 `story/unlocks.txt` locks them, and a sandbox can unlock them again.
 
@@ -156,7 +156,7 @@ folded there and folds again once you pick a tool.
   hospoda – and stays that way; to have something else there, take it down and build anew.
   Clicking a building opens its card: its name, a row of drawings – another look, its
   surroundings, an eraser to take it down – and how many live there, a number by a little
-  figure. Clicking a road, path, railway, fence or trees does nothing: Erase
+  figure. Clicking a road, path, railway, fence, wall or trees does nothing: Erase
   removes them, and ⌘Z brings back what was removed.
 - Not everything needs a road. Homes, shops and offices, services, landmarks and the
   cemetery do fine with just a footpath within a dot and a half: their people walk or
@@ -177,7 +177,12 @@ folded there and folds again once you pick a tool.
 - The **Landmarks** group has the old town (a chapel, a church, a town hall in three sizes, a
   war memorial, a castle) and the new one (a stadium or Sokol hall, and a TV
   tower or lookout, which only goes on a hilltop). A church sometimes appears by itself in a
-  big enough neighbourhood without one.
+  big enough neighbourhood without one. A church stands on its own, a path from its door and
+  nothing round it: its churchyard is yours to build. The **Zídka** (in **Pole a pastviny**,
+  beside the Ohrada) is a low plastered wall under a capping, drawn as the fence is; closed all
+  round, the ground inside becomes a hřbitov: rows of graves with headstones and crosses, a
+  place left empty here and there, kept off the footpaths, the church and the trees. A footpath
+  through the wall gets an arched gateway; a road through it opens it, and the graves go.
 - **Občanská vybavenost** also has a house of culture and a cemetery. **Prostranství** has
   each kind of park and square as its own tool, in its sizes (**Shift**) and looks (**Space**):
   greenery, a playground, a sports ground, a garden, a forest park with a lookout, a park by a

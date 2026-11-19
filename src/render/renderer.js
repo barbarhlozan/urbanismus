@@ -213,6 +213,7 @@ export class Renderer {
       paths: new InkLayer(['path-wash', 'footpath', 'bridge', 'bridge-post']),
       rails: new InkLayer(['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'bridge', 'bridge-post']),
       fences: new InkLayer(['fence-post', 'fence-pillar', 'fence']),
+      walls: new InkLayer(['grave', 'grave-stone', 'wall-stone', 'wall', 'wall-cap']),
     };
     this.buildOrder = new Map(); // network layer -> Map dot -> its place in the last build, for the pen
 
@@ -257,6 +258,10 @@ export class Renderer {
     on('paths:changed', 'fences'); // (gates)
     on('roads:changed', 'fences');
     on('rails:changed', 'fences');
+    // churchyard walls: gaps and gateways as the fences', and the graves
+    // inside, which keep clear of what's built and planted there
+    for (const type of ['walls:changed', 'paths:changed', 'roads:changed', 'rails:changed', 'structure:added', 'structure:removed', 'feature:added', 'feature:removed']) on(type, 'walls');
+    on('walls:changed', 'paths'); // (a gateway holds the footpath to its dot)
     // street lamps: new streets get theirs drawn in, gone ones erased
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) world.events.on(type, () => this.touchStreets());
     on('paths:changed', 'paths');
@@ -285,7 +290,7 @@ export class Renderer {
         if (this.bridgeKey !== this.waterBridges) this.dirty.add('terrain');
       });
     }
-    for (const type of ['roads:changed', 'paths:changed', 'rails:changed', 'fences:changed']) {
+    for (const type of ['roads:changed', 'paths:changed', 'rails:changed', 'fences:changed', 'walls:changed']) {
       world.events.on(type, (e) => {
         if (e?.nodes && e.layer) this.buildOrder.set(e.layer, new Map(e.nodes.map((n, i) => [n, i])));
         if (e?.nodes) {
@@ -301,10 +306,10 @@ export class Renderer {
     // a field sown or cleared: it grows its crop again (render/meadow.js)
     world.events.on('fields:changed', () => this.dirty.add('meadow'));
     // (what's built across a field cuts it: the crop there again)
-    for (const type of ['roads:changed', 'rails:changed', 'paths:changed', 'fences:changed', 'structure:added', 'structure:removed', 'structure:changed']) world.events.on(type, () => { if (world.crops.some((v) => v)) this.dirty.add('meadow'); });
+    for (const type of ['roads:changed', 'rails:changed', 'paths:changed', 'fences:changed', 'walls:changed', 'structure:added', 'structure:removed', 'structure:changed']) world.events.on(type, () => { if (world.crops.some((v) => v)) this.dirty.add('meadow'); });
     // a car parking redraws only its own lot (renderParked)
     world.events.on('parking:changed', (s) => this.parkedDirty.add(s.id));
-    on('terrain:changed', 'terrain', 'meadow', 'paths', 'rails', 'roads', 'fences');
+    on('terrain:changed', 'terrain', 'meadow', 'paths', 'rails', 'roads', 'fences', 'walls');
     world.events.on('terrain:changed', () => {
       this.worldStamp = null; // (the lines on the ground in world space, worldLine)
       this.objsAll = this.worldAll = true; // (not just the view: draw them all now)

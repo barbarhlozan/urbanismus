@@ -374,6 +374,8 @@ tools.register(createNetworkTool(ctx, { kind: 'path', fineGrid: true, group: 'tr
 tools.register(createNetworkTool(ctx, { kind: 'rail', fineGrid: true, group: 'transport' }));
 for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createNetworkTool(ctx, { kind: 'fence', fineGrid: true, group: 'farming' }));
+// churchyard walls, drawn as the fence is (sim/churchyards.js)
+tools.register(createNetworkTool(ctx, { kind: 'wall', fineGrid: true, group: 'farming' }));
 // fields: their edges drawn as a fence is, closed all round they grow the crop (sim/fields.js)
 for (const crop of CROPS) tools.register(createCropBrush(ctx, { crop, group: 'farming' }));
 tools.register(createBulldozeTool(ctx));
@@ -750,6 +752,7 @@ function pickUp() {
   else if (world.paths.hasNode(world.networks.path.nodeAt(...p))) tool = tools.registry.get('path');
   else if (world.rails.hasNode(world.networks.rail.nodeAt(...p))) tool = tools.registry.get('rail');
   else if (world.fences.hasNode(world.networks.fence.nodeAt(...p))) tool = tools.registry.get('fence');
+  else if (world.walls.hasNode(world.networks.wall.nodeAt(...p))) tool = tools.registry.get('wall');
   else if (fieldsOf(world).at(...p) >= 0) tool = tools.registry.get(fieldsOf(world).list[fieldsOf(world).at(...p)].crop); // (in a field: its crop's tool)
   else if (world.hasRoad(node)) tool = tools.registry.get(world.laneOnly(node) ? 'lane' : [...world.roads.neighbors(node)].some((m) => world.hasSidewalk(node, m)) ? 'street' : 'road');
   if (!tool) return;

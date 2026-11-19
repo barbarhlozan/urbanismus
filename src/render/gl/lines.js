@@ -56,6 +56,11 @@ const STYLES = {
   'fence-post': { colour: 'detail', width: 1, cap: 'round' },
   'fence-pillar': { colour: 'detail', width: 2, cap: 'butt' },
   fence: { colour: 'detail', width: 1, cap: 'round' },
+  wall: { colour: 'main', width: 1, cap: 'round' },
+  'wall-cap': { colour: 'detail', width: 0.8, cap: 'round' },
+  'wall-stone': { colour: 'detail', width: 0.6, cap: 'round', near: true },
+  grave: { colour: 'detail', width: 0.7, cap: 'round' },
+  'grave-stone': { colour: 'main', width: 0.8, cap: 'round' },
   // the terrain's: widths and colours from styles.css (look.styles)
   steep: { colour: 'detail', width: 0.5, cap: 'round' },
   'contour-d2': { colour: 'detail', width: 1, cap: 'butt' },
@@ -73,7 +78,7 @@ const STYLES = {
 // (the shaders' tables hold this many)
 const MAX_STYLES = 48;
 // the far-out level of detail leaves these out (styles.css #world.lod-2)
-const FAR_HIDDEN = new Set(['driveway', 'zebra']);
+const FAR_HIDDEN = new Set(['driveway', 'zebra', 'grave-stone', 'wall-stone']);
 // the painted schemes leave these out: the washes stand for them
 const WASHED = new Set(['road', 'kerb', 'zebra', 'road-exit', 'footpath', 'driveway']);
 const CAPS = { butt: 1, round: 0, square: 2 };
