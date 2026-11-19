@@ -64,7 +64,7 @@ camera sit along its bottom. On a phone, tap once to preview and again to confir
   or `'cross'` switches to the other hands tried (`src/render/roadMarks.js`).
 - Neighbouring apartments and shops facing the same road often share a wall and form a
   street front; panel blocks join into one long block built in sections.
-- **Boží muka a křížek** (Památky, beside the chapel, 1×1) stands by a road or a footpath and faces it:
+- **Boží muka a křížek** (Památky, beside the chapel) stands wherever it's put, facing a road it's set by:
   **Space** steps through a granite boží muka with its niches, a cast-iron cross on a stone plinth
   and a wooden cross under a little tin roof, with a lime tree behind or two either side. It
   gets no house number.
@@ -155,7 +155,8 @@ unit = a house's plot); terrain (water, height, rock, slope) stays a raster read
   rectangle turned by `angle`. Near a road it snaps: front to the road's direction, set back by
   the type's setback plus a little seeded variation. Tab turns a quarter, Alt turns freely.
 - Valid when its plot touches no other plot, way corridor or water, and the ground under its
-  body isn't too steep; a type's own `canPlace` still applies. Access is the road point nearest
+  body isn't too steep; a bus stop (`needsRoad`) only where a road takes it. Only types with a
+  `canPlace` rule of their own (stations, the TV tower) still stand on the dots. Access is the road point nearest
   its front within `CONFIG.access.reach`; facing is set once when built.
 - Same-`join` buildings side by side (angles within a few degrees, gap under ~0.1) share a wall.
 - Ways (`src/roads/ways.js`, `curves.js`) are drawn point by point; people walk them via

@@ -308,6 +308,7 @@ export class WorldPlacement {
     const flush = Math.abs(twist) < JOIN_TWIST && this.joinSnap(type, x, y, angle);
     if (flush) [x, y, angle] = flush;
     let check = this.fitsOutline(type, x, y, angle);
+    if (check.ok && !road && STRUCTURE_TYPES[type]?.needsRoad) check = { ok: false, reason: 'Needs a road alongside' };
     // across a way: the way bent round it, if it can be (detoursFor)
     if (WAY_REASONS.has(check.reason)) {
       const around = this.detoursFor(type, x, y, angle);

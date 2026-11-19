@@ -16,12 +16,6 @@
 
 import { tree } from './kit.js';
 
-// Road dots straight beside it, or a footpath within reach (the way the
-// single-dot buildings find their front, World.frontFor).
-function wayBeside(world, nodes) {
-  return !!world.frontFor(nodes);
-}
-
 // An arch on a face: posts from zb up to where the arch starts, a half
 // circle over them. P(u, z) gives the face's points, n its normal.
 function arch(g, P, n, w, zb, zt) {
@@ -158,9 +152,6 @@ export const wayside = {
   plot: { props: 'green', boundary: 0, density: 0 }, // grass, no benches or beds
   yards: [],
   kinds: ['muka', 'iron', 'wooden'],
-  canPlace(world, nodes) {
-    return wayBeside(world, nodes) ? { ok: true } : { ok: false, reason: 'Needs a road or a path beside' };
-  },
   draw(g, s) {
     const pick = g.pick(this.kinds);
     const kind = this.kinds.includes(s?.data?.kind) ? s.data.kind : pick;

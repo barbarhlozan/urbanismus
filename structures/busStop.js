@@ -13,14 +13,6 @@ import { bench, tree, flowerBed, outward } from './kit.js';
 // stood as tall as a house (the plates keep their thickness).
 const S = 0.7;
 
-// Road dots straight next to the footprint (not diagonal ones).
-function roadBeside(world, nodes) {
-  return nodes.some((n) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
-    const m = world.grid.offset(n, dx, dy);
-    return m >= 0 && world.hasRoad(m);
-  }));
-}
-
 // A thin plate: the planar polygon pts (3D) and the same shifted by `off`,
 // joined round the edge – a wall of sheet metal seen from either side.
 function plate(g, pts, off) {
@@ -88,9 +80,7 @@ export const busStop = {
   facesRoad: true, // can't be turned away from its road
   sim: { destinations: [] },
   footprint: [[0, 0]],
-  canPlace(world, nodes) {
-    return roadBeside(world, nodes) ? { ok: true } : { ok: false, reason: 'Needs a road alongside' };
-  },
+  needsRoad: true, // placed freely, but only where it's taken by a road
   stats: {},
   agents: 0,
   draw(g) {
