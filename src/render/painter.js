@@ -112,9 +112,23 @@ export const CLEAN = { wobble: 0.15, tilt: 0.15, overshoot: 0 };
 const paintedOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('painted');
 // Photos (a perspective camera): roof hatching at most this many px apart
 // on the picture; windows are drawn open, as frames (Painter._window), with
-// their glazing bars from this many px wide
+// their glazing bars from this many px wide and a sill from `PHOTO_SILL`;
+// a shaded wall's strokes (Painter._shade) this many px apart where it is
+// turned right away from the sun, further apart the less it is
 const PHOTO_HATCH = 5;
-const PHOTO_PANE = 7;
+const PHOTO_PANE = 3.5;
+const PHOTO_SILL = 5;
+const PHOTO_WALL = 3;
+// A photo's hand, looser than the map's (set with the user for buildings,
+// LOOK): its lines `wobble` times as unsteady
+export const PHOTO_HAND = { wobble: 1.7 };
+// Chimneys standing on the roof's own slope (Painter.onRoof): in photos
+// always, on the map with `map`
+export const ROOF_STACKS = { map: true, rise: 2.2 };
+// …and how they are drawn there: 'even' all of them, evenly; 'loose' by
+// hand, as the roofs are – each its own length, a little askew; 'none' not
+// at all (the photo is drawn without shade on the walls)
+export const PHOTO_SHADE = { walls: 'none', askew: 0.12, ragged: 0.35 };
 // The light a lit window low on its wall throws on the ground in front of
 // it at night (Painter._window, Renderer.renderLights): from windows whose
 // sill is at most `below` up the wall (grid units), `reach` out from the
@@ -290,6 +304,7 @@ export class Painter {
     this.site = null;
     this.spots = [];
     this.vents = [];      // chimney mouths: { x, y } scene, `at` world, kind, k, seed (see vent())
+    this.roofs = [];      // the faces drawn turned up: { pts (local), n, solid }, for onRoof()
     this.lod = 0;
     // the detail worth drawing at all: levels up to `keep`, hatching tiers
     // up to `keepTier` (Renderer.paintStructure: what the band it is drawn
@@ -441,7 +456,7 @@ export class Painter {
   }
 
   _sketchScreen(scr, closed, wobble, round = 0) {
-    const amp = LOOK.sketch * this.camera.tile / 32 * wobble * (cleanOn() ? CLEAN.wobble : 1);
+    const amp = LOOK.sketch * this.camera.tile / 32 * wobble * (cleanOn() ? CLEAN.wobble : 1) * (this.camera.perspective ? PHOTO_HAND.wobble : 1);
     // rounded corners (LOOK.round): a line back where it started (a
     // window's frame) taken as closed, so all its corners are
     const r = (round * this.camera.tile) / 32;
@@ -608,7 +623,9 @@ export class Painter {
     const cam = this.camera;
     if (cam.perspective && !cam.isAhead(w[0], w[1])) return null;
     const [sx, sy] = this._project(...w);
-    return [sx, sy, cam.scaleAt ? cam.scaleAt(w[0], w[1]) : cam.tile];
+    // (a photo's camera may draw what is drawn facing it – trees, mostly –
+    // smaller than its distance makes it: PerspectiveCamera.shapes)
+    return [sx, sy, cam.scaleAt ? cam.scaleAt(w[0], w[1]) * (cam.shapes ?? 1) : cam.tile];
   }
 
   _lod(opts) {
@@ -785,6 +802,7 @@ export class Painter {
     this._ensure(...points[0]);
     this._spread(points);
     const n = newellNormal(points);
+    if (n[2] > 1e-9 && !this._onRoof) this.roofs.push({ pts: points, n, solid: this.current });
     if (opts.shadow !== false && !this._footOf(points, n)) this._castFace(points);
     this._lastPaint = '';
     if (!this._facing(n, points[0])) return this;
@@ -793,14 +811,38 @@ export class Painter {
     // its corners rounded by what it is (LOOK.round): a wall, else a roof
     if (opts.round === undefined) opts = { ...opts, round: LOOK.round[this._wallNormal(n) ? 'walls' : 'roofs'] };
     if (paint) opts = { ...opts, cls: opts.cls ? `${opts.cls} ${paint}` : paint };
+    // In a photo a wall has no line along its foot: seen from someone's
+    // eyes the ruled edge where it meets the ground makes the house look set
+    // down on the picture, a model on a board; left open, the ground runs
+    // up to the wall as in a drawing
+    // – a gable wall too, outlined only in part (_walls: `open`)
+    let runs = null;
+    if (this.camera.perspective && this._wallNormal(n)) {
+      const k = points.length, low = (i) => points[i][2] <= 1e-6;
+      const foot = points.findIndex((_, i) => low(i) && low((i + 1) % k));
+      if (foot >= 0) {
+        // the outline as a list of points round from just past the foot,
+        // cut wherever an edge of it runs along the ground
+        const ring = opts.open ?? Array.from({ length: k }, (_, i) => (foot + 1 + i) % k);
+        const side = (a, b) => (b - a + k) % k === 1 || (a - b + k) % k === 1;
+        runs = [[ring[0]]];
+        for (let i = 1; i < ring.length; i++) {
+          const [a, b] = [ring[i - 1], ring[i]];
+          if (low(a) && low(b) && side(a, b)) runs.push([]);
+          runs[runs.length - 1].push(b);
+        }
+        runs = runs.filter((r) => r.length > 1);
+      }
+    }
     if (this._lod(opts) <= this.keep) {
       const lod = this._lod(opts), { open, ...rest } = opts;
-      if (!open) this.current.parts.push(this._outline(points, true, opts, lod));
+      runs ??= open ? [open] : null;
+      if (!runs) this.current.parts.push(this._outline(points, true, opts, lod));
       else {
         // (filled whole, outlined only along the points listed, in order:
         // its other edges are drawn by what lies over them)
         this.current.parts.push(this._outline(points, true, { ...rest, stroke: 'none' }, lod));
-        this.current.parts.push(this._outline(open.map((i) => points[i]), false, { ...rest, fill: 'none' }, lod, 'sk filled'));
+        for (const run of runs) this.current.parts.push(this._outline(run.map((i) => points[i]), false, { ...rest, fill: 'none' }, lod, 'sk filled'));
       }
     }
     if (paint.startsWith('ww')) this._washDetail(points, n, paint);
@@ -955,8 +997,29 @@ export class Painter {
     const back = ([u, z]) => [o[0] + ex * u, o[1] + ey * u, z];
     const [wx, wy] = this.toWorld(o[0], o[1]);
     const seed = (wx * 13.1 + wy * 7.7) % 97;
+    // In a photo the wall is seen big, and strokes left out here and there
+    // read as a few lines scratched on it, not as shade: there they are all
+    // drawn, evenly, a set distance apart on the picture – closer the more
+    // the wall is turned from the sun – so they make a tone, as a pen shades
+    let strokes = SUN.strokes;
+    const photo = this.camera.perspective, loose = photo && PHOTO_SHADE.walls === 'loose';
+    if (photo) {
+      if (PHOTO_SHADE.walls === 'none') return;
+      strokes = { ...strokes, gap: Math.min(strokes.gap / share, PHOTO_WALL / share / this.camera.scaleAt(wx, wy)) };
+      if (loose) strokes.ragged = Math.max(strokes.ragged, PHOTO_SHADE.ragged);
+      share = 1;
+    }
     const d = new Map(); // `${tier}|${level}` -> path data
-    for (const [a, b, k] of wallStrokes(flat, SUN.strokes, share, seed)) {
+    for (let [a, b, k] of wallStrokes(flat, strokes, share, seed)) {
+      if (loose) {
+        // turned a little about its middle, and its start cut back a bit
+        // too, by chance: as a hand hatches, not a ruler
+        const t = PHOTO_SHADE.askew * (2 * hash(k + seed, 7.1) - 1), c = Math.cos(t), sn = Math.sin(t);
+        const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const turn = (p, s0) => { const x = (p[0] - m[0]) * s0, y = (p[1] - m[1]) * s0; return [m[0] + x * c - y * sn, m[1] + x * sn + y * c]; };
+        a = turn(a, 1 - PHOTO_SHADE.ragged * hash(k, seed + 2.3));
+        b = turn(b, 0.94); // (in from the end, so it stays on the wall turned)
+      }
       if (tierOf(k) > this.keepTier) continue;
       // (sun-free, by level alone: the tiers the band leaves out are not
       // drawn at all, keepTier, and a path for each would be many)
@@ -1089,6 +1152,69 @@ export class Painter {
     this._foot(base, z0, z1 - z0);
     this.face(base.map(([x, y]) => [x, y, z1]), opts);
     return this;
+  }
+
+  // A chimney (or a vent pipe) `s` square standing on the roof drawn
+  // before it, at (x, y), starting at z – inside the roof – up to z + h.
+  // Drawn as a box from z, drawn after the roof, its foot would show on the
+  // roof, and it would sit on it like a picture pasted there. So its walls
+  // start where they meet the roof, each corner at the roof's height there;
+  // and it is drawn just after the roof when it stands on a slope turned to
+  // the eye, just before it when on one turned away (behind the ridge, which
+  // hides its foot) – not by its middle's distance, which in a photo puts
+  // one behind the ridge over the whole roof when it stands towards a gable
+  // end. (ROOF_STACKS.map: on the map too, not only in photos.)
+  // Its top (z); false where there is no roof under it: draw a box.
+  onRoof(x, y, z, s, h, opts = {}) {
+    if (!this.camera.perspective && !ROOF_STACKS.map) return false;
+    let top = z + h;
+    const c = [[x - s / 2, y - s / 2], [x + s / 2, y - s / 2], [x + s / 2, y + s / 2], [x - s / 2, y + s / 2]];
+    const inside = (pts, px, py) => {
+      let ok = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i], [xj, yj] = pts[j];
+        if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) ok = !ok;
+      }
+      return ok;
+    };
+    const height = (r, px, py) => r.pts[0][2] - (r.n[0] * (px - r.pts[0][0]) + r.n[1] * (py - r.pts[0][1])) / r.n[2];
+    // the roof under its middle: the highest face turned up below its top
+    let roof = null, best = -Infinity;
+    for (const r of this.roofs) {
+      if (!inside(r.pts, x, y)) continue;
+      const hz = height(r, x, y);
+      if (hz < top - 1e-6 && hz > best) { best = hz; roof = r; }
+    }
+    if (!roof) return false;
+    // (its height was set for a box seen whole: by the ridge it would show
+    // as a stub, so it stands at least ROOF_STACKS.rise times its width
+    // clear of the roof)
+    top = Math.max(top, best + ROOF_STACKS.rise * s);
+    // each corner on the roof where it is: the highest face over it, not
+    // the plane under the middle carried on – by the ridge that would lift
+    // the corners over the other slope off the roof
+    const under = (px, py) => {
+      let hz = -Infinity;
+      for (const r of this.roofs) {
+        if (!inside(r.pts, px, py)) continue;
+        const v = height(r, px, py);
+        if (v < top - 1e-6 && v > hz) hz = v;
+      }
+      return hz > -Infinity ? hz : height(roof, px, py);
+    };
+    const foot = c.map(([px, py]) => [px, py, Math.min(top - 1e-3, Math.max(z, under(px, py)))]);
+    this._onRoof = true;
+    this._grow(c);
+    this.solid(x, y, (best + top) / 2);
+    const facing = this._facing(roof.n, [x, y, best]);
+    if (roof.solid) this.current.depth = roof.solid.depth + (facing ? 1e-4 : -1e-4);
+    for (let i = 0; i < 4; i++) {
+      const a = foot[i], b = foot[(i + 1) % 4];
+      this.face([a, b, [b[0], b[1], top], [a[0], a[1], top]], opts);
+    }
+    this.face(c.map(([px, py]) => [px, py, top]), opts);
+    this._onRoof = false;
+    return top;
   }
 
   box(x, y, z, w, d, h, opts = {}) {
@@ -1700,6 +1826,12 @@ export class Painter {
     const late = photo ? out : (this.current.late ??= []);
     const mix = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t);
     const bar = (p, q) => late.push(this._outline([p, q], false, { ...opts, cls: 'pane bar' }, lod));
+    // in a photo, big enough, the sill under it: a little wider than the
+    // window, just below it
+    if (photo && wide >= PHOTO_SILL) {
+      const down = (p) => p.map((v, i) => v + (a[i] - e[i]) * 0.08);
+      bar(down(mix(a, b, -0.1)), down(mix(a, b, 1.1)));
+    }
     if (opts.bay && wide > high * 3) {
       // a band of windows: a mullion every bay
       const n = Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / opts.bay);

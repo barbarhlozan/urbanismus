@@ -363,6 +363,12 @@ mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3
 .layer-meadow .ear { stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 .layer-meadow .leaf { fill: var(--bg); stroke: var(--main); }
 .layer-meadow .bloom { fill: var(--bg); stroke: var(--main); }
+/* a meadow sown (meadow.js wildMeadow): grass and flowers alike in the
+   detail pen, as the wild meadow's and the trees' – a daisy's heart and a
+   poppy's head inked, the rest in lines */
+.layer-meadow .stem { stroke: var(--detail); }
+.layer-meadow .head { fill: var(--detail); stroke: var(--detail); }
+.layer-meadow .head.daisy { fill: var(--bg); }
 .ghost .gnd { fill: none; stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
 /* the build preview: all in the detail pen, solid lines (the dashed .ghost
    look above is for buildings being erased); faded where it can't go */
@@ -419,13 +425,15 @@ svg.draft .layer-objects .d2,
 svg.draft .layer-lots .d2 { display: none; }
 
 
-.overlay .hover, .overlay .anchor {
+.overlay .hover, .overlay .anchor, .overlay .brush {
   fill: none;
   stroke: var(--fg);
   stroke-width: calc(var(--pen-4) * var(--stroke, 1));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* (the crop brush's circle: there at once, wherever the pointer goes – no
+   pen animation) */
 .overlay .anchor { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
 /* the hover ring is circled by pen once, from the start of the stroke to
    its end, then stays (--len: its length on screen, see OverlayKit.ringAt).
@@ -730,6 +738,15 @@ body:not(.touch) .controls button:hover > .label, .controls button.telling > .la
    in the corner */
 .popup .title { border-bottom: none; padding: 10px 34px 2px; justify-content: center; text-align: center; }
 .popup .title > span { font-size: 17px; line-height: 1.25; padding: 6px 0 0; }
+/* the Building card for now (ui/popup.js `compact`): one line under the
+   building – a place's name, the house number, the drawings */
+.popup.compact { min-width: 0; }
+.popup.compact .popup-body { display: flex; align-items: center; }
+.popup.compact .popup-block { padding: 6px 4px 6px 12px; }
+.popup.compact .popup-icons { gap: 2px; padding: 4px 6px 4px 4px; }
+.popup.compact .popup-icon .icon { width: 18px; height: 18px; }
+.popup.compact .bi-head { gap: 8px; flex-wrap: nowrap; }
+.popup.compact .bi-name { font-size: 15px; white-space: nowrap; }
 #ui .popup .title .close { position: absolute; top: 6px; right: 0; border-left: none; min-height: 0; padding: 6px 12px; font-size: 14px; color: var(--detail); }
 .popup .popup-block { padding: 2px 16px 4px; align-items: center; text-align: center; }
 
@@ -857,7 +874,26 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
 .story-bubbles .ink .paper { fill: var(--bg); stroke: none; }
 .story-bubbles .ink .fresh { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bb-draw .4s ease-out forwards; }
 @keyframes bb-draw { to { stroke-dashoffset: 0; } }
-@media (prefers-reduced-motion: reduce) { .story-bubbles .ink .fresh { animation: none; stroke-dasharray: none; } }
+/* a new bubble pops up out of its tail's corner, from the house below:
+   grows, rises a little and slows to its size, no overshoot */
+.story-bubbles .bb.pop { animation: bb-pop .26s cubic-bezier(.2, .7, .3, 1); }
+@keyframes bb-pop { from { transform: translateY(10px) scale(.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .story-bubbles .ink .fresh, .story-bubbles .bb.pop { animation: none; stroke-dasharray: none; } }
+
+/* three dots over a house where someone's talking (ui/kecDots.js): the
+   house clicked, the talk is told there in bubbles (src/story/kecy.js) */
+.story-bubbles .kec-dots {
+  position: absolute; left: 0; top: 0; pointer-events: none; transition: opacity .35s;
+}
+.story-bubbles .kec-dots svg { display: block; overflow: visible; }
+.story-bubbles .kec-dots .pen { fill: none; stroke: var(--main); stroke-width: 1.3px; stroke-linecap: round; stroke-linejoin: round; }
+.story-bubbles .kec-dots .paper { fill: var(--bg); stroke: none; }
+.story-bubbles .kec-dots .blots { fill: var(--main); }
+.story-bubbles .kec-dots .fresh { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bb-draw .5s ease-out forwards; }
+.story-bubbles .kec-dots .blots { opacity: 0; animation: kec-blots .2s .45s ease-out forwards; }
+@keyframes kec-blots { to { opacity: 1; } }
+.story-bubbles .kec-dots.going { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .story-bubbles .kec-dots .fresh, .story-bubbles .kec-dots .blots { animation: none; stroke-dasharray: none; opacity: 1; } }
 
 /* the narrator (Děda, today, in the car) and the choices: a caption at the
    bottom, not on the map */
@@ -1808,25 +1844,17 @@ body.touch .sk-slider { height: auto; padding: 4px 0; } /* a bigger target for a
 .pm-rel { position: relative; }
 /* each mark shows only in its state; the line under a word is drawn on
    from the left */
-.pm :is(.pm-crop, .pm-u, .pm-chosen, .pm-tick, .pm-x, .pm-strike) { display: none; }
+.pm :is(.pm-crop, .pm-u, .pm-tick, .pm-x, .pm-strike) { display: none; }
 .pm .pm-u { display: inline; stroke-dasharray: 1 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset 140ms cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0s 140ms; }
 .pm .pm-strike { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 .pm :is(.pm-box, .pm-x) { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
-/* chosen: hatched like a roof, in the detail colour, under the control's
-   drawing and word; the word gets a halo of paper so it reads clear */
-.pm .pm-chosen { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
-/* (the marks go behind what's in the control, within the control's own
-   layer, so its drawing and word sit over the hatching) */
-#ui :is(.bm-tab, .bm-tool, .hud-photo, .controls button, .chron-tab) { isolation: isolate; }
-#ui :is(.bm-tab, .bm-tool, .hud-photo, .controls button, .chron-tab) > .pm { z-index: -1; }
-#ui :is(.bm-tab.on, .bm-tool.active, .hud-photo.on, .controls button.on, .chron-tab.on) > :not(.pm) {
-  text-shadow: 0 0 2px var(--bg), 0 0 2px var(--bg), 0 0 3px var(--bg);
-}
-/* pointed at (only where there's a pointer), or picked with the arrow keys */
+/* pointed at (only where there's a pointer), or picked with the arrow
+   keys; and chosen (a tab, a tile, the camera…): the same line, staying –
+   a Build menu tab only while its drawer is open, not left on in the rail
+   once it's folded */
 body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
-#ui .cap-choices button.focus > .pm .pm-u { stroke-dashoffset: 0; opacity: 1; transition-delay: 0s; }
-/* chosen: boxed */
-#ui :is(.bm-tab.on, .bm-tool.active, .hud-photo.on, .controls button.on, .chron-tab.on) > .pm .pm-chosen { display: inline; }
+#ui .cap-choices button.focus > .pm .pm-u,
+#ui :is(.build-menu:not(.folded) .bm-tab.on, .bm-tool.active, .hud-photo.on, .controls button.on, .chron-tab.on) > .pm .pm-u { stroke-dashoffset: 0; opacity: 1; transition-delay: 0s; }
 /* the line of words picked: ticked */
 #ui :is(.scheme, .choice).on > .pm .pm-tick { display: inline; }
 /* a setting: its box, crossed while on */
@@ -2003,17 +2031,16 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 }
 
 
-/* the menu's keys stay out of sight until the pointer is on their tile or
-   tab (or it has keyboard focus): the menu reads as a menu, not a keyboard
-   chart, and the title still names the key. The options of the tool in
-   hand (the dock: size, turn, another look, Esc) keep theirs – there the
-   key is what the button is for. */
-#ui .build-menu :is(.bm-tool, .bm-tab, .bm-act) .key { transition: opacity 150ms; }
-#ui .build-menu :is(.bm-tool, .bm-tab, .bm-act):not(:hover):not(:focus-visible) .key { opacity: 0; }
+/* the menu's keys aren't written on its tiles and tabs, not even when
+   pointed at: the menu reads as a menu, not a keyboard chart, and the
+   title still names the key. The options of the tool in hand (the dock:
+   size, turn, another look, Esc) keep theirs – there the key is what the
+   button is for. */
+#ui .build-menu :is(.bm-tool, .bm-tab, .bm-act) .key { display: none; }
 
 /* ---------- Photo mode (tools/photo.js, render/photo.js) ---------- */
 
-.overlay .photo-cone-hatch { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
+.overlay .photo-aim { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
 .overlay .photo-cam path, .overlay .photo-cam circle { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-5) / 0.24 * var(--stroke, 1)); /* drawn at scale(0.24), OverlayKit.photoCone */ stroke-linejoin: round; stroke-linecap: round; }
 
 
@@ -2051,6 +2078,11 @@ svg.photo .photo-cloud-fill { fill: var(--bg); stroke: none; }
 svg.photo .photo-cloud-edge { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
 svg.photo .photo-cloud-under { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
 svg.photo .photo-rain { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.6; }
+/* one pen draws the whole photo: what the map draws in its second, greyer
+   ink (trees, the ground's marks, the far hills) is the same ink here, only
+   pressed a little less – so the houses don't stand out of the landscape
+   like pictures pasted on it */
+svg.photo { --detail: color-mix(in srgb, var(--main) 72%, var(--bg)); }
 /* line weight by distance (PHOTO.weight): each layer sets --stroke for its
    distance and --fine, never above 1, for texture, so hatching, windows
    and grass stay fine up close */
@@ -2059,9 +2091,6 @@ svg.photo :is(.roof-hatch, .wall-shade, .ink, .bar, .leaf, .twig, .shadow, .laye
 svg.photo .pane { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
 svg.photo .pane.bar { fill: none; }
 svg.photo .hedge { fill: var(--bg); } /* kit.js hedgeSide */
-/* the ground right in front (photo.js nearGround) */
-svg.photo .photo-cobble { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linecap: round; }
-svg.photo .photo-pebble { fill: var(--bg); stroke: var(--detail); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linejoin: round; }
 svg.photo .photo-figure * { vector-effect: non-scaling-stroke; } /* deer, cows, sheep: the map's line widths */
 svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
@@ -2166,6 +2195,14 @@ html:is(.wc, .tint) .layer-meadow path.ear { stroke: #9c6e1c; }
 html:is(.wc, .tint) .layer-meadow path.ridge { stroke: #9a7a5c; }
 html:is(.wc, .tint) .layer-meadow path.leaf { stroke: #5f7d38; }
 html:is(.wc, .tint) .layer-meadow path.bloom { stroke: #8a7aa8; }
+/* the meadow's flowers: green stems, red poppies, white daisies with a
+   yellow heart, the dandelions and thistles their own */
+html:is(.wc, .tint) .layer-meadow path.stem { stroke: #6f8b3d; }
+html:is(.wc, .tint) .layer-meadow path.head.poppies { fill: #c4472f; stroke: #a8392a; }
+html:is(.wc, .tint) .layer-meadow path.head.daisy { fill: #e3b23c; stroke: #c9962a; }
+html:is(.wc, .tint) .layer-meadow path.stem.daisy { stroke: #8a9a62; }
+html:is(.wc, .tint) .layer-meadow path.stem.dandelion { stroke: #c9a23a; }
+html:is(.wc, .tint) .layer-meadow path.head.thistle { fill: #9a6fa8; stroke: #85609a; }
 /* water (Renderer.washWater): a turquoise wash on a ring of green bank;
    the shore drawn in a deeper teal, the ripples lifted out pale */
 html:is(.wc, .tint) .pond { fill: #8ccbc6; stroke: none; }

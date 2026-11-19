@@ -21,6 +21,10 @@ function pathLength(d) {
   return len;
 }
 
+// the photo arrow: from `from` to `to` grid steps out from the photographer,
+// its head's two strokes `head` long, `spread` radians off the shaft
+const PHOTO_AIM = { from: 0.35, to: 1.5, head: 0.32, spread: 0.45 };
+
 export class OverlayKit {
   constructor(world, camera, config) {
     this.world = world;
@@ -37,10 +41,11 @@ export class OverlayKit {
   // --len and data-anim are for the pen animation (.hover in styles.css,
   // kept running across redraws by Renderer.keepAnimating), in the
   // ring's own units like its dashes.
-  ringAt(x, y, r, cls = 'hover') {
+  // `seed`: the same stroke wherever it is (a brush following the pointer
+  // keeps its shape).
+  ringAt(x, y, r, cls = 'hover', seed = seedOf(x, y, cls.length)) {
     const [sx, sy] = this.project(x, y);
     const [rx, ry] = this.camera.groundEllipse(r);
-    const seed = seedOf(x, y, cls.length);
     const d = sketchEllipse(sx, sy, rx, ry, seed);
     const len = Math.ceil(pathLength(d) * 1.05); // a little spare for the round caps
     return `<path class="${cls}" d="${d}" style="--len:${len}px" data-anim="${seed}"/>`;
@@ -283,38 +288,28 @@ export class OverlayKit {
   }
 
   // Photo mode (tools/photo.js): the photographer at (x, y), the camera icon,
-  // and, with `yaw`, the wedge of ground their camera sees, `fov` degrees
-  // wide and `len` grid steps long, held level at the photographer's height
-  // (not laid on the ground, so a slope doesn't stretch it out of shape) –
-  // no outline, only loose pencil strokes
-  // across it, irregular in spacing, slant, length and where they start
-  // (seeded by the spot, so they hold still while aiming).
-  photographer(x, y, yaw = null, fov = 42, len = 3) {
+  // and, with `yaw`, a small pencil arrow the way they look – only which
+  // way: how much of the town the picture takes in is the photo's own
+  // business (render/photo.js framePhoto), not a cone to aim. Held level at
+  // the photographer's height, so a slope doesn't bend it; its strokes
+  // seeded by the spot, so they hold still while aiming.
+  photographer(x, y, yaw = null) {
     const k = 1 / this.camera.zoom;
     let out = '';
     if (yaw != null) {
-      const rnd = mulberry32(seedOf(x, y, 7));
-      const half = (fov * Math.PI) / 360, tan = Math.tan(half);
       const z = this.world.terrain.heightAt(x, y) + 0.04;
-      const at = (t, w, a) => {
-        const c = Math.cos(yaw + a), s = Math.sin(yaw + a);
-        return this.camera.project(x + c * t - s * w, y + s * t + c * w, z, [x, y]);
+      const at = (t, a = 0) => this.camera.project(x + Math.cos(yaw + a) * t, y + Math.sin(yaw + a) * t, z, [x, y]);
+      const { from, to, head, spread } = PHOTO_AIM;
+      const tip = at(to);
+      const back = (side) => {
+        const c = Math.cos(yaw), s = Math.sin(yaw), b = to - head * Math.cos(spread), w = side * head * Math.sin(spread);
+        return this.camera.project(x + c * b - s * w, y + s * b + c * w, z, [x, y]);
       };
-      let d = '';
-      for (let t = 0.1 + rnd() * 0.05; t < len; t += 0.05 + rnd() * 0.1) {
-        const w = Math.min(t * tan, Math.sqrt(Math.max(0, len * len - t * t)));
-        if (w < 0.02 || rnd() < 0.12) continue;
-        // a stroke need not cross the whole wedge: it starts and stops at
-        // random, now and then two short ones instead of one
-        const slant = (rnd() - 0.5) * 0.35;
-        const parts = rnd() < 0.2 ? [[-1, -0.1 + rnd() * 0.3], [0.1 + rnd() * 0.3, 1]] : [[-1, 1]];
-        for (const [p, q] of parts) {
-          const a = w * (p + rnd() * 0.3), b = w * (q - rnd() * 0.35);
-          if (b - a < w * 0.15) continue;
-          d += sketchLine(at(t, a, slant * 0.2), at(t + (b - a) * slant * 0.5, b, slant * 0.2), seedOf(x, y, t * 100), { k, over: 0.6 + rnd() * 1.5, bow: 2.5 });
-        }
-      }
-      out += `<path class="photo-cone-hatch" d="${d}"/>`;
+      const seed = seedOf(x, y, 7);
+      const d = sketchLine(at(from), tip, seed, { k, over: 1, bow: 2 })
+        + sketchLine(back(1), tip, seed + 1, { k, over: 0.5, bow: 1 })
+        + sketchLine(back(-1), tip, seed + 2, { k, over: 0.5, bow: 1 });
+      out += `<path class="photo-aim" d="${d}"/>`;
     }
     const [sx, sy] = this.project(x, y);
     // the camera from the Photo button up top, standing on the spot

@@ -130,11 +130,15 @@
       return s;
     }
 
+    // ?only=a,b keeps just those pieces; ?outline=1 saves the lines alone:
+    // no paper inside, though what's in front still hides the lines behind
+    const ONLY = q.get('only')?.split(',') ?? null, OUTLINE = q.get('outline') === '1';
     const P = [];
-    const piece = (group, name, svg, opts = {}) => P.push({ group, name, svg, ...opts });
+    const piece = (group, name, svg, opts = {}) => { if (!ONLY || ONLY.includes(name)) P.push({ group, name, svg, ...opts }); };
 
     // the churches
     piece('Church', 'church-twin', townSVG([['church', 'twin', 0, 0, { grounds: 'none' }]]));
+    piece('Church', 'church-twin-nowall', townSVG([['church', 'twin', 0, 0, { grounds: 'none', wall: 'none' }]]));
     piece('Church', 'church-twin-graves', townSVG([['church', 'twin', 0, 0, { grounds: 'graves' }]]));
     piece('Church', 'church-onion', townSVG([['church', 'onion', 0, 0, { grounds: 'none' }]]));
     // houses
@@ -267,12 +271,39 @@
       }
       if (p.el.querySelector('text')) defs.insertAdjacentHTML('afterbegin', `<style>@font-face{font-family:"Basteleur";src:url(data:font/woff2;base64,${await font()}) format("woff2");}</style>`);
       clone.prepend(defs);
+      if (OUTLINE) outline(clone, p.box);
       const k = p.px ?? SCALE;
       clone.setAttribute('width', Math.round(p.box.w * k));
       clone.setAttribute('height', Math.round(p.box.h * k));
       clone.removeAttribute('style');
       if (p.paper) clone.insertAdjacentHTML('afterbegin', `<rect x="${p.box.x}" y="${p.box.y}" width="${p.box.w}" height="${p.box.h}" fill="${PAPER}"/>`);
       return new XMLSerializer().serializeToString(clone);
+    }
+    // The paper fills dropped, the drawing shown through a mask of itself:
+    // white where a line is the topmost thing, black where paper covers it.
+    function outline(svg, box) {
+      const probe = document.body.appendChild(document.createElement('i'));
+      probe.style.color = PAPER;
+      const PAPER_RGB = getComputedStyle(probe).color;
+      probe.remove();
+      const art = [...svg.children].filter((c) => c.tagName !== 'defs');
+      const mask = document.createElementNS(NS, 'mask');
+      mask.id = 'outline-mask';
+      mask.setAttribute('maskUnits', 'userSpaceOnUse');
+      for (const [k, v] of Object.entries({ x: box.x, y: box.y, width: box.w, height: box.h })) mask.setAttribute(k, v);
+      for (const c of art) mask.appendChild(c.cloneNode(true));
+      const isPaper = (v) => v === PAPER_RGB;
+      for (const el of mask.querySelectorAll('*')) {
+        const st = el.style;
+        if (st.fill && st.fill !== 'none') st.fill = isPaper(st.fill) ? '#000' : '#fff';
+        if (st.stroke && st.stroke !== 'none') st.stroke = '#fff';
+      }
+      for (const c of art) for (const el of [c, ...c.querySelectorAll('*')]) if (isPaper(el.style.fill)) el.style.fill = 'none';
+      svg.querySelector('defs').appendChild(mask);
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('mask', 'url(#outline-mask)');
+      for (const c of art) g.appendChild(c);
+      svg.appendChild(g);
     }
     async function png(p) {
       const text = await standalone(p);

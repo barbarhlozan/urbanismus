@@ -44,7 +44,7 @@
 //
 //   UNLOCKS.allows(type)              may this type be built?
 //   UNLOCKS.allowsTool(tool)          may this tool be picked up?
-//   UNLOCKS.allowsNetwork(kind)       'street' | 'road' | 'lane' | 'path' | 'rail' | 'fence' | 'wall' | 'grain' | 'potatoes'
+//   UNLOCKS.allowsNetwork(kind)       'street' | 'road' | 'lane' | 'path' | 'rail' | 'fence' | 'wall' | 'grain' | 'potatoes' | 'meadow'
 //   UNLOCKS.allowsControl(id)         a button at the top, by its data-act ('debug'…)
 //   UNLOCKS.allowsVehicle(kind)       'cars' | 'trucks' | 'buses'
 //   UNLOCKS.scheme                    the file's `scheme` line: { value, line } or null
@@ -65,6 +65,7 @@ const NETWORKS = {
   wall: ['churchyard_wall', 'churchyard_walls', 'zidka', 'churchyard', 'churchyards'],
   grain: ['grain', 'grain_field', 'grain_fields', 'field', 'fields'],
   potatoes: ['potatoes', 'potato', 'potato_field', 'potato_fields', 'field', 'fields'],
+  meadow: ['meadow', 'meadows'],
 };
 // The buttons at the top (data-act -> names that mean it), and Terrain,
 // the contour lines offered in the dock (tools/terrain.js). `all` leaves

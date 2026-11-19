@@ -4,6 +4,9 @@
 //
 //   node tools/press-kit.mjs [query] [folder]   e.g. "scale=14&scheme=1" black
 //
+// press/ now holds only=house-farmstead,hospoda,church-twin,church-twin-nowall,
+// tree-spreading-60,tree-spruce-62,bubble-empty-middle&outline=1, scheme=0 → blue-pen, 1 → black-pen.
+//
 // The page's query sets the scale, pen weight, scheme and view; see the
 // note at the top of press-kit.html. With a folder: press/<folder>/.
 import { mkdirSync, writeFileSync } from 'node:fs';

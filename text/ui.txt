@@ -413,6 +413,10 @@ tab.roads
   cs: Cesty
   en: Roads
 
+tab.fields
+  cs: Pole a pastviny
+  en: Fields and pastures
+
 tab.parks
   cs: Parky a náměstí
   en: Parks and squares
@@ -495,6 +499,14 @@ tool.potatoes.blurb
   cs: Táhni štětcem po zemi
   en: Paint it on the ground
 
+tool.meadow
+  cs: Louka
+  en: Meadow
+
+tool.meadow.blurb
+  cs: Tráva a luční kvítí
+  en: Grass and wild flowers
+
 tool.erase
   cs: Vymazat
   en: Erase
@@ -545,14 +557,6 @@ network.stop.wall
   cs: Ukončit zídku
   en: End the wall
 
-crop.sow
-  cs: Sít
-  en: Sow
-
-crop.clear
-  cs: Gumovat
-  en: Clear
-
 # while placing buildings
 
 size
@@ -584,10 +588,6 @@ photo.take
   cs: Vyfotit
   en: Take a picture
 
-photo.lens
-  cs: Objektiv
-  en: Lens
-
 photo.move
   cs: Přejít
   en: Move
@@ -614,6 +614,12 @@ inspect.no
   cs: č. p.
   en: No.
 
+# the three dots over a house where someone's talking (src/story/kecy.js),
+# named for screen readers and on pointing at them
+kecy.dots
+  cs: Někdo si tu povídá
+  en: Someone's talking here
+
 inspect.no.full
   cs: Číslo popisné {no}
   en: House number {no}
@@ -639,6 +645,16 @@ dev.time
 dev.fire
   cs: Oheň
   en: Fire
+
+# the kecy menu beside them: a kec picked puts its dots over the building
+# whose card was opened last (else a house of its own); empty: no kecy
+dev.kecy
+  cs: Kecy
+  en: Chatter
+
+dev.kecy.none
+  cs: V story/kecy.md nejsou žádné kecy
+  en: No chatter in story/kecy.md
 
 
 
@@ -710,13 +726,6 @@ inspect.yard.none
 inspect.demolish
   cs: Zbourat
   en: Demolish
-
-
-
-
-
-
-
 
 yard.garden
   cs: Zahrada

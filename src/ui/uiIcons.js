@@ -55,11 +55,12 @@ export const ICONS = {
   forest: 'New map: Lesy / Forests',
   river: 'New map: Řeka / River',
   more: 'Dialogue: › to go on, once the line is all written',
-  'tab-transport': 'Build menu tab: Doprava / Transport',
+  'tab-transport': 'Build menu tab: Cesty / Ways',
   'tab-housing': 'Build menu tab: Bydlení / Housing',
   'tab-amenities': 'Build menu tab: Občanská vybavenost / Amenities',
   'tab-work': 'Build menu tab: Výroba / Work',
   'tab-farming': 'Build menu tab: Zemědělství / Farming',
+  'tab-fields': 'Build menu tab: Pole a pastviny / Fields and pastures',
   'tab-spaces': 'Build menu tab: Prostranství / Spaces',
   'tab-heritage': 'Build menu tab: Památky / Heritage',
   'tool-street': 'Build menu tile: Ulice / Street',
@@ -71,6 +72,7 @@ export const ICONS = {
   'tool-wall': 'Build menu tile: Zídka / Churchyard wall',
   'tool-grain': 'Build menu tile: Obilí / Grain',
   'tool-potatoes': 'Build menu tile: Brambory / Potatoes',
+  'tool-meadow': 'Build menu tile: Louka / Meadow',
   'tool-erase': 'Build menu: Vymazat / Erase (a rubber)',
 };
 

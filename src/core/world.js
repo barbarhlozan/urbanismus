@@ -472,7 +472,7 @@ export class World {
     for (const s of [...world.structures.values()].sort((a, b) => a.id - b.id)) world.numberStructure(s);
     world.time = data.time ?? 0;
     if (data.weather) world.weather = { kind: data.weather.kind, from: data.weather.from, since: data.weather.since, until: data.weather.until, n: data.weather.n ?? 0 }; // (older saves start fair; without `from` or `since`, WeatherSystem works them out)
-    world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [], places: data.story?.places ?? {} };
+    world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [], places: data.story?.places ?? {}, ...(data.story?.kecy && { kecy: data.story.kecy }) }; // (kecy: src/story/kecy.js, made when first told)
     const marks = data.chronicle?.marks ?? [];
     world.chronicle = { entries: data.chronicle?.entries ?? [], marks };
     // how many of the entries have been read, and the book's tab last open

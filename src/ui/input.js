@@ -14,9 +14,12 @@ import { Camera } from '../render/camera.js';
 
 const DRAG_THRESHOLD = { mouse: 5, touch: 10 };
 
-// `sketch` (optional): { wants(), start(x, y), move(x, y), end(), cancel() } –
+// `sketch` (optional): { wants(), down(x, y), start(x, y), move(x, y), end(), cancel() } –
 // while wants() says so, a left-button or one-finger drag draws (a way
-// sketched freehand, tools/network.js) instead of panning.
+// sketched freehand, tools/network.js) instead of panning. A tool that
+// draws from the moment it's pressed (the crop brush) takes down() and
+// says true: its stroke starts there, with no drag needed, and ends on
+// letting go.
 export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle, onWheel = () => false, sketch = null }) {
   let drag = null;
   const touches = new Map(); // pointerId -> [x, y], for pinch
@@ -76,7 +79,10 @@ export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle
       if (touches.size > 2) return;
     }
     drag = { id: e.pointerId, type: e.pointerType, button: e.button, x: e.clientX, y: e.clientY, last: null, moved: false };
-    if (e.button === 0 && sketch?.wants()) drag.sketch = pick(e);
+    if (e.button === 0 && sketch?.wants()) {
+      drag.sketch = pick(e);
+      drag.sketching = !!sketch.down?.(...drag.sketch);
+    }
   });
 
   el.addEventListener('pointermove', (e) => {
@@ -102,7 +108,9 @@ export function attachInput(el, { camera, onPointer, onClick, onCancel, onMiddle
       if (!drag.moved && Math.hypot(dx, dy) > threshold) {
         drag.moved = true;
         drag.last = [drag.x, drag.y];
-        if (drag.sketch) {
+        if (drag.sketching) {
+          // (drawing since it was pressed)
+        } else if (drag.sketch) {
           drag.sketching = true;
           sketch.start(...drag.sketch);
         } else el.classList.add('panning');

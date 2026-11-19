@@ -68,6 +68,7 @@ export class History {
     this.done = [];
     this.undone = [];
     this.open = null;     // the snapshot of the step being made
+    this.held = false;    // ...kept open until letGo() (hold)
     this.applying = false; // an undo or redo is being put in
     this.asides = 0;
     this.listeners = new Set();
@@ -103,12 +104,27 @@ export class History {
   touch() {
     if (this.applying || this.asides || this.open) return;
     this.open = this.snapshot();
-    queueMicrotask(() => this.commit());
+    queueMicrotask(() => { if (!this.held) this.commit(); });
+  }
+
+  // A step that lasts longer than a click: a stroke of the crop brush,
+  // painted as the pointer moves and taken back in one. Everything changed
+  // from hold() until letGo() is one step.
+  hold() {
+    if (this.applying || this.asides) return;
+    this.commit();
+    this.open = this.snapshot();
+    this.held = true;
+  }
+
+  letGo() {
+    if (this.held) this.commit();
   }
 
   // Close the step being made now (it closes by itself at the end of the task).
   commit() {
     const before = this.open;
+    this.held = false;
     if (!before) return;
     this.open = null;
     const step = this.diff(before);
@@ -121,18 +137,23 @@ export class History {
   }
 
   // The town's own doing: changes made in fn() aren't recorded.
+  // (in the middle of a held step the town's change closes it, and the
+  // step goes on as a new one after)
   aside(fn) {
+    const held = this.held;
     this.commit();
     this.asides++;
     try {
       return fn();
     } finally {
       this.asides--;
+      if (held && !this.asides) this.hold();
     }
   }
 
   clear() {
     this.open = null;
+    this.held = false;
     this.done = [];
     this.undone = [];
     this.notify();

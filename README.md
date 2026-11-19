@@ -125,13 +125,40 @@ a Czech or German layout.
 - **Výroba** (**4**): workshops, works, factory and plants in their sizes, the three mines,
   farmstead / JZD / státní statek
 - **Prostranství** (**5**): every park and square
-- **Památky** (**6**): chapel, church, town hall (**Shift** switches small, medium, large),
-  memorial, castle, tower, stadium
+- **Fields** (a tab of their own, **Pole a pastviny**, apart from the roads and paths; the
+  **Ohrada** is there too, a fence that closed all round makes a pasture, and beside it the
+  **Zídka**, a churchyard wall drawn the same way, see Landmarks) – **Obilí**, **Brambory** and **Louka** (a meadow: grass and wild flowers – daisies,
+  poppies, dandelions, thistles – new maps have one or two now and then) are brushes: their circle follows the pointer and
+  shows how much they cover, a press paints the crop there and holding it down paints wherever
+  you drag (one ⌘Z for the stroke). The field keeps the brush's uneven edge, and the crop comes
+  up where it was painted, once. A new field's rows run the way the stroke went; painted on, a
+  field keeps its rows. **Vymazat** takes a whole field at once: the one under the pointer shows
+  its outline, and clicked, its crop sinks back into the ground from where it was touched.
+  **[** and **]** make the brush smaller and bigger
 - **Backspace** – erase
 - **P** or the **camera**, last in the Build menu's bottom row – photo mode: click where
   to stand, aim with the pointer, click to take a picture of the town from street level;
-  its options are in the dock: **Lens** (**Shift**: 28 mm to start, then 42 and 80 mm),
-  **Move**, and on a phone **Take the photo**. It opens as a print you can save as a PNG
+  its options are in the dock: **Move**, and on a phone **Take the photo**. There is no
+  lens to pick, and on the map only a small arrow shows which way you look: the picture is
+  framed when it's taken, as a drawing is composed – the houses looked at whole in it (the
+  view turned a little to have them in the middle, and up close the photographer steps back a
+  few paces). Standing among the houses it is a picture of a house or two; the further off the
+  nearest ones are, the more of the village it takes in and the wider it goes, till from out
+  in the fields it is the whole village in its landscape. Anything else the picture's sides
+  or top would cut through is left out, paper there instead of half a house. It opens as a
+  print you can save as a PNG.
+  The photo is drawn in one pen, with the map's own brushed line (thinner at the ends,
+  swelling along it): the landscape in the same ink as the houses, only lighter, lines a
+  little heavier in front; the horizon a little below the middle; the ground's rises and dips
+  close by flattened, so houses stand on it rather than sink behind it; the ground in short
+  upright strokes, as grass, each its own and some in tufts; walls with no line along their
+  foot and no shade, and no shadows on the ground; chimneys rising out of the roof's slope;
+  tree crowns drawn round underneath to where the trunk goes in; windows with their bars and
+  sills; in the rain short dashes falling all over the picture. It is drawn in a looser hand
+  than the map – lines a little shakier, each swelling and thinning more along its length –
+  with uneven clouds, and trees smaller than the map draws them, so they don't tower over the
+  houses. Towards its edges the drawing thins away, as a sketch left unfinished there. Its
+  lines are as fine on the print as the map's are on the screen
 - **Esc / right-click** – back to select; **right-click** with nothing in hand picks up
   what's under the pointer (same building, size and rotation, or the road / railway /
   footpath) to build more of it
@@ -142,7 +169,8 @@ a Czech or German layout.
   shadows, roads and trees are drawn from the side they face as it turns (each keeps its
   drawings for the steps either side of where the view rests, made while it rests). While it
   turns they are drawn bare – no windows, sparse roof hatching – and once it rests the pen
-  draws their detail back in, from the middle of the screen out
+  draws their detail back in, from the middle of the screen out. A chimney rises out of
+  its roof's slope, on the map as on a photo: behind the ridge only its top shows
 - **Terrain** – contour lines: a button between Erase and the camera (under the Build rail on a computer, in
   the panel's bottom row on a phone), crossed while on; once on they stay on whatever's in
   hand, until switched off there (off by default, they are the most expensive thing to draw)

@@ -25,12 +25,30 @@ const CLOUDS = {
     perShower: 26,
     slant: 0.22,          // sideways per downwards
   },
+  // rain falling between the eye and everything (rainSVG, a photo's):
+  // `count` short dashes scattered over the whole picture, each `len` px
+  // long, slanting with rain.slant (a storm's `storm` times as many, as
+  // long and as slanted), each a little its own way
+  drops: { count: 240, len: [3.5, 8], storm: 1.8, askew: 0.08 },
 };
 
 const r2 = (n) => Math.round(n * 100) / 100;
 const P = (x, y) => `${r2(x)} ${r2(y)}`;
 const lerp = (a, b, t) => a + (b - a) * t;
 const whole = (rnd, [a, b]) => a + Math.floor(rnd() * (b - a + 1));
+
+// A bulge from the current point a to b as a hand draws it, not a compass:
+// the arc of radius r (the minor one; up – on the left going from a to b –
+// with `up`, else down) as a curve whose two pulls are each a little off,
+// so no two bulges are the same and none is a true circle.
+function bulge(rnd, a, b, r, up) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], c = Math.hypot(dx, dy) || 1e-6;
+  const sag = Math.max(0, r - Math.sqrt(Math.max(0, r * r - (c * c) / 4))) * (up ? 1 : -1);
+  const nx = dy / c, ny = -dx / c; // left of a → b, on the picture (y down)
+  const pull = (t, k) => [a[0] + dx * t + nx * sag * k, a[1] + dy * t + ny * sag * k];
+  const p1 = pull(0.04 + rnd() * 0.16, 1.15 + rnd() * 0.35), p2 = pull(0.8 + rnd() * 0.16, 1.15 + rnd() * 0.35);
+  return `C${P(...p1)} ${P(...p2)} ${P(...b)}`;
+}
 
 // A heap of cloud: a flat base at `by` from x0 to x1, a row of bulges over
 // it, tallest in the middle. Returns the outline path.
@@ -40,13 +58,14 @@ function heap(rnd, x0, x1, by, h) {
   const ts = [0];
   for (let i = 1; i < bumps; i++) ts.push((i + (rnd() - 0.5) * 0.5) / bumps);
   ts.push(1);
-  let d = `M${P(x0, by)}`;
+  let d = `M${P(x0, by)}`, prev = [x0, by];
   for (let i = 0; i < bumps; i++) {
     const xa = x0 + w * ts[i], xb = x0 + w * ts[i + 1];
     const yb = i + 1 === bumps ? by : by - h * 0.5 * Math.pow(Math.sin(Math.PI * ts[i + 1]), 0.7) * (0.8 + rnd() * 0.4);
     const chord = Math.hypot(xb - xa, yb - (i ? by - h * 0.5 * Math.pow(Math.sin(Math.PI * ts[i]), 0.7) : by));
     const r = (chord / 2) * (1.05 + rnd() * 0.45);
-    d += `A${r2(r)} ${r2(r)} 0 0 1 ${P(xb, yb)}`;
+    d += bulge(rnd, prev, [xb, yb], r, true);
+    prev = [xb, yb];
   }
   // the base, a little uneven
   d += `Q${P(x0 + w * 0.6, by + 1 + rnd() * 2)} ${P(x0 + w * 0.3, by - rnd())}T${P(x0, by)}Z`;
@@ -70,12 +89,13 @@ function underHeap(rnd, x0, x1, by, h) {
 // kind (per scallop) go under the edge.
 function layer(rnd, width, by, scallop, strokes) {
   const x0 = -12, x1 = width + 12;
-  let x = x0, d = `M${P(x, by)}`, under = '';
+  let x = x0, py = by, d = `M${P(x, by)}`, under = '';
   while (x < x1) {
     const w = scallop * (0.7 + rnd() * 0.6), xb = x + w;
     const y = by + (rnd() - 0.5) * scallop * 0.12;
     const r = (w / 2) * (1.05 + rnd() * 0.4);
-    d += `A${r2(r)} ${r2(r)} 0 0 0 ${P(xb, y)}`;
+    d += bulge(rnd, [x, py], [xb, y], r, false);
+    py = y;
     if (rnd() < strokes) {
       const n = 1 + whole(rnd, [0, Math.round(strokes * 2)]);
       for (let i = 0; i < n; i++) {
@@ -90,6 +110,23 @@ function layer(rnd, width, by, scallop, strokes) {
     edge: d,
     under,
   };
+}
+
+// Rain as it is seen falling close by, all over the picture: short slanted
+// dashes (CLOUDS.drops) for 'rain' and 'storm', '' in other weather. Drawn
+// last, over everything.
+export function rainSVG(rnd, width, height, kind) {
+  if (kind !== 'rain' && kind !== 'storm') return '';
+  const { count, len: [l0, l1], storm, askew } = CLOUDS.drops;
+  const k = kind === 'storm' ? storm : 1;
+  let d = '';
+  for (let i = Math.round(count * k); i > 0; i--) {
+    const x = rnd() * (width + 20) - 10, y = rnd() * (height + 10) - 10;
+    const len = lerp(l0, l1, rnd()) * (kind === 'storm' ? 1.3 : 1);
+    const slant = CLOUDS.rain.slant * k + (rnd() - 0.5) * 2 * askew;
+    d += `M${P(x, y)}l${r2(-len * slant)} ${r2(len)}`;
+  }
+  return `<path class="photo-rain photo-drops" d="${d}"/>`;
 }
 
 // Slanted strokes from (x, y0) to the ground, `n` of them over `spread` px.
@@ -107,8 +144,9 @@ function streaks(rnd, n, xc, spread, y0, y1) {
 // `kind`: 'fair', 'mist', 'cloudy', 'rain' or 'storm'. `rain` (only for 'rain'): 'showers' – a few
 // distant ones under the cloud – or 'whole' – rain all over the sky. A
 // storm is the heaviest cloud with rain all over.
-export function cloudsSVG(rnd, width, height, kind, { rain = 'showers' } = {}) {
-  const horizon = height / 2;
+// `horizon`: where the horizon is on the picture, px from the top.
+// rain: false draws the clouds without it (a photo: rainSVG over all).
+export function cloudsSVG(rnd, width, height, kind, { rain = 'showers', horizon = height / 2 } = {}) {
   const pen = (cls, d) => (d ? `<path class="${cls}" d="${d}"/>` : '');
   let out = '';
 
@@ -122,7 +160,9 @@ export function cloudsSVG(rnd, width, height, kind, { rain = 'showers' } = {}) {
       const l = layer(rnd, width, by, lerp(CLOUDS.scallop[0], CLOUDS.scallop[1], t), CLOUDS.underScallop[kind] ?? 0.08);
       out += pen('photo-cloud-fill', l.fill) + pen('photo-cloud-edge', l.edge) + pen('photo-cloud-under', l.under);
     }
-    if (kind === 'storm') {
+    if (rain === false) {
+      // (no rain under the clouds)
+    } else if (kind === 'storm') {
       // rain all over, hard, and slanting with the wind
       out += pen('photo-rain', streaks(rnd, CLOUDS.rain.storm, width / 2, width * 1.3, 4, horizon * 0.98));
     } else if (kind === 'rain') {

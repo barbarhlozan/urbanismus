@@ -26,6 +26,10 @@ const ERASE = '<path d="M6 22 L20.1 7.9 L26.5 14.3 L12.4 28.4 Z M10.9 17.1 L17.3
 const PERSON = '<circle cx="8.1" cy="3.9" r="1.9"/><path d="M5.3 6.9 L10.9 6.7 L11.5 12.4 L4.8 12.5 Z"/><path d="M6.6 12.5 V14.6 M9.7 12.4 V14.5"/>';
 const YARD = '<path d="M1.5 13.6 C5 13.3 10 13.8 14.6 13.4"/><path d="M2.6 13.5 V8.6 L3.3 7.6 L4 8.6 V13.5 M6.2 13.5 V8.6 L6.9 7.6 L7.6 8.6 V13.5 M1.6 10 H8.8 M1.6 12 H8.8"/><path d="M9.6 13.4 C8.9 12 9.5 10.2 11 10.1 C11.2 8.4 13.6 8.2 14 9.9 C15.2 10.4 15.1 12.6 13.9 13.4"/>';
 
+// who lives and works there on the card (families, staff, residents):
+// left off for now, the house number alone
+const PEOPLE = false;
+
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export function createInspectTool(ctx) {
@@ -37,12 +41,13 @@ export function createInspectTool(ctx) {
     click(node, event, point) {
       const s = point ? ctx.world.structureAtPoint(...point) : node < 0 ? null : ctx.world.structureAt(node);
       if (!s) return ctx.popup.hide();
+      if (ctx.onBuilding?.(s)) return ctx.popup.hide(); // (kecy told there: a line on, story/kecy.js)
       ctx.onPick?.(s); // (the fire menu acts on it, ui/devMenus.js)
       const { title, items } = structureMenu(ctx, s);
       // beside the building's own drawing as it's shown (its tower or
       // chimney too), or failing that its footprint and some height
       const around = ctx.renderer?.buildingBox(`s${s.id}`) ?? screenBox(ctx, s);
-      ctx.popup.show(event.clientX, event.clientY, title, items, () => structureMenu(ctx, s), around);
+      ctx.popup.show(event.clientX, event.clientY, title, items, () => structureMenu(ctx, s), around, { compact: !PEOPLE });
     },
 
     exit() {
@@ -138,15 +143,20 @@ function workRows(world, s) {
 function structureMenu({ world }, s) {
   const def = STRUCTURE_TYPES[s.type];
 
-  // under its name its house number (and what it is, when the name is the
-  // families'), the families when there are many, who runs what, how many
-  // live there; then a row of drawings
-  const people = s.ruin ? '' : residents(def);
-  const families = familiesOf(s);
+  // For now only its house number – a place (a pub, a church) named over
+  // it, a home not – then a row of drawings. With PEOPLE: under its name
+  // its number (and what it is, when the name is the families'), the
+  // families when there are many, who runs what, how many live there.
+  const home = !!def.stats?.residents;
+  const people = !PEOPLE || s.ruin ? '' : residents(def);
+  const families = PEOPLE ? familiesOf(s) : { title: null, list: '' };
   const title = families.title ?? nameOf(def);
   const items = [];
+  // (for now the card is one line, ui/popup.js `compact`: a place's name
+  // before its number, a home's number alone)
+  const named = !PEOPLE && (!home || s.no == null) ? `<span class="bi-name">${esc(nameOf(def))}</span>` : '';
   const kind = families.title ? `<span class="bi-kind">${esc(nameOf(def))}</span>` : '';
-  if (s.no != null || kind) items.push({ block: `<div class="bi-row bi-head">${s.no != null ? plate(s.no) : ''}${kind}</div>` });
+  if (s.no != null || kind || named) items.push({ block: `<div class="bi-row bi-head">${named}${s.no != null ? plate(s.no) : ''}${kind}</div>` });
   // burnt down: what it is now, and only taking it down
   if (s.ruin) {
     items.push({ block: `<span class="bi-kind">${esc(t('inspect.ruin'))}</span>` });
@@ -154,7 +164,7 @@ function structureMenu({ world }, s) {
     return { title, items };
   }
   if (families.list) items.push({ block: families.list });
-  const work = staffRows(world, s) + workRows(world, s);
+  const work = PEOPLE ? staffRows(world, s) + workRows(world, s) : '';
   if (work) items.push({ block: work });
   if (people) items.push({ block: people });
 

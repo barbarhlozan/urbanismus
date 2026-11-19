@@ -13,12 +13,8 @@
 //   pressed          it grows a little and settles back (motion.js press),
 //                    and its marks – and its own pen frame, if it has one –
 //                    are drawn afresh
-//   chosen           hatched, as the roofs on the map are: thin strokes
-//                    across the control in the detail colour (a tab, a
-//                    tile, the camera, a Menu word whose panel is open),
-//                    just inside a cell packed against its neighbours; its
-//                    drawing and word stay over the hatching, the word
-//                    haloed in the paper's colour as a name on a map is
+//   chosen           the line under it stays drawn (a tab, a tile, the
+//                    camera, a Menu word whose panel is open)
 //   picked line      a tick at the right of the line of words picked (a
 //                    colour scheme; any .choice: a language in Settings)
 //   setting          a small box in the corner, crossed while it's on
@@ -36,7 +32,7 @@
 //
 // penMarks(root) marks every control under root, and the ones added later.
 
-import { sketchLine, sketchRoundBox, sketchHatch, seedOf } from '../render/sketch.js';
+import { sketchLine, sketchRoundBox, seedOf } from '../render/sketch.js';
 import { press } from './motion.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -45,8 +41,8 @@ const CONTROLS = 'button, [role="slider"]';
 // dock's buttons, the × in a heading): their marks sit just inside, not
 // over the next cell
 const CELLS = '.close, .bm-tab, .bm-tool, .bm-act, .bm-toggle, .bm-opts button, .bm-drop, .hud-photo, .chron-tab';
-// what can be chosen, by the mark it gets (styles.css shows it)
-const CHOSEN = '.bm-tab, .bm-tool, .hud-photo, .controls button, .chron-tab';
+// what can be picked or set, by the mark it gets (styles.css shows it;
+// a tab, a tile and the like show they're chosen by their line, .pm-u)
 const TICKED = '.scheme, .choice';
 const SETTING = '.bm-opts button[aria-pressed], .bm-act[aria-pressed], .toggle[aria-pressed]';
 const STRUCK = '.popup button, .bm-act';
@@ -58,7 +54,7 @@ const IN = -3;  // …or inside a cell, or a box that would clip them
 const ARM = 6;  // px: each arm of a crop mark
 
 let count = 0;
-const parts = ['crop', 'u', 'chosen', 'tick', 'box', 'x', 'strike'];
+const parts = ['crop', 'u', 'tick', 'box', 'x', 'strike'];
 
 export function penMarks(root) {
   const resized = new ResizeObserver((entries) => {
@@ -193,12 +189,6 @@ function draw(el) {
     set('u', sketchLine([c.x - 1, base], [c.x + c.w + 1, base + tilt], s, { over: 0.5 + (s % 3) * 0.3, bow: 1.3 }));
   }
 
-  if (el.matches(CHOSEN)) {
-    // hatched over its whole face: just inside a cell, so it keeps off the
-    // next one and the pen frame round a row of them
-    const i = cell || clipped(el) ? 3 : 1;
-    set('chosen', sketchHatch(i, i, w - 2 * i, h - 2 * i, s + 7));
-  }
   if (el.matches(TICKED)) {
     const x = w - 24, y = h / 2;
     set('tick', sketchLine([x, y], [x + 4, y + 5], s, { over: 0.5 }) + sketchLine([x + 4, y + 5], [x + 13, y - 7], s + 1, { over: 1.5, bow: 1.5 }));

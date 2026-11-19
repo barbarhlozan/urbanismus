@@ -432,8 +432,10 @@ export function aerials(g, x0, x1, y, z, n = 3) {
 // Brick chimney standing on the roof (starts at z, pokes out above the
 // ridge); a stove's smoke comes out of it now and then (render/particles.js).
 export function chimney(g, x, y, z, h, s = 0.045) {
-  g.box(x - s / 2, y - s / 2, z, s, s, h);
-  g.vent?.(x, y, z + h, 'house', Math.min(1.3, Math.max(0.7, s / 0.1)));
+  // (standing on the roof's own slope, its top where that leaves it:
+  // Painter.onRoof)
+  const top = g.onRoof?.(x, y, z, s, h) || (g.box(x - s / 2, y - s / 2, z, s, s, h), z + h);
+  g.vent?.(x, y, top, 'house', Math.min(1.3, Math.max(0.7, s / 0.1)));
 }
 
 // Tapered industrial chimney, its boilers' smoke always going.

@@ -32,6 +32,7 @@
 import { mulberry32, valueNoise2D } from '../core/random.js';
 import { freeTest, railIndex } from './lots.js';
 import { fieldsOf } from '../sim/fields.js';
+import { CROP_RES, cropOfValue, alongOfValue } from '../core/world/crops.js';
 
 export const MEADOW = {
   chunk: 8,       // dots per chunk side
@@ -47,6 +48,10 @@ export const MEADOW = {
   // `step` along one (give or take a fifth), this tall
   grain: { rows: 0.11, step: 0.07, gaps: 0.3, h: 0.055 },
   potatoes: { rows: 0.13, step: 0.08, r: 0.03, flowers: 0.18 },
+  // a meadow sown: no rows, a plant every `step` or so each way, most of
+  // them grass, a good share flowering (the shares of each, in order)
+  // (`h` the flowers' height, the grass `grass` of it)
+  meadow: { rows: 0.15, step: 0.15, gaps: 0.25, h: [0.075, 0.105], grass: 0.65, mix: { tuft: 0.4, seedGrass: 0.16, daisy: 0.17, poppies: 0.13, dandelion: 0.08, thistle: 0.06 } },
 };
 
 // ---------- where ----------
@@ -180,51 +185,114 @@ export function plant(world, ground, cx, cy) {
 
 // The crop on the dot's square, where it's in a field and open ground:
 // rows on fixed lines across the whole map (so they run on from dot to
-// dot), a plant at each step along them.
+// dot), a plant at each step along them. Every plant has its own place
+// and seed, by its row and its step along it – not by the field it's in –
+// so sowing or erasing next to it leaves it as it was. Along a field's
+// edge the plants thin out and stay lower, as a brush leaves it.
 function crops(world, ground, cx, cy, out) {
-  // the fields on the square (any reaches one of these points of it)
-  const here = new Set();
-  for (const dy of [-0.4, 0, 0.4]) {
-    for (const dx of [-0.4, 0, 0.4]) {
-      const f = ground.field(cx + dx, cy + dy);
-      if (f) here.add(f);
-    }
-  }
-  if (!here.size) return;
-  const g = rng(hash(world.seed, cx, cy, 77));
-  const grows = (x, y) => {
-    const f = ground.field(x, y), at = f && ground.at(x, y);
-    return at && at.shore > 0.2 ? f : null;
+  // which crops, with their rows which way, the square holds
+  // (`ground.fading`, from the renderer: squares whose crop was just taken
+  // off and is still sinking back into the ground – grown as they were)
+  const fading = ground.fading?.size ? ground.fading : null;
+  const value = (c) => world.crops[c] || (fading?.get(c)?.v ?? 0);
+  const cw = world.cropColumns, R = CROP_RES, vals = new Set();
+  const i0 = Math.max(0, Math.floor(R * (cx - 0.5))), i1 = Math.min(cw - 1, Math.ceil(R * (cx + 0.5)) - 1);
+  const j0 = Math.max(0, Math.floor(R * (cy - 0.5))), j1 = Math.min(world.cropRows - 1, Math.ceil(R * (cy + 0.5)) - 1);
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (value(j * cw + i)) vals.add(value(j * cw + i));
+  if (!vals.size) return;
+  const valueAt = (x, y) => {
+    const c = world.cropCellAt(x, y);
+    return c < 0 ? 0 : value(c);
   };
+  // a plant of value v grows at (x, y): v there, in a field, on open
+  // ground – the last two by the middle of its little square, once each
+  const open = new Map();
+  const grows = (x, y, v) => {
+    const c = world.cropCellAt(x, y);
+    if (c < 0 || value(c) !== v) return false;
+    let ok = open.get(c);
+    if (ok === undefined) {
+      const [mx, my] = world.cropCellCenter(c);
+      // (sinking: no field there any more, only the ground)
+      open.set(c, ok = (world.crops[c] ? !!ground.field(mx, my) : true) && (ground.at(mx, my)?.shore ?? 0) > 0.2);
+    }
+    return ok;
+  };
+  const E = 0.14; // (how far in the edge reaches)
+  const edge = (x, y, v) => [[E, 0], [-E, 0], [0, E], [0, -E]].filter(([dx, dy]) => valueAt(x + dx, y + dy) !== v).length;
   // (u along the rows, w across them, in world units, as x/y for the field)
-  for (const field of here) {
-    const { crop, along } = field, C = MEADOW[crop];
+  for (const v of vals) {
+    const crop = cropOfValue(v), along = alongOfValue(v), C = MEADOW[crop];
+    if (crop === 'meadow') {
+      wildMeadow(world, cx, cy, v, C, grows, edge, out);
+      continue;
+    }
     const [u0, w0] = along === 'x' ? [cx, cy] : [cy, cx];
     const xy = (u, w) => (along === 'x' ? [u, w] : [w, u]);
-    const mine = (x, y) => grows(x, y) === field;
     for (let k = Math.ceil((w0 - 0.5) / C.rows - 0.5); (k + 0.5) * C.rows < w0 + 0.5; k++) {
       const w = (k + 0.5) * C.rows;
       if (crop === 'potatoes') {
         // the ridge (hrůbek): a line along the row, broken where the field isn't
         let run = [];
-        const flush = () => { if (run.length > 1) out.push({ x: run[0][0], y: run[0][1], tier: 0, parts: [], ground: [[[run], 'ridge']] }); run = []; };
+        // (a ridge comes with its plants and goes the last, chunkSVG's growth)
+        const flush = () => { if (run.length > 1) out.push({ x: run[0][0], y: run[0][1], tier: 0, parts: [], ground: [[[run], 'ridge']], field: v, late: 0.95 }); run = []; };
         for (let u = u0 - 0.5; u <= u0 + 0.5 + 1e-9; u += 0.1) {
           const p = xy(Math.min(u, u0 + 0.5), w);
-          if (mine(...p)) run.push(p);
+          if (grows(...p, v) && !edge(...p, v)) run.push(p);
           else flush();
         }
         flush();
       }
-      for (let u = u0 - 0.5 + g.range(0, C.step); u < u0 + 0.5; u += C.step * g.range(0.8, 1.2)) {
+      // the steps along the row whose plant stands on this square
+      for (let n = Math.floor((u0 - 0.5) / C.step) - 1; n * C.step < u0 + 0.5 + C.step; n++) {
+        const g = rng(hash(world.seed, k, n, v * 7 + 101));
+        const u = (n + 0.5 + g.range(-0.2, 0.2)) * C.step;
+        if (u < u0 - 0.5 || u >= u0 + 0.5) continue;
         if (crop === 'grain' && g.chance(C.gaps)) continue;
         const [x, y] = xy(u, w + g.range(-0.5, 0.5) * C.rows * (crop === 'grain' ? 0.25 : 0.1));
-        if (!mine(x, y)) continue;
+        if (!grows(x, y, v)) continue;
+        const rim = edge(x, y, v);
+        if (rim && g.random() < 0.25 * rim) continue;
+        const small = rim ? 0.7 + 0.3 * g.random() : 1;
         const roll = g.random();
-        // (`field` and `late`, 0–1: when it comes up in a field just closed, chunkSVG's growth)
+        // (`late`, 0–1: when it comes up on a square just sown, chunkSVG's growth)
         const late = hash(world.seed, Math.round(x * 1000), Math.round(y * 1000), 3) / 2 ** 32;
-        if (crop === 'grain') out.push({ x, y, tier: roll < 0.3 ? 0 : roll < 0.6 ? 1 : 2, parts: stalk(g, C.h), field, late });
-        else out.push({ x, y, tier: roll < 0.45 ? 0 : 1, parts: potato(g, C.r, C.flowers), field, late });
+        if (crop === 'grain') out.push({ x, y, tier: roll < 0.3 ? 0 : roll < 0.6 ? 1 : 2, parts: stalk(g, C.h * small), field: v, late });
+        else out.push({ x, y, tier: roll < 0.45 ? 0 : 1, parts: potato(g, C.r * small, C.flowers), field: v, late });
       }
+    }
+  }
+}
+
+// A meadow sown (crops above): grass and flowers scattered on a loose
+// lattice, each plant at its own place and from its own seed as the
+// crops' are, thinner and lower along the edge. The flowers in pens of
+// their own (styles.css: the detail pen, as the grass, and their colours where the scheme
+// has them).
+const FLOWER_PENS = { thin: 'stem', ink: 'head' };
+function wildMeadow(world, cx, cy, v, C, grows, edge, out) {
+  const kinds = Object.entries(C.mix), draw = { tuft, seedGrass, daisy, poppies, dandelion, thistle };
+  for (let k = Math.floor((cy - 0.5) / C.rows) - 1; k * C.rows < cy + 0.5 + C.rows; k++) {
+    for (let n = Math.floor((cx - 0.5) / C.step) - 1; n * C.step < cx + 0.5 + C.step; n++) {
+      const g = rng(hash(world.seed, n, k, v * 7 + 211));
+      const x = (n + 0.5 + g.range(-0.45, 0.45)) * C.step, y = (k + 0.5 + g.range(-0.45, 0.45)) * C.rows;
+      if (x < cx - 0.5 || x >= cx + 0.5 || y < cy - 0.5 || y >= cy + 0.5) continue;
+      if (g.chance(C.gaps) || !grows(x, y, v)) continue;
+      const rim = edge(x, y, v);
+      if (rim && g.random() < 0.25 * rim) continue;
+      let pick = g.random(), kind = kinds[0][0];
+      for (const [name, share] of kinds) {
+        kind = name;
+        if ((pick -= share) < 0) break;
+      }
+      const h = g.range(...C.h) * (rim ? 0.75 : 1) * (kind === 'tuft' || kind === 'seedGrass' ? C.grass : 1);
+      let parts = draw[kind](g, h);
+      // (the flowers, not the grass, in the flowers' pens)
+      const flower = kind !== 'tuft' && kind !== 'seedGrass';
+      if (flower) parts = parts.map(([lines, pen]) => [lines, `${FLOWER_PENS[pen] ?? 'stem'} ${kind}`]);
+      const late = hash(world.seed, Math.round(x * 1000), Math.round(y * 1000), 3) / 2 ** 32;
+      // (the flowers seen from a little further out than the meadow's own)
+      out.push({ x, y, tier: flower ? (g.chance(0.6) ? 0 : 1) : g.chance(0.3) ? 0 : 1, parts, field: v, late });
     }
   }
 }
@@ -235,8 +303,8 @@ function crops(world, ground, cx, cy, out) {
 // one <path> per tier and pen. `tile`: scene px per grid step.
 // `project` may return null (not in the picture) and `tile` may be a
 // function (x, y) -> px per grid unit, for the photo camera (photo.js).
-// `growth` (optional): (field, late) -> 0–1, how far up a crop plant has
-// come in a field just closed (0: not yet, 1: grown); `kept` (optional): a
+// `growth` (optional): (late, x, y) -> 0–1, how far up the crop plant at
+// (x, y) has come on a square just sown (0: not yet, 1: grown); `kept` (optional): a
 // Map that keeps each dot's plants from one drawing to the next while they
 // grow (only their size changes).
 export function chunkSVG(world, ground, x0, y0, project, tile, growth = null, kept = null) {
@@ -251,7 +319,7 @@ export function chunkSVG(world, ground, x0, y0, project, tile, growth = null, ke
         kept?.set(cy * 1e5 + cx, plants);
       }
       for (const { x, y, tier, parts, ground: lying, field, late } of plants) {
-        const k = growth && field ? growth(field, late) : 1;
+        const k = growth && field ? growth(late, x, y) : 1;
         if (k <= 0) continue;
         for (const [lines, pen] of lying ?? []) {
           const key = `${tier} ${pen}`;
@@ -278,7 +346,7 @@ export function chunkSVG(world, ground, x0, y0, project, tile, growth = null, ke
   }
   let svg = '';
   for (const [key, d] of [...runs].sort()) {
-    const [tier, pen] = key.split(' ');
+    const cut = key.indexOf(' '), tier = key.slice(0, cut), pen = key.slice(cut + 1); // (a pen may be two classes)
     svg += `<path class="t${tier}${pen ? ` ${pen}` : ''}" d="${d}"/>`;
   }
   return svg;

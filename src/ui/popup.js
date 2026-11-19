@@ -13,6 +13,9 @@
 // than at the pointer, centred on it and a little above, never covering
 // it: below it when there's no room above (something near the top of the
 // screen), else beside it, right or left, when neither fits.
+// `compact` (show's last argument): everything on one line, no title bar
+// and no ×, under what was clicked rather than over it (a building's card:
+// its house number, like the plate by its door).
 
 import { isNarrow } from './device.js';
 import { reveal, isShown } from './motion.js';
@@ -60,8 +63,10 @@ export class Popup {
     return isShown(this.el);
   }
 
-  show(x, y, title, items, refresh = null, around = null) {
+  show(x, y, title, items, refresh = null, around = null, { compact = false } = {}) {
     const wasOpen = this.open;
+    this.compact = compact;
+    this.el.classList.toggle('compact', compact);
     if (!wasOpen) this.openedAt = performance.now();
     this.refresh = refresh;
     this.render(title, items);
@@ -83,7 +88,8 @@ export class Popup {
     let left = x + 12, top = y + 12;
     if (around) {
       left = (around.left + around.right) / 2 - width / 2;
-      if (around.top - GAP - height >= EDGE) top = around.top - GAP - height;
+      if (this.compact && around.bottom + GAP + height <= innerHeight - EDGE) top = around.bottom + GAP;
+      else if (around.top - GAP - height >= EDGE) top = around.top - GAP - height;
       else if (around.bottom + GAP + height <= innerHeight - EDGE) top = around.bottom + GAP;
       else {
         // too tall a thing on too short a screen: beside it, level with it
@@ -119,7 +125,7 @@ export class Popup {
       body += h;
       if (row && !inRow(items[i + 1])) body += '</div>';
     });
-    this.body.innerHTML = `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="${t('close')}">×</button></div>${body}`;
+    this.body.innerHTML = this.compact ? body : `<div class="title"><span>${esc(title)}</span><button class="close" aria-label="${t('close')}">×</button></div>${body}`;
     // shown (at once, for measuring) unless it's on its way out: then
     // show() brings it back with an entrance
     if (!this.el.classList.contains('leaving')) this.el.classList.remove('hidden');

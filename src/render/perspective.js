@@ -8,12 +8,15 @@
 // distortion, not part of the town.
 //
 // The camera looks level (no pitch), so the near plane is vertical and
-// clipping can be done on world points before the relief lifts them.
+// clipping can be done on world points before the relief lifts them. The
+// horizon need not be across the middle of the picture: `horizon` is where
+// it is, as a share of the height from the top – as a shifted lens does, so
+// the walls stay upright and the picture has less bare ground in front.
 //
 // Screen: pixels in a width × height picture, (0, 0) top left.
 
 export class PerspectiveCamera {
-  constructor({ x, y, z, yaw, fov = 55, width = 480, height = 320, lift = null, near = 0.06 }) {
+  constructor({ x, y, z, yaw, fov = 55, width = 480, height = 320, lift = null, near = 0.06, horizon = 0.5, shapes = 1 }) {
     this.perspective = true;
     this.ex = x;
     this.ey = y;
@@ -24,6 +27,7 @@ export class PerspectiveCamera {
     this.height = height;
     this.lift = lift;
     this.near = near;
+    this.horizonY = height * horizon; // the horizon on the picture, px from the top
     this.fx = Math.cos(yaw);
     this.fy = Math.sin(yaw);
     // right, matching the map: the iso view has +x to the right of -y
@@ -34,6 +38,10 @@ export class PerspectiveCamera {
     this.tile = 32;
     this.rotation = 0;
     this.zScale = 1;
+    // what the painters draw facing the eye (trees' crowns and trunks,
+    // Painter._anchor) drawn this many times as big as their distance makes
+    // them: the map draws trees big, to read from above
+    this.shapes = shapes;
   }
 
   // No turn of its own: world directions are its view directions (for the
@@ -52,7 +60,7 @@ export class PerspectiveCamera {
     const cz = Math.max(this.ahead(x, y), 1e-4);
     const cx = (x - this.ex) * this.rx + (y - this.ey) * this.ry;
     const cy = z - this.ez;
-    return [this.width / 2 + (cx / cz) * this.focal, this.height / 2 - (cy / cz) * this.focal];
+    return [this.width / 2 + (cx / cz) * this.focal, this.horizonY - (cy / cz) * this.focal];
   }
 
   // Pixels per world unit at a point (for screen-facing shapes).

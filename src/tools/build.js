@@ -36,6 +36,21 @@ export function createBuildTool(ctx, defs) {
   // parks and squares turn only by quarters (World.freePlacement)
   const free = () => !def().canPlace;
   let point = null; // the pointer's world position (snap)
+  // The building just put down, while the pointer is still on it: no
+  // preview over it (it would only say the ground is taken – by what was
+  // just built), until the pointer has left it once.
+  let justBuilt = null;
+  const onJustBuilt = () => {
+    if (justBuilt == null) return false;
+    if (point && world.structureAtPoint(...point)?.id === justBuilt) return true;
+    justBuilt = null;
+    return false;
+  };
+  const built = (s) => {
+    if (!s) return;
+    justBuilt = s.id;
+    seed = newSeed();
+  };
   // A building placed freely faces its road (or, with none near, the
   // viewer) and is turned from there by `twist` (radians): the scroll
   // wheel turns it smoothly, Tab or the Turn button by TURN_STEP.
@@ -89,6 +104,7 @@ export function createBuildTool(ctx, defs) {
     // params: { type, rotation } picks up a copy of a built structure
     // (right-click on it)
     enter(params) {
+      justBuilt = null;
       const i = defs.findIndex((d) => d.id === params.type && UNLOCKS.allows(d.id));
       if (i >= 0) variant = i;
       else if (!UNLOCKS.allows(def().id)) resize();
@@ -108,11 +124,11 @@ export function createBuildTool(ctx, defs) {
       if (!UNLOCKS.allows(def().id)) return;
       if (free()) {
         const p = freeAt();
-        if (p?.check.ok && world.placeStructureAt(def().id, p.x, p.y, p.angle, { seed, data: freeData() })) seed = newSeed();
+        if (p?.check.ok) built(world.placeStructureAt(def().id, p.x, p.y, p.angle, { seed, data: freeData() }));
         return;
       }
       const at = world.placementFor(def().id, node, placed());
-      if (world.placeStructure(def().id, at.node, { rotation: at.rotation, seed, data: data() })) seed = newSeed();
+      built(world.placeStructure(def().id, at.node, { rotation: at.rotation, seed, data: data() }));
     },
 
     // the scroll wheel turns a building placed freely (else the map zooms)
@@ -138,7 +154,7 @@ export function createBuildTool(ctx, defs) {
     ],
 
     overlay(kit, hover) {
-      if (hover < 0) return '';
+      if (hover < 0 || onJustBuilt()) return '';
       const d = def();
       if (free()) {
         const p = freeAt();

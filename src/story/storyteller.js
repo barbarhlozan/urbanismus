@@ -160,7 +160,7 @@ export class Storyteller {
 
   // dt: real seconds.
   update(dt) {
-    if (!this.script || this.telling) return;
+    if (!this.script || this.telling || this.busy?.()) return; // (busy: kecy being told, main.js)
     this.timer += dt;
     if (this.timer < this.config.check) return;
     this.timer = 0;

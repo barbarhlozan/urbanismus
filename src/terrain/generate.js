@@ -13,6 +13,7 @@ export function generateWorld(world, config) {
     generateTributaries(world, rng, config.terrain);
     generateLakes(world, rng, config.terrain);
     generateTrees(world, rng, config.terrain);
+    generateMeadows(world, config.terrain);
   });
 }
 
@@ -505,3 +506,42 @@ function generateTrees(world, rng, opts) {
     world.addFeature('tree', i, { ox, oy, variant, scale });
   }
 }
+
+// Now and then a meadow or two (a crop of its own, world/crops.js): a
+// patch of grass and flowers painted as the brush paints one, a few
+// strokes wandering about a spot – out of the woods, off the water, away
+// from the map's middle where the village will be. From a randomness of
+// its own, so the passes before it come out as they did.
+function generateMeadows(world, opts) {
+  const rng = mulberry32(world.seed ^ 0x6c6f756b);
+  const [least, most] = opts.meadows ?? [0, 2];
+  const count = least + Math.floor(rng() * (most - least + 1.4));
+  const { grid, terrain } = world;
+  const [mx, my] = mapCenter(grid);
+  for (let made = 0, tries = 0; made < count && tries < 40; tries++) {
+    const x = 2 + rng() * (grid.width - 5), y = 2 + rng() * (grid.height - 5);
+    if (Math.hypot(x - mx, y - my) < opts.clearRadius + 2) continue;
+    if (world.land.depth(x, y) < 2.5) continue;
+    // open ground all round: no water, few trees
+    let trees = 0, wet = false;
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const n = grid.nodeAt(x + dx, y + dy);
+        if (n < 0 || terrain.isWater(n)) wet = true;
+        else if (world.featureAt(n)) trees++;
+      }
+    }
+    if (wet || trees > 3) continue;
+    let [px, py] = [x, y], a = rng() * Math.PI * 2;
+    const pts = [[px, py]];
+    for (let k = 2 + Math.floor(rng() * 4); k > 0; k--) {
+      a += (rng() - 0.5) * 2;
+      px += Math.cos(a) * (0.8 + rng() * 0.9);
+      py += Math.sin(a) * (0.8 + rng() * 0.9);
+      pts.push([px, py]);
+    }
+    world.paintCrops(pts, 0.9 + rng() * 0.7, 'meadow');
+    made++;
+  }
+}
+

@@ -207,6 +207,8 @@ function spruceShape(g, H, simple) {
 //   width   crown half width (share of the height)
 //   lobes   pen lobes round the crown
 //   gap     the open part underneath (radians either side of straight down)
+// the open part underneath in a photo (radians either side of straight down)
+const PHOTO_GAP = 0.1;
 const SKETCH = {
   sapling: { trunk: [0.3, 0.42], width: [0.2, 0.28], lobes: [3, 5], gap: [0.4, 0.8] },
   spreading: { trunk: [0.22, 0.32], width: [0.34, 0.48], lobes: [4, 6], gap: [0.35, 0.7] },
@@ -224,7 +226,13 @@ function drawLeafy(g, x, y, kind, H, simple) {
   const heavy = g.chance(0.65) ? g.pick([-1, 1]) : 0;
   const ox = lean + heavy * rx * g.range(0.08, 0.28);
   const side = [rx * (heavy < 0 ? g.range(1.05, 1.25) : g.range(0.85, 1)), rx * (heavy > 0 ? g.range(1.05, 1.25) : g.range(0.85, 1))];
-  const gap = g.range(...p.gap), a0 = -Math.PI + gap + g.range(-0.15, 0.15), a1 = Math.PI - gap + g.range(-0.15, 0.15);
+  let gap = g.range(...p.gap), j0 = g.range(-0.15, 0.15), j1 = g.range(-0.15, 0.15);
+  // In a photo the crown is seen from the side, not from above: open below,
+  // the trunk would go up into the paper of the crown with no line under it.
+  // There the line comes round underneath, leaving only a gap about as wide
+  // as the trunk where it goes in.
+  if (g.camera?.perspective) [gap, j0, j1] = [PHOTO_GAP, j0 * 0.2, j1 * 0.2];
+  const a0 = -Math.PI + gap + j0, a1 = Math.PI - gap + j1;
   const at = (a, k) => [ox + Math.sin(a) * side[Math.sin(a) < 0 ? 0 : 1] * k, cy + Math.cos(a) * ry * k * (Math.cos(a) < 0 ? 0.9 : 1)];
 
   const { pen, fill } = key === 'poplar' ? raggedCrown(g, at, a0, a1, simple) : loopCrown(g, at, a0, a1, rx, p, simple);

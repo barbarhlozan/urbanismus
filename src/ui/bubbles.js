@@ -1,8 +1,13 @@
 // The story told on the map (bubbles-lab.html, style D): what people say
-// shows in bubbles over the building where it happens, stacked like a chat,
-// a lane a speaker (two on the sides, a third in the middle, four in four),
-// the name inside only when the speaker changes, older lines above and
-// paler, and a tail from the last of a speaker's run leaning to the roof.
+// shows in bubbles over the building where it happens, stacked like a chat
+// along a line straight up from the house: a side a speaker – one alone
+// on the line, two either side of it (the first to speak on the left, its
+// edge and tail at the line), a third on it, four two a side –
+// the name inside only when the speaker changes, older lines above (all
+// of them as strong as the newest until the talk ends: then they go, the
+// oldest first, close({ fade })), and a tail on the newest only, leaning
+// to the roof – someone's still talking. When the talk ends the tail goes
+// first, then the bubbles.
 // The narrator's lines (`narrator` in the story file), narration and the
 // choices are a caption at the bottom of the screen instead.
 //
@@ -14,7 +19,8 @@
 //   …{ crowd: true }      a bubble that goes by itself after a while; resolves
 //                         a moment later, so the next one comes over it
 //   await bubbles.choose(['…', '…'])           resolves with the index picked
-//   bubbles.close()
+//   bubbles.close({ fade, after })   the tail goes, `after` s later the
+//                         bubbles, oldest first, `fade` s apart
 //   bubbles.frame()       every frame: the bubbles follow their buildings
 //
 // Click a bubble or the caption (or Enter) to go on; a click while the line
@@ -30,12 +36,15 @@ import { mulberry32 } from '../core/random.js';
 const NS = 'http://www.w3.org/2000/svg';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const COLUMN = 380;  // px: the width of a house's talk
-const KEEP = 4;      // lines kept in a stack
+const KEEP = 12;     // lines kept in a stack (a longer talk: its first go, so it doesn't climb off the screen)
 const EDGE = 14;     // px kept clear round the screen
 const FRAME = 11;    // px: the sprite's border slice, on screen
-const LANES = [[0.5], [0.2, 0.8], [0.17, 0.83, 0.5], [0.14, 0.86, 0.38, 0.62]];
-const FADE = [1, 0.78, 0.58, 0.42, 0.32];
+// where each speaker's bubbles sit, by how many talk: 0 on the line up
+// from the house, -1 just left of it (its right edge by the line), 1 just
+// right, ±2 a step further out
+const SIDES = [[0], [-1, 1], [-1, 1, 0], [-2, 2, -1, 1]];
+const GAP = 7;   // px between the line and a bubble beside it
+const STEP = 64; // px further out for the outer pair of four
 
 // The bubble, drawn once per scheme: a rounded box in one pen line whose
 // ends overlap where it closes, paper inside. 120×72, sliced 26 in.
@@ -80,6 +89,8 @@ export class Bubbles {
     this.list = [];
     this.count = 0;
     this.lanes = new Map(); // building id -> its speakers, in the order they first spoke
+    this.shown = new Map(); // building id -> those of them in a bubble there now: its lanes
+    this.last = null;       // (when the last frame was, for easing)
     this.pending = null;    // { kind: 'say' | 'choose', resolve }
     this.line = null;       // what's being written: { start, text, el?, cap? }
 
@@ -116,7 +127,8 @@ export class Bubbles {
         this.pending = { kind: 'say', resolve: () => { clearTimeout(t); resolve(); } };
       });
     }
-    this.line = { start: instant ? -1e9 : this.now(), text, bubble: b };
+    // (a bubble comes whole, like a text message; only the caption is written out)
+    this.line = { start: -1e9, text, bubble: b };
     return new Promise((resolve) => { this.pending = { kind: 'say', resolve }; });
   }
 
@@ -135,11 +147,15 @@ export class Bubbles {
     return new Promise((resolve) => { this.pending = { kind: 'choose', resolve }; });
   }
 
-  close() {
+  // fade: the bubbles go one by one, the oldest first, `fade` seconds
+  // apart, as older lines do while talking (the talk left hanging a while)
+  close({ fade = 0, after = 0 } = {}) {
     this.finish();
     this.line = null;
-    for (const b of this.list) this.drop(b);
-    this.lanes.clear();
+    const now = this.now();
+    // (a bubble going has no tail: so the newest's goes now, at once)
+    this.list.filter((b) => b.dropAt == null).forEach((b, i) => { b.dropAt = now + (fade ? after : 0) + i * fade; });
+    if (!fade) { this.lanes.clear(); this.shown.clear(); } // (else each place's once its bubbles are gone: frame)
     this.hideCaption();
   }
 
@@ -267,7 +283,7 @@ export class Bubbles {
   bubble(who, text, at, crowd) {
     this.layer.style.setProperty('--chat-sprite', chatSprite());
     const el = document.createElement('div');
-    el.className = 'bb';
+    el.className = 'bb pop'; // (it pops up from its tail as it comes: styles.css)
     el.innerHTML = `<div class="bb-name">${esc(who)}</div><div class="bb-text"><span class="un">${esc(text)}</span></div>`;
     // its tail in an <svg> of its own, behind its letters
     const ink = document.createElementNS(NS, 'svg');
@@ -287,7 +303,7 @@ export class Bubbles {
     const b = { who, at, place, crowd, el, g, n, seed: seedOf(n, 31), born: this.now(),
       named: crowd || !before || before.who !== who,
       jitter: crowd ? [(rnd() - 0.5) * 260, 20 - rnd() * 110] : [0, 0], rel: null, fresh: true };
-    if (crowd) b.line = { start: this.now(), text, bubble: b };
+    if (crowd) b.line = { start: -1e9, text, bubble: b };
     // no more than KEEP lines kept at a house
     const kept = this.list.filter((o) => !o.crowd && o.dropAt == null && o.place === place);
     if (!crowd) for (const o of kept.slice(0, Math.max(0, kept.length - KEEP + 1))) this.drop(o);
@@ -302,6 +318,9 @@ export class Bubbles {
   // Every frame: write, lay out, follow the buildings.
   frame() {
     const now = this.now();
+    // (how far things ease this frame: most of the way in about half a second)
+    this.ease = this.last == null ? 1 : 1 - Math.exp(-Math.min(0.1, now - this.last) / 0.16);
+    this.last = now;
     if (this.line) this.write(this.line);
     if (!this.cap.classList.contains('hidden')) this.placeCaption();
     for (const b of this.list) {
@@ -313,6 +332,7 @@ export class Bubbles {
       b.el.remove();
       return false;
     });
+    for (const place of this.lanes.keys()) if (!this.list.some((b) => b.place === place)) { this.lanes.delete(place); this.shown.delete(place); }
     if (!this.list.length) return;
     const W = innerWidth, H = innerHeight;
 
@@ -323,16 +343,13 @@ export class Bubbles {
       if (!stacks.has(key)) stacks.set(key, []);
       stacks.get(key).push(b);
     }
-    // (paler the further back it was said, at this house or another)
-    const age = new Map();
-    let k = 0;
-    for (const b of [...this.list].reverse()) if (!b.crowd && b.dropAt == null) age.set(b, k++);
-    for (const stack of stacks.values()) this.layStack(stack, W, H, age);
+    for (const stack of stacks.values()) this.layStack(stack, W, H);
   }
 
   // One building's talk: laid out round its roof, the newest lowest. Off
   // screen, the whole stack is moved in to the edge on the building's side.
-  layStack(stack, W, H, age) {
+  layStack(stack, W, H) {
+    const now = this.now();
     const at = stack[0].at;
     const anchor = this.roofOf(at);
     if (!anchor) {
@@ -340,7 +357,14 @@ export class Bubbles {
       return;
     }
     const [ax, ay] = anchor;
-    const speakers = this.lanes.get(stack[0].place) ?? [];
+    // a lane each for those talking there now (in a bubble not going), in
+    // the order they first spoke, the middle of them over the house: one
+    // alone right over it, two either side, three in three… While the
+    // talk is going away, the lanes stay as they were.
+    const place = stack[0].place;
+    const talking = new Set(stack.filter((b) => !b.crowd && b.dropAt == null).map((b) => b.who));
+    if (talking.size) this.shown.set(place, (this.lanes.get(place) ?? []).filter((w) => talking.has(w)));
+    const speakers = this.shown.get(place) ?? [];
     const lanes = Math.max(1, Math.min(4, speakers.length));
     let up = 0, belowWho = null;
     const laid = [];
@@ -348,17 +372,22 @@ export class Bubbles {
       b.el.classList.toggle('noname', !b.named);
       b.el.style.maxWidth = `${lanes >= 4 ? 175 : lanes === 3 ? 205 : 240}px`;
       const w = b.el.offsetWidth, h = b.el.offsetHeight;
-      const lane = b.crowd ? 0.5 : LANES[lanes - 1][speakers.indexOf(b.who)] ?? 0.5;
-      const laneX = -COLUMN / 2 + COLUMN * lane;
-      const tail = b.crowd || belowWho !== b.who;
+      const side = b.crowd ? 0 : SIDES[lanes - 1][speakers.indexOf(b.who)] ?? 0;
+      // (room for a tail where the speaker changes; drawn on the newest
+      // only, while the talk goes on)
+      const gap = b.crowd || belowWho !== b.who;
+      const tail = b.crowd || (r === 0 && b.dropAt == null);
       belowWho = b.who;
-      const x = Math.max(-COLUMN / 2, Math.min(COLUMN / 2 - w, laneX - w / 2)) + b.jitter[0];
-      const y = -h - 18 - up - (tail ? 10 : 0) + b.jitter[1];
-      up += h + (tail ? 10 : 0) + 5;
-      // (the stack eases into its new shape as lines come; the building it
-      // hangs on it follows at once)
-      b.rel = b.rel ? [b.rel[0] + (x - b.rel[0]) * 0.22, b.rel[1] + (y - b.rel[1]) * 0.22] : [x, y];
-      laid.push({ b, r, w, h, tail, laneX });
+      const out = Math.abs(side) > 1 ? STEP : 0;
+      b.el.style.transformOrigin = side < 0 ? '100% 100%' : side > 0 ? '0 100%' : '50% 100%';
+      const x = (side < 0 ? -GAP - w - out : side > 0 ? GAP + out : -w / 2) + b.jitter[0];
+      const y = -h - 18 - up - (gap ? 10 : 0) + b.jitter[1];
+      up += h + (gap ? 10 : 0) + 5;
+      // (the stack eases into its new shape as lines come and lanes open;
+      // the building it hangs on it follows at once)
+      const k = this.ease ?? 1;
+      b.rel = b.rel ? [b.rel[0] + (x - b.rel[0]) * k, b.rel[1] + (y - b.rel[1]) * k] : [x, y];
+      laid.push({ b, r, w, h, tail });
     });
 
     // off screen: the stack moved in, whole, to the edge on that side
@@ -375,30 +404,39 @@ export class Bubbles {
       dy = y0 < pad ? pad - y0 : y1 > H - pad ? H - pad - y1 : 0;
     }
 
-    for (const { b, r, w, h, tail, laneX } of laid) {
+    for (const { b, r, w, h, tail } of laid) {
       let x = ax + b.rel[0] + dx, y = ay + b.rel[1] + dy;
-      let fade = Math.min(FADE[age.get(b) ?? 0] ?? 0.3, b.dim ? 0.35 : 1);
+      let fade = b.dim ? 0.35 : 1; // (faded back behind a caption or a choice)
       if (!off) {
         x = Math.max(8, Math.min(W - w - 8, x));
         if (y < 4 && r > 0) fade = 0; // an older line pushed off the top goes
       }
-      b.el.style.opacity = b.dropAt != null ? 0 : fade;
-      b.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      b.el.style.opacity = b.dropAt != null && now >= b.dropAt ? 0 : fade;
+      // (placed with `translate`, so its pop – a `transform` – grows round its own tail corner)
+      b.el.style.translate = `${x.toFixed(1)}px ${y.toFixed(1)}px`;
       // the ink svg sits in the padding box, inside the border
       b.g.setAttribute('transform', `translate(${(-x - FRAME).toFixed(1)} ${(-y - FRAME).toFixed(1)})`);
-      this.setInk(b, tail ? this.tail(b, x, y, w, h, ax, ay, laneX + ax + dx, off) : []);
+      this.setInk(b, tail ? this.tail(b, x, y, w, h, ax, ay, off) : []);
     }
   }
 
-  // The tail: from under the bubble, leaning from its lane to the roof; or,
-  // off screen, out of the side facing the building, pointing to it.
-  tail(b, x, y, w, h, ax, ay, laneX, off) {
+  // The tail: from under the bubble, at the point of it nearest the house
+  // and leaning towards it (eased there as the bubble moves to its lane);
+  // or, off screen, out of the side facing the building, pointing to it.
+  tail(b, x, y, w, h, ax, ay, off) {
     let root, dir;
     if (!off) {
-      const tx = Math.max(x + 22, Math.min(x + w - 22, laneX + (ax - laneX) * 0.45));
+      // down from under it, clear of its rounded corners, as near the
+      // house as it gets; leaning more the further the house is to the side
+      const k = this.ease ?? 1;
+      const along = w < 52 ? w / 2 : Math.max(24, Math.min(w - 24, ax - x));
+      b.along = b.along == null ? along : b.along + (along - b.along) * k;
+      const tx = x + b.along;
+      const lean = Math.max(-1, Math.min(1, (ax - tx) / 90));
+      b.lean = b.lean == null ? lean : b.lean + (lean - b.lean) * k;
       root = [tx, y + h - 3]; // (the sprite's line)
-      const ddx = ax - tx, ddy = Math.max(20, ay - root[1]), l = Math.hypot(ddx, ddy);
-      dir = [ddx / l, ddy / l];
+      const l = Math.hypot(b.lean * 0.4, 1);
+      dir = [(b.lean * 0.4) / l, 1 / l];
     } else {
       // out of the side facing the building (on the sprite's line, 3 in;
       // not round its rounded corners)
@@ -414,7 +452,7 @@ export class Bubbles {
     const side = [-dir[1], dir[0]];
     const tip = [root[0] + dir[0] * 14, root[1] + dir[1] * 14];
     const a = [root[0] + side[0] * 6, root[1] + side[1] * 6], c = [root[0] - side[0] * 6, root[1] - side[1] * 6];
-    const ia = [a[0] - dir[0] * 3, a[1] - dir[1] * 3], ic = [c[0] - dir[0] * 3, c[1] - dir[1] * 3];
+    const ia = [a[0] - dir[0] * 4, a[1] - dir[1] * 4], ic = [c[0] - dir[0] * 4, c[1] - dir[1] * 4];
     return [
       ['paper', `M${ia[0]} ${ia[1]}L${tip[0]} ${tip[1]}L${ic[0]} ${ic[1]}Z`],
       ['pen', sketchLine(a, tip, b.seed + 3, { bow: 0.8 }) + sketchLine(tip, c, b.seed + 4, { bow: 0.8 })],

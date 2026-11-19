@@ -241,6 +241,7 @@ export const CONFIG = {
     treeDensity: 3,       // 0 disables trees
     forestThreshold: 0.58, // forest noise above this grows trees: lower, more woodland
     clearRadius: 5,     // keep the map centre free for the player
+    meadows: [0, 2],    // meadows on a new map (generate.js): from … to, now and then one more
   },
 
   // Too steep to build on (metres of rise per grid step): buildings where
@@ -591,6 +592,16 @@ export const CONFIG = {
     unlocks: 'story/unlocks.txt', // what may be built (src/story/unlocks.js)
     check: 2,             // real seconds between looks at the rules
     typing: 55,           // letters a second as a line is written out (0: all at once)
+  },
+
+  // Kecy (src/story/kecy.js, written in story/kecy.md): now and then three
+  // dots over a house; the house clicked, two neighbours talk there in bubbles.
+  kecy: {
+    file: 'story/kecy.md',
+    every: [90, 200],     // real seconds from one kec told (or the town opened) to the next dots
+    linger: 6,            // seconds the last bubble stays; then the talk ends: its tail goes…
+    after: 0.6,           // …and this much later the bubbles…
+    fade: 0.3,            // …one by one, the oldest first, this many seconds apart
   },
 
   // The town's chronicle (src/sim/chronicle.js), opened from the book by the town's name.

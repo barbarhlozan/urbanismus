@@ -8,6 +8,7 @@
 import { sketchFrame } from './sketchFrame.js';
 import { t } from '../core/text.js';
 import { printImage } from './prints.js';
+import { brushPhoto } from './photoBrush.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -35,6 +36,8 @@ export class PhotoPrint {
         <button data-act="close">${t('close')}</button>
       </div>`;
     this.el.classList.remove('hidden');
+    // (in the page now, so its styles are known: drawn with the pen's line)
+    brushPhoto(this.photo);
     this.onToggle(true);
   }
 

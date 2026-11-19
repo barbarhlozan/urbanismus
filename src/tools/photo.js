@@ -2,27 +2,26 @@
 // Click to place the photographer, move the pointer to aim, click again to
 // take the photo (render/photo.js); it opens as a print (ui/photoPrint.js).
 // Taking more shots from the same spot keeps the photographer where they
-// are; Esc (or Move) picks them up again. The lens starts wide, at 28mm
-// (Shift, or Lens in the dock, goes on to 42 and 80).
+// are; Esc (or Move) picks them up again. There is no lens to pick: on the
+// map a small arrow shows only which way they look, and the picture is
+// framed when it is taken, by what is aimed at (render/photo.js
+// framePhoto) – the lens, a slight turn, a step or two back to have the
+// houses whole.
 //
 // It's picked up with the camera at the end of the Build menu's bottom row
-// (ui/buildMenu.js) or P; its options – Lens, Take, Move – and the × that
-// puts it down are in the Build menu's dock, as a building's are.
+// (ui/buildMenu.js) or P; its options – Take, Move – and the × that puts it
+// down are in the Build menu's dock, as a building's are.
 //
 // Touch has no hover to aim with: a tap places the photographer, a second
 // tap sets where they look (the cone stays there, tap again to turn), and
 // the Take photo button shoots.
 
-import { PHOTO } from '../render/photo.js';
 import { t } from '../core/text.js';
-
-const LENSES = PHOTO.lenses;
 
 export function createPhotoTool({ world }, { shoot }) {
   let point = null;  // pointer, world
   let spot = null;   // the photographer, world [x, y]
   let aim = null;    // touch: where they look, world [x, y] (null: at the pointer)
-  let lens = 0; // 28mm
 
   const yaw = () => {
     const at = aim ?? point;
@@ -30,11 +29,14 @@ export function createPhotoTool({ world }, { shoot }) {
       ? Math.atan2(at[1] - spot[1], at[0] - spot[0])
       : null;
   };
-  const cycleLens = () => { lens = (lens + 1) % LENSES.length; };
   const place = (at) => { spot = at; aim = null; };
-  const take = () => {
+  const shot = () => {
     const a = yaw();
-    if (a != null) shoot({ x: spot[0], y: spot[1], yaw: a, fov: LENSES[lens].fov, lens: LENSES[lens].label });
+    return a == null ? null : { x: spot[0], y: spot[1], yaw: a, at: aim ?? point };
+  };
+  const take = () => {
+    const s = shot();
+    if (s) shoot(s);
   };
 
   return {
@@ -71,8 +73,7 @@ export function createPhotoTool({ world }, { shoot }) {
     },
 
     key(e) {
-      if (e.key === 'Shift' && !e.repeat) cycleLens(); // like Size while building
-      else if (e.key === 'Enter' && aim) take();
+      if (e.key === 'Enter' && aim) take();
       else return false;
       return true;
     },
@@ -82,7 +83,6 @@ export function createPhotoTool({ world }, { shoot }) {
     lead: { label: t('photo.take'), run: take },
 
     actions: () => [
-      { label: `${t('photo.lens')}: ${LENSES[lens].label}`, key: 'Shift', run: cycleLens },
       ...(spot ? [{ label: t('photo.move'), run: () => place(null) }] : []),
     ],
 
@@ -91,7 +91,7 @@ export function createPhotoTool({ world }, { shoot }) {
     },
 
     overlay(kit) {
-      if (spot) return kit.photographer(...spot, yaw(), LENSES[lens].fov, 3);
+      if (spot) return kit.photographer(...spot, yaw());
       return point ? kit.photographer(...point) : '';
     },
   };

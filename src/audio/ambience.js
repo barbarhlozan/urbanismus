@@ -37,6 +37,12 @@ const SOUND = {
   // the pencil: how long for one building, and for a line (a road, a path,
   // a fence) by its segments
   build: { one: [0.4, 0.75], line: [0.35, 0.06, 2.2] },
+  // a field: the brush is the pencil soft and low, piece after piece as
+  // long as it sows (each piece s long, from … to); rubbed out, the pencil
+  // lower and duller, longer for a bigger field (s: at the least, for each
+  // grid square's root, at most)
+  brush: { piece: [0.3, 0.5], rate: 0.85, dull: 0.35, soft: 0.5 },
+  rubOut: { length: [0.35, 0.12, 1.3], rate: 0.7, dull: 0.65, soft: 0.65 },
 };
 
 export class Ambience {
@@ -194,6 +200,26 @@ export class Ambience {
     else if (added) this.effects.scribble(Math.min(most, one() + 0.25 * (added - 1)));
     else if (changed) this.effects.scribble(one() * 0.6, { soft: 0.8 });
     else if (gone || cut) this.effects.scribble(Math.min(1.2, 0.3 + 0.1 * (gone + cut / 4)), { rate: 0.8, dull: 0.6, soft: 0.6 });
+    // a field rubbed out (sown, the brush is heard as it goes: brush())
+    else if (step.crops?.length && step.crops.every(([, , now]) => !now)) this.rubOut(step.crops.length / 64);
+  }
+
+  // The crop brush sowing: the pencil goes on while it's drawn, the next
+  // piece laid on as the last ends – so it stops soon after the brush does.
+  brush() {
+    if (!this.ctx || !this.on || this.ctx.state !== 'running') return;
+    const now = this.ctx.currentTime, b = SOUND.brush;
+    if ((this.brushUntil ?? 0) > now + 0.08) return;
+    const at = Math.max(now, this.brushUntil ?? 0);
+    const length = b.piece[0] + Math.random() * (b.piece[1] - b.piece[0]);
+    this.effects.scribble(length, { at, rate: b.rate, dull: b.dull, soft: b.soft });
+    this.brushUntil = at + length;
+  }
+
+  // A field rubbed out (`area` in grid squares; built()).
+  rubOut(area) {
+    const { length: [least, each, most], rate, dull, soft } = SOUND.rubOut;
+    this.effects.scribble(Math.min(most, least + each * Math.sqrt(area)), { rate, dull, soft });
   }
 
   // Set every sound for the weather and the hour now (at once when `now`,

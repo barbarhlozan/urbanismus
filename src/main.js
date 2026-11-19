@@ -10,6 +10,7 @@ import { Bubbles } from './ui/bubbles.js';
 import { ChronicleBook } from './ui/chronicleBook.js';
 import { Chronicle } from './sim/chronicle.js';
 import { Storyteller } from './story/storyteller.js';
+import { Kecy } from './story/kecy.js';
 import { UNLOCKS, applyScheme } from './story/unlocks.js';
 import { World } from './core/world.js';
 import { generateWorld } from './terrain/generate.js';
@@ -358,6 +359,10 @@ const dialogue = new Bubbles(uiRoot, {
   },
 });
 const story = new Storyteller({ world, agents, fires, trains, dialogue, chronicle, config: CONFIG });
+// now and then three dots over a house: clicked, two talk there (story/kecy.md)
+const kecy = new Kecy({ world, dialogue, config: CONFIG });
+kecy.busy = () => story.telling;
+story.busy = () => !!kecy.playing;
 // (read with the opening, below: openIntro)
 
 const tools = new ToolManager(world.grid, 'inspect');
@@ -365,7 +370,7 @@ tools.allowed = (tool) => (!tool.defs || tool.defs.some((d) => REVIEWED.has(d.id
 // (contours: the Terrain button beside Erase, tools/terrain.js; the button is
 // told whenever it changes)
 const contours = contoursSetting({ renderer, fallback: STYLE.contours, changed: (on) => hud.buildMenu.showTerrain(on) });
-const ctx = { world, camera, tools, popup, growth, renderer, config: CONFIG };
+const ctx = { world, camera, tools, popup, growth, renderer, config: CONFIG, sound: ambience };
 tools.register(createInspectTool(ctx));
 tools.register(createNetworkTool(ctx, { kind: 'road', id: 'street', street: true, group: 'transport' }));
 tools.register(createNetworkTool(ctx, { kind: 'road', group: 'transport' }));
@@ -376,7 +381,7 @@ for (const defs of BUILD_FAMILIES) tools.register(createBuildTool(ctx, defs));
 tools.register(createNetworkTool(ctx, { kind: 'fence', fineGrid: true, group: 'farming' }));
 // churchyard walls, drawn as the fence is (sim/churchyards.js)
 tools.register(createNetworkTool(ctx, { kind: 'wall', fineGrid: true, group: 'farming' }));
-// fields: their edges drawn as a fence is, closed all round they grow the crop (sim/fields.js)
+// fields and meadows: painted with a brush (tools/cropBrush.js, sim/fields.js)
 for (const crop of CROPS) tools.register(createCropBrush(ctx, { crop, group: 'farming' }));
 tools.register(createBulldozeTool(ctx));
 // while a print is out, photo mode rests (see the input below): no menu
@@ -791,6 +796,12 @@ attachInput(document.getElementById('input'), {
   // a way tool in hand: dragging draws the way (tools/network.js)
   sketch: {
     wants: () => !photoPrint.open && !!tools.active?.sketch,
+    down: (x, y) => {
+      if (!tools.active?.sketch?.down) return false;
+      tools.pointer(x, y);
+      tools.active.sketch.down(x, y);
+      return true;
+    },
     start: (x, y) => { tools.active?.sketch?.start(x, y); tools.pointer(x, y); },
     move: (x, y) => { tools.active?.sketch?.move(x, y); tools.pointer(x, y); },
     end: () => { tools.active?.sketch?.end(); tools.resnap(); },
@@ -886,7 +897,7 @@ const INTRO = {
 };
 let opening = true;
 async function openIntro() {
-  await story.load();
+  await Promise.all([story.load(), kecy.load()]);
   fileScheme();
   const intro = document.getElementById('intro');
   const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -1014,7 +1025,9 @@ function loop(now) {
     hud.update();
     chronicle.update(dt);
     if (!opening && !atMenu) story.update(dt); // (the story waits for the map to be drawn, and for the player)
+    if (!opening && !atMenu) kecy.update(dt);
     dialogue.frame();
+    kecy.frame();
   } catch (err) {
     if (!reported) console.error('Frame failed:', err);
     reported = true;
@@ -1023,8 +1036,10 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // Handy for debugging from the console: cmd.help() (src/dev/commands.js).
-window.cmd = createCommands({ world, config: CONFIG, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, annotations, renderer, unlocks: UNLOCKS });
+window.cmd = createCommands({ world, config: CONFIG, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, kecy, annotations, renderer, unlocks: UNLOCKS });
 // TEMPORARY: the time and the fires from two drawings beside the chronicle
 // (the fires act on the building whose card was opened last)
 const devMenus = new DevMenus(uiRoot, { world, cmd: window.cmd, popup });
 ctx.onPick = (s) => devMenus.pick(s);
+// a house being talked in: clicking it goes on a line (src/story/kecy.js)
+ctx.onBuilding = (s) => kecy.click(s);

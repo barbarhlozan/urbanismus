@@ -1,5 +1,5 @@
 // The Build menu, in the middle of the bottom edge: a row of tabs (TABS),
-// each shown by a drawing (a house, a road, a park), over a grid
+// each shown by a drawing (a house, a footpath, grain, a park), over a grid
 // of that group's tools – the building's own drawing, its name, its key –
 // and, along the bottom, a box of loose things, each a small drawing with
 // its name: Zpět (Undo) and, right after an undo, Znovu (Redo), then Erase,
@@ -49,10 +49,13 @@ import { t } from '../core/text.js';
 
 // The menu's tabs. Few buildings are offered for now, so the groups
 // (structures/index.js CATEGORIES, still what story/unlocks.txt names) share
-// three tabs: every building, the lines drawn on the ground (roads, paths,
-// the railway, the fence), and parks and squares.
-const TABS = [{ id: 'buildings', icon: 'housing' }, { id: 'roads', icon: 'transport' }, { id: 'parks', icon: 'spaces' }];
-const tabOf = (tool) => (!tool?.group ? null : !tool.defs ? 'roads' : tool.group === 'spaces' ? 'parks' : 'buildings');
+// four tabs: every building, the ways (roads, paths, the railway), the
+// land worked (the fields and the meadow, the fence that closes a
+// pasture), and parks and squares.
+const TABS = [{ id: 'buildings', icon: 'housing' }, { id: 'roads', icon: 'transport' }, { id: 'fields', icon: 'fields' }, { id: 'parks', icon: 'spaces' }];
+const tabOf = (tool) => (!tool?.group ? null
+  : !tool.defs ? (tool.group === 'farming' ? 'fields' : 'roads')
+  : tool.group === 'spaces' ? 'parks' : 'buildings');
 const groupName = (c) => t(`tab.${c.id}`);
 
 const FOLD_KEY = 'urbanismus.buildMenuFolded';
@@ -60,7 +63,7 @@ const GROUP_KEY = 'urbanismus.buildMenuGroup';
 
 // Each tab shows a group's sprite, icons/ui/tab-<icon>.svg; without one,
 // the drawing of the tool here
-const TAB_ICON = { buildings: 'build:house', roads: 'road', parks: 'build:green' };
+const TAB_ICON = { buildings: 'build:house', roads: 'path', fields: 'grain', parks: 'build:green' };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 

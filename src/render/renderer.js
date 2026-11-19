@@ -303,8 +303,24 @@ export class Renderer {
         }
       });
     }
-    // a field sown or cleared: it grows its crop again (render/meadow.js)
-    world.events.on('fields:changed', () => this.dirty.add('meadow'));
+    // a field sown or cleared: the meadow round where it changed grows its
+    // crop again (render/meadow.js) – the chunks in its box, and a dot
+    // beyond (a plant on a dot's edge is drawn from the dot)
+    world.events.on('fields:changed', (e) => {
+      if (e?.nodes) return;
+      if (e?.from) this.cropFrom = e.from;
+      if (!e?.box) return this.dirty.add('meadow');
+      // (the dots whose square the box reaches, a step to spare)
+      const c = MEADOW.chunk, dots = e.box.map((v, i) => Math.round(v) + (i < 2 ? -1 : 1));
+      for (let cy = Math.floor(dots[1] / c); cy <= Math.floor(dots[3] / c); cy++) {
+        for (let cx = Math.floor(dots[0] / c); cx <= Math.floor(dots[2] / c); cx++) {
+          const key = `${cx},${cy}`;
+          this.dropPlants(key, dots);
+          if (!this.meadowDirty.has(key)) (this.meadowReuse ??= new Set()).add(key);
+          this.meadowDirty.add(key);
+        }
+      }
+    });
     // (what's built across a field cuts it: the crop there again)
     for (const type of ['roads:changed', 'rails:changed', 'paths:changed', 'fences:changed', 'walls:changed', 'structure:added', 'structure:removed', 'structure:changed']) world.events.on(type, () => { if (world.crops.some((v) => v)) this.dirty.add('meadow'); });
     // a car parking redraws only its own lot (renderParked)
@@ -355,6 +371,7 @@ export class Renderer {
   // rebuilding (curves, plots and yards reach that far).
   touchMeadow(points) {
     const c = MEADOW.chunk, r = 2;
+    this.meadowReuse?.clear(); // (the ground changed: nothing kept for those chunks)
     for (const [x, y] of points) {
       for (let cy = Math.floor((y - r) / c); cy <= Math.floor((y + r) / c); cy++) {
         for (let cx = Math.floor((x - r) / c); cx <= Math.floor((x + r) / c); cx++) this.meadowDirty.add(`${cx},${cy}`);

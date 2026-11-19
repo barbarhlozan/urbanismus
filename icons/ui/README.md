@@ -76,11 +76,12 @@ drawing written in the code, the one each file was first exported from.
 | `forest.svg` | New map: Lesy / Forests |
 | `river.svg` | New map: Řeka / River |
 | `more.svg` | Dialogue: › to go on, once the line is all written |
-| `tab-transport.svg` | Build menu tab: Doprava / Transport (a road going away) |
+| `tab-transport.svg` | Build menu tab: Cesty / Ways (a footpath winding away through the grass) |
 | `tab-housing.svg` | Build menu tab: Bydlení / Housing (the cube house) |
 | `tab-amenities.svg` | Build menu tab: Občanská vybavenost / Amenities (the Jednota shop) |
 | `tab-work.svg` | Build menu tab: Výroba / Work (the textile mill's sawtooth roof) |
-| `tab-farming.svg` | Build menu tab: Zemědělství / Farming (the JZD cowshed and silo) |
+| `tab-farming.svg` | Build menu tab: Zemědělství / Farming (the JZD cowshed and silo; not in the menu for now) |
+| `tab-fields.svg` | Build menu tab: Pole a pastviny / Fields and pastures (a few stalks of grain, an ear on each) |
 | `tab-spaces.svg` | Build menu tab: Prostranství / Spaces (a tree, a bush) |
 | `tab-heritage.svg` | Build menu tab: Památky / Heritage (the chapel) |
 | `tool-road.svg` | Build menu tile: Silnice / Road (a stretch of road, its middle dashed) |

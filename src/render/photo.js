@@ -3,8 +3,8 @@
 //
 // Everything draws through a PerspectiveCamera (perspective.js): the
 // structures, trees and street lamps with their own draw code (the
-// renderer's paint* functions) with the shadows their shaded walls cast
-// (shadows.js), the roads, footpaths, fences and railways with the
+// renderer's paint* functions) – the shadows they cast only with
+// PHOTO.shadows –, the roads, footpaths, fences and railways with the
 // renderer's ink items; deer, cows and sheep as the map's figures.
 //
 // The ground is solid: it is cut into bands across the view, each a little
@@ -19,6 +19,7 @@
 // cuts what stands in it (photoMist).
 
 import { PerspectiveCamera } from './perspective.js';
+import { flattenPath } from './gl/geometry.js';
 import { meadowGround, plant } from './meadow.js';
 import { mulberry32 } from '../core/random.js';
 import { freeTest } from './lots.js';
@@ -28,7 +29,7 @@ import { VEHICLES, vehicleSVGIn, modelFor, truckFor } from './vehicles.js';
 import { signsAt, signSVGIn, flashSVGIn, litLight } from './crossings.js';
 import { wobble } from './painter.js';
 import { sunFor, shadowSVG } from './shadows.js';
-import { cloudsSVG } from './clouds.js';
+import { cloudsSVG, rainSVG } from './clouds.js';
 import { DEER, deerSVG } from './deer.js';
 import { LIVESTOCK, livestockSVG } from './livestock.js';
 import { PEOPLE, bodyFor, walkerSVG, cyclistSVG } from './people.js';
@@ -39,9 +40,24 @@ export const PHOTO = {
   height: 320,
   eye: 0.12,     // eye height in grid units (a storey is about 0.15):
                  // a little above a person's, for a bit more overview
+  // where the horizon is, as a share of the picture's height from the top:
+  // a little below the middle, as a shifted lens puts it, so the town has
+  // more of the picture and the bare ground in front less
+  horizon: 0.58,
+  // The map's relief (warp.js makeLift) is made to be read from above; seen
+  // from someone's eyes its rises and dips close by hide the feet of the
+  // houses behind them, and they seem to sit on top of the picture rather
+  // than on the ground. Around the photographer it is flattened to `near`
+  // of itself, coming back to `far` of it from `from` to `to` steps away,
+  // so the hills further off still stand.
+  relief: { near: 0.4, far: 0.9, from: 2, to: 12 },
   range: 28,     // how far anything is drawn, in grid steps
   clear: 0.3,    // solids closer than this to the photographer are left out,
   trees: 1.4,    // trees and shrubs closer than this (they would be a blob filling the frame)
+  // trees (and all else drawn facing the eye) this many times as big as on
+  // the map: there they are drawn big to read from above, and seen from the
+  // street they towered over the houses
+  treeSize: 0.6,
   lamps: 0.8,    // street lamps closer than this (only a piece of the head
                  // would be in the picture, a dark bar along its top edge)
   lots: 1,       // lot drawing on the ground (beds, paving, benches' feet) closer than this
@@ -56,31 +72,70 @@ export const PHOTO = {
   // lobes about `lobe` px long, `rise` times as long as high
   mist: { cols: 120, sight: 1.6, lobe: 22, rise: 5 },
   meadow: 12,    // how far the meadow tufts reach
-  // line weight by distance, as in a sketch: heavy in front, hairlines far
-  // off. Lines are drawn with the pens as written (styles.css) `at` steps
-  // away, a pen heavier for every halving of the distance and a pen
-  // lighter for every doubling (the pens go up in √2 steps), from `min` to
-  // `max` times. Texture (hatching, windows, grass: --fine in styles.css)
-  // only ever gets lighter, so up close it stays fine.
-  weight: { at: 2, min: 0.5, max: 2 },
+  // line weight by distance, as in a sketch: a little heavier in front,
+  // lighter far off – but not by much, as one pen draws the whole picture
+  // and the hand only presses less. Lines are drawn with the pens as written
+  // (styles.css) `at` steps away, `per` times heavier for every halving of
+  // the distance and lighter for every doubling, from `min` to `max` times
+  // (in eighths of a doubling, so neighbours share a group). Texture
+  // (hatching, windows, grass: --fine in styles.css) only ever gets
+  // lighter, so up close it stays fine.
+  weight: { at: 2, per: 1.15, min: 0.7, max: 1.35 },
+  // …and all of them `pen` times as heavy: a photo is drawn 480 px wide and
+  // shown half as wide again (the print, styles.css .photo-print), which
+  // would make its lines that much heavier than the map's; so they look
+  // about as fine on the print as the map's do on the screen
+  pen: 0.65,
   // the pencil strokes: `gap` px apart along a band, about `len` px long;
   // nearer than `blank` steps only one in `sparse` of them (and of the
   // ripples), so the foreground is left mostly bare
   hatch: { gap: 30, len: 16, blank: 1.2, sparse: 4 },
+  // …or, `on`, upright: short strokes standing up off the ground, as blades
+  // of grass `blade` steps high would on the picture (no shorter than `min`
+  // px, no taller than `max`), each its own height, leaning by up to `lean`
+  // of it and bent by up to `bend`, now and then two or three from one spot
+  // (`tuft` of the time); `gap` px apart along a band
+  upright: { on: true, gap: 16, blade: 0.025, min: 1.5, max: 9, lean: 0.5, bend: 0.25, tuft: 0.3 },
   // the ripples on the water: small waves about `len` px long `at` steps
   // away, shorter further off (down to `min` times) and longer up close (up
   // to `max` times), as high as `rise` of their length there – and flatter
   // as they go off, as the water is seen ever more edge on, till far out
   // they are level strokes. A share `skip` of the places for them left out
   ripples: { len: 18, at: 2, min: 0.45, max: 1.4, rise: 0.09, skip: 0.75 },
-  // a little ground right in front, nearer than `reach` steps: patches of
-  // cobbles on roads and paths, a few pebbles on bare ground, and the top
-  // edge of a street's kerb (`kerb` high) with the joints between its stones
+  // a street's kerb right in front, nearer than `reach` steps: its top
+  // edge (`kerb` high) with the joints between its stones
   ground: { reach: 1.6, kerb: 0.006, stone: 0.05 },
-  // lenses by focal length, as on a 35 mm camera: the horizontal angle of
-  // view across the 36 mm frame
-  lenses: [28, 42, 80].map((mm) => ({ label: `${mm}mm`, fov: (2 * Math.atan(18 / mm) * 180) / Math.PI })),
+  // the shadows things cast on the ground: seen from someone's eyes they lie
+  // nearly edge on, and close in to a wall draw a dark band along its foot,
+  // the very line the walls are drawn without – so a photo has none
+  shadows: false,
+  // How a photo is framed (framePhoto): the player says only where they
+  // stand and which way they look, and the picture is composed as a drawing
+  // is. Its subject is the buildings looked at – those within the wedge of
+  // the aim, up to `reach` steps past the point aimed at (or out to `depth`
+  // with no point), and the one aimed at. How much it takes in goes by how
+  // far off the nearest houses ahead are: standing among them (`near`
+  // steps or closer) the wedge is `wedge[0]` degrees either side and the
+  // lens up to `long[0]` mm, a picture of a house or two; standing off
+  // (`far` steps and more) it is `wedge[1]`, reaching `reach[1]` past the
+  // aim, and the lens no longer than `long[1]` – the whole village in its
+  // landscape. The lens is the longest, from `wide` mm up to that, that has
+  // them all whole, clear of the sides by `side` of the width (where the
+  // drawing fades out) and of the top by `top` of the height; the view
+  // turns by up to `turn` degrees to have them in the middle. Where even
+  // the widest doesn't take them, the photographer steps back, `back` at a
+  // time, up to `away` steps. With nothing looked at, the lens is `none` mm.
+  // Anything else the sides or the top would cut through is left out of the
+  // picture altogether: a drawing leaves paper there, it doesn't saw a
+  // house in half.
+  frame: {
+    near: 2, far: 9, wedge: [16, 26], reach: [2, 6], long: [50, 32], depth: 14,
+    wide: 28, side: 0.12, top: 0.08, turn: 10, back: 0.5, away: 6, none: 35,
+  },
 };
+
+// a lens's horizontal angle of view (degrees) across the 36 mm frame
+const fovOf = (mm) => (2 * Math.atan(18 / mm) * 180) / Math.PI;
 
 const r2 = (n) => Math.round(n * 100) / 100;
 // a tree's, a shrub's or a hedge's drawing (features/trees.js, kit.js),
@@ -91,21 +146,150 @@ const pt = (p) => `${r2(p[0])} ${r2(p[1])}`;
 // how ink items are layered, back to front (as on the map)
 const NET_ORDER = ['photo-shore', 'footpath', 'fence-post', 'fence-pillar', 'fence', 'grave', 'grave-stone', 'wall-stone', 'wall', 'wall-cap', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
 
-// shot: { x, y, yaw (radians), fov (degrees), eye? }
+// What a thing draws above the ground through camera `cam` (`paint(cam)`
+// draws it): `out`, as it was drawn, and each point it drew there, as
+// `seen(screen point, world point lifted)` is told of it.
+function tracing(cam, terrain, paint, seen) {
+  const rec = Object.create(cam);
+  rec.project = (px, py, pz, at, liftAt = at) => {
+    const p = cam.project(px, py, pz, at, liftAt);
+    if (pz - terrain.heightAt(px, py) > 0.01) seen(p, px, py, pz + (cam.lift ? cam.lift(...(liftAt ?? [px, py])) : 0));
+    return p;
+  };
+  return paint(rec);
+}
+
+// Where drawn solids lie on the picture: [x0, y0, x1, y1] of the points of
+// their drawing (as the painters wrote it, in picture px).
+const SHAPE = /\b(d|points)="([^"]*)"/g;
+function boxOf(solids) {
+  const b = [Infinity, Infinity, -Infinity, -Infinity];
+  const grow = (x, y) => {
+    if (x < b[0]) b[0] = x;
+    if (y < b[1]) b[1] = y;
+    if (x > b[2]) b[2] = x;
+    if (y > b[3]) b[3] = y;
+  };
+  for (const so of solids) {
+    for (const [, kind, v] of so.parts.join('').matchAll(SHAPE)) {
+      if (kind === 'points') {
+        const n = v.trim().split(/[\s,]+/).map(Number);
+        for (let i = 0; i + 1 < n.length; i += 2) grow(n[i], n[i + 1]);
+      } else for (const { pts } of flattenPath(v, 1)) for (const [x, y] of pts) grow(x, y);
+    }
+  }
+  return b;
+}
+
+// The photo's framing (PHOTO.frame) for a shot { x, y, yaw, at? } (`at`:
+// the point aimed at): { x, y, yaw, fov, subject } – where the photographer
+// stands for it, the way they look, the lens's angle (degrees) and the ids
+// of the buildings it is of. `memo` (a Map) keeps the buildings' outlines
+// between calls, for aiming: the cone on the map shows the framing.
+export function framePhoto(renderer, shot, memo = null) {
+  const F = PHOTO.frame;
+  const { world } = renderer;
+  const { terrain } = world;
+  const { x, y, yaw, at = null } = shot;
+  const { width: W, height: H } = PHOTO;
+  const fx = Math.cos(yaw), fy = Math.sin(yaw);
+  const lift = photoLift(renderer.camera.lift, x, y);
+  const ground = (px, py) => terrain.heightAt(px, py) + (lift ? lift(px, py) : 0);
+  // how far off the nearest houses ahead are: 0 among them … 1 off
+  let d0 = Infinity;
+  const view = (fovOf(F.wide) * Math.PI) / 360;
+  for (const s of world.structures.values()) {
+    const [cx, cy] = centerOf(world, s);
+    const dx = cx - x, dy = cy - y, ahead = dx * fx + dy * fy;
+    if (ahead >= PHOTO.clear && Math.abs(Math.atan2(dy * fx - dx * fy, ahead)) <= view) d0 = Math.min(d0, Math.hypot(dx, dy));
+  }
+  const u = Math.min(1, Math.max(0, (d0 - F.near) / (F.far - F.near))), off = u * u * (3 - 2 * u);
+  const mix = ([a, b]) => a + (b - a) * off;
+  const reach = at ? Math.hypot(at[0] - x, at[1] - y) + mix(F.reach) : F.depth;
+  const wedge = (mix(F.wedge) * Math.PI) / 180, long = mix(F.long);
+  let probe = null;
+  const subject = new Set(), pts = [];
+  // the buildings looked at – or, aimed between them, the nearest one in
+  // the picture's middle
+  const looked = [], near = [];
+  for (const s of world.structures.values()) {
+    const [cx, cy] = centerOf(world, s);
+    const dx = cx - x, dy = cy - y, ahead = dx * fx + dy * fy, aside = Math.abs(Math.atan2(dy * fx - dx * fy, ahead));
+    const aimed = at && world.nodesOf(s).some((n) => { const [nx, ny] = world.grid.xy(n); return Math.hypot(nx - at[0], ny - at[1]) < 0.75; });
+    if (aimed || (ahead >= PHOTO.clear && ahead <= reach && aside <= wedge)) looked.push(s);
+    else if (ahead >= PHOTO.clear && ahead <= F.depth && aside <= (fovOf(F.none) * Math.PI) / 360) near.push([Math.hypot(dx, dy), s]);
+  }
+  if (!looked.length && near.length) looked.push(near.sort((a, b) => a[0] - b[0])[0][1]);
+  for (const s of looked) {
+    // its outline: the points it draws above the ground, from here
+    const key = `${s.id}:${Math.round(x)},${Math.round(y)}`;
+    let hull = memo?.get(key);
+    if (!hull) {
+      probe ??= new PerspectiveCamera({ x, y, z: ground(x, y) + PHOTO.eye, yaw, fov: 60, width: W, height: H, lift, horizon: PHOTO.horizon, shapes: PHOTO.treeSize });
+      const seen = new Set();
+      hull = [];
+      tracing(probe, terrain, (cam) => renderer.paintStructure(s, cam), (p, px, py, pz) => {
+        const k = `${Math.round(px * 50)},${Math.round(py * 50)},${Math.round(pz * 50)}`;
+        if (!seen.has(k)) { seen.add(k); hull.push([px, py, pz]); }
+      });
+      // (only buildings: what stands on the ground, not a park or a square)
+      if (!hull.some((p) => p[2] - ground(p[0], p[1]) > 0.06)) hull = [];
+      memo?.set(key, hull);
+    }
+    if (!hull.length) continue;
+    subject.add(s.id);
+    pts.push(...hull);
+  }
+  if (!pts.length) return { x, y, yaw, fov: fovOf(F.none), subject };
+
+  const focalOf = (mm) => W / 2 / Math.tan((fovOf(mm) * Math.PI) / 360);
+  const longest = focalOf(long), widest = focalOf(F.wide);
+  const horizon = H * PHOTO.horizon, turnMax = (F.turn * Math.PI) / 180;
+  let best = null;
+  for (let back = 0; back <= F.away + 1e-9; back += F.back) {
+    const ex = x - fx * back, ey = y - fy * back, ez = ground(ex, ey) + PHOTO.eye;
+    // each point's angle off the aim, how far off it is and how high
+    let lo = Infinity, hi = -Infinity;
+    const ang = [];
+    for (const [px, py, pz] of pts) {
+      const dx = px - ex, dy = py - ey, a = dx * fx + dy * fy;
+      if (a < 0.15) { lo = NaN; break; }
+      const t = Math.atan2(dy * fx - dx * fy, a);
+      lo = Math.min(lo, t);
+      hi = Math.max(hi, t);
+      ang.push([t, Math.hypot(dx, dy), pz - ez]);
+    }
+    if (Number.isNaN(lo)) continue;
+    const turn = Math.max(-turnMax, Math.min(turnMax, (lo + hi) / 2));
+    const span = Math.max(hi - turn, turn - lo);
+    if (span >= Math.PI / 2 - 0.05) continue;
+    let up = 0;
+    for (const [t, r, v] of ang) up = Math.max(up, v / Math.max(0.05, r * Math.cos(t - turn)));
+    const focal = Math.min(longest, ((W / 2) * (1 - 2 * F.side)) / Math.tan(span), up > 0 ? (horizon - F.top * H) / up : Infinity);
+    best = { x: ex, y: ey, yaw: yaw + turn, fov: (2 * Math.atan(W / 2 / Math.max(focal, widest)) * 180) / Math.PI, subject };
+    if (focal >= widest) break;
+  }
+  return best ?? { x, y, yaw, fov: fovOf(F.wide), subject };
+}
+
+// shot: { x, y, yaw (radians), at? (the point aimed at), eye? } – framed by
+// framePhoto – or with its own fov (degrees) as it is
 export function takePhoto(renderer, shot) {
   const { world } = renderer;
   const { terrain } = world;
   const base = renderer.camera;
   const { width, height, range } = PHOTO;
-  const { x, y, yaw, fov } = shot;
-  const lift = base.lift;
+  const framed = shot.fov == null ? framePhoto(renderer, shot) : null;
+  const { x, y, yaw, fov } = framed ?? shot;
+  const subject = framed?.subject ?? new Set();
+  const lift = photoLift(base.lift, x, y);
   const water = waterSurface(renderer, lift);
   const raise = water.raise;
   // height of the ground (or the water's surface) above the drawing's zero,
   // and a point of it on the picture
   const groundAt = (px, py) => terrain.heightAt(px, py) + (lift ? lift(px, py) : 0) + raise(px, py);
   const cam = new PerspectiveCamera({
-    x, y, z: groundAt(x, y) + (shot.eye ?? PHOTO.eye), yaw, fov, width, height, lift,
+    x, y, z: groundAt(x, y) + (shot.eye ?? PHOTO.eye), yaw, fov, width, height, lift, horizon: PHOTO.horizon, shapes: PHOTO.treeSize,
   });
   const onGround = (px, py) => cam.project(px, py, terrain.heightAt(px, py) + raise(px, py));
 
@@ -144,6 +328,7 @@ export function takePhoto(renderer, shot) {
     // where it stands
     const project = painter.groundProjector();
     const put = (mx, my, shade) => {
+      if (!PHOTO.shadows) return;
       const svg = Math.hypot(mx - x, my - y) >= PHOTO.clear ? shadowSVG({ ...shade, project }, sun) : '';
       if (svg) bands.add(bandAt(mx, my), 'lots', svg);
     };
@@ -153,17 +338,25 @@ export function takePhoto(renderer, shot) {
       put(mx, my, { casts: [c] });
     }
   };
+  // drawn whole, or not at all: what the sides or the top of the picture
+  // would cut through is left out (PHOTO.frame) – but never the subject
+  const whole = (paint, keep = false) => {
+    const out = paint(cam);
+    if (!out || keep) return out;
+    const [x0, y0, x1] = boxOf(out.painter.solids);
+    return x0 < 0 || x1 > width || y0 < 0 ? null : out;
+  };
   for (const s of world.structures.values()) {
     const nodes = world.nodesOf(s);
-    if (seen(...centerOf(world, s), Math.sqrt(nodes.length) + 1.5)) take(renderer.paintStructure(s, cam));
+    if (seen(...centerOf(world, s), Math.sqrt(nodes.length) + 1.5)) take(whole((c) => renderer.paintStructure(s, c), subject.has(s.id)));
   }
   for (const f of world.features.values()) {
-    if (seen(f.x, f.y, 0.6)) take(renderer.paintFeature(f, cam));
+    if (seen(f.x, f.y, 0.6)) take(whole((c) => renderer.paintFeature(f, c)));
   }
   for (const key of world.sidewalks.keys()) {
     const [a] = key.split('-').map(Number);
     if (!seen(...world.grid.xy(a), 2)) continue;
-    const out = renderer.paintStreet(key, cam);
+    const out = whole((c) => renderer.paintStreet(key, c));
     if (out && Math.hypot(out.x - x, out.y - y) >= PHOTO.lamps) take(out);
   }
 
@@ -212,7 +405,7 @@ export function takePhoto(renderer, shot) {
     if (cls === 'kerb') kerbTop(cam, bands, pts);
   }
 
-  groundMarks(world, renderer.config, cam, bands, seen, onGround, groundAt, water.wet);
+  groundMarks(world, renderer.config, cam, bands, seen, onGround, water.wet);
   shoreLines(renderer, cam, bands, onGround);
 
   // ----- together, far to near -----
@@ -234,18 +427,20 @@ export function takePhoto(renderer, shot) {
     const k = penAt(l.dist ?? -l.depth);
     if (k !== open) {
       if (open !== null) svg += '</g>';
-      svg += `<g style="--stroke: ${k}; --fine: ${Math.min(1, k)}">`;
+      svg += `<g style="--stroke: ${r2(k * PHOTO.pen)}; --fine: ${r2(Math.min(1, k) * PHOTO.pen)}">`;
       open = k;
     }
     svg += l.svg;
   }
   if (open !== null) svg += '</g>';
 
-  return `<svg class="photo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="--sun: ${renderer.config.weather.sun[world.weather.kind] ?? 1}">`
+  return `<svg class="photo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="--sun: ${renderer.config.weather.sun[world.weather.kind] ?? 1}; --stroke: ${PHOTO.pen}">`
     + `<rect class="photo-sky" x="0" y="0" width="${width}" height="${height}"/>`
-    + cloudsSVG(mulberry32(Math.imul(Math.round(x * 100), 83492791) ^ Math.imul(Math.round(y * 100), 2654435761) ^ world.seed), width, height, world.weather.kind)
+    + cloudsSVG(mulberry32(Math.imul(Math.round(x * 100), 83492791) ^ Math.imul(Math.round(y * 100), 2654435761) ^ world.seed), width, height, world.weather.kind, { horizon: cam.horizonY, rain: false })
     + skyline(cam, groundAt, range)
     + `<g class="layer-objects">${svg}</g>`
+    // the rain, falling between the photographer and all of it
+    + rainSVG(mulberry32(Math.imul(Math.round(x * 100), 40503) ^ Math.imul(Math.round(y * 100), 2246822519) ^ world.seed), width, height, world.weather.kind)
     + '</svg>';
 }
 
@@ -400,9 +595,10 @@ function shoreLines(renderer, cam, bands, onGround) {
 // The pen for something `dist` steps away (PHOTO.weight): a factor on
 // every line width, a whole number of √2 pen steps.
 function penAt(dist) {
-  const { at, min, max } = PHOTO.weight;
-  const steps = Math.round(Math.log(at / Math.max(dist, 0.01)) / Math.log(2));
-  return Math.min(max, Math.max(min, r2(Math.SQRT2 ** steps)));
+  const { at, per, min, max } = PHOTO.weight;
+  // the factor as a power of two: `per` for every halving of the distance
+  const octaves = Math.log2(per) * Math.log2(at / Math.max(dist, 0.01));
+  return Math.min(max, Math.max(min, r2(2 ** (Math.round(octaves * 8) / 8))));
 }
 
 // The ground bands. Each is sampled along fixed rays across the picture (so
@@ -419,7 +615,7 @@ function makeBands(cam, onGround) {
   const cols = Array.from({ length: COLS + 1 }, (_, i) => -spread + (2 * spread * i) / COLS);
   const edge = (t) => cols.map((u) => onGround(cam.ex + cam.fx * t + cam.rx * u * t, cam.ey + cam.fy * t + cam.ry * u * t));
   const edges = d.map(edge);
-  const marks = Array.from({ length: n }, () => ({ lots: '', meadow: '', hatch: '', ripples: '', near: '', net: new Map() }));
+  const marks = Array.from({ length: n }, () => ({ lots: '', meadow: '', hatch: '', ripples: '', net: new Map() }));
 
   const of = (ahead) => {
     if (ahead < d[0]) return 0;
@@ -462,7 +658,6 @@ function makeBands(cam, onGround) {
           svg: `<path class="photo-band" d="${fill}"/>`
             + (m.hatch ? `<path class="photo-hatch" d="${m.hatch}"/>` : '')
             + (m.ripples ? `<path class="photo-ripples" d="${m.ripples}"/>` : '')
-            + m.near
             + m.lots
             + (m.meadow ? `<g class="layer-meadow">${m.meadow}</g>` : '')
             + net
@@ -481,11 +676,12 @@ function makeBands(cam, onGround) {
 //   ripples  small waves on lakes and rivers (ripple)
 //   meadow   the map's own tufts and flowers (meadow.js), near the camera
 // Seeded by the spot, so the same photo comes out the same.
-function groundMarks(world, config, cam, bands, seen, onGround, groundAt, wetAt) {
+function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
   const { grid } = world;
   const offRoad = freeTest(world, config);
   const rnd = mulberry32(Math.imul(Math.round(cam.ex * 100), 73856093) ^ Math.imul(Math.round(cam.ey * 100), 19349663) ^ world.seed);
-  const { gap, len, blank, sparse } = PHOTO.hatch;
+  const { len, blank, sparse } = PHOTO.hatch;
+  const up = PHOTO.upright, gap = up.on ? up.gap : PHOTO.hatch.gap;
   const spread = (cam.width / 2 / cam.focal) * 1.1;
 
   for (let k = 0; k < bands.n; k++) {
@@ -509,12 +705,20 @@ function groundMarks(world, config, cam, bands, seen, onGround, groundAt, wetAt)
       if (wet && !(wetAt(px - dx, py - dy) && wetAt(px + dx, py + dy))) continue; // within the banks
       const a = onGround(px - dx, py - dy), b = onGround(px + dx, py + dy);
       if (wet) ripples += ripple(a, b, crest * (rnd() < 0.5 ? -1 : 1));
-      else hatch += `M${pt(a)}L${pt(b)}`;
+      else if (up.on) {
+        const foot = onGround(px, py), tall = Math.min(up.max, Math.max(up.min, up.blade * scale));
+        const n = rnd() < up.tuft ? 2 + Math.floor(rnd() * 2) : 1;
+        for (let b = 0; b < n; b++) {
+          // as a hand flicks one up: its own height and lean, a little bowed
+          const h = tall * (0.4 + 1.1 * rnd() ** 1.5), lean = h * up.lean * (2 * rnd() - 1) + (b ? (b === 1 ? -1 : 1) * h * 0.25 : 0);
+          const bow = h * up.bend * (2 * rnd() - 1), x0 = foot[0] + (b ? (rnd() - 0.5) * tall * 0.3 : 0);
+          hatch += `M${pt([x0, foot[1]])}q${r2(lean * 0.3 + bow)} ${r2(-h * 0.55)} ${r2(lean)} ${r2(-h)}`;
+        }
+      } else hatch += `M${pt(a)}L${pt(b)}`;
     }
     bands.add(k, 'hatch', hatch);
     bands.add(k, 'ripples', ripples);
   }
-  nearGround(cam, bands, onGround, groundAt, offRoad, wetAt, rnd);
 
   // meadow: every dot within reach, each glyph on its own band
   const open = meadowGround(world, config);
@@ -551,65 +755,6 @@ function ripple(a, b, rise) {
   // (a cubic's control points stand out about 3.5 times the curve's height)
   const h = Math.hypot(vx, vy) * rise * 3.5;
   return `M${pt(a)}C${pt([a[0] + vx / 3, a[1] + vy / 3 - h])} ${pt([a[0] + (2 * vx) / 3, a[1] + (2 * vy) / 3 + h])} ${pt(b)}`;
-}
-
-// The ground right in front of the photographer (PHOTO.ground), drawn as
-// a sketcher would put in just enough to say what it is underfoot and
-// leave the rest bare: a patch or two of cobbles – rows of small arcs, the
-// pattern Czech setts are laid in – where it is a road or a path, a few
-// pebbles here and there on the bare ground.
-function nearGround(cam, bands, onGround, groundAt, offRoad, wetAt, rnd) {
-  const { reach } = PHOTO.ground;
-  const spread = cam.width / 2 / cam.focal;
-  const at = (a, r) => [cam.ex + cam.fx * a + cam.rx * r, cam.ey + cam.fy * a + cam.ry * r];
-  const path = (pts) => (pts.every(([x, y]) => cam.isAhead(x, y)) ? `M${pts.map((q) => pt(onGround(...q))).join('L')}` : '');
-  // cobbles: patches round a few spots on the road ahead
-  for (let tries = 0, patches = 0; tries < 12 && patches < 2; tries++) {
-    const a = 0.25 + rnd() ** 2 * (reach - 0.25), r = (rnd() * 2 - 1) * a * spread * 0.8;
-    const [cx, cy] = at(a, r);
-    if (offRoad(cx, cy) || wetAt(cx, cy)) continue;
-    patches++;
-    // setts as far apart on the picture near and far (larger than life, as
-    // a sketch would have them): rows about 3 px apart, arcs about 14 px wide
-    const row = (3 * a * a) / (cam.focal * Math.max(cam.ez - groundAt(cx, cy), 0.02)), arc = (14 * a) / cam.focal;
-    const size = 0.05 + rnd() * 0.04, deep = Math.max(size, row * 2.5);
-    for (let v = -deep; v <= deep; v += row) {
-      const shift = (Math.round(v / row) % 2) * arc / 2;
-      for (let u = -size - shift; u <= size; u += arc) {
-        // thinned out towards the patch's edge, so it fades into the paper
-        if (Math.hypot(u / size, v / deep) > 0.35 + rnd() * 0.65) continue;
-        const ends = [at(a + v, r + u - arc / 2), at(a + v, r + u + arc / 2)];
-        if (ends.some(([ex, ey]) => offRoad(ex, ey))) continue;
-        const pts = [];
-        for (let t = 0; t <= 4; t++) {
-          const s = t / 4 - 0.5; // across the arc, bowed away from the camera
-          pts.push(at(a + v + (0.25 - s * s) * row * 0.9, r + u + s * arc * 0.9));
-        }
-        const d = path(pts);
-        if (d) bands.add(bands.of(a + v), 'near', `<path class="photo-cobble" d="${d}"/>`);
-      }
-    }
-  }
-  // pebbles: a few small clusters on open ground
-  for (let tries = 0, clusters = 0; tries < 14 && clusters < 3; tries++) {
-    const a = 0.25 + rnd() ** 2 * (reach - 0.25), r = (rnd() * 2 - 1) * a * spread * 0.8;
-    const [cx, cy] = at(a, r);
-    if (!offRoad(cx, cy) || wetAt(cx, cy)) continue;
-    clusters++;
-    const n = 1 + Math.floor(rnd() * 4);
-    for (let i = 0; i < n; i++) {
-      const pa = a + (rnd() - 0.5) * 0.06, pr = r + (rnd() - 0.5) * 0.08;
-      const size = 0.004 + rnd() * 0.006, turn = rnd() * Math.PI;
-      const pts = [];
-      for (let t = 0; t <= 10; t++) {
-        const b = (t / 10) * Math.PI * 2;
-        const ru = Math.cos(b) * size * 1.4, rv = Math.sin(b) * size;
-        pts.push(at(pa + ru * Math.sin(turn) + rv * Math.cos(turn), pr + ru * Math.cos(turn) - rv * Math.sin(turn)));
-      }
-      const d = path(pts);
-      if (d) bands.add(bands.of(pa), 'near', `<path class="photo-pebble" d="${d}Z"/>`);
-    }
-  }
 }
 
 // Vehicles as they are at the moment of the photo, the same models as on
@@ -781,7 +926,7 @@ function people(renderer, cam, seen) {
       // lines in the picture's pen for its distance (penAt), as the
       // buildings' round it – not the map's widths: a coat's outline as
       // heavy as a wall's (the .fig-* pens times --stroke, undone by `k`)
-      svg: `<g class="photo-person" style="--stroke:${(FIGURE_PEN * penAt(cam.ahead(x, y)) / k).toFixed(4)}" transform="translate(${r2(sx)} ${r2(sy)}) scale(${flip ? -r2(k) : r2(k)} ${r2(k)})">${svg}</g>`,
+      svg: `<g class="photo-person" style="--stroke:${(FIGURE_PEN * PHOTO.pen * penAt(cam.ahead(x, y)) / k).toFixed(4)}" transform="translate(${r2(sx)} ${r2(sy)}) scale(${flip ? -r2(k) : r2(k)} ${r2(k)})">${svg}</g>`,
     });
   }
   return out;
@@ -858,7 +1003,7 @@ function waterSurface(renderer, lift) {
   const river = (x, y) => field && field.depth(x, y) > 0;
   // the surface's height at (x, y), -Infinity off the water
   const surface = (x, y) => {
-    let best = river(x, y) ? lift.of(field.at(x, y).z) : -Infinity;
+    let best = river(x, y) ? lift.of(field.at(x, y).z, x, y) : -Infinity;
     const rx = Math.round(x), ry = Math.round(y);
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
@@ -876,6 +1021,24 @@ function waterSurface(renderer, lift) {
   };
 }
 
+// The map's relief as the photo has it (PHOTO.relief): flattened around
+// the photographer at (x, y), less so further off. Carries the map lift's
+// `range` and `of` (the lift of a height – a river's surface – at a point),
+// flattened alike.
+function photoLift(lift, x, y) {
+  if (!lift) return null;
+  const { near, far, from, to } = PHOTO.relief;
+  const l0 = lift(x, y);
+  const share = (px, py) => {
+    const t = Math.min(1, Math.max(0, (Math.hypot(px - x, py - y) - from) / (to - from)));
+    return near + (far - near) * t * t * (3 - 2 * t);
+  };
+  const out = (px, py) => l0 + share(px, py) * (lift(px, py) - l0);
+  out.range = lift.range;
+  out.of = (metres, px = x, py = y) => l0 + share(px, py) * (lift.of(metres) - l0);
+  return out;
+}
+
 // The far edge of the ground: for each column of the picture, the highest
 // point of the terrain along its ray – the backdrop behind the last band.
 function skyline(cam, groundAt, range) {
@@ -888,7 +1051,7 @@ function skyline(cam, groundAt, range) {
     let top = Infinity;
     for (let t = 0.5; t <= range; t *= 1.08) {
       const wx = cam.ex + dx * t, wy = cam.ey + dy * t;
-      const sy = height / 2 - ((groundAt(wx, wy) - cam.ez) / t) * cam.focal;
+      const sy = cam.horizonY - ((groundAt(wx, wy) - cam.ez) / t) * cam.focal;
       if (sy < top) top = sy;
     }
     pts.push([px, Math.min(top, height + 2)]);

@@ -11,7 +11,7 @@ import { SUN, DAY, sunAt, stepAt, holdDay, goOnDay, dayLength } from '../render/
 
 const STEP = 0.5; // simulated seconds per step while jumping
 
-export function createCommands({ world, config, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, annotations, unlocks, renderer = null, save = exportCity }) {
+export function createCommands({ world, config, clock, weather, agents, fires, trains, boats, deer, livestock, growth, story, kecy = null, annotations, unlocks, renderer = null, save = exportCity }) {
   // What `cmd.spawn(name)` can make; each returns something truthy if it did.
   const SPAWN = {
     deer: () => deer.launch(),
@@ -271,6 +271,13 @@ export function createCommands({ world, config, clock, weather, agents, fires, t
       play: (branch) => story.play(branch), // tell a branch now
       reset: () => story.reset(),           // forget what was told, start over
       reload: () => story.reload(),         // read the file again
+    },
+    // kecy (story/kecy.md, src/story/kecy.js)
+    kecy: {
+      list: () => kecy.list.map((k) => k.title),     // the kecy in the file
+      now: (name, no) => kecy.offer(name, no),        // the dots now (that kec, that house: either may be left out)
+      reload: () => kecy.reload(),                    // read the file again
+      reset: () => kecy.reset(),                      // forget what was told and the houses
     },
     log: (n = 20) => annotations.lines.slice(0, n), // what the systems reported, newest first
     seed: () => world.seed,
