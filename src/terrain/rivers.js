@@ -31,6 +31,13 @@ export const RIVER = {
   step: 0.1,   // sampling step of the field
 };
 
+// The dense dots (footpaths, railways) are half a step apart, so a narrower
+// band of them still holds a row no way slips across (a step between dense
+// dots is at most 0.71 long, so one of its ends is always within 0.36 of
+// the line): over a stream they count as water only just past the water
+// itself, and a footbridge spans the stream, not the meadow beside it.
+export const DENSE_WET = 0.4;
+
 const JOIN = 0.35; // grid units over which two channels' banks round into each other
 
 // A stream: the same, smaller – a thin channel in a shallow fold of the
@@ -46,7 +53,8 @@ export const RIVER_SIZES = { river: RIVER, stream: STREAM };
 // bank(x, y): from the line to its banks there }),
 // each(x, y) -> the same for every river within its reach,
 // depth(x, y) -> grid units inside the banks (negative outside),
-// wet(x, y) -> the same for the water dots' band }, or null without
+// wet(x, y, least) -> the same for the water dots' band (`least`: its
+// half width at the narrowest instead of the river's `wet`) }, or null without
 // rivers. Each river is sampled over its own box (plus its reach), then
 // read back bilinearly – elevation is asked for at every drawn point.
 // (Rivers saved before banks varied have no `width` / `vary`: 0.95, 0;
@@ -69,9 +77,9 @@ export function riverField(rivers) {
       for (const r of all(x, y)) depth = smoothMax(depth, r.river.bank(x, y) - r.d, JOIN);
       return depth;
     },
-    wet(x, y) {
+    wet(x, y, least = null) {
       let wet = out;
-      for (const r of all(x, y)) wet = Math.max(wet, Math.max(r.river.bank(x, y), r.river.wet) - r.d);
+      for (const r of all(x, y)) wet = Math.max(wet, Math.max(r.river.bank(x, y), least ?? r.river.wet) - r.d);
       return wet;
     },
   };

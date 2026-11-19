@@ -22,6 +22,7 @@ import { townName } from './townName.js';
 import { Grid } from './grid.js';
 import { Terrain } from '../terrain/terrain.js';
 import { findHills } from '../terrain/hills.js';
+import { DENSE_WET } from '../terrain/rivers.js';
 import { RoadNetwork } from '../roads/network.js';
 import { NetworkLayer } from '../roads/layer.js';
 import { Ways } from '../roads/ways.js';
@@ -125,8 +126,8 @@ export class World {
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'rails:changed',
         bridge: {
-          water: (f) => this.coarseAround(f).some((c) => this.terrain.isWater(c)),
-          river: (f) => this.coarseAround(f).every((c) => !this.terrain.isWater(c) || this.terrain.isRiver(c)),
+          water: (f) => this.denseWater(f),
+          river: (f) => !this.denseLake(f),
           span: 5,
           taken: (f) => this.roadAtFine(f),
         },
@@ -141,11 +142,10 @@ export class World {
         conflicts: (f, g) => !!this.roadOn(...this.fine.xy(f), ...this.fine.xy(g)) || this.rails.hasEdge(f, g),
         coarseOf: (f) => this.fineToCoarse(f),
         event: 'paths:changed',
-        // a dense dot is over water if a main dot around it is; a two-dot
-        // river takes up to five of them
+        // a dense dot is over water by the river itself (denseWater)
         bridge: {
-          water: (f) => this.coarseAround(f).some((c) => this.terrain.isWater(c)),
-          river: (f) => this.coarseAround(f).every((c) => !this.terrain.isWater(c) || this.terrain.isRiver(c)),
+          water: (f) => this.denseWater(f),
+          river: (f) => !this.denseLake(f),
           span: 5,
           taken: () => false,
         },
@@ -229,6 +229,22 @@ export class World {
   }
 
   // Main dots touching a fine node: 1 (on a dot), 2 (between two), 4 (middle of a square).
+  // A dense dot over water: in a river's band of dense dots (DENSE_WET:
+  // narrower than the main dots', which reach a step either side of the
+  // water), or by a lake or pond – those go by the main dots around (and
+  // so does river water with no rivers' field to go by: the tests' towns).
+  denseWater(f) {
+    if (this.denseLake(f)) return true;
+    const field = this.riverField;
+    if (!field) return this.coarseAround(f).some((c) => this.terrain.isWater(c));
+    const [x, y] = this.fine.xy(f);
+    return field.wet(x / 2, y / 2, DENSE_WET) > 0;
+  }
+
+  denseLake(f) {
+    return this.coarseAround(f).some((c) => this.terrain.isWater(c) && !this.terrain.isRiver(c));
+  }
+
   coarseAround(f) {
     const [fx, fy] = this.fine.xy(f);
     const xs = fx % 2 ? [(fx - 1) / 2, (fx + 1) / 2] : [fx / 2];

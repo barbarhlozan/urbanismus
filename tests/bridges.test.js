@@ -135,3 +135,29 @@ test('a way sketched slantwise over a river still gets its bridge', async () => 
     assert.equal(findBridges(w).length, 1, `${kind} ${ang}° over ${wide}: one bridge`);
   }
 });
+
+// The dense dots count as water just past the water itself, not a whole
+// main step either side of it: a footbridge over a stream is short, and
+// still no step between dense dots slips across without one.
+test('a stream is narrow water for footpaths, with no gap in it', () => {
+  for (const size of ['stream', 'river']) {
+    const w = laidRiver(size);
+    const { fine } = w;
+    const water = (f) => w.networks.path.bridge.water(f);
+    // across the stream at y = 5: only the dots by the water itself
+    const row = [];
+    for (let x = 14; x <= 26; x++) if (water(fine.index(x, 10))) row.push(x / 2);
+    assert.ok(row.length >= 1, `${size}: ${row}`);
+    if (size === 'stream') assert.ok(row.every((x) => Math.abs(x - 10) <= 0.5), `stream water dots at ${row}`);
+    // no step from one bank to the other between dry dots
+    for (let f = 0; f < fine.size; f++) {
+      if (water(f)) continue;
+      const [x] = fine.xy(f);
+      for (const [dx, dy] of [[1, 0], [1, 1], [1, -1]]) {
+        const g = fine.offset(f, dx, dy);
+        if (g < 0 || water(g)) continue;
+        assert.ok(!((x / 2 < 10) && ((x + dx) / 2 > 10)), `${size}: a step across at ${fine.xy(f)}`);
+      }
+    }
+  }
+});

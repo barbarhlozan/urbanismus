@@ -113,14 +113,14 @@ export class WorldPlacement {
   }
 
   // Railways keep clear of buildings: no dense dot touching one, nor a
-  // feature that blocks roads.
+  // feature that blocks roads. Water by the dense dots' own rule (denseWater).
   isRailBlocked(f) {
-    return this.coarseAround(f).some((c) => this.isRoadBlocked(c));
+    return this.denseWater(f) || this.coarseAround(f).some((c) => !this.terrain.isWater(c) && this.isRoadBlocked(c));
   }
 
   isPathBlocked(f) {
+    if (this.denseWater(f)) return true;
     const around = this.coarseAround(f);
-    if (around.some((c) => this.terrain.isWater(c))) return true;
     // Blocked only if every surrounding dot belongs to the same building,
     // so paths can squeeze between neighbouring buildings.
     const ids = around.map((c) => this.structureAtNode.get(c));
