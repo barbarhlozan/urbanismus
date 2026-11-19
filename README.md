@@ -72,7 +72,7 @@ README says how to draw one and lists them all, and `icons/ui/index.html` shows 
 
 The Build menu offers what the story of Dědina needs and nothing more: the houses and family
 houses, the pub, the chapel and the church, the bus stop, the roads and footpaths, the fields,
-meadow and fence, greenery, the sports ground, the village pond and the squares. No train comes
+meadow and fence, greenery, the sports ground, the village pond, the well and the squares. No train comes
 to Dědina, and the summer cinema, playground, flower beds and forest park belong to a town:
 `story/unlocks.txt` locks them, and a sandbox can unlock them again.
 
@@ -176,7 +176,8 @@ folded there and folds again once you pick a tool.
 - **Občanská vybavenost** also has a house of culture and a cemetery. **Prostranství** has
   each kind of park and square as its own tool, in its sizes (**Shift**) and looks (**Space**):
   greenery, a playground, a sports ground, a garden, a forest park with a lookout, a park by a
-  pond, a summer cinema; a plaza, a fountain square, a monument square, a market square, a
+  pond, a village well (a rumpál, or a pump on a concrete ring or a stone slab: people stop by
+  it a moment), a summer cinema; a plaza, a fountain square, a monument square, a market square, a
   shopping precinct, a parade square. The ČSAD bus station is in **Doprava**.
 - A park only gets walkways where people can come in: a footpath reaching it, a street
   (sidewalks) or lane along it, or a neighbouring park that has a way in. One way in runs to

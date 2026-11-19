@@ -20,7 +20,7 @@
 
 import {
   tree, bush, bench, lamp, tufts,
-  playground, bandstand, flowerBed, kiosk, pitch, swings, sandpit, FRAME, kindOf,
+  playground, bandstand, flowerBed, kiosk, pitch, swings, sandpit, FRAME, kindOf, wooden,
 } from './kit.js';
 import { segmentDistance } from '../src/core/geom2d.js';
 import { offsetPolyline, keepRuns, measurePolyline, pointAt } from '../src/roads/geometry.js';
@@ -572,5 +572,102 @@ export const summerCinema = {
     benches(g, 4);
     grove(g, g.int(6, 8), -0.32, -0.32, 1.32, 1.32, [[qx, qy, 0.5], [bx, by, 0.16], [kx, ky, 0.12]]);
     grass(g, 20);
+  },
+};
+
+// ----- the well -----
+
+// A ring of fieldstone (g.stone) or of concrete, r across, h tall.
+function wellRing(g, x, y, r, h, stone) {
+  const was = g.stone;
+  g.stone = stone;
+  g.cylinder(x, y, 0, r, h, 10);
+  g.stone = was;
+}
+
+// Rumpál: the old well of a náves – a ring of fieldstone, two timber posts
+// with the windlass between them, a crank at one end, the bucket on the
+// rim, a little shingled roof over it all.
+function rumpal(g, x, y) {
+  const r = 0.05, h = 0.045, top = 0.13, p = 0.012, axle = 0.095;
+  g.detailed(1, () => wellRing(g, x, y, r, h, true));
+  g.detailed(1, () => wooden(g, () => {
+    for (const k of [-1, 1]) g.box(x + k * (r + 0.004) - p / 2, y - p / 2, 0, p, p, top);
+    g.gable(x - r - 0.022, y - 0.045, top, 2 * r + 0.044, 0.09, 0.003, 0.045);
+  }));
+  g.detailed(2, () => {
+    g.solid(x, y, axle);
+    g.line([[x - r, y, axle], [x + r + 0.02, y, axle]], FRAME);
+    // the crank, and the chain down to the bucket on the rim
+    g.line([[x + r + 0.02, y, axle], [x + r + 0.02, y, axle - 0.02], [x + r + 0.032, y, axle - 0.02]], FRAME);
+    g.line([[x - 0.01, y, axle], [x - 0.01, y - r + 0.014, h + 0.02]]);
+    g.cylinder(x - 0.01, y - r + 0.014, h, 0.011, 0.018, 8);
+  });
+}
+
+// A cast-iron pump (pumpa): a fluted column with a cap, the spout towards
+// -y, the long handle bent back over the top, standing on z.
+function pump(g, x, y, z, tall = 0.085) {
+  g.detailed(1, () => {
+    g.lathe(x, y, z, [[0.011, 0], [0.009, 0.012], [0.008, tall * 0.8], [0.011, tall * 0.84], [0.006, tall * 0.95], [0, tall]], 8);
+  });
+  g.detailed(2, () => {
+    g.solid(x, y - 0.02, z + tall * 0.6);
+    g.line([[x, y - 0.008, z + tall * 0.62], [x, y - 0.03, z + tall * 0.62], [x, y - 0.034, z + tall * 0.55]], FRAME);
+    g.line([[x, y + 0.004, z + tall * 0.95], [x, y + 0.03, z + tall * 1.12], [x, y + 0.062, z + tall * 1.05]], FRAME);
+  });
+}
+
+// Skruž: a concrete well ring with a lid, the pump on the lid, a bucket
+// under its spout.
+function ringPump(g, x, y) {
+  const r = 0.05, h = 0.04;
+  g.detailed(1, () => {
+    wellRing(g, x, y, r, h, false);
+    g.cylinder(x, y, h, r + 0.004, 0.008, 10);
+  });
+  pump(g, x, y + 0.015, h + 0.008);
+  g.detailed(2, () => g.cylinder(x, y - r - 0.006, 0, 0.012, 0.02, 8));
+}
+
+// A pump on its own over the shaft, on a slab of stone, a stone trough
+// under the spout for the cattle and the washing.
+function slabPump(g, x, y) {
+  const was = g.stone;
+  g.detailed(1, () => {
+    g.stone = true;
+    g.box(x - 0.045, y - 0.03, 0, 0.09, 0.075, 0.012);
+    g.box(x - 0.04, y - 0.075, 0, 0.08, 0.035, 0.026);
+    g.stone = was;
+  });
+  pump(g, x, y + 0.01, 0.012, 0.11);
+}
+
+// Studna: the well where the cottages round it draw their water, people
+// stopping by it a moment. A rumpál, a concrete ring with a pump on it, or
+// a pump over the shaft with a trough – stepped with Space. A trodden patch
+// round it, a linden and a bench.
+export const well = {
+  id: 'well',
+  name: 'Well',
+  blurb: 'Water for the cottages round it',
+  ...common,
+  sim: { destinations: [], stop: { time: [8, 20], reach: 0.1 } }, // a moment by it (agents/leisure.js)
+  footprint: [[0, 0]],
+  stats: {},
+  agents: 0,
+  kinds: ['rumpal', 'ring-pump', 'slab-pump'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    walkways(g);
+    const [cx, cy] = g.site.paths.centre;
+    g.groundCircle(cx, cy, 0.1, { dash: '1 2', lod: 1 });
+    if (kind === 'rumpal') rumpal(g, cx, cy);
+    else if (kind === 'ring-pump') ringPump(g, cx, cy);
+    else slabPump(g, cx, cy);
+    const [tx, ty] = freeSpot(g, quadrants(g, 0.26), 0.1);
+    tree(g, tx, ty, 1.05, 'spreading');
+    benches(g, 1);
+    grass(g, 8);
   },
 };

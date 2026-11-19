@@ -118,6 +118,7 @@
 #     flower_beds        garden_park
 #     forest_park        forest_park
 #     village_pond       pond_park
+#     well               well
 #     summer_cinema      summer_cinema
 #     square             plaza, market_square
 #     shopping_precinct  precinct_large

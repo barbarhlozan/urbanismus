@@ -590,6 +590,14 @@ village_pond.blurb
   cs: Voda pro hasiče, lípy kolem
   en: Water for the firemen, lindens round it
 
+well
+  cs: Studna
+  en: Well
+
+well.blurb
+  cs: Voda pro chalupy kolem
+  en: Water for the cottages round it
+
 summer_cinema
   cs: Letní kino
   en: Summer cinema

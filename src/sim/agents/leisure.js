@@ -144,7 +144,8 @@ export class AgentLeisure {
     } else if (trip.linger) {
       a.state = 'linger';
       const place = this.world.structures.get(trip.dest);
-      this.startWander(a, between(...this.config.linger.park), this.parkSpots(place, [a.x, a.y]));
+      const stop = STRUCTURE_TYPES[place?.type]?.sim?.stop; // (a well: a moment by it)
+      this.startWander(a, between(...(stop?.time ?? this.config.linger.park)), this.parkSpots(place, [a.x, a.y]));
     } else {
       a.state = 'away';
       a.timer = this.dwell(trip);
@@ -402,9 +403,18 @@ export class AgentLeisure {
   // Where to stand about in a park or square: along its walkways, a step
   // to either side; on a green without any, round its middle; elsewhere (a
   // churchyard…) near where they came in.
+  // A place with a `stop` (def.sim.stop: { time, reach }, a well) is
+  // stood round, a step or two from its middle, not walked through.
   parkSpots(place, anchor) {
     if (!place || !STRUCTURE_TYPES[place.type]?.site) return around(...anchor, 0.25);
     const { lines, centre } = siteWalks(this.world.sitePaths(place));
+    const stop = STRUCTURE_TYPES[place.type].sim?.stop;
+    if (stop) {
+      return () => {
+        const a = Math.random() * Math.PI * 2, d = stop.reach * (0.8 + Math.random() * 0.4);
+        return [centre[0] + Math.cos(a) * d, centre[1] + Math.sin(a) * d];
+      };
+    }
     if (!lines.length) return around(...centre, 0.3);
     const walks = lines.map(measurePolyline);
     const total = walks.reduce((sum, w) => sum + w.total, 0);
