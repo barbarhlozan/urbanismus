@@ -1,4 +1,4 @@
-// Ways drawn point by point (docs/free-placement-plan.md, stage C): the
+// Ways drawn point by point (README, Free placement, stage C): the
 // points the player clicks become a smooth centre line – a centripetal
 // Catmull-Rom curve through them, which never loops or overshoots between
 // close points – resampled evenly for drawing and for travel by arc

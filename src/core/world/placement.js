@@ -215,7 +215,7 @@ export class WorldPlacement {
     return this.structureIndex.overlapping(poly).some((id) => id !== s.id) || !!this.wayAcross(poly);
   }
 
-  // Free placement (docs/free-placement-plan.md, stage B): may a structure
+  // Free placement (README, Free placement, stage B): may a structure
   // of `type` stand with its middle at (x, y), turned by `angle`? Its
   // outline must stay on the map, its body (bodyBox) overlap no other's
   // (touching is fine) and no way – road, railway, footpath – with its

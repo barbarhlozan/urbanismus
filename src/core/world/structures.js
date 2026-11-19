@@ -21,7 +21,7 @@ export class WorldStructures {
     return s;
   }
 
-  // Free placement (docs/free-placement-plan.md, stage B): a structure with
+  // Free placement (README, Free placement, stage B): a structure with
   // its middle at (x, y), its front looking along `angle`, wherever its
   // outline fits (fitsOutline). It's marked s.free and keeps that position;
   // s.node and s.rotation are the nearest dot and quarter turn, for what

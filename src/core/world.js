@@ -70,7 +70,7 @@ export class World {
     // (radians, the way the front looks: rotation r = r·π/2, front
     // (sin a, -cos a)), kept up to date as they're indexed (poseStructure).
     // For now they're still placed on the dots (node, rotation), and only
-    // the placement rules should read those – see docs/free-placement-plan.md.
+    // the placement rules should read those – see README, Free placement.
     this.structures = new Map();      // id -> { id, no, type, x, y, angle, node, rotation, seed, data }
     this.features = new Map();        // id -> { id, type, x, y, node, ox, oy, variant, scale }
     this.structureIndex = new SpatialIndex(); // structure id by outline (outlineOf)
@@ -89,7 +89,7 @@ export class World {
     // (roads/ways.js), the only truth about them. The layers below, and
     // the street sets, are its dot view (roads/dotView.js), rebuilt by
     // syncWays / refreshNetwork whenever it changes, for what still reads
-    // dots (stage D of docs/free-placement-plan.md).
+    // dots (stage D of README, Free placement).
     this.ways = new Ways();
     this.sidewalks = new Set(); // edgeKey of road segments that are streets (have sidewalks)
     this.lanes = new Set();     // edgeKey of road segments that are single-track lanes (never streets)

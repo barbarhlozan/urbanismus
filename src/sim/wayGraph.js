@@ -1,4 +1,4 @@
-// Getting about on the ways themselves (docs/free-placement-plan.md,
+// Getting about on the ways themselves (README, Free placement,
 // stage D): one graph per way of going – driving, walking, cycling –
 // derived from world.ways, with routes travelled by arc length along the
 // ways' own curves.

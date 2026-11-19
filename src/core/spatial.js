@@ -2,7 +2,7 @@
 // square. Each item is an id with an outline (a convex polygon in world
 // units, [[x, y], …]); it sits in every cell its bounding box touches.
 // One index each for structures and features (World keeps them up to
-// date as things are placed and removed). See docs/free-placement-plan.md.
+// date as things are placed and removed). See README, Free placement.
 //
 //   at(x, y)            ids whose outline holds the point
 //   near(x, y, r)       ids whose outline comes within r of the point,

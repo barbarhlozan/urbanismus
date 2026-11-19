@@ -31,7 +31,7 @@ export function createBuildTool(ctx, defs) {
   // turned smoothly (not parks and squares: they keep to quarter turns)
   const smooth = () => turnable() && !def().site;
   const turn = () => (single() && turnable() ? rotation : 0);
-  // placed freely (World.freePlacement, docs/free-placement-plan.md):
+  // placed freely (World.freePlacement, README, Free placement):
   // everything without a rule of its own (stations stay on the dots);
   // parks and squares turn only by quarters (World.freePlacement)
   const free = () => !def().canPlace;

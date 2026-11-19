@@ -1,4 +1,4 @@
-// A network of ways off the dots (docs/free-placement-plan.md, stage C):
+// A network of ways off the dots (README, Free placement, stage C):
 // roads, lanes, footpaths, railways and fences as junctions and the
 // curves between them, replacing the dot graph (network.js) one kind at a
 // time.

@@ -735,7 +735,7 @@ tools.onChange((tool) => {
     : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: ['road', 'lane', 'street'].includes(tool.id) };
   contours.lend(!!dots && tool.id !== 'bulldoze' && UNLOCKS.allowsControl('terrain'));
 });
-// Ways and buildings are placed freely now (docs/free-placement-plan.md):
+// Ways and buildings are placed freely now (README, Free placement):
 // the dots are shown only for what still stands on them – stations, whose
 // track runs on the dots.
 const dotsShown = () => !!dots?.building && !!STRUCTURE_TYPES[dots.building.type]?.canPlace;

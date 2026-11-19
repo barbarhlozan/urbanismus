@@ -1,5 +1,5 @@
 // Drawing tool for any kind of way (roads, footpaths, railways, fences, walls),
-// point by point (docs/free-placement-plan.md, stage C): click where it
+// point by point (README, Free placement, stage C): click where it
 // starts, then click along – the way is built as you go, from the first
 // point to the last one clicked, one smooth curve through them all, its
 // bends eased to what the kind can take (curves.js easeBends). Each click

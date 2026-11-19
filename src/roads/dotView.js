@@ -1,5 +1,5 @@
 // The ways (ways.js) seen as dots, for what still reads the dot graph
-// while the game moves off it (docs/free-placement-plan.md, "The switch",
+// while the game moves off it (README, Free placement, "The switch",
 // step 1): each kind's edges traced onto that kind's dots into a
 // RoadNetwork, with where each dot sits on its curve. Derived, never saved
 // or edited – the ways are the truth.
