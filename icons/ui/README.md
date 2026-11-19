@@ -12,7 +12,7 @@ drawing written in the code, the one each file was first exported from.
 
 - **The box.** Each file keeps the `viewBox` of the drawing it was exported from, and the game
   draws a file in its own `viewBox`, at the size that place gives its drawings. The Menu's
-  items are on `0 0 24 24`, most of the others on `0 0 16 16`, the camera on `0 0 32 32` and
+  items are on `0 0 24 24`, most of the others on `0 0 16 16`, photo mode's drawing on `0 0 32 32` and
   the dialogue's › on `0 0 10 16` (it stands taller than wide). A new drawing may keep its file's
   box or use `0 0 24 24`; keep it inside the box, about an eighth of it from the edge.
 - **Lines only**, no fills: `fill="none"` and `stroke="currentColor"` on the `<svg>`. The
@@ -58,12 +58,12 @@ drawing written in the code, the one each file was first exported from.
 | `lang-en.svg` | Menu: English (the Union Jack), shown while the game is in Czech |
 | `rename.svg` | Top left: the pencil beside the town's name, to rename it |
 | `chronicle.svg` | Top left: the chronicle book, beside the town's name |
-| `camera.svg` | Build menu, last in the row under the rail (on a phone, the panel's bottom row): photo mode, **P**; and the dock while it's on |
+| `camera.svg` | Build menu, last in the row under the rail (on a phone, the panel's bottom row), and top left beside the town's name: photo mode, **P**; and the dock while it's on (a sketchbook with a pencil drawing a hill on its page – a photo is drawn as an illustration) |
 | `rotate.svg` | Tool dock: rotate option, **Tab** |
 | `bend-diagonal.svg` | Tool dock: a line's bend, diagonal first, **Tab** |
 | `bend-straight.svg` | Tool dock: a line's bend, straight first, **Tab** |
 | `another-look.svg` | Tool dock: another look, **Space**; and the Building card: Jiná podoba / Another look |
-| `terrain.svg` | Build menu, after Erase, before the camera: Terén / Terrain (the contour lines), a range of mountains |
+| `terrain.svg` | Build menu, after Erase, before photo mode: Terén / Terrain (the contour lines), a range of mountains |
 | `undo.svg` | Build menu, first in the row, before Erase, and the dock on a phone: Zpět / Undo, **⌘Z** |
 | `redo.svg` | Build menu, right after Zpět, and the dock on a phone: Znovu / Redo |
 | `erase.svg` | Building card: Zbourat / Demolish, last in the row of drawings (the Erase tool's eraser) |
@@ -100,7 +100,7 @@ it's added there.
 - **The Build menu's tiles for buildings**: each is drawn from the building's own draw code
   (`src/ui/icons.js` structureIcon), so it always matches what gets built, in a looser, rounder
   hand than the map's (`DOODLE` there, `.icon.doodle` in styles.css).
-- **The map's own marks**: the photographer's camera on the map, the cursor's crosses and
+- **The map's own marks**: the photographer's mark on the map, a drawing in its frame (`PHOTO_SPOT` in `src/render/overlay.js`), the cursor's crosses and
   signs, the road marks (`src/render/`).
 - **Pen frames and marks drawn to size**: the boxes round the panels (`sketchFrame.js`), what
   a button is doing (`penMarks.js`), the chronicle book's tabs, ribbon, corners and rules,

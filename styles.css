@@ -177,12 +177,10 @@ html, body {
 /* a named hill's top (terrain/hills.js): a little pen triangle; hovering it
    shows the name and height (ui/annotations.js) */
 .summit { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
-/* lakes and rivers (Renderer.renderWater): a lake's shoreline with
-   two wave strokes inside, a river's banks thinner and lighter; all in the
-   detail pen */
+/* lakes and rivers (Renderer.renderWater): a lake's shoreline, a river's
+   banks thinner and lighter, the water inside bare; all in the detail pen */
 .shore { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
 .bank { fill: none; stroke: color-mix(in srgb, var(--detail) 75%, var(--bg)); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
-.wave { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
 
 /* roads: their two edge lines (roadEdges in src/roads/geometry.js) */
 .road {
@@ -229,7 +227,7 @@ html, body {
 .fence, .fence-post { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; } /* as the garden fences (.layer-objects .ln) */
 /* a gate's pillars, either side of a footpath through the fence */
 .wall, .grave-stone { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; } /* churchyard walls and headstones (wallItems) */
-.wall-cap, .wall-stone, .grave { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2, 0.6px) * var(--stroke, 1)); stroke-linecap: round; }
+.wall-cap, .grave { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2, 0.6px) * var(--stroke, 1)); stroke-linecap: round; }
 .fence-pillar { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-5) * var(--stroke, 1)); stroke-linecap: butt; }
 /* railways: the map symbol – a solid line with dashes of background
    colour inside it; faded dashes past the map edge, a bar at dead ends */
@@ -490,7 +488,6 @@ svg.draft .layer-lots .d2 { display: none; }
 @media (prefers-reduced-motion: reduce) { .overlay .eraser-mark { animation: none; } }
 /* Erase: the eraser over what would go (OverlayKit.eraserAt) */
 .overlay .eraser-body { fill: var(--bg); stroke: none; }
-.overlay .eraser-hatch { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
 .overlay .eraser { fill: none; stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .overlay .steep-wedge { fill: var(--fg); stroke: var(--fg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 /* among the dots around the pointer (OverlayKit.nearDots) the signs are as
@@ -2040,8 +2037,8 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
 
 /* ---------- Photo mode (tools/photo.js, render/photo.js) ---------- */
 
-.overlay .photo-aim { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; }
-.overlay .photo-cam path, .overlay .photo-cam circle { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-5) / 0.24 * var(--stroke, 1)); /* drawn at scale(0.24), OverlayKit.photoCone */ stroke-linejoin: round; stroke-linecap: round; }
+.overlay .photo-aim { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-5) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.overlay .photo-cam path { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-4) / var(--k) * var(--stroke, 1)); /* drawn at scale(--k): OverlayKit.photographer */ stroke-linejoin: round; stroke-linecap: round; }
 
 
 
@@ -2086,17 +2083,18 @@ svg.photo { --detail: color-mix(in srgb, var(--main) 72%, var(--bg)); }
 /* line weight by distance (PHOTO.weight): each layer sets --stroke for its
    distance and --fine, never above 1, for texture, so hatching, windows
    and grass stay fine up close */
-svg.photo :is(.roof-hatch, .wall-shade, .ink, .bar, .leaf, .twig, .shadow, .layer-meadow path, .photo-hatch, .photo-ripples) { --stroke: var(--fine, 1); }
+svg.photo :is(.roof-hatch, .wall-shade, .ink, .bar, .leaf, .twig, .shadow, .layer-meadow path, .photo-hatch, .photo-reflect) { --stroke: var(--fine, 1); }
 /* a window close up: its frame and glazing bars (Painter._window) */
 svg.photo .pane { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-2, 0.7px) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
 svg.photo .pane.bar { fill: none; }
 svg.photo .hedge { fill: var(--bg); } /* kit.js hedgeSide */
 svg.photo .photo-figure * { vector-effect: non-scaling-stroke; } /* deer, cows, sheep: the map's line widths */
 svg.photo .photo-deck { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
+svg.photo .photo-wall { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; } /* a churchyard wall's faces: solid, hiding what's behind */
 svg.photo .photo-band { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
 svg.photo .photo-crest { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 svg.photo .photo-hatch { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.7; }
-svg.photo .photo-ripples { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; opacity: 0.8; }
+svg.photo .photo-reflect { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
 svg.photo .photo-shore { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 
 /* ---------- Watercolour (the scheme with `wash` in src/theme.js) ----------
@@ -2209,7 +2207,6 @@ html:is(.wc, .tint) .pond { fill: #8ccbc6; stroke: none; }
 html:is(.wc, .tint) .river-wash { fill: none; stroke: #8ccbc6; stroke-linecap: round; stroke-linejoin: round; }
 /* (no line round the water in the painted schemes: its colour is its edge) */
 html:is(.wc, .painted) :is(.shore, .bank) { display: none; }
-html:is(.wc, .tint) .wave { stroke: #eef6f1; }
 /* gables (Painter._washGable): a board at the eaves and a painted trim */
 html:is(.wc, .tint) .layer-objects .wtrim { stroke: #8a4532; stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* the outhouse's door and heart, the shrine's cross (structures/kit.js) */
@@ -2327,4 +2324,3 @@ html.tint .layer-forest :is(.filled, .forest) { fill: var(--bg); }
 html.tint .layer-forest .forest-edge { stroke: #6f8b3d; }
 html.tint :is(.pond, .river-wash) { display: none; }
 html.tint :is(.shore, .bank) { stroke: #4f9a96; }
-html.tint .wave { stroke: #74b5b0; }

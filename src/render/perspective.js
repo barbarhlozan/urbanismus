@@ -7,16 +7,21 @@
 // does on the map; the map's sideways warp is left out – it is a drawing
 // distortion, not part of the town.
 //
-// The camera looks level (no pitch), so the near plane is vertical and
-// clipping can be done on world points before the relief lifts them. The
-// horizon need not be across the middle of the picture: `horizon` is where
-// it is, as a share of the height from the top – as a shifted lens does, so
-// the walls stay upright and the picture has less bare ground in front.
+// The camera mostly looks level, so the near plane is vertical and clipping
+// can be done on world points before the relief lifts them. The horizon
+// need not be across the middle of the picture: `horizon` is where it is,
+// as a share of the height from the top – as a shifted lens does, so the
+// walls stay upright and the picture has less bare ground in front.
+// Right up against a house it may look up instead (`pitch`, radians): the
+// walls then lean in towards the top, as they do seen from below; `horizon`
+// is then the middle of the picture and horizonY where the true horizon
+// falls, below it. (Clipping stays on the level distance: the photo keeps
+// what is right by the photographer out anyway.)
 //
 // Screen: pixels in a width × height picture, (0, 0) top left.
 
 export class PerspectiveCamera {
-  constructor({ x, y, z, yaw, fov = 55, width = 480, height = 320, lift = null, near = 0.06, horizon = 0.5, shapes = 1 }) {
+  constructor({ x, y, z, yaw, fov = 55, width = 480, height = 320, lift = null, near = 0.06, horizon = 0.5, shapes = 1, pitch = 0 }) {
     this.perspective = true;
     this.ex = x;
     this.ey = y;
@@ -27,13 +32,17 @@ export class PerspectiveCamera {
     this.height = height;
     this.lift = lift;
     this.near = near;
-    this.horizonY = height * horizon; // the horizon on the picture, px from the top
+    this.pitch = pitch;
+    this.cp = Math.cos(pitch);
+    this.sp = Math.sin(pitch);
+    this.middleY = height * horizon; // where the view's axis meets the picture, px from the top
     this.fx = Math.cos(yaw);
     this.fy = Math.sin(yaw);
     // right, matching the map: the iso view has +x to the right of -y
     this.rx = -this.fy;
     this.ry = this.fx;
     this.focal = width / 2 / Math.tan((fov * Math.PI) / 360);
+    this.horizonY = this.middleY + this.focal * Math.tan(pitch); // the horizon on the picture, px from the top
     // painters scale the hand-drawn wobble by tile / 32: keep it as on the map
     this.tile = 32;
     this.rotation = 0;
@@ -57,10 +66,16 @@ export class PerspectiveCamera {
 
   project(x, y, z = 0, at = null, liftAt = at) {
     if (this.lift) z += this.lift(...(liftAt ?? [x, y]));
-    const cz = Math.max(this.ahead(x, y), 1e-4);
+    return this.projectRaw(x, y, z);
+  }
+
+  // The same for a point whose height already has the relief in it.
+  projectRaw(x, y, z) {
+    const a = this.ahead(x, y), up = z - this.ez;
+    const cz = Math.max(a * this.cp + up * this.sp, 1e-4);
     const cx = (x - this.ex) * this.rx + (y - this.ey) * this.ry;
-    const cy = z - this.ez;
-    return [this.width / 2 + (cx / cz) * this.focal, this.horizonY - (cy / cz) * this.focal];
+    const cy = up * this.cp - a * this.sp;
+    return [this.width / 2 + (cx / cz) * this.focal, this.middleY - (cy / cz) * this.focal];
   }
 
   // Pixels per world unit at a point (for screen-facing shapes).

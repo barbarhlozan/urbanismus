@@ -16,7 +16,6 @@ import { Painter, LOOK } from '../render/painter.js';
 import { vehicleSVG } from '../render/vehicles.js';
 import { drawSeed, footprintOffsets } from '../../structures/index.js';
 import { sampleSitePaths } from '../roads/siteWalks.js';
-import { sketchLine, sketchRect, sketchEllipse } from '../render/sketch.js';
 import { drawing, iconSvg } from './uiIcons.js';
 
 const ICON_SEED = 12345;
@@ -177,25 +176,12 @@ export function toolIcon(tool) {
   return art ? `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">${art}</svg>` : '<svg class="icon" viewBox="0 0 32 32"></svg>';
 }
 
-// Photo mode's camera, icons/ui/camera.svg. Its stand-in is a plain camera
-// – a box, the viewfinder's hump on top, the shutter button beside it, the
-// lens in the middle – in a few pen strokes on a 32×32 box, the same every
-// time (fixed seeds), drawn once when first wanted.
-let camera = null;
+// Photo mode's drawing, icons/ui/camera.svg: since a photo is drawn as an
+// illustration, a sketchbook with the pencil drawing on it rather than a
+// camera. Its stand-in is the same lines.
+const FRAMED = '<path d="M3.9 9.3Q13.2 9.05 22.4 9.1M22.1 8.8Q22.25 18.1 22.2 27.3M22.5 27.05Q13.2 27.2 4 27.1M4.3 27.45Q4.15 18.2 4.4 8.85"/><path d="M7.2 10.6C6.4 9.5 6.8 7.3 8.3 7.7M10.8 10.6C10 9.5 10.4 7.3 11.9 7.7M14.4 10.6C13.6 9.5 14 7.3 15.5 7.7M18 10.6C17.2 9.5 17.6 7.3 19.1 7.7"/><path d="M6.6 23.4Q9.4 18.6 12.4 21.6Q13.6 20.6 15.1 21.5"/><path d="M16.4 19.3L25.3 4.6M18.6 20.6L27.5 5.9M25.2 4.5Q26.5 4.9 27.6 6M24 6.9Q25.2 7.3 26.3 8.2M16.45 19.25L15.2 22.3L18.65 20.6"/>';
 export function cameraIcon() {
-  return iconSvg('camera', 'class="icon camera-icon" aria-hidden="true"', camera ??= cameraArt(), '0 0 32 32');
-}
-
-function cameraArt() {
-  const o = { k: 0.3 };
-  const d = [
-    sketchRect(4, 10.5, 24, 15.5, 31, { k: 0.3, over: 1.4, bow: 1 }),     // the body
-    sketchLine([11.5, 10.5], [13, 7], 32, o) + sketchLine([13, 7], [19, 7], 33, o) + sketchLine([19, 7], [20.5, 10.5], 34, o), // the viewfinder
-    sketchLine([6.5, 8.8], [9.5, 8.8], 35, o),                             // shutter button
-    sketchEllipse(16, 18.2, 5, 5, 36, o),                                  // the lens
-    sketchEllipse(16, 18.2, 2, 2, 37, o),
-  ].join('');
-  return `<path d="${d}"/>`;
+  return iconSvg('camera', 'class="icon camera-icon" aria-hidden="true"', FRAMED, '0 0 32 32');
 }
 
 // Little pen drawings for the HUD's numbers, on a 16×16 box. The ones in

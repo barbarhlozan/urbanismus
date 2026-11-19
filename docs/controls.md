@@ -5,7 +5,7 @@ the time used: Doprava (transport), Bydlení (housing), Výroba (industry, mines
 Občanská vybavenost (civic amenities: shops, pubs, offices, services, school, culture – none of
 it private, so there's no separate "business"), Prostranství (parks and squares) and Památky
 (landmarks). Along its bottom (under the rail on a computer) stand, in this order, Zpět and
-Znovu (undo, redo), Erase, Terrain and the camera. Every building is its own thing to build: nothing upgrades into
+Znovu (undo, redo), Erase, Terrain and photo mode. Every building is its own thing to build: nothing upgrades into
 something else. Open a group to see its tools; click a tool to pick it up and click it
 again (or close its group, or **Esc**) to put it down. The **–** folds the menu into a single
 Build button; picking a tool folds it too, out of the way, and it comes back when you put the
@@ -27,7 +27,7 @@ The **≡** at the top right opens the Menu: Colours, Save to a file, Open from 
 Nastavení (the Settings) and Hlavní menu (back to the main menu), each a small drawing. Point at one (or, on a phone, hold
 a finger on it) and its name is written beside it; on a computer they stand in a line along the
 top edge, on a phone in a column down from the ≡. These drawings, and the UI's others (the ≡
-itself, the camera, the chronicle book, the tool options, the New map settings…), are SVG files
+itself, photo mode's sketchbook, the chronicle book, the tool options, the New map settings…), are SVG files
 of their own in `icons/ui/`, read when the game starts: replace a file to change a drawing. Its
 README says how to draw one and lists them all, and `icons/ui/index.html` shows them side by side.
 
@@ -100,17 +100,20 @@ a Czech or German layout.
   its outline, and clicked, its crop sinks back into the ground from where it was touched.
   **[** and **]** make the brush smaller and bigger
 - **Backspace** – erase
-- **P** or the **camera**, last in the Build menu's bottom row – photo mode: click where
+- **P** or the **sketchbook**, last in the Build menu's bottom row – photo mode: click where
   to stand, aim with the pointer, click to take a picture of the town from street level;
-  its options are in the dock: **Move**, and on a phone **Take the photo**. There is no
+  its options are in the dock: **Draw it** (Nakreslit; on a phone the only way to take it) and **Move**. There is no
   lens to pick, and on the map only a small arrow shows which way you look: the picture is
   framed when it's taken, as a drawing is composed – the houses looked at whole in it (the
   view turned a little to have them in the middle, and up close the photographer steps back a
-  few paces). Standing among the houses it is a picture of a house or two; the further off the
+  few paces). Right up against a building it is a detail of it instead, looked up at, the
+  walls leaning in towards the sky; a church too tall for the picture otherwise has the
+  horizon lowered for it. Standing among the houses it is a picture of a house or two; the further off the
   nearest ones are, the more of the village it takes in and the wider it goes, till from out
   in the fields it is the whole village in its landscape. Anything else the picture's sides
   or top would cut through is left out, paper there instead of half a house. It opens as a
-  print you can save as a PNG.
+  print you can save as a PNG, drawn in before your eyes as an illustrator would: the line of the
+  land first, then the houses, then their roofs and windows, the trees, the land, and last the sky.
   The photo is drawn in one pen, with the map's own brushed line (thinner at the ends,
   swelling along it): the landscape in the same ink as the houses, only lighter, lines a
   little heavier in front; the horizon a little below the middle; the ground's rises and dips

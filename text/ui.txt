@@ -585,8 +585,8 @@ control.photo
   en: Photograph
 
 photo.take
-  cs: Vyfotit
-  en: Take a picture
+  cs: Nakreslit
+  en: Draw it
 
 photo.move
   cs: Přejít

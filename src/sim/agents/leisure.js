@@ -221,6 +221,36 @@ export class AgentLeisure {
     return 'linger';
   }
 
+  // The house the player has held the pointer on (main.js): one of those
+  // at home comes out of the door, a step or two, and stands there looking
+  // out for as long as it's pointed at, then goes back in (ungreet). Only
+  // a house with a front, and somebody in: an empty one stays shut. True
+  // if somebody came out (or is out already).
+  greet(home) {
+    for (const a of this.agents.values()) if (a.greets === home.id) return true;
+    let a = null;
+    for (const p of this.agents.values()) if (p.home === home.id && p.state === 'home' && !p.truck && !p.engine) { a = p; break; }
+    if (!a || !this.startPorch(a, home)) return false;
+    const front = this.world.frontFor(this.world.nodesOf(home));
+    const [x, y] = this.world.grid.xy(front.door), [dx, dy] = front.dir;
+    const out = this.config.sim.doorPad + 0.25; // (a step past the door step)
+    const step = [x + dx * out, y + dy * out];
+    Object.assign(a.wander, { time: Infinity, pause: 0.15, spot: () => step });
+    a.state = 'linger';
+    a.greets = home.id;
+    return true;
+  }
+
+  // The pointer gone from the house: whoever came out goes back in at once.
+  ungreet() {
+    for (const a of this.agents.values()) {
+      if (a.greets == null) continue;
+      a.greets = null;
+      if (a.state !== 'linger' || !a.wander) continue;
+      Object.assign(a.wander, { time: 0, pause: 0, target: null });
+    }
+  }
+
   // Round the house, where nothing leads from its front (no road, no
   // footpath): out of the door and a little way round it in the garden,
   // along a loop at the door's distance (doorPad) round the footprint,

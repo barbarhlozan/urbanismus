@@ -86,10 +86,6 @@ export { mergeRuns } from './order.js';
 const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'hillshade', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'overlay'];
 const TOP = ['mist', 'objects', 'overlay']; // in the #objects <svg>, see the constructor
 
-// The squash of a building pointed at (Renderer.markHovered): how long, the
-// share of it spent going down, and how much it's pressed down and spread.
-const SQUASH = { ms: 260, down: 0.3, press: 0.03, spread: 0.015 };
-
 export class Renderer {
   constructor(svg, ground, { world, camera, agents, trains, boats, deer, livestock, parking, config }) {
     this.svg = svg;
@@ -213,7 +209,7 @@ export class Renderer {
       paths: new InkLayer(['path-wash', 'footpath', 'bridge', 'bridge-post']),
       rails: new InkLayer(['rail-exit', 'rail-buffer', 'rail', 'rail-dash', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'bridge', 'bridge-post']),
       fences: new InkLayer(['fence-post', 'fence-pillar', 'fence']),
-      walls: new InkLayer(['grave', 'grave-stone', 'wall-stone', 'wall', 'wall-cap']),
+      walls: new InkLayer(['grave', 'grave-stone', 'wall', 'wall-cap']),
     };
     this.buildOrder = new Map(); // network layer -> Map dot -> its place in the last build, for the pen
 
@@ -418,46 +414,6 @@ export class Renderer {
     return box;
   }
 
-  // The building under the pointer (an objs key, 's12', or null): it gives
-  // a little squash as the pointer comes onto it – pressed down from the
-  // roof and spreading a touch, standing on its ground, then back up,
-  // settling without a bounce – once each time it's pointed at, so it reads
-  // as something to click. Only the building: its garden stands still.
-  // Its parts are drawn in among the yard's, so each is squashed on its
-  // own about the same point, the middle of the building's base. Not while
-  // it slides in a turn of the view. Set by main.js; frame() applies it.
-  markHovered() {
-    const key = this.hovered ?? null;
-    if (key === this.hoveredKey) return;
-    this.hoveredKey = key;
-    const entry = key ? this.objs.get(key) : null;
-    if (!entry || entry.slid || entry.shown === false || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const parts = this.buildingParts(key);
-    let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const el of parts) {
-      const gb = this.glObjects?.boxOf(el); // (with WebGL: not laid out)
-      const b = gb ? { x: gb[0], y: gb[1], width: gb[2] - gb[0], height: gb[3] - gb[1] } : el.getBBox();
-      if (!b.width && !b.height) continue;
-      x0 = Math.min(x0, b.x); x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
-    }
-    if (!(x1 > x0)) return;
-    const px = r2((x0 + x1) / 2), py = r2(y1);
-    const start = performance.now();
-    const run = (entry.squash = {});
-    const step = (now) => {
-      if (entry.squash !== run) return; // (pointed at again: the new one goes on)
-      const t = Math.min(1, (now - start) / SQUASH.ms);
-      // down quickly, easing in to the deepest point, then slowly back up
-      const f = t < SQUASH.down ? 1 - (1 - t / SQUASH.down) ** 2 : (1 - (t - SQUASH.down) / (1 - SQUASH.down)) ** 2;
-      const k3 = (n) => Math.round(n * 1000) / 1000;
-      const sx = k3(1 + SQUASH.spread * f), sy = k3(1 - SQUASH.press * f);
-      const tf = t < 1 ? `translate(${px} ${py}) scale(${sx} ${sy}) translate(${-px} ${-py})` : null;
-      for (const el of parts) tf ? el.setAttribute('transform', tf) : el.removeAttribute('transform');
-      if (t < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-
   frame(overlaySVG) {
     this.placeView();
     // labels that keep their screen size divide by this (styles.css); set
@@ -542,7 +498,6 @@ export class Renderer {
       this.deerGone.clear();
     }
     this.markErasing();
-    this.markHovered();
     this.renderShadeCanvas();
     this.renderGlLines();
     this.renderGlTerrain();

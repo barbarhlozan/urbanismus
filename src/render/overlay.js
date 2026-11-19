@@ -6,9 +6,8 @@ import { smoothPolyline } from '../roads/geometry.js';
 import { Painter } from './painter.js';
 import { drawSeed, tiltOf, roadFront, freeTilt, freeAnchor } from '../../structures/index.js';
 import { fitSite, siteEdges } from './lots.js';
-import { sketchEllipse, sketchLine, sketchHatch, seedOf } from './sketch.js';
+import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
-import { controlArt } from '../ui/icons.js';
 import { THEME } from '../theme.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -21,9 +20,19 @@ function pathLength(d) {
   return len;
 }
 
+// the photographer's mark on the map: a drawing in its frame, `size` times
+// its 32×32 box, standing with the middle of its foot (`tip`) on the spot
+const PHOTO_SPOT = {
+  size: 0.3,
+  tip: [16, 25.3],
+  art: '<path d="M4.2 7.4Q16.1 7.1 28 7.3M27.7 7Q27.85 16.2 27.75 25.3M28.1 25.05Q16 25.2 3.9 25.1M4.3 25.45Q4.15 16.4 4.4 6.95"/><path d="M7 21.8Q11.7 15.4 16.8 18.9Q20.4 16.6 25 20.5"/><path d="M11 17.8L11.1 14.6L12.8 13.1L14.4 14.6L14.3 16.6M10.8 14.8L12.8 12.9L14.6 14.8"/><path d="M20.5 17.6L20.55 15.4M20.5 15.5C18.7 15.6 18.6 12.4 20.6 12.2C22.4 12.3 22.3 15.4 20.6 15.5"/>',
+};
+
 // the photo arrow: from `from` to `to` grid steps out from the photographer,
-// its head's two strokes `head` long, `spread` radians off the shaft
-const PHOTO_AIM = { from: 0.35, to: 1.5, head: 0.32, spread: 0.45 };
+// its head's two wings about `head` long, `spread` radians off the shaft;
+// its shaft bowed by `bow` of its length and gone over again along the
+// last `again` of it
+const PHOTO_AIM = { from: 0.28, to: 0.8, head: 0.2, spread: 0.55, bow: 0.06, again: 0.45 };
 
 export class OverlayKit {
   constructor(world, camera, config) {
@@ -152,41 +161,39 @@ export class OverlayKit {
     return dots + signs;
   }
 
-  // Erase mode, over what would go: the rubber from the Erase tile
-  // (icons/ui/tool-erase.svg, without its smudge) – tilted, rounded, drawn
-  // by hand, a little differently wherever it lands – filled with the paper
-  // so it reads over anything, its rubber tip hatched as a roof is.
-  eraserAt(x, y, size = 0.16) {
+  // Erase mode's cursor: a rubber block lying tilted – its top, its long
+  // side and its rounded end, a band where the end begins – in outline, as
+  // a pen draws it, filled with the paper so it reads over anything. Its
+  // middle at (x, y); the same drawing wherever it goes, so it follows the
+  // pointer without flickering.
+  eraserAt(x, y, size = 0.1) {
     const [cx, cy] = this.project(x, y);
-    const s = (size * this.camera.tile) / 8.25; // the tile's 24-box, around its middle
-    const seed = seedOf(x, y, 11);
+    const s = (size * this.camera.tile) / 8.25; // the drawing's 24-box
+    const seed = 11;
     // each point of the drawing nudged a hair, so no two are alike (the
-    // same point the same way in the outline, its fill and the tip)
+    // same point the same way in the outline and its fill)
     const q = (px, py) => {
       const rnd = mulberry32(seedOf(px, py, seed));
-      const jx = (rnd() - 0.5) * 0.5, jy = (rnd() - 0.5) * 0.5;
-      return `${r2(cx + (px + jx - 12.15) * s)} ${r2(cy + (py + jy - 13.65) * s)}`;
+      const jx = (rnd() - 0.5) * 0.4, jy = (rnd() - 0.5) * 0.4;
+      return `${r2(cx + (px + jx - 11.8) * s)} ${r2(cy + (py + jy - 12) * s)}`;
     };
     const path = (pts) => pts.map(([c, ...n]) => c + (n.length ? q(...n.slice(0, 2)) + (n.length > 2 ? ' ' + q(...n.slice(2)) : '') : '')).join('');
-    const rim = [['M', 4.38, 15.39], ['Q', 9.12, 10.91, 13.51, 6.07], ['Q', 14.61, 5.12, 15.71, 6.31], ['Q', 17.51, 8.25, 19.42, 10.08],
-      ['Q', 20.54, 10.89, 19.34, 12.09], ['Q', 14.78, 16.31, 10.49, 20.8], ['Q', 9.39, 22.19, 8.54, 20.83], ['Q', 6.64, 19.04, 4.61, 17.39],
-      ['Q', 3.66, 16.23, 4.78, 15.38], ['L', 3.9, 15.1]];
+    // the outline: along the top, round the far end, down the long bottom
+    // edge, round the near end and back up
+    const rim = [['M', 14.2, 3.6], ['Q', 15.1, 3.0, 16.3, 3.5], ['L', 20.4, 5.6], ['Q', 21.5, 6.3, 21.3, 7.6],
+      ['Q', 21.0, 10.0, 19.6, 11.8], ['L', 10.3, 20.1], ['Q', 9.4, 20.8, 8.5, 20.6], ['L', 3.3, 17.6],
+      ['Q', 2.1, 16.8, 2.4, 15.7], ['Q', 3.4, 13.0, 5.3, 10.9], ['Q', 5.9, 10.2, 6.8, 9.5], ['L', 14.2, 3.6]];
     const outline = path(rim);
-    const band = path([['M', 9.17, 10.51], ['Q', 11.95, 13.5, 14.99, 16.23]]);
-    const fill = path(rim.slice(0, -1)) + 'Z';
-    const tip = path([['M', 9.17, 10.51], ['Q', 11.95, 13.5, 14.99, 16.23], ['L', 10.49, 20.8], ['Q', 9.39, 22.19, 8.54, 20.83],
-      ['Q', 6.64, 19.04, 4.61, 17.39], ['Q', 3.66, 16.23, 4.78, 15.38]]) + 'Z';
-    // the tip's hatching: strokes across the box round it, cut to its shape
-    const [x0, y0] = [cx + (3.4 - 12.15) * s, cy + (10.2 - 13.65) * s];
-    const [x1, y1] = [cx + (15.3 - 12.15) * s, cy + (22.4 - 13.65) * s];
-    const hatch = sketchHatch(x0, y0, x1 - x0, y1 - y0, seed + 7, { gap: Math.max(3.2, s * 1.6) });
-    const clip = `eraser-tip-${seed}`;
-    // data-anim: it pops up once where it lands, not again on every redraw
-    // of a pan, and shrinks away when it goes (Renderer.keepAnimating, letGo)
-    return `<g class="eraser-mark" data-anim="erase-${seed}">`
-      + `<clipPath id="${clip}"><path d="${tip}"/></clipPath>`
+    const fill = path(rim) + 'Z';
+    // the top's two near edges, the rounded end's edge, the band
+    const lines = path([['M', 6.8, 9.5], ['L', 14.3, 13.0], ['L', 21.1, 7.0]])
+      + path([['M', 13.9, 13.3], ['Q', 11.3, 15.2, 8.9, 20.3]])
+      + path([['M', 14.1, 13.9], ['L', 13.7, 17.1]]);
+    // data-anim: it pops up once when Erase is picked, not again on every
+    // move, and shrinks away when it goes (Renderer.keepAnimating, letGo)
+    return `<g class="eraser-mark" data-anim="eraser">`
       + `<path class="cross-halo" d="${outline}"/><path class="eraser-body" d="${fill}"/>`
-      + `<path class="eraser-hatch" clip-path="url(#${clip})" d="${hatch}"/><path class="eraser" d="${outline}${band}"/></g>`;
+      + `<path class="eraser" d="${outline}${lines}"/></g>`;
   }
 
   steep(node, size) {
@@ -299,21 +306,40 @@ export class OverlayKit {
     if (yaw != null) {
       const z = this.world.terrain.heightAt(x, y) + 0.04;
       const at = (t, a = 0) => this.camera.project(x + Math.cos(yaw + a) * t, y + Math.sin(yaw + a) * t, z, [x, y]);
-      const { from, to, head, spread } = PHOTO_AIM;
-      const tip = at(to);
-      const back = (side) => {
-        const c = Math.cos(yaw), s = Math.sin(yaw), b = to - head * Math.cos(spread), w = side * head * Math.sin(spread);
-        return this.camera.project(x + c * b - s * w, y + s * b + c * w, z, [x, y]);
+      const { from, to, head, spread, bow, again } = PHOTO_AIM;
+      // drawn as by hand on the paper (seeded by the spot, so it holds its
+      // shape while turning): the shaft one stroke bowed a little to a side,
+      // gone over again towards the tip, and the head one stroke down to the
+      // tip and back out, its wings not quite alike
+      const rnd = mulberry32(seedOf(x, y, 7));
+      const [tx, ty] = at(from), [px, py] = at(to), [hx, hy] = at(to - head);
+      const len = Math.hypot(px - tx, py - ty) || 1, hl = Math.hypot(px - hx, py - hy);
+      const ux = (px - tx) / len, uy = (py - ty) / len;
+      const side = rnd() < 0.5 ? -1 : 1, b = side * len * bow * (0.7 + 0.6 * rnd());
+      const cx = (tx + px) / 2 - uy * b, cy = (ty + py) / 2 + ux * b;
+      // where the curve is at t, and which way it goes at its tip
+      const on = (t) => [(1 - t) * (1 - t) * tx + 2 * t * (1 - t) * cx + t * t * px, (1 - t) * (1 - t) * ty + 2 * t * (1 - t) * cy + t * t * py];
+      const ex = px - cx, ey = py - cy, el = Math.hypot(ex, ey) || 1, dx = ex / el, dy = ey / el;
+      const wing = (sgn) => {
+        const a = sgn * spread * (0.85 + 0.3 * rnd()), l = hl * (0.8 + 0.4 * rnd());
+        const c = Math.cos(a), s2 = Math.sin(a);
+        return [px - (dx * c - dy * s2) * l, py - (dy * c + dx * s2) * l];
       };
-      const seed = seedOf(x, y, 7);
-      const d = sketchLine(at(from), tip, seed, { k, over: 1, bow: 2 })
-        + sketchLine(back(1), tip, seed + 1, { k, over: 0.5, bow: 1 })
-        + sketchLine(back(-1), tip, seed + 2, { k, over: 0.5, bow: 1 });
+      const [l1, l2] = [wing(1), wing(-1)];
+      const past = hl * 0.12 * rnd(); // the pen runs a touch past the tip
+      const p = (q) => `${r2(q[0])} ${r2(q[1])}`;
+      const [ax, ay] = on(1 - again), slip = (rnd() - 0.5) * 2 * k;
+      let d = `M${p([tx, ty])}Q${p([cx, cy])} ${p([px, py])}`;
+      d += `M${p([ax - uy * slip, ay + ux * slip])}Q${p(on(1 - again / 2))} ${p([px + dx * past * 0.5, py + dy * past * 0.5])}`;
+      d += `M${p(l1)}Q${p([(l1[0] + px) / 2 + dy * hl * 0.06, (l1[1] + py) / 2 - dx * hl * 0.06])} ${p([px + dx * past, py + dy * past])}`
+        + `L${p([px, py])}Q${p([(l2[0] + px) / 2 - dy * hl * 0.05, (l2[1] + py) / 2 + dx * hl * 0.05])} ${p(l2)}`;
       out += `<path class="photo-aim" d="${d}"/>`;
     }
     const [sx, sy] = this.project(x, y);
-    // the camera from the Photo button up top, standing on the spot
-    const s = 0.24 * (this.camera.tile / 32);
-    return out + `<g class="photo-cam" transform="translate(${r2(sx - 8 * s)} ${r2(sy - 12.6 * s)}) scale(${r2(s)})">${controlArt('photo')}</g>`;
+    // a drawing in its frame, standing on the spot: the picture will be
+    // drawn from here
+    const s = PHOTO_SPOT.size * (this.camera.tile / 32);
+    const [px, py] = PHOTO_SPOT.tip;
+    return out + `<g class="photo-cam" style="--k: ${r2(s)}" transform="translate(${r2(sx - px * s)} ${r2(sy - py * s)}) scale(${r2(s)})">${PHOTO_SPOT.art}</g>`;
   }
 }

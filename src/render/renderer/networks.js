@@ -303,8 +303,7 @@ export class NetworkDrawing {
   // foot only on the side in sight, an upright where it turns away and at
   // its ends. Where a road or railway crosses there's a gap; where a
   // footpath does, an arched gateway a little taller than the wall
-  // (sim/pastures.js fenceGates). Close up, here and there a patch of
-  // bare stone where the plaster has come off. Then the graves of every
+  // (sim/pastures.js fenceGates). Then the graves of every
   // churchyard closed all round (sim/churchyards.js), each a mound
   // outlined on the ground and a headstone, a cross or a rounded stone at
   // its head.
@@ -424,6 +423,21 @@ export class NetworkDrawing {
         ], a, b);
         arch(T, 'wall', 'a');
         arch(-T, 'wall-cap', 'b');
+        // (in a photo it stands solid, the way through left open)
+        if (camera.ahead) {
+          for (const d of [T, -T]) {
+            add(`${gk}w${d > 0 ? 'f' : 'b'}`, 'wall-face', [
+              [...off(p0, d), 0], [...off(m, d, -G), 0],
+              ...Array.from({ length: 9 }, (_, i) => {
+                const ang = Math.PI - (i / 8) * Math.PI;
+                return [...off(m, d, Math.cos(ang) * G), spring + Math.sin(ang) * G];
+              }),
+              [...off(m, d, G), 0], [...off(p1, d), 0], [...off(p1, d), gh], [...off(p0, d), gh],
+            ], a, b);
+          }
+          add(`${gk}wt`, 'wall-face', z([off(p0, T), off(p1, T), off(p1, -T), off(p0, -T)], gh), a, b);
+          for (const [p, e] of [[p0, 0], [p1, 1]]) add(`${gk}we${e}`, 'wall-face', [[...off(p, T), 0], [...off(p, T), gh], [...off(p, -T), gh], [...off(p, -T), 0]], a, b);
+        }
         add(`${gk}f0`, 'wall', [[...off(p0, T), 0], [...c0, 0]], a, b);
         add(`${gk}f1`, 'wall', [[...c1, 0], [...off(p1, T), 0]], a, b);
       });
@@ -455,7 +469,7 @@ export class NetworkDrawing {
   // One stretch of churchyard wall along `pts` (wallItems): its two top
   // lines and the capping's ridge, the foot on the side in sight, the
   // uprights where it turns away from the viewer and at its ends (unless
-  // a gateway stands there), and close up its bare stones.
+  // a gateway stands there).
   wallRun(add, key, pts, { loop, startEnd, endEnd, a, b, sees, z }) {
     if (pts.length < 2) return;
     const C = this.config.wall, t = C.thick / 2, h = C.height;
@@ -474,11 +488,39 @@ export class NetworkDrawing {
     });
     const L = side(1), R = side(-1);
     const close = (ps) => (loop ? [...ps, ps[0]] : ps);
+    // in a photo (a perspective camera: either side may be in sight) it
+    // stands solid, a piece at a time, so it hides what is behind it
+    // (photo.js sorts the pieces by distance); both its feet are drawn and
+    // the faces cover the one out of sight
+    if (this.camera.ahead) {
+      for (let i = 0; i < segs; i++) {
+        for (const [S, id] of [[L, 'l'], [R, 'r']]) add(`${key}w${id}${i}`, 'wall-face', [[...S[i], 0], [...S[i + 1], 0], [...S[i + 1], h], [...S[i], h]], a, b);
+        add(`${key}wt${i}`, 'wall-face', z([L[i], L[i + 1], R[i + 1], R[i]], h), a, b);
+      }
+      add(`${key}fl`, 'wall', z(close(L), 0), a, b);
+      add(`${key}fr`, 'wall', z(close(R), 0), a, b);
+      for (const i of [0, pts.length - 1]) {
+        if ((i ? endEnd : startEnd)) add(`${key}we${i}`, 'wall-face', [[...L[i], 0], [...L[i], h], [...R[i], h], [...R[i], 0]], a, b);
+      }
+    }
     add(`${key}tl`, 'wall', z(close(L), h), a, b);
     add(`${key}tr`, 'wall', z(close(R), h), a, b);
     add(`${key}r`, 'wall-cap', z(close(pts), h + C.cap), a, b);
     // the foot, on the side in sight, segment by segment
-    const front = dirs.map(([ux, uy]) => (sees([-uy, ux]) ? 1 : -1));
+    // (taken over a few pieces, and changing side only once the other is
+    // clearly the one in sight: a wall running nearly straight away from
+    // the viewer would otherwise flip at every wobble of the hand)
+    const lean = ([nx, ny]) => {
+      const v = this.camera.toView?.(nx, ny);
+      return v ? v[0] + v[1] : sees([nx, ny]) ? 1 : -1;
+    };
+    const front = [];
+    for (let i = 0; i < segs; i++) {
+      const [p, q] = [pts[Math.max(0, i - 3)], pts[Math.min(pts.length - 1, i + 4)]];
+      const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+      const v = lean([-(q[1] - p[1]) / l, (q[0] - p[0]) / l]);
+      front.push(i && Math.abs(v) < 0.2 ? front[i - 1] : v > 0 ? 1 : -1);
+    }
     let run = null, k = 0;
     const flush = () => { if (run && run.pts.length > 1) add(`${key}f${k++}`, 'wall', z(run.pts, 0), a, b); run = null; };
     for (let i = 0; i < segs; i++) {
@@ -508,18 +550,6 @@ export class NetworkDrawing {
         const S = fs > 0 ? L : R;
         add(`${key}${e}`, 'wall', [[...S[i], 0], [...S[i], h]], a, b);
       }
-    }
-    // close up, bare stones on the face in sight, hand-placed
-    const curve = measurePolyline(pts), n = Math.floor(curve.total / C.stones);
-    for (let j = 0; j < n; j++) {
-      const s = (j + 0.5) * C.stones, p = pointAt(curve, s);
-      const r = Math.abs(Math.sin(p[0] * 12.9898 + p[1] * 78.233) * 43758.5453) % 1;
-      if (r < 0.4) continue;
-      const i = Math.min(segs - 1, Math.max(0, pts.findIndex((_, m) => m > 0 && measurePolyline(pts.slice(0, m + 1)).total >= s) - 1));
-      const [ux, uy] = dirs[i], f = front[i], o = [p[0] - uy * f * (t + 0.003), p[1] + ux * f * (t + 0.003)];
-      const at = (along, zz) => [o[0] + ux * along, o[1] + uy * along, zz];
-      const z0 = 0.015 + r * 0.025, wd = 0.012 + r * 0.01;
-      add(`${key}s${j}`, 'wall-stone', [at(-wd, z0), at(wd * 0.8, z0 + 0.003), at(wd, z0 + 0.016), at(-wd * 0.7, z0 + 0.019), at(-wd, z0)], a, b);
     }
   }
 

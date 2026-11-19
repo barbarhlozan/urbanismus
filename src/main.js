@@ -974,6 +974,26 @@ openIntro();
 
 // ---------- loop ----------
 
+// A house the pointer rests on: after GREET_AFTER ms one of those at home
+// opens the door and steps out to look (AgentSystem.greet), with the click
+// of its latch, and goes back in as soon as the pointer leaves. Passing
+// over a house on the way somewhere else does nothing.
+const GREET_AFTER = 500;
+const greeting = { id: null, since: 0, done: false };
+function greetFrame(s) {
+  const id = s?.id ?? null, now = performance.now();
+  if (id !== greeting.id) {
+    if (greeting.done) agents.ungreet();
+    Object.assign(greeting, { id, since: now, done: false });
+    return;
+  }
+  if (id == null || greeting.done || now - greeting.since < GREET_AFTER) return;
+  greeting.done = true;
+  if (!agents.greet(s)) return;
+  const box = renderer.buildingBox(`s${id}`);
+  ambience.tap(false, box ? (box.left + box.right) / 2 / innerWidth : 0.5);
+}
+
 let last = performance.now();
 let reported = false;
 function loop(now) {
@@ -999,12 +1019,12 @@ function loop(now) {
     if (!atMenu) growth.update(simDt);
     camera.coast(dt); // (a turn let go: in real time, whatever the clock)
     driftFrame(dt); // (the main menu's drift)
-    // the building under the pointer, with nothing in hand, gives a little
-    // squash as the pointer comes onto it (Renderer.markHovered): there's
-    // something to click; its name is on the card that opens
+    // the building under the pointer, with nothing in hand: held there a
+    // moment, somebody comes out of its door (greetFrame); its name is on
+    // the card a click opens
     const hovered = tools.active?.id === 'inspect' && !popup.open && !photoPrint.open && tools.point
       ? world.structureAtPoint(...tools.point) : null;
-    renderer.hovered = hovered ? `s${hovered.id}` : null;
+    greetFrame(hovered);
     renderer.frame((dotsShown() ? overlayKit.nearDots(tools.point, { ...dots, building: dots.building?.type }) : '') + tools.overlay(overlayKit) + annotations.overlay(overlayKit, popup.open || photoPrint.open ? null : tools.point, tools.active?.id));
     const sky = weather.sky();
     // (no sun at night, so no cloud shadows: they fade away)

@@ -9,6 +9,7 @@ import { sketchFrame } from './sketchFrame.js';
 import { t } from '../core/text.js';
 import { printImage } from './prints.js';
 import { brushPhoto } from './photoBrush.js';
+import { drawPhoto } from './photoDraw.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -38,11 +39,23 @@ export class PhotoPrint {
     this.el.classList.remove('hidden');
     // (in the page now, so its styles are known: drawn with the pen's line)
     brushPhoto(this.photo);
+    // and drawn in before your eyes – from the next frame, once the print
+    // for the chronicle (main.js) has been made of the finished photo
+    this.drawing?.finish();
+    this.drawing = null;
+    // (the finished photo kept out of sight till then, so it doesn't flash up)
+    const photo = this.photo, frame = this.el.querySelector('.photo-frame');
+    frame.style.opacity = 0;
+    requestAnimationFrame(() => {
+      if (this.photo === photo) this.drawing = drawPhoto(photo);
+      frame.style.opacity = '';
+    });
     this.onToggle(true);
   }
 
   hide() {
     if (!this.open) return;
+    this.drawing?.finish();
     this.el.classList.add('hidden');
     this.onToggle(false);
   }
@@ -59,6 +72,7 @@ export class PhotoPrint {
   async save() {
     const src = this.photo;
     if (!src) return;
+    this.drawing?.finish();
     const blob = await printImage(src, { scale: 3, type: 'image/png' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

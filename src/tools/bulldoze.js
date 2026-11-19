@@ -32,18 +32,18 @@ export function createBulldozeTool(ctx) {
     },
 
     // What would go: a building or tree turns to the secondary colour, a
-    // field shows its outline in it, and the eraser pops up over it (a
-    // road, path or rail dot just gets the eraser)
+    // field shows its outline in it; the rubber goes with the pointer
     overlay(kit) {
       const t = target();
       if (renderer) renderer.erasing = t?.key ?? null;
-      if (!t) return '';
+      const rubber = point ? kit.eraserAt(...point) : '';
+      if (!t) return rubber;
       let out = '';
       if (t.field) {
         if (outline?.field[0] !== t.field[0] || outline.field.length !== t.field.length) outline = { field: t.field, loops: cellsOutline(world, t.field) };
         out = outline.loops.map((loop) => kit.sketchPath(loop, 'preview field invalid')).join('');
       }
-      return out + kit.eraserAt(...t.at, t.size);
+      return out + rubber;
     },
 
     exit() {

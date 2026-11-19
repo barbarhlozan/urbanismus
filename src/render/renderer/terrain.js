@@ -6,7 +6,6 @@
 import { THEME } from '../../theme.js';
 import { keepRuns } from '../../roads/geometry.js';
 import { ORTHO } from '../../core/grid.js';
-import { mulberry32 } from '../../core/random.js';
 import { SegmentIndex } from '../../core/geom2d.js';
 import { ELEVATION, contours } from '../../terrain/elevation.js';
 import { sketchPolyline, seedOf } from '../sketch.js';
@@ -24,12 +23,9 @@ import { SVGNS, TERRAIN_LINES, COS30, r2 } from './shared.js';
 // Lakes (Renderer.renderWater): the furthest the shore reaches from a water
 // dot (under 1, so dry dots stay dry) and how softly neighbouring dots'
 // reach blends (higher = less), metres of elevation counted as one grid
-// step of depth, the sampling step; `ripple`: the small waves all over
-// lakes and rivers, as in a photo (photo.js ripple) – their places about
-// `gap` apart, only those at least `room` from the shore, a share `keep`
-// of them; about `len` long (grid units, shorter where the shore is near),
-// as high as `rise` of their length, `tilt` askew of level at most.
-const WATER = { radius: 0.75, soft: 5, metres: 6, step: 0.08, ripple: { gap: 0.14, room: 0.3, keep: 0.6, len: 0.09, rise: 0.12, tilt: 0.12 } };
+// step of depth, the sampling step. The water itself is left bare, as a
+// pen sketch leaves it (photos draw what stands by it reflected: photo.js).
+const WATER = { radius: 0.75, soft: 5, metres: 6, step: 0.08 };
 
 // A field just closed comes up plant by plant: each starts within `spread`
 // ms of the field closing (meadow.js `late`) and takes `each` ms to grow,
@@ -390,55 +386,17 @@ export class TerrainDrawing {
     this.waterBridges = this.bridgeKey; // drawn broken under these (see the constructor)
     // The lines in world units, traced once per terrain (the costly part)…
     // …then broken where a bridge deck passes over, and put on screen
-    const { shore, bank, ripple } = this.traceWater();
+    const { shore, bank } = this.traceWater();
     const hidden = bridges.length ? hiddenUnder(bridges, deck, this.camera) : null;
     const open = (lines) => (hidden ? lines.flatMap((pts) => keepRuns(pts, (q) => !hidden(...q), 0.04)) : lines);
     // a path per chunk of the map (as the contours): a river runs right across it
     const path = (lines, cls) => chunked(cut(lines, CONTOUR_CHUNK), CONTOUR_CHUNK).map((ls) => `<path class="${cls}" d="${this.pathData(ls, false)}"/>`).join('');
-    // the ripples as short lines on the ground, level on the screen as the view rests
-    const ripples = this.rippleLines(ripple, hidden);
     if (lines) {
       this.terrainItems(lines, open(shore), 'shore');
       this.terrainItems(lines, open(bank), 'bank');
-      this.terrainItems(lines, ripples, 'wave');
       return this.washWater(shore);
     }
-    return this.washWater(shore) + path(open(shore), 'shore') + path(open(bank), 'bank') + path(ripples, 'wave d1');
-  }
-
-  // The ripples on the water (their places the world's, traceWater) as
-  // lines on the ground in world units: each a small wave, a crest and then
-  // a trough, level on the screen at the view's angle as it is now. On the
-  // GPU a turn carries them round with the water; once the view rests they
-  // are made level again (land redraws the terrain). Kept while the angle
-  // and the bridges stay the same, so the GPU keeps them too
-  // (renderTerrain); left out under a bridge deck.
-  rippleLines(spots, hidden) {
-    const cam = this.camera, key = `${cam.angle}|${this.bridgeKey}`;
-    if (this.ripples?.spots === spots && this.ripples.key === key) return this.ripples.lines;
-    const { rise } = WATER.ripple;
-    // the ground's directions on the screen, and back: the world offset of
-    // an offset on the screen (scene px)
-    const [ox, oy] = cam.project(cam.cx, cam.cy, 0), [ax, ay] = cam.project(cam.cx + 1, cam.cy, 0), [bx, by] = cam.project(cam.cx, cam.cy + 1, 0);
-    const [jxx, jyx, jxy, jyy] = [ax - ox, ay - oy, bx - ox, by - oy], det = jxx * jyy - jxy * jyx;
-    const back = (sx, sy) => [(jyy * sx - jxy * sy) / det, (jxx * sy - jyx * sx) / det];
-    const lines = [];
-    for (const { x, y, room, len, sign, tilt } of spots) {
-      if (hidden?.(x, y)) continue;
-      // as long on the screen as `len` (or the room there) along the ground
-      const c = Math.cos(tilt), s = Math.sin(tilt), l = Math.min(len, room * 1.8) / Math.hypot(...back(c, s));
-      const h = l * rise * sign * 3.5; // (a cubic's control points stand out about 3.5 times its height, as photo.js ripple)
-      const p0 = [-c * l / 2, -s * l / 2], p1 = [-c * l / 6, -s * l / 6 - h], p2 = [c * l / 6, s * l / 6 + h], p3 = [c * l / 2, s * l / 2];
-      const pts = [];
-      for (let k = 0; k <= 8; k++) {
-        const t = k / 8, u = 1 - t, w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
-        const [dx, dy] = back(w[0] * p0[0] + w[1] * p1[0] + w[2] * p2[0] + w[3] * p3[0], w[0] * p0[1] + w[1] * p1[1] + w[2] * p2[1] + w[3] * p3[1]);
-        pts.push([x + dx, y + dy]);
-      }
-      lines.push(pts);
-    }
-    this.ripples = { spots, key, lines };
-    return lines;
+    return this.washWater(shore) + path(open(shore), 'shore') + path(open(bank), 'bank');
   }
 
   // The watercolour scheme (html.wc) and the tone schemes (html.tone): the
@@ -462,13 +420,12 @@ export class TerrainDrawing {
     return out;
   }
 
-  // The water's lines in world units, { shore, bank, ripple }, traced once
-  // per terrain (the costly part of renderWater); `ripple` the places of
-  // the ripples ({ x, y, room, len, sign, tilt }, renderRipples).
+  // The water's lines in world units, { shore, bank }, traced once
+  // per terrain (the costly part of renderWater).
   traceWater() {
     const { world } = this;
     if (!this.waterLines) {
-      this.waterLines = { shore: [], bank: [], ripple: [] };
+      this.waterLines = { shore: [], bank: [] };
       const elev = world.elevation, field = world.riverField;
       for (const cells of this.waterBodies()) {
         if (field && world.terrain.isRiver(world.grid.nodeAt(...cells[0]))) {
@@ -524,12 +481,12 @@ export class TerrainDrawing {
     return rim > top && rim < Infinity ? (top + rim) / 2 : top + 0.5;
   }
 
-  // One body of water's shore (a river's: banks) and ripples, appended to `out`.
+  // One body of water's shore (a river's: banks), appended to `out`.
   // `below(x, y)`: grid units inside the shore (negative on land), kept
   // within reach of the water dots. With `river` (its field) it is worked
   // out to the edge of the map, past the dots at the edges.
   renderWaterBody(cells, below, out, river = null) { // (out: lines in world units, by class)
-    const { radius, soft, step, ripple } = WATER;
+    const { radius, soft, step } = WATER;
     const { width, height } = this.world.grid;
     const xs = cells.map((c) => c[0]), ys = cells.map((c) => c[1]);
     let [x0, y0, x1, y1] = [Math.min(...xs) - 1.5, Math.min(...ys) - 1.5, Math.max(...xs) + 1.5, Math.max(...ys) + 1.5];
@@ -572,41 +529,6 @@ export class TerrainDrawing {
     };
     const field = (x, y) => Math.min(wet[sample(x, y)] / 0.06, 0.5);
     for (const c of contours(field, box, { step, interval: 1, index: 99, only: 0 })) out[river ? 'bank' : 'shore'].push(c.points);
-    // Ripples: places on a jittered grid with room enough to the shore (a
-    // two-pass chamfer distance from the land samples), seeded by the body
-    // so they stay put however often it is traced.
-    const dist = new Float32Array(nx * ny);
-    for (let k = 0; k < dist.length; k++) dist[k] = wet[k] > 0 ? Infinity : 0;
-    const diag = step * Math.SQRT2;
-    const relax = (k, n, w) => { if (dist[n] + w < dist[k]) dist[k] = dist[n] + w; };
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-      const k = j * nx + i;
-      if (i > 0) relax(k, k - 1, step);
-      if (j > 0) {
-        relax(k, k - nx, step);
-        if (i > 0) relax(k, k - nx - 1, diag);
-        if (i < nx - 1) relax(k, k - nx + 1, diag);
-      }
-    }
-    for (let j = ny - 1; j >= 0; j--) for (let i = nx - 1; i >= 0; i--) {
-      const k = j * nx + i;
-      if (i < nx - 1) relax(k, k + 1, step);
-      if (j < ny - 1) {
-        relax(k, k + nx, step);
-        if (i < nx - 1) relax(k, k + nx + 1, diag);
-        if (i > 0) relax(k, k + nx - 1, diag);
-      }
-    }
-    const [sx, sy] = cells[0];
-    const rnd = mulberry32(Math.imul(sx + 1, 73856093) ^ Math.imul(sy + 1, 19349663) ^ this.world.seed);
-    const { gap } = ripple;
-    for (let y = y0 + gap / 2; y < box[3]; y += gap) for (let x = x0 + gap / 2; x < box[2]; x += gap) {
-      const px = x + (rnd() - 0.5) * gap * 0.8, py = y + (rnd() - 0.5) * gap * 0.8;
-      const len = ripple.len * (0.6 + 0.8 * rnd()), sign = rnd() < 0.5 ? -1 : 1, tilt = (rnd() - 0.5) * 2 * ripple.tilt;
-      const room = dist[sample(px, py)];
-      if (room < ripple.room || rnd() > ripple.keep) continue;
-      out.ripple.push({ x: px, y: py, room, len, sign, tilt });
-    }
   }
 
   setContours(on) {

@@ -2,9 +2,10 @@
 //   hover tags  with the Terrain lines on, a hill's top mark tells its
 //               name and height under the pointer, set on it like a label
 //               on a map, underlined by pen ("Holý vrch · 570 m",
-//               terrain/hills.js). Buildings get no name on pointing: they
-//               give a little squash instead (Renderer.markHovered), and
-//               their name is on the card a click opens.
+//               terrain/hills.js). Buildings get no name on pointing: held
+//               there a moment, somebody comes out of the door instead
+//               (main.js greetFrame), and their name is on the card a
+//               click opens.
 //
 // Systems also report what happens with annotations.log(text, [x, y])
 // (visitors, residents leaving, buildings growing…). The player doesn't

@@ -42,7 +42,7 @@ function edgeFade(w, h) {
 const NS = 'http://www.w3.org/2000/svg';
 
 // path data for a drawn element, or '' for one that isn't a line
-function dataOf(el) {
+export function dataOf(el) {
   switch (el.tagName) {
     case 'path': return el.getAttribute('d') ?? '';
     case 'line': return `M${el.getAttribute('x1')} ${el.getAttribute('y1')}L${el.getAttribute('x2')} ${el.getAttribute('y2')}`;
@@ -74,6 +74,8 @@ export function brushPhoto(svg) {
     const ribbon = document.createElementNS(NS, 'path');
     ribbon.setAttribute('d', d);
     ribbon.setAttribute('style', `fill:${ink};fill-opacity:${cs.strokeOpacity};stroke:none;opacity:${cs.opacity}`);
+    // (what it was, for drawing the photo in: ui/photoDraw.js)
+    ribbon.dataset.ribbon = width;
     el.style.stroke = 'none';
     el.after(ribbon);
   }

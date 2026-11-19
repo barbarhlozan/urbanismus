@@ -17,7 +17,7 @@
 //   gl.setLayer(name, items, classes)     items: [{ key, cls, pts|runs: [[x, y, z]…] }] in world space
 //   gl.draw(view, look)                   each frame; draws only when something changed
 //
-// The terrain's lines (contours, steep slopes, shores, banks, waves) are
+// The terrain's lines (contours, steep slopes, shores, banks) are
 // drawn by one of these too, on a canvas of their own under the world's
 // layers (Renderer.renderGlTerrain): their pens and colours are the
 // browser's own for those classes, asked once (look.styles).
@@ -58,7 +58,6 @@ const STYLES = {
   fence: { colour: 'detail', width: 1, cap: 'round' },
   wall: { colour: 'main', width: 1, cap: 'round' },
   'wall-cap': { colour: 'detail', width: 0.8, cap: 'round' },
-  'wall-stone': { colour: 'detail', width: 0.6, cap: 'round', near: true },
   grave: { colour: 'detail', width: 0.7, cap: 'round' },
   'grave-stone': { colour: 'main', width: 0.8, cap: 'round' },
   // the terrain's: widths and colours from styles.css (look.styles)
@@ -68,7 +67,6 @@ const STYLES = {
   'contour-index': { colour: 'detail', width: 1.4, cap: 'butt' },
   shore: { colour: 'detail', width: 1.4, cap: 'butt' },
   bank: { colour: 'detail', width: 1, cap: 'butt' },
-  wave: { colour: 'detail', width: 1, cap: 'round' },
   'brow-light': { colour: 'detail', width: 1, cap: 'round' },
   brow: { colour: 'detail', width: 1, cap: 'round' },
   'brow-outline': { colour: 'detail', width: 1.4, cap: 'round' },
@@ -78,7 +76,7 @@ const STYLES = {
 // (the shaders' tables hold this many)
 const MAX_STYLES = 48;
 // the far-out level of detail leaves these out (styles.css #world.lod-2)
-const FAR_HIDDEN = new Set(['driveway', 'zebra', 'grave-stone', 'wall-stone']);
+const FAR_HIDDEN = new Set(['driveway', 'zebra', 'grave-stone']);
 // the painted schemes leave these out: the washes stand for them
 const WASHED = new Set(['road', 'kerb', 'zebra', 'road-exit', 'footpath', 'driveway']);
 const CAPS = { butt: 1, round: 0, square: 2 };

@@ -9,7 +9,7 @@
 //
 // The ground is solid: it is cut into bands across the view, each a little
 // further than the last, filled with paper and carrying its own marks
-// (pencil strokes, ripples, meadow tufts, lot drawing, roads). Bands and
+// (pencil strokes, reflections, meadow tufts, lot drawing, roads). Bands and
 // solids are drawn together far to near, so a hill hides what is behind it.
 // Past the last band a skyline of the terrain closes the picture. Lakes
 // and rivers are flat: the ground under the water is drawn at its surface
@@ -87,8 +87,8 @@ export const PHOTO = {
   // about as fine on the print as the map's do on the screen
   pen: 0.65,
   // the pencil strokes: `gap` px apart along a band, about `len` px long;
-  // nearer than `blank` steps only one in `sparse` of them (and of the
-  // ripples), so the foreground is left mostly bare
+  // nearer than `blank` steps only one in `sparse` of them, so the
+  // foreground is left mostly bare
   hatch: { gap: 30, len: 16, blank: 1.2, sparse: 4 },
   // …or, `on`, upright: short strokes standing up off the ground, as blades
   // of grass `blade` steps high would on the picture (no shorter than `min`
@@ -96,12 +96,14 @@ export const PHOTO = {
   // of it and bent by up to `bend`, now and then two or three from one spot
   // (`tuft` of the time); `gap` px apart along a band
   upright: { on: true, gap: 16, blade: 0.025, min: 1.5, max: 9, lean: 0.5, bend: 0.25, tuft: 0.3 },
-  // the ripples on the water: small waves about `len` px long `at` steps
-  // away, shorter further off (down to `min` times) and longer up close (up
-  // to `max` times), as high as `rise` of their length there – and flatter
-  // as they go off, as the water is seen ever more edge on, till far out
-  // they are level strokes. A share `skip` of the places for them left out
-  ripples: { len: 18, at: 2, min: 0.45, max: 1.4, rise: 0.09, skip: 0.75 },
+  // what stands by the water drawn again in it, upside down, as a pen
+  // sketch does it: only its outlines, each still one line (dashed it
+  // looks drawn by a machine), wavering side to side (`waver` grid units by
+  // the water's edge, `deep` at the bottom), the waver turning every `turn`
+  // of the drawing's height, and gone `keep` of the way down; kept `margin`
+  // steps inside the shore. Only for what has water in front of it within
+  // `reach` steps, the water bare otherwise
+  reflect: { reach: 2.5, waver: 0.003, deep: 0.014, turn: 0.16, keep: 0.75, margin: 0.06, step: 1.5 },
   // a street's kerb right in front, nearer than `reach` steps: its top
   // edge (`kerb` high) with the joints between its stones
   ground: { reach: 1.6, kerb: 0.006, stone: 0.05 },
@@ -125,12 +127,20 @@ export const PHOTO = {
   // turns by up to `turn` degrees to have them in the middle. Where even
   // the widest doesn't take them, the photographer steps back, `back` at a
   // time, up to `away` steps. With nothing looked at, the lens is `none` mm.
+  // Another building whole across but taller than the picture (a church up
+  // on a hill) has the horizon lowered for it, by up to `lower` of the height.
+  // Standing within `detail.near` steps of a building, the picture is a
+  // detail of it: a `detail.mm` lens looking up at it, by as much as has
+  // its top `detail.top` of the height below the frame (up to
+  // `detail.pitch` degrees) – the walls leaning in, a tower going up into
+  // the sky – and it may be cut by the frame, as a detail is.
   // Anything else the sides or the top would cut through is left out of the
   // picture altogether: a drawing leaves paper there, it doesn't saw a
   // house in half.
   frame: {
     near: 2, far: 9, wedge: [16, 26], reach: [2, 6], long: [50, 32], depth: 14,
-    wide: 28, side: 0.12, top: 0.08, turn: 10, back: 0.5, away: 6, none: 35,
+    wide: 28, side: 0.12, top: 0.08, turn: 10, back: 0.5, away: 6, none: 35, lower: 0.32,
+    detail: { near: 1.4, mm: 55, top: 0.06, pitch: 38 },
   },
 };
 
@@ -144,7 +154,7 @@ const TREE = /class="[^"]*\b(tree|crown-line|leaf|hedge)\b/;
 const TUFT = /class="[^"]*\btuft\b/;
 const pt = (p) => `${r2(p[0])} ${r2(p[1])}`;
 // how ink items are layered, back to front (as on the map)
-const NET_ORDER = ['photo-shore', 'footpath', 'fence-post', 'fence-pillar', 'fence', 'grave', 'grave-stone', 'wall-stone', 'wall', 'wall-cap', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
+const NET_ORDER = ['photo-reflect', 'photo-shore', 'footpath', 'fence-post', 'fence-pillar', 'fence', 'grave', 'grave-stone', 'wall', 'wall-cap', 'track-bed', 'track-sleeper', 'track-rail', 'track-exit', 'rail-buffer', 'driveway', 'road', 'kerb', 'zebra', 'road-exit', 'bridge', 'bridge-post'];
 
 // What a thing draws above the ground through camera `cam` (`paint(cam)`
 // draws it): `out`, as it was drawn, and each point it drew there, as
@@ -208,7 +218,8 @@ export function framePhoto(renderer, shot, memo = null) {
   const reach = at ? Math.hypot(at[0] - x, at[1] - y) + mix(F.reach) : F.depth;
   const wedge = (mix(F.wedge) * Math.PI) / 180, long = mix(F.long);
   let probe = null;
-  const subject = new Set(), pts = [];
+  const focalOf = (mm) => W / 2 / Math.tan((fovOf(mm) * Math.PI) / 360);
+  const subject = new Set(), pts = [], hulls = [];
   // the buildings looked at – or, aimed between them, the nearest one in
   // the picture's middle
   const looked = [], near = [];
@@ -239,10 +250,26 @@ export function framePhoto(renderer, shot, memo = null) {
     if (!hull.length) continue;
     subject.add(s.id);
     pts.push(...hull);
+    hulls.push([s, hull]);
   }
   if (!pts.length) return { x, y, yaw, fov: fovOf(F.none), subject };
 
-  const focalOf = (mm) => W / 2 / Math.tan((fovOf(mm) * Math.PI) / 360);
+  // Right up against a building: a detail of it, looked up at (PHOTO.frame
+  // detail) – no stepping back from it, cut by the frame as it may be.
+  const { near: close, mm, top: room, pitch: steepest } = F.detail;
+  const dist = (h) => Math.min(...h.map(([px, py]) => Math.hypot(px - x, py - y)));
+  const [nearest, hull] = hulls.reduce((a, b) => (dist(b[1]) < dist(a[1]) ? b : a));
+  if (dist(hull) <= close) {
+    const ez = ground(x, y) + PHOTO.eye, focal = focalOf(mm);
+    let up = 0;
+    for (const [px, py, pz] of hull) {
+      const a = (px - x) * fx + (py - y) * fy;
+      if (a > 0.1) up = Math.max(up, Math.atan2(pz - ez, a));
+    }
+    const pitch = Math.max(0, Math.min((steepest * Math.PI) / 180, up - Math.atan((H / 2 - room * H) / focal)));
+    return { x, y, yaw, fov: fovOf(mm), pitch, subject: new Set([nearest.id]) };
+  }
+
   const longest = focalOf(long), widest = focalOf(F.wide);
   const horizon = H * PHOTO.horizon, turnMax = (F.turn * Math.PI) / 180;
   let best = null;
@@ -280,7 +307,7 @@ export function takePhoto(renderer, shot) {
   const base = renderer.camera;
   const { width, height, range } = PHOTO;
   const framed = shot.fov == null ? framePhoto(renderer, shot) : null;
-  const { x, y, yaw, fov } = framed ?? shot;
+  const { x, y, yaw, fov, pitch = 0 } = framed ?? shot;
   const subject = framed?.subject ?? new Set();
   const lift = photoLift(base.lift, x, y);
   const water = waterSurface(renderer, lift);
@@ -288,9 +315,30 @@ export function takePhoto(renderer, shot) {
   // height of the ground (or the water's surface) above the drawing's zero,
   // and a point of it on the picture
   const groundAt = (px, py) => terrain.heightAt(px, py) + (lift ? lift(px, py) : 0) + raise(px, py);
-  const cam = new PerspectiveCamera({
-    x, y, z: groundAt(x, y) + (shot.eye ?? PHOTO.eye), yaw, fov, width, height, lift, horizon: PHOTO.horizon, shapes: PHOTO.treeSize,
+  const lens = (horizon) => new PerspectiveCamera({
+    x, y, z: groundAt(x, y) + (shot.eye ?? PHOTO.eye), yaw, fov, width, height, lift, horizon, shapes: PHOTO.treeSize, pitch,
   });
+  let cam = lens(pitch ? 0.5 : PHOTO.horizon);
+  // A building in the picture but taller than it – a church up on a hill –
+  // isn't left out: the horizon goes down (as a shifted lens takes in more
+  // above, the walls still upright) till its top is in, by up to `lower`.
+  const painted = new Map();
+  {
+    let need = 0;
+    for (const s of world.structures.values()) {
+      const [cx, cy] = centerOf(world, s);
+      if (cam.ahead(cx, cy) < PHOTO.clear || Math.hypot(cx - x, cy - y) > range) continue;
+      const out = renderer.paintStructure(s, cam);
+      painted.set(s.id, out);
+      if (!out) continue;
+      const [x0, y0, x1] = boxOf(out.painter.solids);
+      if (x0 >= 0 && x1 <= width && y0 < 0) need = Math.max(need, PHOTO.frame.top * height - y0);
+    }
+    if (need > 0 && !pitch) {
+      cam = lens(Math.min(PHOTO.horizon + PHOTO.frame.lower, PHOTO.horizon + need / height));
+      painted.clear();
+    }
+  }
   const onGround = (px, py) => cam.project(px, py, terrain.heightAt(px, py) + raise(px, py));
 
   // what could be in the picture: ahead, within the (slightly widened) view
@@ -314,9 +362,11 @@ export function takePhoto(renderer, shot) {
   const solids = [];
   const sun = sunFor(cam);
   const vents = [];
-  const take = (out) => {
+  // (each marked with what it is, for drawing the photo in: ui/photoDraw.js)
+  const take = (out, kind) => {
     if (!out) return;
     const { painter } = out;
+    for (const so of painter.solids) so.draw = kind;
     solids.push(...painter.solids);
     vents.push(...painter.vents);
     painter.ground.forEach((svg, i) => {
@@ -346,18 +396,27 @@ export function takePhoto(renderer, shot) {
     const [x0, y0, x1] = boxOf(out.painter.solids);
     return x0 < 0 || x1 > width || y0 < 0 ? null : out;
   };
+  const reflect = (out, fx, fy) => {
+    if (out) reflection(cam, bands, out.painter.solids, fx, fy, groundAt, water.wet, world.seed);
+  };
   for (const s of world.structures.values()) {
     const nodes = world.nodesOf(s);
-    if (seen(...centerOf(world, s), Math.sqrt(nodes.length) + 1.5)) take(whole((c) => renderer.paintStructure(s, c), subject.has(s.id)));
+    if (!seen(...centerOf(world, s), Math.sqrt(nodes.length) + 1.5)) continue;
+    const out = whole((c) => (painted.has(s.id) ? painted.get(s.id) : renderer.paintStructure(s, c)), subject.has(s.id));
+    take(out, 'house');
+    reflect(out, ...centerOf(world, s));
   }
   for (const f of world.features.values()) {
-    if (seen(f.x, f.y, 0.6)) take(whole((c) => renderer.paintFeature(f, c)));
+    if (!seen(f.x, f.y, 0.6)) continue;
+    const out = whole((c) => renderer.paintFeature(f, c));
+    take(out, 'tree');
+    reflect(out, f.x, f.y);
   }
   for (const key of world.sidewalks.keys()) {
     const [a] = key.split('-').map(Number);
     if (!seen(...world.grid.xy(a), 2)) continue;
     const out = whole((c) => renderer.paintStreet(key, c));
-    if (out && Math.hypot(out.x - x, out.y - y) >= PHOTO.lamps) take(out);
+    if (out && Math.hypot(out.x - x, out.y - y) >= PHOTO.lamps) take(out, 'tree');
   }
 
   // ----- roads, footpaths and railways -----
@@ -382,6 +441,23 @@ export function takePhoto(renderer, shot) {
   // up on a bridge: each piece sorted on its own with the decks (below),
   // so the deck hides what is under it and not what is on it
   const raised = [];
+  // the churchyard walls and headstones stand: each piece of them sorted on
+  // its own with the buildings, the wall's faces filled, so a wall hides
+  // what is behind it (and its own lines lie on its faces, a little nearer)
+  const STANDING = new Set(['wall-face', 'wall', 'wall-cap', 'grave-stone']);
+  const ahead = (ps) => ps.reduce((sum, p) => sum + p[2], 0) / ps.length;
+  for (const { cls, pts } of items) {
+    if (!STANDING.has(cls)) continue;
+    if (cls === 'wall-face') {
+      raised.push({ depth: -ahead(pts), dist: ahead(pts), svg: `<path class="photo-wall" d="M${pts.map(pt).join('L')}Z"/>` });
+      continue;
+    }
+    for (let i = 1; i < pts.length; i++) {
+      const d = ahead([pts[i - 1], pts[i]]);
+      raised.push({ depth: -d + 0.03, dist: d, svg: `<path class="${cls}" d="M${pt(pts[i - 1])}L${pt(pts[i])}"/>` });
+    }
+  }
+  items = items.filter((it) => !STANDING.has(it.cls));
   for (const { cls, pts } of items) {
     let run = [pts[0]], band = -1;
     for (let i = 1; i < pts.length; i++) {
@@ -417,9 +493,13 @@ export function takePhoto(renderer, shot) {
     const svg = so.parts.join('');
     const near = so.at ? Math.hypot(so.at[0] - x, so.at[1] - y) : Infinity;
     if (near <= PHOTO.clear || (near < PHOTO.trees && TREE.test(svg)) || (near < PHOTO.tuft && TUFT.test(svg))) continue;
-    layers.push({ depth: so.depth, svg });
+    layers.push({ depth: so.depth, svg: `<g data-draw="${so.draw}">${svg}</g>` });
   }
-  layers.push(...bands.layers(), ...photoMist(renderer, cam, bands.d), ...smoke(renderer, cam, vents), ...raised, ...bridgeDecks(renderer, cam, seen), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen), ...people(renderer, cam, seen));
+  const tag = (kind, list) => list.map((l) => ({ ...l, svg: `<g data-draw="${kind}">${l.svg}</g>` }));
+  layers.push(
+    ...tag('land', [...bands.layers(), ...photoMist(renderer, cam, bands.d), ...raised, ...bridgeDecks(renderer, cam, seen)]),
+    ...tag('life', [...smoke(renderer, cam, vents), ...vehicles(renderer, cam, seen), ...animals(renderer, cam, seen), ...people(renderer, cam, seen)]),
+  );
   layers.sort((a, b) => a.depth - b.depth);
   // each in the pen for its distance; neighbours in the same pen share a group
   let svg = '', open = null;
@@ -436,11 +516,11 @@ export function takePhoto(renderer, shot) {
 
   return `<svg class="photo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="--sun: ${renderer.config.weather.sun[world.weather.kind] ?? 1}; --stroke: ${PHOTO.pen}">`
     + `<rect class="photo-sky" x="0" y="0" width="${width}" height="${height}"/>`
-    + cloudsSVG(mulberry32(Math.imul(Math.round(x * 100), 83492791) ^ Math.imul(Math.round(y * 100), 2654435761) ^ world.seed), width, height, world.weather.kind, { horizon: cam.horizonY, rain: false })
-    + skyline(cam, groundAt, range)
+    + '<g data-draw="sky">' + cloudsSVG(mulberry32(Math.imul(Math.round(x * 100), 83492791) ^ Math.imul(Math.round(y * 100), 2654435761) ^ world.seed), width, height, world.weather.kind, { horizon: Math.min(cam.horizonY, height * 0.92), rain: false }) + '</g>'
+    + `<g data-draw="land">${skyline(cam, groundAt, range)}</g>`
     + `<g class="layer-objects">${svg}</g>`
     // the rain, falling between the photographer and all of it
-    + rainSVG(mulberry32(Math.imul(Math.round(x * 100), 40503) ^ Math.imul(Math.round(y * 100), 2246822519) ^ world.seed), width, height, world.weather.kind)
+    + '<g data-draw="rain">' + rainSVG(mulberry32(Math.imul(Math.round(x * 100), 40503) ^ Math.imul(Math.round(y * 100), 2246822519) ^ world.seed), width, height, world.weather.kind) + '</g>'
     + '</svg>';
 }
 
@@ -610,12 +690,12 @@ function makeBands(cam, onGround) {
   const d = [];
   for (let t = near; t < far * step; t *= step) d.push(t);
   const n = d.length - 1;
-  const spread = (cam.width / 2 / cam.focal) * 1.15;
+  const spread = (cam.width / 2 / cam.focal / cam.cp) * 1.15;
   const COLS = 48;
   const cols = Array.from({ length: COLS + 1 }, (_, i) => -spread + (2 * spread * i) / COLS);
   const edge = (t) => cols.map((u) => onGround(cam.ex + cam.fx * t + cam.rx * u * t, cam.ey + cam.fy * t + cam.ry * u * t));
   const edges = d.map(edge);
-  const marks = Array.from({ length: n }, () => ({ lots: '', meadow: '', hatch: '', ripples: '', net: new Map() }));
+  const marks = Array.from({ length: n }, () => ({ lots: '', meadow: '', hatch: '', net: new Map() }));
 
   const of = (ahead) => {
     if (ahead < d[0]) return 0;
@@ -657,7 +737,6 @@ function makeBands(cam, onGround) {
           dist: (d[k] + d[k + 1]) / 2,
           svg: `<path class="photo-band" d="${fill}"/>`
             + (m.hatch ? `<path class="photo-hatch" d="${m.hatch}"/>` : '')
-            + (m.ripples ? `<path class="photo-ripples" d="${m.ripples}"/>` : '')
             + m.lots
             + (m.meadow ? `<g class="layer-meadow">${m.meadow}</g>` : '')
             + net
@@ -673,7 +752,6 @@ function makeBands(cam, onGround) {
 //   hatch    short level pencil strokes on all the ground but roads and
 //            paths (buildings cover their own), in rows along the bands,
 //            about the same distance apart on the picture near and far
-//   ripples  small waves on lakes and rivers (ripple)
 //   meadow   the map's own tufts and flowers (meadow.js), near the camera
 // Seeded by the spot, so the same photo comes out the same.
 function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
@@ -687,25 +765,19 @@ function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
   for (let k = 0; k < bands.n; k++) {
     const d = (bands.d[k] + bands.d[k + 1]) / 2, scale = cam.focal / d;
     const half = d * spread + 0.2;
-    const { len: wave, at, min, max, rise } = PHOTO.ripples;
-    const waves = wave * Math.min(max, Math.max(min, Math.sqrt(at / d)));
-    const crest = rise * Math.min(1, (at / d) ** 1.5);
-    let hatch = '', ripples = '';
+    let hatch = '';
     for (let w = -half + rnd() * gap / scale; w < half; w += (gap * (0.6 + rnd() * 0.8)) / scale) {
       const dd = bands.d[k] + (bands.d[k + 1] - bands.d[k]) * rnd();
       const px = cam.ex + cam.fx * dd + cam.rx * w, py = cam.ey + cam.fy * dd + cam.ry * w;
-      const wet = wetAt(px, py);
-      if (rnd() < (wet ? PHOTO.ripples.skip : 0.35) || (!wet && !offRoad(px, py))) continue;
+      if (wetAt(px, py) || rnd() < 0.35 || !offRoad(px, py)) continue;
       if (dd < blank && rnd() * sparse > 1) continue;
       // level on the picture: along the camera's right, a touch askew
-      const l = ((wet ? waves : len) * (0.5 + rnd())) / scale / 2;
+      const l = (len * (0.5 + rnd())) / scale / 2;
       const tilt = (rnd() - 0.5) * 0.25;
       const dx = (cam.rx + cam.fx * tilt) * l, dy = (cam.ry + cam.fy * tilt) * l;
       if (!cam.isAhead(px - dx, py - dy) || !cam.isAhead(px + dx, py + dy)) continue;
-      if (wet && !(wetAt(px - dx, py - dy) && wetAt(px + dx, py + dy))) continue; // within the banks
       const a = onGround(px - dx, py - dy), b = onGround(px + dx, py + dy);
-      if (wet) ripples += ripple(a, b, crest * (rnd() < 0.5 ? -1 : 1));
-      else if (up.on) {
+      if (up.on) {
         const foot = onGround(px, py), tall = Math.min(up.max, Math.max(up.min, up.blade * scale));
         const n = rnd() < up.tuft ? 2 + Math.floor(rnd() * 2) : 1;
         for (let b = 0; b < n; b++) {
@@ -717,7 +789,6 @@ function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
       } else hatch += `M${pt(a)}L${pt(b)}`;
     }
     bands.add(k, 'hatch', hatch);
-    bands.add(k, 'ripples', ripples);
   }
 
   // meadow: every dot within reach, each glyph on its own band
@@ -747,15 +818,89 @@ function groundMarks(world, config, cam, bands, seen, onGround, wetAt) {
   }
 }
 
-// A ripple on the water from a to b (on the picture): a small wave, a
-// crest and then a trough, standing up off the water `rise` of its length
-// (below 0: a trough first).
-function ripple(a, b, rise) {
-  const vx = b[0] - a[0], vy = b[1] - a[1];
-  // (a cubic's control points stand out about 3.5 times the curve's height)
-  const h = Math.hypot(vx, vy) * rise * 3.5;
-  return `M${pt(a)}C${pt([a[0] + vx / 3, a[1] + vy / 3 - h])} ${pt([a[0] + (2 * vx) / 3, a[1] + (2 * vy) / 3 + h])} ${pt(b)}`;
+// What stands at (fx, fy) – its drawn solids – reflected in the water in
+// front of it (PHOTO.reflect): its outlines turned over, upside down from
+// where the water begins in front of it – as if it stood at the water's
+// edge, as a sketch draws it: by the true mirror a house a step back from
+// the bank would show only its chimney, if that. Each point of them is kept
+// only where the line of sight to it meets the water there (wet) – the
+// reflection lies on the water, not on the bank – and drawn on the ground
+// band of that point, so nearer ground still covers it.
+const REFLECTED = /<(path|polygon|polyline)\b([^>]*)>/g;
+const UNREFLECTED = /\b(roof-hatch|wall-shade|ink|bar|leaf|twig|shadow|tree-foot|hatch|pane|window|glass|door|sill|smoke)\b/;
+function reflection(cam, bands, solids, fx, fy, groundAt, wet, seed) {
+  const R = PHOTO.reflect;
+  // the water in front: along the way to the photographer from the foot
+  const to = Math.hypot(cam.ex - fx, cam.ey - fy);
+  let water = null;
+  for (let t = 0.05; t <= Math.min(R.reach, to - cam.near); t += 0.08) {
+    const qx = fx + ((cam.ex - fx) * t) / to, qy = fy + ((cam.ey - fy) * t) / to;
+    if (wet(qx, qy)) { water = [qx, qy]; break; }
+  }
+  if (!water) return;
+  const level = groundAt(...water);
+  const edge = cam.projectRaw(...water, level)[1], foot = cam.projectRaw(fx, fy, groundAt(fx, fy))[1];
+  const tall = foot - boxOf(solids)[1];
+  if (!(tall > 2)) return;
+  const scale = cam.focal / Math.max(cam.ahead(fx, fy), cam.near);
+  const rnd = mulberry32(Math.imul(Math.round(fx * 100), 73856093) ^ Math.imul(Math.round(fy * 100), 19349663) ^ seed);
+  const p1 = rnd() * 6.3, p2 = rnd() * 6.3;
+  const turn = Math.max(6, R.turn * tall);
+  // where on the water a point of the picture lies: its line of sight met
+  // with the water's level (null above the horizon or behind)
+  const onWater = (sx, sy) => {
+    const u = (sx - cam.width / 2) / cam.focal, v = (cam.middleY - sy) / cam.focal;
+    const den = cam.sp + v * cam.cp;
+    if (den >= 0) return null;
+    const t = (level - cam.ez) / den, ahead = t * (cam.cp - v * cam.sp), side = u * t;
+    return ahead < cam.near ? null : [cam.ex + cam.fx * ahead + cam.rx * side, cam.ey + cam.fy * ahead + cam.ry * side, ahead];
+  };
+  // on the water, and that far inside its shore all round
+  const inside = (q) => q && [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dy]) => wet(q[0] + dx * R.margin, q[1] + dy * R.margin));
+  let band = -1, run = [];
+  const flush = () => {
+    if (run.length > 1) bands.line(band, 'photo-reflect', run);
+    run = [];
+  };
+  for (const so of solids) {
+    for (const [, tag, attrs] of so.parts.join('').matchAll(REFLECTED)) {
+      if (UNREFLECTED.test(/\bclass="([^"]*)"/.exec(attrs)?.[1] ?? '')) continue;
+      const lines = tag === 'path'
+        ? flattenPath(/\bd="([^"]*)"/.exec(attrs)?.[1] ?? '', 0.5).map((l) => l.pts)
+        : [pairs(/\bpoints="([^"]*)"/.exec(attrs)?.[1] ?? '', tag === 'polygon')];
+      for (const line of lines) {
+        for (let i = 1; i < line.length; i++) {
+          const [ax, ay] = line[i - 1], [bx, by] = line[i];
+          const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / R.step));
+          for (let k = i === 1 ? 0 : 1; k <= n; k++) {
+            const sx = ax + ((bx - ax) * k) / n, sy = edge + foot - (ay + ((by - ay) * k) / n);
+            const down = (sy - edge) / tall;
+            const sway = scale * (R.waver + (R.deep - R.waver) * down) * Math.sin((sy * 2 * Math.PI) / turn + p1);
+            const q = down >= 0 && down < R.keep * (0.85 + 0.15 * Math.sin(sx * 0.2 + p2)) ? onWater(sx + sway, sy) : null;
+            if (!inside(q)) { flush(); continue; }
+            // (a new band carries on from the last point, so the line stays whole)
+            const b = bands.of(q[2]);
+            if (b !== band) {
+              const last = run[run.length - 1];
+              flush();
+              if (last) run.push(last);
+              band = b;
+            }
+            run.push([sx + sway, sy]);
+          }
+        }
+        flush();
+      }
+    }
+  }
 }
+
+const pairs = (v, closed) => {
+  const n = v.trim().split(/[\s,]+/).map(Number), out = [];
+  for (let i = 0; i + 1 < n.length; i += 2) out.push([n[i], n[i + 1]]);
+  if (closed && out.length) out.push(out[0]);
+  return out;
+};
 
 // Vehicles as they are at the moment of the photo, the same models as on
 // the map (vehicles.js) drawn through the photo camera: cars driving
@@ -1051,7 +1196,7 @@ function skyline(cam, groundAt, range) {
     let top = Infinity;
     for (let t = 0.5; t <= range; t *= 1.08) {
       const wx = cam.ex + dx * t, wy = cam.ey + dy * t;
-      const sy = cam.horizonY - ((groundAt(wx, wy) - cam.ez) / t) * cam.focal;
+      const sy = cam.projectRaw(wx, wy, groundAt(wx, wy))[1];
       if (sy < top) top = sy;
     }
     pts.push([px, Math.min(top, height + 2)]);

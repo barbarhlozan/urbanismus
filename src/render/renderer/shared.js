@@ -34,7 +34,7 @@ export const GL_LINES = ['paths', 'rails', 'roads', 'fences', 'walls'];
 export const TERRAIN_LINES = {
   steep: 'steep', 'contour-d2': 'contour d2', 'contour-d1': 'contour d1', 'contour-index': 'contour index',
   'brow-light': 'brow light', brow: 'brow', 'brow-outline': 'brow outline', 'rock-face': 'rock-face', 'rock-lip': 'rock-lip',
-  shore: 'shore', bank: 'bank', wave: 'wave d1',
+  shore: 'shore', bank: 'bank',
 };
 // The steps of a whole turn (Camera.STEP); the views an object keeps of
 // the steps it has been drawn at, at most (Renderer.swapIn); and ms the

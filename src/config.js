@@ -204,13 +204,12 @@ export const CONFIG = {
     cornerRadius: 0,
     curveSamples: 1,
     wander: 0.02,        // how far it drifts off true: laid by hand, but a mason's hand
-    height: 0.1,         // to the capping (a walker is about 0.08)
-    thick: 0.05,
-    cap: 0.014,          // the capping's ridge above the wall's top
-    gate: 0.07,          // half the gateway's opening
+    height: 0.065,       // to the capping, below a walker's shoulder (a walker is about 0.08)
+    thick: 0.04,
+    cap: 0.01,           // the capping's ridge above the wall's top
+    gate: 0.055,         // half the gateway's opening
     pier: 0.04,          // the gateway's piers either side of it
-    gateHeight: 0.2,     // the gateway's top
-    stones: 0.35,        // close up, a patch of bare stone where the plaster fell off, about this often
+    gateHeight: 0.14,    // the gateway's top
   },
 
   // cows and sheep in fenced pastures (sim/livestock.js)
