@@ -1,6 +1,6 @@
 # Drawn buildings
 
-Test sheets for hand-drawn buildings, tried out on drawn-lab.html (not in
+Test sheets for hand-drawn buildings, tried out on drawn-lab.html (page removed, see git history; not in
 the game yet). Two ways: line sheets (SVG, below; src/lab/lines.js) and
 painted sheets (PNG from Procreate, colouring the faces of a building
 the game already draws; src/lab/faces.js, see the page).

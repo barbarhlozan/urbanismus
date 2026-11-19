@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dědina – how a house is built</title>
-  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/svg+xml" href="../icons/favicon.svg">
+  <link rel="stylesheet" href="../styles.css">
   <style>
     html, body { overflow: hidden; height: 100%; position: static; margin: 0; }
     body { background: var(--bg); color: var(--main); font-family: var(--ui-font); display: flex; flex-direction: column; }
@@ -85,16 +85,16 @@
     //   builder.html?scene=1&step=2&rot=2&scheme=1&notes=0
     // Keys: ← → steps, ↑ ↓ house / tree, space play, R turn, L coordinates,
     // N notes, C colours, H hide the bar.
-    import { SCHEMES, THEME } from './src/theme.js';
-    import { Camera } from './src/render/camera.js';
-    import { Painter, LOOK } from './src/render/painter.js';
-    import { sunFor, shadowSVG } from './src/render/shadows.js';
-    import { mulberry32 } from './src/core/random.js';
-    import { pointInPolygon } from './src/core/geom2d.js';
-    import { door, chimney, fenceAlong } from './structures/kit.js';
-    import { drawCourt } from './structures/courts.js';
-    import { drawPlot } from './structures/plots.js';
-    import { drawTree } from './features/trees.js';
+    import { SCHEMES, THEME } from '../src/theme.js';
+    import { Camera } from '../src/render/camera.js';
+    import { Painter, LOOK } from '../src/render/painter.js';
+    import { sunFor, shadowSVG } from '../src/render/shadows.js';
+    import { mulberry32 } from '../src/core/random.js';
+    import { pointInPolygon } from '../src/core/geom2d.js';
+    import { door, chimney, fenceAlong } from '../structures/kit.js';
+    import { drawCourt } from '../structures/courts.js';
+    import { drawPlot } from '../structures/plots.js';
+    import { drawTree } from '../features/trees.js';
 
     const q = new URLSearchParams(location.search);
     // colours set here only: theme.js applyTheme() would also change the game's saved scheme

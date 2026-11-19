@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dědina – house lab</title>
-  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/svg+xml" href="../icons/favicon.svg">
+  <link rel="stylesheet" href="../styles.css">
   <link rel="stylesheet" href="labs.css">
   <style>
     body { overflow: visible; } /* (the page scrolls, so the knobs can stick) */
@@ -44,14 +44,14 @@
     // (LOOK and CLEAN in src/render/painter.js, SUN.strokes in
     // src/render/shadows.js, `clean` per scheme in src/theme.js).
     // The knobs are kept in the address (#…), so a look can be passed on.
-    import { mapPatterns } from './src/lab/page.js';
-    import { applyTheme, SCHEMES } from './src/theme.js';
-    import { Camera } from './src/render/camera.js';
-    import { Painter, LOOK, CLEAN, ROOF_OF } from './src/render/painter.js';
-    import { SUN, WALL_STROKES, sunFor, shadowSVG } from './src/render/shadows.js';
-    import { STRUCTURE_TYPES, drawSeed, tiltOf } from './structures/index.js';
-    import { CONFIG } from './src/config.js';
-    import { BRUSH } from './src/render/brush.js';
+    import { mapPatterns } from '../src/lab/page.js';
+    import { applyTheme, SCHEMES } from '../src/theme.js';
+    import { Camera } from '../src/render/camera.js';
+    import { Painter, LOOK, CLEAN, ROOF_OF } from '../src/render/painter.js';
+    import { SUN, WALL_STROKES, sunFor, shadowSVG } from '../src/render/shadows.js';
+    import { STRUCTURE_TYPES, drawSeed, tiltOf } from '../structures/index.js';
+    import { CONFIG } from '../src/config.js';
+    import { BRUSH } from '../src/render/brush.js';
 
     mapPatterns(); // (the map's fills: ponds, pools)
 
