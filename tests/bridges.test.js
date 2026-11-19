@@ -114,3 +114,24 @@ test('a road sketched over a river has its bridge on the road', async () => {
   const y = edge.pts[0][1] + ((edge.pts.at(-1)[1] - edge.pts[0][1]) * (10 - edge.pts[0][0])) / (edge.pts.at(-1)[0] - edge.pts[0][0]);
   assert.ok(deck(10, y) > 0);
 });
+
+// Drawn at a slant over a river, a way's crossing isn't a straight run of
+// dots: the tool sets it straight in the nearest grid direction, so the
+// bridge is built roughly as drawn rather than refused.
+test('a way sketched slantwise over a river still gets its bridge', async () => {
+  const { createNetworkTool } = await import('../src/tools/network.js');
+  for (const [kind, ang, wide] of [['path', 20, 1], ['path', 35, 2], ['path', -15, 2], ['road', 10, 1], ['road', 25, 2]]) {
+    const w = flatWorld();
+    river(w, 10, wide);
+    const tool = createNetworkTool({ world: w, config: {} }, { kind });
+    const r = (ang * Math.PI) / 180, c = [10.3 + wide / 2, 9.7];
+    const a = [c[0] - Math.cos(r) * 4.5, c[1] - Math.sin(r) * 4.5], b = [c[0] + Math.cos(r) * 4.5, c[1] + Math.sin(r) * 4.5];
+    // the plain line can't be bridged
+    assert.equal(w.checkWay(kind, [a, b]).reason, 'A bridge has to be straight', `${kind} ${ang}°`);
+    tool.sketch.start(...a);
+    for (let i = 1; i <= 60; i++) tool.sketch.move(a[0] + ((b[0] - a[0]) * i) / 60, a[1] + ((b[1] - a[1]) * i) / 60);
+    tool.sketch.end();
+    assert.ok(w.ways.edges.size, `${kind} ${ang}° over ${wide}: laid`);
+    assert.equal(findBridges(w).length, 1, `${kind} ${ang}° over ${wide}: one bridge`);
+  }
+});

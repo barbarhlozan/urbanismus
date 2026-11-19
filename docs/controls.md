@@ -51,6 +51,9 @@ a Czech or German layout.
 - **Click the map** – menu for the nearest dot (build, road from here, remove); the dots
   themselves only show while building
 - **Roads**, **footpaths** (Doprava: **1 Q**, **1 E**) – click start, click end; **Tab** flips the bend
+- Drawn **over a river**, a way gets a bridge: it crosses straight, in the direction nearest to the
+  stroke, and bends back to the line on the far bank. It only fails if the way ends in the water or the
+  river is too wide.
 - Draw a footpath **along a road** (on it or right beside it) to make it a street with sidewalks (kerb lines on both
   sides, street lamps, zebra crossings at junctions). People only walk along streets and footpaths; cyclists and
   cars use every road. Erasing a street removes its sidewalks first.

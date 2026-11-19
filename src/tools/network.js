@@ -15,6 +15,7 @@
 
 import { easeBends } from '../roads/curves.js';
 import { measurePolyline, pointAt } from '../roads/geometry.js';
+import { traceLine } from '../roads/dotView.js';
 import { t, reasonText } from '../core/text.js';
 import { EXIT_REACH } from '../core/world/access.js';
 
@@ -80,7 +81,24 @@ export function createNetworkTool(ctx, options) {
   };
 
   const same = (p, q) => p && q && Math.hypot(p[0] - q[0], p[1] - q[1]) < SAME * Math.max(layer.scale, 0.5);
-  const lineThrough = (pts) => (pts.length < 2 ? null : easeBends(pts, radius));
+  // an end set on a way (snapPoint) stays there
+  const onWay = (p) => !!(world.ways.nodeNear(...p, 1e-3) || world.ways.edgeNear(...p, 1e-3));
+  const lineThrough = (pts) => {
+    if (pts.length < 2) return null;
+    const line = easeBends(pts, radius);
+    if (!line || !layer.bridge) return line;
+    // (longer straight runs on the banks if the bends won't ease into a short one)
+    // (and the next nearest direction, where the nearest bends too sharply)
+    for (const next of [false, true]) {
+      for (const run of [1.2, 2, 0.7].map((k) => Math.max(radius * k, 0.6))) {
+        const fixed = straightCrossings(pts, line, layer, { run, next, keep: onWay });
+        if (fixed === pts) return line;
+        const eased = easeBends(fixed, radius);
+        if (eased) return eased;
+      }
+    }
+    return line;
+  };
 
   // The way as it would be with the pointer's point added: { line, check }.
   const plan = () => {
@@ -246,6 +264,92 @@ export function createNetworkTool(ctx, options) {
       return out + note(...(first ?? at));
     },
   };
+}
+
+// A bridge goes straight from dot to dot, so a hand-drawn line over a river
+// rarely makes one: where `line` (eased through `pts`) crosses water, the
+// crossing is set straight in the grid direction nearest to how it was
+// drawn, from the last land dot before the water to the first after it,
+// with a straight `run` on land either side for the bends to ease into.
+// An end too near the water for its run is moved onto the bridge's line,
+// unless `keep(end)` says it must stay (it's on a way). `next`: the next
+// nearest direction rather than the nearest. Returns new points
+// to ease, or `pts` itself when nothing needed setting.
+export function straightCrossings(pts, line, layer, { run = 1, next = false, keep = () => false } = {}) {
+  const { grid, bridge } = layer;
+  const dots = traceLine(line, grid, layer.scale);
+  const poly = measurePolyline(pts);
+  // where along `pts` a point lies (arc length of the nearest point on it)
+  const sOf = ([x, y]) => {
+    let best = Infinity, at = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, ay] = pts[i - 1], vx = pts[i][0] - ax, vy = pts[i][1] - ay, l2 = vx * vx + vy * vy;
+      const t = l2 ? Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / l2)) : 0;
+      const d = Math.hypot(ax + vx * t - x, ay + vy * t - y);
+      if (d < best) [best, at] = [d, poly.cum[i - 1] + t * Math.sqrt(l2)];
+    }
+    return at;
+  };
+  const cuts = [];
+  for (let i = 1; i < dots.length - 1; i++) {
+    if (!bridge.water(dots[i].n) || bridge.water(dots[i - 1].n)) continue;
+    let j = i;
+    while (j + 1 < dots.length && bridge.water(dots[j + 1].n)) j++;
+    if (j + 1 >= dots.length) break; // ends in the water: nothing to set straight
+    const a = dots[i - 1].n, pa = dots[i - 1].p, pb = dots[j + 1].p;
+    // straight already: the bridge goes as drawn
+    const step = (m, n) => grid.xy(n).map((v, k) => v - grid.xy(m)[k]).join();
+    const first = step(dots[i - 1].n, dots[i].n);
+    let straight = true;
+    for (let k = i; k <= j; k++) straight &&= step(dots[k].n, dots[k + 1].n) === first;
+    if (straight) { i = j; continue; }
+    // the nearest of the eight grid directions to the drawn line, then the
+    // next nearest
+    const turn = Math.atan2(pb[1] - pa[1], pb[0] - pa[0]) / (Math.PI / 4);
+    const k0 = Math.round(turn), k1 = turn > k0 ? k0 + 1 : k0 - 1;
+    for (const k of next ? [k1, k0] : [k0, k1]) {
+      const dx = Math.round(Math.cos((k * Math.PI) / 4)), dy = Math.round(Math.sin((k * Math.PI) / 4));
+      let q = grid.offset(a, dx, dy), steps = 1;
+      if (q < 0 || !bridge.water(q)) continue;
+      while (q >= 0 && bridge.water(q) && steps <= bridge.span) [q, steps] = [grid.offset(q, dx, dy), steps + 1];
+      if (q < 0 || bridge.water(q)) continue;
+      const A = layer.dot(a), Q = layer.dot(q), u = Math.hypot(dx, dy);
+      const d = [(dx / u) * run, (dy / u) * run];
+      cuts.push({ from: sOf(A) - run, to: sOf(Q) + run, A, Q, dir: [dx / u, dy / u], put: [[A[0] - d[0], A[1] - d[1]], A, Q, [Q[0] + d[0], Q[1] + d[1]]] });
+      break;
+    }
+    i = j;
+  }
+  if (!cuts.length) return pts;
+  // a run reaching past an end of the way, or leaving too short a leg to
+  // it: the end goes onto the bridge's line, as far from the bank as it was
+  // drawn (or, kept, joins it there)
+  const total = poly.total;
+  let start = pts[0], end = pts.at(-1);
+  const along = (P, dir, from, sign) => {
+    const l = Math.max(Math.hypot(from[0] - P[0], from[1] - P[1]), 0.3);
+    return [P[0] + dir[0] * l * sign, P[1] + dir[1] * l * sign];
+  };
+  const [head, tail] = [cuts[0], cuts.at(-1)];
+  if (head.from <= run) {
+    head.put.shift();
+    if (!keep(start)) start = along(head.A, head.dir, start, -1);
+  }
+  if (tail.to >= total - run) {
+    tail.put.pop();
+    if (!keep(end)) end = along(tail.Q, tail.dir, end, 1);
+  }
+  const out = [start];
+  let c = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const s = poly.cum[i];
+    while (c < cuts.length && s > cuts[c].to) out.push(...cuts[c++].put);
+    if (c < cuts.length && s >= cuts[c].from) continue;
+    out.push(pts[i]);
+  }
+  while (c < cuts.length) out.push(...cuts[c++].put);
+  out.push(end);
+  return out.filter((p, i) => !i || Math.hypot(p[0] - out[i - 1][0], p[1] - out[i - 1][1]) > 1e-6);
 }
 
 // A line with only the points that matter (Ramer–Douglas–Peucker): none
