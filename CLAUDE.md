@@ -1,7 +1,8 @@
 # Dědina – notes for Claude
 
-A black-and-white isometric village builder: plain JS, no build step. The README says how
-it's run and where things live; read it first.
+A black-and-white isometric village builder: plain JS, no build step. When you need to find
+something, read `## Where things live` in the README; the player's controls are in
+`docs/controls.md`. Don't read the whole README up front.
 
 ## Running and checking the game
 
@@ -41,3 +42,13 @@ its own, so that a change in one place reaches the whole game:
 - Comments and docs in the project's own voice: plain words about what the player sees,
   saying why, as the existing files do.
 - Keep the README up to date with what changes for the player.
+
+## Keeping it lean
+
+- Memory notes: current state, not a diary. Rewrite the note when things change; don't append
+  "Update …". At most 1 kB each.
+- Plans in `docs/` are deleted when the work is done; the lasting rule goes into the README or
+  a memory note in one line.
+- Comments say why, never what changed – that's the commit's job.
+- Commits: subject 1–3 words, body only when the why isn't obvious, at most 2 lines.
+- Final messages: say what changed and what's left, a few lines, no recap of every step.
