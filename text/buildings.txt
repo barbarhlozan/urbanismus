@@ -464,6 +464,14 @@ posta.blurb
   cs: Pošta a Státní spořitelna
   en: The post office and the State Savings Bank
 
+penzion
+  cs: Penzion
+  en: Guesthouse
+
+penzion.blurb
+  cs: Pokoje pro hosty, zahrádka
+  en: Rooms for guests, a garden
+
 hotel
   cs: Hotel
   en: Hotel
@@ -740,6 +748,18 @@ staff.listonos
 staff.listonos.f
   cs: Listonoška
   en: Postwoman
+
+staff.spravce
+  cs: Správce penzionu
+  en: Guesthouse keeper
+
+staff.spravce.f
+  cs: Správkyně penzionu
+  en: Guesthouse keeper
+
+staff.pokojska
+  cs: Pokojská
+  en: Chambermaid
 
 staff.recepcni
   cs: Recepční

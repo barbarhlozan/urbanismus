@@ -72,7 +72,7 @@ README says how to draw one and lists them all, and `icons/ui/index.html` shows 
 
 The Build menu offers what the story of Dědina needs and nothing more: the houses and family
 houses, the výměnek (a farmer's little cottage to retire to, as Wenzlová's above the
-church: a room and a kitchen, gable or eaves to the street, a fenced yard), the pub, the chapel and the church, the bus stop, the roads and footpaths, the fields,
+church: a room and a kitchen, gable or eaves to the street, a fenced yard), the pub, the penzion, the chapel and the church, the bus stop, the roads and footpaths, the fields,
 meadow, fence and churchyard wall, greenery, the sports ground, the village pond, the well and the squares. No train comes
 to Dědina, and the summer cinema, playground, flower beds and forest park belong to a town:
 `story/unlocks.txt` locks them, and a sandbox can unlock them again.
@@ -120,7 +120,7 @@ a Czech or German layout.
 - **Bus stop** (**1 Y**, 1×1), beside a road, facing it: a shelter, the stop sign, a bench. Buses only
   come when a road leads off the map: in through an exit, a few stops (nearest next), out again.
 - **Bydlení** (**2**): house / apartments / block, each also wide (**Shift**)
-- **Občanská vybavenost** (**3**): Jednota, hospoda, obchodní dům, Tuzex, národní výbor, pošta,
+- **Občanská vybavenost** (**3**): Jednota, hospoda, penzion, obchodní dům, Tuzex, národní výbor, pošta,
   hotel, the services, school, house of culture, swimming pool, cemetery
 - **Výroba** (**4**): workshops, works, factory and plants in their sizes, the three mines,
   farmstead / JZD / státní statek

@@ -59,6 +59,7 @@ const KINDS = [
   ['pub', (d) => matches(d, 'pub')],
   ['shop', ids('jednota', 'jednota-wide')],
   ['store', ids('store', 'store-wide')],
+  ['penzion', ids('penzion')],
   ['hotel', (d) => matches(d, 'hotel')],
   ['culture-house', ids('culture-house', 'culture-house-small')],
   ['pool', ids('pool')],

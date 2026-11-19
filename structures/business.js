@@ -6,6 +6,7 @@
 // people work and shop (src/sim/agents.js).
 // Front (shop window, entrance) is the -y side.
 
+import { LOOK } from '../src/render/painter.js';
 import { door, panel, chimney, frontage, shared, hips, aerials, flagpole, star, crates, barrels, bikeRack, bench, streetClock, tree, kindOf } from './kit.js';
 
 const FRONT = [0, -1, 0];
@@ -170,6 +171,167 @@ export const hospoda = {
     } else {
       doorBench(g, -0.16, y - 0.03);
     }
+  },
+};
+
+// A table in a guesthouse garden under its sun umbrella, a chair either
+// side: the umbrella a low cone on its pole, the table and chairs in the
+// fine pen.
+function umbrellaTable(g, x, y) {
+  if (!g.isFree(x, y, 0.07)) return;
+  g.detailed(2, () => {
+    g.solid(x, y, 0.06);
+    trestle(g, x, y, 0.05, 0.04, 0.05);
+    for (const k of [-1, 1]) trestle(g, x + k * 0.045, y, 0.018, 0.018, 0.026);
+    g.line([[x, y, 0.05], [x, y, 0.13]], FINE);
+    g.lathe(x, y, 0.115, [[0.06, 0], [0.004, 0.024]], 8, FINE);
+  });
+}
+
+// A window on the front (-y) wall drawn as the panes are (an ink block or
+// an outline) – these count as windows (the night lights them, a fire
+// starts in them).
+function pane(g, cx, y, z, w, h) {
+  g.line([[cx - w / 2, y, z], [cx + w / 2, y, z], [cx + w / 2, y, z + h], [cx - w / 2, y, z + h], [cx - w / 2, y, z]],
+    { facing: FRONT, cls: LOOK.ink ? 'ink' : undefined });
+}
+
+// A row of `count` windows along a wall from a to b ([x, y]) with outward
+// normal n, their sills at z, each in the middle of its bay – every wall
+// of a house on the same two lines, the upper windows over the lower ones;
+// `skip(t)` leaves out the bay t of the way along (behind a veranda).
+function wallPanes(g, a, b, n, z, count, skip = () => false, ww = 0.04, wh = 0.065) {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
+  const at = (t, du, zz) => [a[0] + ux * (t + du), a[1] + uy * (t + du), zz];
+  for (let i = 0; i < count; i++) {
+    const t = (len * (i + 0.5)) / count;
+    if (skip(t)) continue;
+    g.line([at(t, -ww / 2, z), at(t, ww / 2, z), at(t, ww / 2, z + wh), at(t, -ww / 2, z + wh), at(t, -ww / 2, z)],
+      { facing: n, cls: LOOK.ink ? 'ink' : undefined });
+  }
+}
+
+// The four walls of a box as wallPanes takes them, front first:
+// [a, b, normal, how many windows on it at `bay` apart].
+function walls(x0, y0, x1, y1, bay) {
+  const n = (len) => Math.max(1, Math.round(len / bay));
+  return [[[x0, y0], [x1, y0], [0, -1, 0], n(x1 - x0)], [[x1, y0], [x1, y1], [1, 0, 0], n(y1 - y0)],
+    [[x1, y1], [x0, y1], [0, 1, 0], n(x1 - x0)], [[x0, y1], [x0, y0], [-1, 0, 0], n(y1 - y0)]];
+}
+
+// Penzion: the guesthouse an engineer from Povodí stays in, a little bigger
+// than the houses around it, stepped with Space:
+//   vila   a villa from the spa country round Mariánské Lázně and Karlovy
+//          Vary, two storeys under a saddle roof with its gables to the
+//          sides, the eaves boards cut out as on the spa villas, a glazed
+//          wooden veranda before the door under a little roof of its own,
+//          PENZION over its door; an umbrella table in the garden in front.
+//   chata  a guesthouse of the 60s as they built them in the hills, its
+//          steep gable to the street: the ground floor plastered, the upper
+//          one and the gable in boards, a wooden balcony across the gable
+//          with PENZION on it;
+//          a table beside it under a spruce.
+// Both have four windows to a floor along the street and their windows on
+// the sides in line with them, two floors.
+function villaPenzion(g) {
+  const w = g.range(0.54, 0.58), d = g.range(0.34, 0.36), fh = 0.135, h = fh * 2 + 0.05, r = g.range(0.17, 0.2);
+  const x0 = -w / 2, x1 = w / 2, y0 = -0.07, y1 = y0 + d, ym = (y0 + y1) / 2;
+  g.body = { x0, y0, x1, y1 };
+  g.roofed(x0, y0, 0, w, d, h, { h: r });
+  // the veranda before the door, over two of the four bays to the street,
+  // its little roof well under the upper windows
+  const vw = g.range(0.2, 0.23), vx = g.pick([-1, 1]) * w / 4, vd = 0.09, vh = 0.115;
+  const vx0 = vx - vw / 2, vy = y0 - vd;
+  for (const [i, [a, b, n, count]] of walls(x0, y0, x1, y1, 0.13).entries()) {
+    const front = i === 0, k = front ? 4 : count;
+    wallPanes(g, a, b, n, fh + 0.06, k);
+    wallPanes(g, a, b, n, 0.045, k, front ? (t) => Math.abs(x0 + t - vx) < vw / 2 + 0.02 : undefined);
+  }
+  // the eaves boards on the gables, cut to a point under the ridge
+  for (const [x, n] of [[x0, [-1, 0, 0]], [x1, [1, 0, 0]]]) {
+    g.line([[x, y0 + 0.02, h + 0.01], [x, ym, h + r - 0.03], [x, y1 - 0.02, h + 0.01]], { facing: n });
+    g.detailed(2, () => g.line([[x, ym, h + r - 0.03], [x, ym, h + r - 0.075]], { facing: n }));
+  }
+  // (the veranda and its name board come after everything on the house's
+  // walls: drawn after them, a line would go with them, in front)
+  g.roofed(vx0, vy, 0, vw, vd, vh, { h: 0.04, hip: 0.04 });
+  g.windows(vx0, vy, vw, vd, 0, vh, vh, 0.03, { ribbon: true, h: 0.5, skip: ['back', 'front'] });
+  door(g, vx, vy, 0.045, 0.09);
+  for (const k of [-1, 1]) pane(g, vx + k * vw * 0.3, vy, 0.035, 0.05, 0.055);
+  nameBoard(g, vx - vw / 2 + 0.015, vy, 0.094, vw - 0.03, 0.018, [7]);   // PENZION
+  chimney(g, x0 + w * g.range(0.25, 0.4), ym + 0.04, h, r + 0.05);
+  // the garden in front: a table on the other side of the veranda, a linden
+  umbrellaTable(g, vx > 0 ? -0.22 : 0.22, -0.28);
+  tree(g, vx > 0 ? -0.33 : 0.33, 0.3, 0.8, 'spreading');
+}
+
+function chataPenzion(g) {
+  const w = g.range(0.4, 0.43), d = g.range(0.46, 0.5), fh = 0.135, h = fh * 2 + 0.02, r = g.range(0.26, 0.3);
+  const x0 = -w / 2, x1 = w / 2, y0 = -0.17, y1 = y0 + d;
+  g.body = { x0, y0, x1, y1 };
+  g.roofed(x0, y0, 0, w, d, h, { h: r, ridge: 'y' });
+  // the sides and back: the same two lines as the front's windows
+  for (const [a, b, n, count] of walls(x0, y0, x1, y1, 0.12).slice(1)) {
+    for (const z of [0.04, fh + 0.05]) wallPanes(g, a, b, n, z, count, undefined, 0.04, 0.06);
+  }
+  // the ground floor: the door off the middle, windows
+  const dx = g.pick([-1, 1]) * w * 0.18;
+  door(g, dx, y0, 0.055, 0.1);
+  pane(g, -dx * 1.1, y0, 0.04, 0.045, 0.06);
+  pane(g, dx + (dx > 0 ? 0.11 : -0.11) * 0.95, y0, 0.04, 0.03, 0.05);
+  // the upper floor and the gable in upright boards, two windows and the
+  // balcony door between them
+  const line = (pts) => g.line(pts, { ...FINE, facing: FRONT });
+  line([[x0, y0, fh + 0.01], [x1, y0, fh + 0.01]]);
+  g.detailed(2, () => {
+    for (let x = x0 + 0.025; x < x1 - 0.01; x += 0.025) {
+      const top = h + r * (1 - Math.abs(x) / (w / 2)) - 0.012;
+      line([[x, y0, fh + 0.01], [x, y0, top]]);
+    }
+  });
+  for (const k of [-1, 1]) pane(g, k * w * 0.3, y0, fh + 0.05, 0.045, 0.065);
+  pane(g, 0, y0, fh + 0.02, 0.05, 0.1);
+  pane(g, 0, y0, h + r * 0.35, 0.035, 0.045);                            // the window in the gable
+  // the balcony across the gable: a planked parapet on two struts
+  const bz = fh + 0.02, bd = 0.07;
+  g.box(x0 + 0.03, y0 - bd, bz, w - 0.06, bd, 0.045);
+  for (const x of [x0 + 0.06, x1 - 0.06]) g.line([[x, y0, bz - 0.06], [x, y0 - bd + 0.01, bz]], { facing: [x < 0 ? -1 : 1, -1, 0] });
+  // PENZION painted on a board across its middle, the planks either side
+  // (lines on the balcony, not a board of its own: one in front of the wall
+  // under it would be drawn over the balcony)
+  const lw = 0.17, by = y0 - bd, bl = (pts) => g.line(pts, { ...FINE, facing: FRONT });
+  bl([[-lw / 2, by, bz + 0.01], [lw / 2, by, bz + 0.01], [lw / 2, by, bz + 0.036], [-lw / 2, by, bz + 0.036], [-lw / 2, by, bz + 0.01]]);
+  g.detailed(2, () => {
+    for (let i = 0; i < 7; i++) {
+      const x = -lw / 2 + 0.025 + ((lw - 0.05) * i) / 6;
+      bl([[x, by, bz + 0.016], [x, by, bz + 0.03]]);
+    }
+    for (let x = x0 + 0.05; x < x1 - 0.04; x += 0.022) {
+      if (Math.abs(x) > lw / 2 + 0.006) line([[x, by, bz + 0.004], [x, by, bz + 0.041]]);
+    }
+  });
+  chimney(g, x0 + w * 0.3, y0 + d * 0.62, h, r * 0.7);
+  // a table beside it under a spruce
+  const side = dx > 0 ? -1 : 1;
+  umbrellaTable(g, side * 0.31, -0.24);
+  tree(g, side * 0.32, 0.28, 0.9, 'spruce');
+}
+
+export const penzion = {
+  ...COMMON,
+  id: 'penzion',
+  name: 'Penzion',
+  blurb: 'The guesthouse',
+  tags: ['business', 'guesthouse'],
+  code: 'PZ',
+  footprint: [[0, 0]],
+  stats: { jobs: 2 },
+  agents: 1,
+  yards: ['trees', 'garden'],
+  kinds: ['vila', 'chata'],
+  draw(g, s) {
+    if (kindOf(g, s, this.kinds) === 'chata') chataPenzion(g);
+    else villaPenzion(g);
   },
 };
 

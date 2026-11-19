@@ -41,8 +41,8 @@
 #   residential          every home: house, family_house, vymenek, apartments,
 #                        block
 #   houses               house and family_house, every size
-#   business             jednota, hospoda, obchodni_dum, narodni_vybor,
-#                        posta, hotel
+#   business             jednota, hospoda, penzion, obchodni_dum,
+#                        narodni_vybor, posta, hotel
 #   shop, pub, office, hotel
 #   industrial           everything in vyroba but the mines, and Mlékárna, ZZN,
 #                        STS, Cukrovar, Benzina
@@ -74,6 +74,7 @@
 #     obchodni_dum       store, store_wide
 #     narodni_vybor      office, office_wide, office_tower, office_tower_wide
 #     posta              post_office
+#     penzion            penzion
 #     hotel              hotel, hotel_wide
 #     fire_station       fire_house, fire_station, fire_station_large
 #     police_post        police

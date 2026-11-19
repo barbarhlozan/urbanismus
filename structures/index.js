@@ -85,7 +85,7 @@ export const BUILD_FAMILIES = [
   // Bydlení
   [housing.house, housing.houseWide], [housing.familyHouse], [housing.vymenek], [housing.apartments, housing.apartmentsWide], [housing.block, housing.blockWide],
   // Občanská vybavenost
-  [business.jednota], [business.jednotaWide], [business.hospoda, business.hospodaWide], [business.store, business.storeWide],
+  [business.jednota], [business.jednotaWide], [business.hospoda, business.hospodaWide], [business.penzion], [business.store, business.storeWide],
   [business.office, business.officeWide, business.officeTower, business.officeTowerWide],
   [business.postOffice], [business.hotel, business.hotelWide],
   [services.fireHouse, services.fireStation, services.fireStationLarge], [services.police],
@@ -118,7 +118,7 @@ export const BUILD_FAMILIES = [
 export const REVIEWED = new Set(['bus-stop', 'house', 'house-wide', 'family-house', 'family-house-wide', 'vymenek', 'chapel', 'wayside-cross', 'church',
   'green', 'meadow', 'playground', 'playground-large', 'pitch', 'sports-ground', 'garden-park', 'forest-park', 'pond-park', 'well', 'summer-cinema',
   'plaza', 'market-square',
-  'hospoda', 'hospoda-wide']);
+  'hospoda', 'hospoda-wide', 'penzion']);
 
 export const STRUCTURES = BUILD_FAMILIES.flat();
 

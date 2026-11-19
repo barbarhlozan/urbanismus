@@ -1006,6 +1006,10 @@ ledger.kind.store
   cs: obchodní dům | {n:m} obchodní domy | {n:m} obchodních domů
   en: department store | {n:w} department stores
 
+ledger.kind.penzion
+  cs: penzion | {n:m} penziony | {n:m} penzionů
+  en: guesthouse | {n:w} guesthouses
+
 ledger.kind.hotel
   cs: hotel | {n:m} hotely | {n:m} hotelů
   en: hotel | {n:w} hotels
