@@ -71,7 +71,8 @@ of their own in `icons/ui/`, read when the game starts: replace a file to change
 README says how to draw one and lists them all, and `icons/ui/index.html` shows them side by side.
 
 The Build menu offers what the story of Dědina needs and nothing more: the houses and family
-houses, the pub, the chapel and the church, the bus stop, the roads and footpaths, the fields,
+houses, the výměnek (a farmer's little cottage to retire to, as Wenzlová's above the
+church: a room and a kitchen, gable or eaves to the street, a fenced yard), the pub, the chapel and the church, the bus stop, the roads and footpaths, the fields,
 meadow and fence, greenery, the sports ground, the village pond, the well and the squares. No train comes
 to Dědina, and the summer cinema, playground, flower beds and forest park belong to a town:
 `story/unlocks.txt` locks them, and a sandbox can unlock them again.

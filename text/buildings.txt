@@ -130,6 +130,14 @@ family-house.blurb
   cs: Kostka nebo vila se zahrádkou
   en: A cube house or a villa with a garden
 
+vymenek
+  cs: Výměnek
+  en: Retirement cottage
+
+vymenek.blurb
+  cs: Chaloupka na stáří, světnice a kuchyně, dvorek
+  en: A cottage to grow old in: a room, a kitchen, a little yard
+
 apartments
   cs: Činžovní dům
   en: Tenement house

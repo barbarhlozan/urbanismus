@@ -27,7 +27,7 @@
 //               Keep within about ±0.4 of the footprint dots, and keep separate
 //               solids side by side rather than overlapping.
 
-import { door, panel, chimney, aerials, frontage, shared, hips, kindOf, tree } from './kit.js';
+import { door, panel, chimney, aerials, frontage, shared, hips, kindOf, tree, woodpile, wooden } from './kit.js';
 import { LOOK } from '../src/render/painter.js';
 import { courtSide } from './courts.js';
 
@@ -263,6 +263,83 @@ export const familyHouse = {
   draw(g, s) {
     // (with a court beside it, its kůlna stands in for the shed)
     dressedHouse(g, kindOf(g, s, this.kinds) === 'cube', !courtSide(g.court));
+  },
+};
+
+// A výměnek: the little cottage a farmer built at the edge of his yard to
+// retire to when the farm passed to his son – one room and a kitchen
+// (světnice a kuchyně), a small entrance hall between them, under one low
+// roof. Smaller and lower than the houses: two windows where a house has
+// three, a door straight off the yard, firewood against the wall. Its own
+// little yard: a vegetable bed dug in rows, a fruit tree. (No bench by the
+// door: at the map's size its legs read as stilts under the house.)
+//   gable  its gable to the street, the gable boarded, the door on the
+//          long side, the woodpile behind
+//   eaves  its eaves to the street, a window each side of the door, a
+//          lean-to woodshed at one end
+function vymenekCottage(g, kind) {
+  const line = (pts) => g.line(pts, { facing: FRONT });
+  if (kind === 'gable') {
+    const w = g.range(0.2, 0.22), d = g.range(0.28, 0.31), h = 0.11, r = g.range(0.15, 0.17);
+    const x0 = 0, x1 = x0 + w, y0 = -0.16, y1 = y0 + d, cx = (x0 + x1) / 2;
+    g.body = { x0, y0, x1, y1 };
+    g.roofed(x0, y0, 0, w, d, h, { h: r, ridge: 'y' });
+    g.windows(x0, y0, w, d, 0, h, h, 0.1, { h: 0.4, skip: ['front', 'left'] });
+    for (const k of [-1, 1]) frontWindow(g, cx + k * w * 0.22, y0, h * 0.32, 0.04, 0.055);
+    line([[x0, y0, h], [x1, y0, h]]);
+    g.detailed(1, () => {
+      for (let x = x0 + 0.03; x < x1 - 0.02; x += 0.028) {
+        const top = h + r * (1 - Math.abs(x - cx) / (w / 2)) - 0.012;
+        if (top - h > 0.025) line([[x, y0, h + 0.008], [x, y0, top]]);
+      }
+    });
+    // to the yard (local -x): a window and the door
+    const side = [-1, 0, 0], yw = y0 + d * 0.22, yd = y0 + d * 0.62;
+    g.line([[x0, yw - 0.02, 0.035], [x0, yw + 0.02, 0.035], [x0, yw + 0.02, 0.09], [x0, yw - 0.02, 0.09], [x0, yw - 0.02, 0.035]],
+      { facing: side, cls: LOOK.ink ? 'ink' : undefined });
+    g.line([[x0, yd - 0.024, 0], [x0, yd - 0.024, 0.095], [x0, yd + 0.024, 0.095], [x0, yd + 0.024, 0]], { facing: side, round: LOOK.round.windows });
+    chimney(g, cx + 0.01, y0 + d * 0.55, h + r * 0.45, r * 0.55, 0.04);
+    woodpile(g, cx, y1 + 0.035, true);
+    return;
+  }
+  const w = g.range(0.32, 0.35), d = g.range(0.21, 0.23), h = 0.11, r = g.range(0.12, 0.14);
+  const x0 = -0.3, x1 = x0 + w, y0 = 0.02, y1 = y0 + d;
+  g.body = { x0, y0, x1, y1 };
+  g.roofed(x0, y0, 0, w, d, h, { h: r, hip: 0.05 }); // half-hipped
+  g.windows(x0, y0, w, d, 0, h, h, 0.1, { h: 0.4, skip: ['front'] });
+  const dx = x0 + w * g.pick([0.38, 0.62]);
+  door(g, dx, y0, 0.048, 0.095);
+  for (const k of [-1, 1]) frontWindow(g, dx + k * w * 0.27, y0, h * 0.32, 0.04, 0.055);
+  chimney(g, dx + 0.02, y0 + d / 2, h + r * 0.4, r * 0.65, 0.04);
+  // the lean-to woodshed against the right end, open to the front, logs in it
+  const sx = x1, sw = 0.1, sh = 0.075;
+  g.box(sx, y0 + 0.03, 0, sw, d - 0.03, 0.006);
+  wooden(g, () => g.roofed(sx, y0 + 0.03, 0, sw, d - 0.03, sh, { h: 0.025, ridge: 'y' }));
+  g.detailed(2, () => {
+    for (let z = 0.012; z < sh - 0.01; z += 0.014) line([[sx + 0.012, y0 + 0.03, z], [sx + sw - 0.012, y0 + 0.03, z]]);
+  });
+}
+
+export const vymenek = {
+  id: 'vymenek',
+  name: 'Výměnek',
+  blurb: 'A retirement cottage',
+  ...HOME,
+  footprint: [[0, 0]],
+  plot: { props: 'garden', boundary: 0.8, kinds: ['fence'], density: 0.2 },
+  stats: { residents: 1 },
+  agents: 1,
+  yards: [],
+  tilt: true,
+  kinds: ['gable', 'eaves'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    vymenekCottage(g, kind);
+    // the vegetable bed, dug in rows, in front or beside the cottage
+    const [bx0, bx1, by0, by1] = kind === 'gable' ? [-0.32, -0.1, -0.32, -0.08] : [0.06, 0.3, -0.32, -0.12];
+    g.groundPoly([[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]], { lod: 1 });
+    for (let x = bx0 + 0.04; x < bx1 - 0.02; x += 0.04) g.groundLine([[x, by0 + 0.02], [x, by1 - 0.02]], { dash: '3 2', lod: 2 });
+    tree(g, kind === 'gable' ? -0.26 : 0.3, 0.26, 0.8, 'spreading');
   },
 };
 

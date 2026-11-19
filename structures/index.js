@@ -82,7 +82,7 @@ export const BUILD_FAMILIES = [
   // Doprava
   [station.station, station.main, station.stop], [busStop], [square.busStation], [industry.benzina],
   // Bydlení
-  [housing.house, housing.houseWide], [housing.familyHouse], [housing.apartments, housing.apartmentsWide], [housing.block, housing.blockWide],
+  [housing.house, housing.houseWide], [housing.familyHouse], [housing.vymenek], [housing.apartments, housing.apartmentsWide], [housing.block, housing.blockWide],
   // Občanská vybavenost
   [business.jednota], [business.jednotaWide], [business.hospoda, business.hospodaWide], [business.store, business.storeWide],
   [business.office, business.officeWide, business.officeTower, business.officeTowerWide],
@@ -114,7 +114,7 @@ export const BUILD_FAMILIES = [
 // Buildings through the one-by-one review: only their tools are offered
 // for now. The rest stay registered (saves still load and draw them) but
 // can't be picked up until their turn comes.
-export const REVIEWED = new Set(['bus-stop', 'house', 'house-wide', 'family-house', 'family-house-wide', 'chapel', 'church',
+export const REVIEWED = new Set(['bus-stop', 'house', 'house-wide', 'family-house', 'family-house-wide', 'vymenek', 'chapel', 'church',
   'green', 'meadow', 'playground', 'playground-large', 'pitch', 'sports-ground', 'garden-park', 'forest-park', 'pond-park', 'well', 'summer-cinema',
   'plaza', 'market-square',
   'hospoda', 'hospoda-wide']);
