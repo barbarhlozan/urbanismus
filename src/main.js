@@ -160,7 +160,7 @@ const entering = (() => {
   }
 })();
 // ?testing in the address (?testing=0 not): never the main menu, the town
-// straight away, as before there was one – for trying things out quickly
+// straight away – for trying things out quickly
 const testing = (() => {
   const v = new URLSearchParams(location.search).get('testing');
   return v !== null && v !== '0' && v !== 'false';
@@ -735,7 +735,7 @@ tools.onChange((tool) => {
     : { fine: !!tool.fineGrid, building: tool.id.startsWith('build:') ? tool : null, roads: ['road', 'lane', 'street'].includes(tool.id) };
   contours.lend(!!dots && tool.id !== 'bulldoze' && UNLOCKS.allowsControl('terrain'));
 });
-// Ways and buildings are placed freely now (README, Free placement):
+// Ways and buildings are placed freely (README, Free placement):
 // the dots are shown only for what still stands on them – stations, whose
 // track runs on the dots.
 const dotsShown = () => !!dots?.building && !!STRUCTURE_TYPES[dots.building.type]?.canPlace;

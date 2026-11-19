@@ -275,9 +275,7 @@ export const CONFIG = {
     // rain and storms only out of clouds – a short shower passing, or a
     // storm building – and a storm mostly clears to fair; mist settles in
     // the valleys only after fair weather. Over a long time this comes to
-    // roughly cloudy 39 %, fair 37 %, rain 14 %, storm 6 %, mist 3 %. (There
-    // was an overcast between cloudy and rain; a save still in it starts
-    // cloudy, WeatherSystem.)
+    // roughly cloudy 39 %, fair 37 %, rain 14 %, storm 6 %, mist 3 %.
     next: {
       fair: { cloudy: 0.85, mist: 0.15 },
       mist: { fair: 0.5, cloudy: 0.5 },
