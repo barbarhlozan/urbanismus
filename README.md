@@ -170,6 +170,10 @@ folded there and folds again once you pick a tool.
   or `'cross'` switches to the other hands tried (`src/render/roadMarks.js`).
 - Neighbouring apartments and shops facing the same road often share a wall and form a
   street front; panel blocks join into one long block built in sections.
+- **Boží muka a křížek** (Památky, beside the chapel, 1×1) stands by a road or a footpath and faces it:
+  **Space** steps through a granite boží muka with its niches, a cast-iron cross on a stone plinth
+  and a wooden cross under a little tin roof, with a lime tree behind or two either side. It
+  gets no house number.
 - The **Landmarks** group has the old town (a chapel, a church, a town hall in three sizes, a
   war memorial, a castle) and the new one (a stadium or Sokol hall, and a TV
   tower or lookout, which only goes on a hilltop). A church sometimes appears by itself in a

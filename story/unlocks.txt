@@ -25,8 +25,8 @@
 #   zemedelstvi, farming              the farms, Mlékárna, ZZN, STS, Cukrovar,
 #                                     the fence
 #   prostranstvi, spaces              parks and squares
-#   pamatky, heritage, landmarks      Chapel, Church, Town hall, Memorial, Castle,
-#                                     Tower, Stadium
+#   pamatky, heritage, landmarks      Chapel, Wayside cross, Church, Town hall,
+#                                     Memorial, Castle, Tower, Stadium
 #   zones                             bydleni + vyroba + zemedelstvi
 #   public                            obcanska_vybavenost + prostranstvi
 #
@@ -126,6 +126,7 @@
 #     shopping_precinct  precinct_large
 #   Památky
 #     chapel             chapel
+#     wayside_cross      wayside_cross
 #     church             church
 #     town_hall          town_hall, town_hall_small, town_hall_large
 #     memorial           memorial

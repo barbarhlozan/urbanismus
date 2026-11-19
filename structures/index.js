@@ -53,6 +53,7 @@ import * as services from './services.js';
 import * as heritage from './heritage.js';
 import * as station from './station.js';
 import { busStop } from './busStop.js';
+import { wayside } from './wayside.js';
 import * as landmarks from './landmarks.js';
 import * as grounds from './grounds.js';
 import * as mine from './mine.js';
@@ -107,14 +108,14 @@ export const BUILD_FAMILIES = [
   [park.gardenPark], [park.forestPark], [park.pondPark], [park.well], [park.summerCinema],
   [square.plaza, square.marketSquare], [square.precinctLarge],
   // Památky
-  [heritage.chapel], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
+  [heritage.chapel], [wayside], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
   [heritage.castle, heritage.castleSmall], [landmarks.tvTower], [landmarks.stadium],
 ];
 
 // Buildings through the one-by-one review: only their tools are offered
 // for now. The rest stay registered (saves still load and draw them) but
 // can't be picked up until their turn comes.
-export const REVIEWED = new Set(['bus-stop', 'house', 'house-wide', 'family-house', 'family-house-wide', 'vymenek', 'chapel', 'church',
+export const REVIEWED = new Set(['bus-stop', 'house', 'house-wide', 'family-house', 'family-house-wide', 'vymenek', 'chapel', 'wayside-cross', 'church',
   'green', 'meadow', 'playground', 'playground-large', 'pitch', 'sports-ground', 'garden-park', 'forest-park', 'pond-park', 'well', 'summer-cinema',
   'plaza', 'market-square',
   'hospoda', 'hospoda-wide']);

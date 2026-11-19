@@ -640,6 +640,14 @@ chapel.blurb
   cs: Kaplička u cesty
   en: A little chapel by the road
 
+wayside_cross
+  cs: Boží muka a křížek
+  en: Shrine and cross
+
+wayside_cross.blurb
+  cs: U cesty, kamenná nebo železná
+  en: By a road or a path, of stone or iron
+
 church
   cs: Kostel
   en: Church
