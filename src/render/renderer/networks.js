@@ -39,6 +39,29 @@ function wayExits(world, layer, exits) {
   return (n) => byWay.get(n) ?? null;
 }
 
+// Where the footpaths' lines (their ways as drawn) cross the polyline
+// `line`: the distances along it (wallItems' gateways).
+function pathCrossings(world, line) {
+  const out = [];
+  const cum = measurePolyline(line).cum;
+  for (const e of world.ways.edges.values()) {
+    if (e.kind !== 'path') continue;
+    const q = e.pts;
+    for (let j = 1; j < q.length; j++) {
+      const [cx, cy] = q[j - 1], [dx, dy] = q[j];
+      for (let i = 1; i < line.length; i++) {
+        const [ax, ay] = line[i - 1], [bx, by] = line[i];
+        const rx = bx - ax, ry = by - ay, sx = dx - cx, sy = dy - cy;
+        const den = rx * sy - ry * sx;
+        if (Math.abs(den) < 1e-12) continue;
+        const t = ((cx - ax) * sy - (cy - ay) * sx) / den, u = ((cx - ax) * ry - (cy - ay) * rx) / den;
+        if (t >= 0 && t <= 1 && u >= 0 && u <= 1) out.push(cum[i - 1] + t * (cum[i] - cum[i - 1]));
+      }
+    }
+  }
+  return out;
+}
+
 // Kerbs open this much wider than a footpath coming in, each side (grid units).
 const PATH_OPENING = 0.012;
 
@@ -347,6 +370,17 @@ export class NetworkDrawing {
         if (gates.at.has(n)) gatesHere.push(sAt(i));
       });
       for (let i = 1; i < chain.length; i++) if (gates.across.has(edgeKey(chain[i - 1], chain[i]))) gatesHere.push((sAt(i - 1) + sAt(i)) / 2);
+      // …each where the footpath's own line crosses the wall, not at the
+      // wall's dot nearest to it: a path drawn freely passes between the dots
+      if (gatesHere.length) {
+        const crossings = pathCrossings(world, dense).map((s) => (s / (measurePolyline(dense).total || 1)) * len);
+        gatesHere.forEach((s, k) => {
+          const near = crossings.reduce((best, c) => (Math.abs(c - s) < Math.abs(best - s) ? c : best), Infinity);
+          if (Math.abs(near - s) < 0.4) gatesHere[k] = near;
+        });
+        gatesHere.sort((p, q) => p - q);
+        for (let k = gatesHere.length - 1; k > 0; k--) if (gatesHere[k] - gatesHere[k - 1] < 2 * (G + P)) gatesHere.splice(k, 1);
+      }
       const blocks = gatesHere.map((s) => [Math.max(0, s - G - P), Math.min(len, s + G + P), s]).sort((p, q) => p[0] - q[0]);
       // the wall between them
       const runs = [];
