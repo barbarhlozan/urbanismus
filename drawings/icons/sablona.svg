@@ -1,0 +1,763 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3880" height="5040" viewBox="0 0 3880 5040">
+<style>
+text { font-family: -apple-system, Helvetica, sans-serif; fill: #8cc4e6; }
+.g { fill: none; stroke: #8cc4e6; stroke-width: 3; } .d { stroke-dasharray: 14 12; } .thin { stroke-width: 2; }
+.ghost { opacity: 0.55; }
+.ghost * { fill: none; stroke: #8cc4e6; stroke-width: var(--w); stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.ghost [fill="currentColor"], .ghost .ink { fill: #8cc4e6; }
+.ghost .p { fill: #fff; stroke: none; }
+.ghost .h { stroke-width: var(--h); }
+</style>
+<rect width="3880" height="5040" fill="#fff"/>
+<text x="100" y="110" font-size="64" font-weight="600">Dědina · kresby v rozhraní</text>
+<text x="100" y="170" font-size="30" >Kresli černě na vrstvu nad šablonou, každou kresbu do jejího plného modrého čtverce. Při importu se bere jen tmavý inkoust uvnitř čtverce;</text>
+<text x="100" y="212" font-size="30" >modrá, popisky a vzorky pera pod čtverci se zahodí. Prázdný čtverec nechá ve hře kresbu, jaká je. Čárkovaný čtverec uvnitř je bezpečný okraj (osmina).</text>
+<text x="100" y="254" font-size="30" >Modře je kresba, jak je teď, tloušťkou čáry, jakou má na obrazovce. Černá čárka pod čtvercem je to pero ve velikosti, v jaké se kresba ukazuje:</text>
+<text x="100" y="296" font-size="30" >čím menší ve hře, tím silnější tu. Kresba se do hry vezme celá, jak je nakreslená, i s tloušťkou fixy – čáry slabší než vzorek se na obrazovce ztratí.</text>
+<text x="100" y="338" font-size="30" >Bez písmen. Záložky Stavby: budova zepředu, země na čárkované čáře. Jednotlivé tečky (okna, oka kostky) klidně plné.</text>
+<text x="100" y="400" font-size="26" >53 kreseb · políčko 460×640 px · čtverec 360 px</text>
+<rect class="g d thin" x="106" y="466" width="448" height="628" rx="10"/>
+<text x="126" y="506" font-size="24" font-weight="600" letter-spacing="1">Menu</text>
+<text x="126" y="548" font-size="34" font-weight="600">menu</text>
+<text x="126" y="584" font-size="22" >tlačítko Menu, sbalené (≡)</text>
+<rect class="g" x="150" y="610" width="360" height="360"/>
+<rect class="g d thin" x="195" y="655" width="270" height="270"/>
+<g class="ghost" style="--w:33px; --h:15px" transform="translate(150 610) scale(22.5) translate(0 0)">
+  
+  <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+</g>
+<line x1="140" y1="1022" x2="270" y2="1022" stroke="#111" stroke-width="33" stroke-linecap="round"/>
+<text x="300" y="1016" font-size="24" >pero 33 px</text>
+<text x="300" y="1046" font-size="20" >ve hře 14 px, čára 1,3 px</text>
+<rect class="g d thin" x="566" y="466" width="448" height="628" rx="10"/>
+<text x="586" y="548" font-size="34" font-weight="600">menu-close</text>
+<text x="586" y="584" font-size="22" >tlačítko Menu, rozbalené (×)</text>
+<rect class="g" x="610" y="610" width="360" height="360"/>
+<rect class="g d thin" x="655" y="655" width="270" height="270"/>
+<g class="ghost" style="--w:33px; --h:15px" transform="translate(610 610) scale(22.5) translate(0 0)">
+  
+  <path d="M4 4l8 8M12 4l-8 8"/>
+</g>
+<line x1="600" y1="1022" x2="730" y2="1022" stroke="#111" stroke-width="33" stroke-linecap="round"/>
+<text x="760" y="1016" font-size="24" >pero 33 px</text>
+<text x="760" y="1046" font-size="20" >ve hře 14 px, čára 1,3 px</text>
+<rect class="g d thin" x="1026" y="466" width="448" height="628" rx="10"/>
+<text x="1046" y="548" font-size="34" font-weight="600">colors</text>
+<text x="1046" y="584" font-size="22" >Barvy (paleta, tři skvrny)</text>
+<rect class="g" x="1070" y="610" width="360" height="360"/>
+<rect class="g d thin" x="1115" y="655" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(1070 610) scale(15) translate(0 0)">
+  
+  <path d="M11.98 3.59C6.51 3.07 2.9 7.21 3.02 12.31C3.51 17.22 7.88 20.86 12.84 20.39C14.54 20.49 15.19 18.8 14.48 17.79C13.79 16.54 14.13 15.01 16.19 15.18C18.26 15.23 21.18 14.38 20.84 10.73C20.95 6.13 16.75 3.41 12.17 3.31Q12.16 3.46 12.17 3.61l-0.92 -0.47"/>
+  <circle cx="10.4" cy="16.2" r="1.2"/>
+  <path d="M7.33 10.6l0.01 0M10.57 6.76l0.01 0M15.58 7.2l0.01 0"/>
+</g>
+<line x1="1060" y1="1022" x2="1190" y2="1022" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="1220" y="1016" font-size="24" >pero 21 px</text>
+<text x="1220" y="1046" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="1486" y="466" width="448" height="628" rx="10"/>
+<text x="1506" y="548" font-size="34" font-weight="600">export</text>
+<text x="1506" y="584" font-size="22" >Uložit do souboru (šipka ven z krabice)</text>
+<rect class="g" x="1530" y="610" width="360" height="360"/>
+<rect class="g d thin" x="1575" y="655" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(1530 610) scale(15) translate(0 0)">
+  
+  <path d="M3.94 11.33Q3.97 14.96 4.01 18.59Q3.85 20.56 6.1 20.54Q11.94 20.54 17.77 20.47Q20.05 20.48 20.18 18.38Q20.35 14.92 20.34 11.46"/>
+  <path d="M12.01 15.2Q11.94 9.5 12.09 3.79M8.29 7.09Q10.1 5.15 12.04 3.33Q13.74 5.47 15.75 7.33"/>
+</g>
+<line x1="1520" y1="1022" x2="1650" y2="1022" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="1680" y="1016" font-size="24" >pero 21 px</text>
+<text x="1680" y="1046" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="1946" y="466" width="448" height="628" rx="10"/>
+<text x="1966" y="548" font-size="34" font-weight="600">import</text>
+<text x="1966" y="584" font-size="22" >Otevřít ze souboru (šipka do krabice)</text>
+<rect class="g" x="1990" y="610" width="360" height="360"/>
+<rect class="g d thin" x="2035" y="655" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(1990 610) scale(15) translate(0 0)">
+  
+  <path d="M3.83 11.54Q3.97 14.96 3.64 18.36Q3.81 20.82 6.08 20.66Q11.86 20.75 17.64 20.64Q19.84 20.79 20.17 18.57Q20.44 15.08 20.34 11.58"/>
+  <path d="M11.9 3.18Q12.39 9 11.79 14.81M8.25 11.28Q10.11 13.31 12.11 15.2Q13.8 13.29 15.68 11.57"/>
+</g>
+<line x1="1980" y1="1022" x2="2110" y2="1022" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="2140" y="1016" font-size="24" >pero 21 px</text>
+<text x="2140" y="1046" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="2406" y="466" width="448" height="628" rx="10"/>
+<text x="2426" y="548" font-size="34" font-weight="600">newmap</text>
+<text x="2426" y="584" font-size="22" >Nová mapa (prázdný list s plusem)</text>
+<rect class="g" x="2450" y="610" width="360" height="360"/>
+<rect class="g d thin" x="2495" y="655" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(2450 610) scale(15) translate(0 0)">
+  
+  <path d="M5.34 4.77Q11.89 4.23 18.43 4.77Q20.58 4.66 20.59 6.19Q20.16 11.93 20.76 17.66Q20.43 19.68 18.5 19.48Q11.89 19.99 5.27 19.51Q3.72 19.69 3.69 17.8Q4.06 12.01 3.49 6.23Q3.44 4.68 5.57 4.4Q5.52 4.66 5.51 4.93l0.57 -0.17"/>
+  <path d="M11.89 8.7Q12.16 12.12 12.06 15.56M8.46 12.27Q11.99 12.32 15.53 12.2"/>
+</g>
+<line x1="2440" y1="1022" x2="2570" y2="1022" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="2600" y="1016" font-size="24" >pero 21 px</text>
+<text x="2600" y="1046" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="2866" y="466" width="448" height="628" rx="10"/>
+<text x="2886" y="548" font-size="34" font-weight="600">settings</text>
+<text x="2886" y="584" font-size="22" >Nastavení (tři posuvníky)</text>
+<rect class="g" x="2910" y="610" width="360" height="360"/>
+<rect class="g d thin" x="2955" y="655" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(2910 610) scale(15) translate(0 0)">
+  
+  <path d="M3.6 6.2Q11.9 5.8 20.4 6.1M3.5 12.1Q7.6 11.8 20.5 12.2M3.7 18Q12 17.7 20.3 18.1"/>
+  <circle cx="14.6" cy="6.1" r="2.1"/>
+  <circle cx="8.1" cy="12" r="2.1"/>
+  <circle cx="16.9" cy="18" r="2.1"/>
+</g>
+<line x1="2900" y1="1022" x2="3030" y2="1022" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="3060" y="1016" font-size="24" >pero 21 px</text>
+<text x="3060" y="1046" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="3326" y="466" width="448" height="628" rx="10"/>
+<text x="3346" y="548" font-size="34" font-weight="600">main-menu</text>
+<text x="3346" y="584" font-size="22" >Hlavní menu (titulní list, podtržené jm…</text>
+<rect class="g" x="3370" y="610" width="360" height="360"/>
+<rect class="g d thin" x="3415" y="655" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(3370 610) scale(15) translate(0 0)">
+  
+  <path d="M5.4 3.9Q12 3.5 18.6 3.9Q20.2 3.9 20.1 5.5Q19.8 12 20.2 18.6Q20.2 20.2 18.6 20.1Q12 20.5 5.4 20.1Q3.8 20.2 3.9 18.6Q4.2 12 3.8 5.5Q3.8 3.8 5.6 3.7"/>
+  <path d="M7.6 9.2Q12 8.9 16.4 9.2M7.9 12.4Q10.2 11.6 12.4 12.3Q14.4 12.9 16.3 12.1M7.6 16.2Q9.6 16 11.6 16.2"/>
+</g>
+<line x1="3360" y1="1022" x2="3490" y2="1022" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="3520" y="1016" font-size="24" >pero 21 px</text>
+<text x="3520" y="1046" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="106" y="1106" width="448" height="628" rx="10"/>
+<text x="126" y="1146" font-size="24" font-weight="600" letter-spacing="1">Vlevo nahoře</text>
+<text x="126" y="1188" font-size="34" font-weight="600">rename</text>
+<text x="126" y="1224" font-size="22" >tužka u jména obce: přejmenovat</text>
+<rect class="g" x="150" y="1250" width="360" height="360"/>
+<rect class="g d thin" x="195" y="1295" width="270" height="270"/>
+<g class="ghost" style="--w:30px; --h:17px" transform="translate(150 1250) scale(22.5) translate(0 0)">
+  
+  <path d="M3 13 L3.6 10.4 L10.8 3.2 L12.8 5.2 L5.6 12.4 Z M9.6 4.4 L11.6 6.4"/>
+</g>
+<line x1="140" y1="1662" x2="270" y2="1662" stroke="#111" stroke-width="30" stroke-linecap="round"/>
+<text x="300" y="1656" font-size="24" >pero 30 px</text>
+<text x="300" y="1686" font-size="20" >ve hře 13 px, čára 1,1 px</text>
+<rect class="g d thin" x="566" y="1106" width="448" height="628" rx="10"/>
+<text x="586" y="1188" font-size="34" font-weight="600">camera</text>
+<text x="586" y="1224" font-size="22" >fotografování, P (skicák a tužka); i na…</text>
+<rect class="g" x="610" y="1250" width="360" height="360"/>
+<rect class="g d thin" x="655" y="1295" width="270" height="270"/>
+<g class="ghost" style="--w:24px; --h:11px" transform="translate(610 1250) scale(11.25) translate(0 0)">
+  
+  <path d="M3.9 9.3Q13.2 9.05 22.4 9.1M22.1 8.8Q22.25 18.1 22.2 27.3M22.5 27.05Q13.2 27.2 4 27.1M4.3 27.45Q4.15 18.2 4.4 8.85"/>
+  <path d="M7.2 10.6C6.4 9.5 6.8 7.3 8.3 7.7M10.8 10.6C10 9.5 10.4 7.3 11.9 7.7M14.4 10.6C13.6 9.5 14 7.3 15.5 7.7M18 10.6C17.2 9.5 17.6 7.3 19.1 7.7"/>
+  <path d="M6.6 23.4Q9.4 18.6 12.4 21.6Q13.6 20.6 15.1 21.5"/>
+  <path d="M16.4 19.3L25.3 4.6M18.6 20.6L27.5 5.9M25.2 4.5Q26.5 4.9 27.6 6M24 6.9Q25.2 7.3 26.3 8.2M16.45 19.25L15.2 22.3L18.65 20.6"/>
+</g>
+<line x1="600" y1="1662" x2="730" y2="1662" stroke="#111" stroke-width="24" stroke-linecap="round"/>
+<text x="760" y="1656" font-size="24" >pero 24 px</text>
+<text x="760" y="1686" font-size="20" >ve hře 19 px, čára 1,25 px</text>
+<rect class="g d thin" x="1026" y="1106" width="448" height="628" rx="10"/>
+<text x="1046" y="1188" font-size="34" font-weight="600">chronicle</text>
+<text x="1046" y="1224" font-size="22" >kronika (teď se neukazuje)</text>
+<rect class="g" x="1070" y="1250" width="360" height="360"/>
+<rect class="g d thin" x="1115" y="1295" width="270" height="270"/>
+<g class="ghost" style="--w:25px; --h:14px" transform="translate(1070 1250) scale(22.5) translate(0 0)">
+  
+  <path d="M8 4.2 C6.2 3 4 2.8 1.8 3.2 V12.8 C4 12.4 6.2 12.6 8 13.8 C9.8 12.6 12 12.4 14.2 12.8 V3.2 C12 2.8 9.8 3 8 4.2 Z M8 4.2 V13.8 M3.6 6 C4.8 5.8 5.8 6 6.6 6.4 M3.6 8.4 C4.8 8.2 5.8 8.4 6.6 8.8"/>
+</g>
+<line x1="1060" y1="1662" x2="1190" y2="1662" stroke="#111" stroke-width="25" stroke-linecap="round"/>
+<text x="1220" y="1656" font-size="24" >pero 25 px</text>
+<text x="1220" y="1686" font-size="20" >ve hře 16 px, čára 1,1 px</text>
+<rect class="g d thin" x="1486" y="1106" width="448" height="628" rx="10"/>
+<text x="1506" y="1146" font-size="24" font-weight="600" letter-spacing="1">Nástroje a řádek Stavby</text>
+<text x="1506" y="1188" font-size="34" font-weight="600">rotate</text>
+<text x="1506" y="1224" font-size="22" >otočit, Tab</text>
+<rect class="g" x="1530" y="1250" width="360" height="360"/>
+<rect class="g d thin" x="1575" y="1295" width="270" height="270"/>
+<g class="ghost" style="--w:26px; --h:14px" transform="translate(1530 1250) scale(22.5) translate(0 0)">
+  
+  <path d="M12.6 6.2 A5 5 0 1 0 13 9.6 M12.9 2.8 V6.4 H9.3"/>
+</g>
+<line x1="1520" y1="1662" x2="1650" y2="1662" stroke="#111" stroke-width="26" stroke-linecap="round"/>
+<text x="1680" y="1656" font-size="24" >pero 26 px</text>
+<text x="1680" y="1686" font-size="20" >ve hře 15 px, čára 1,1 px</text>
+<rect class="g d thin" x="1946" y="1106" width="448" height="628" rx="10"/>
+<text x="1966" y="1188" font-size="34" font-weight="600">bend-diagonal</text>
+<text x="1966" y="1224" font-size="22" >ohyb čáry: napřed šikmo, Tab</text>
+<rect class="g" x="1990" y="1250" width="360" height="360"/>
+<rect class="g d thin" x="2035" y="1295" width="270" height="270"/>
+<g class="ghost" style="--w:26px; --h:14px" transform="translate(1990 1250) scale(22.5) translate(0 0)">
+  
+  <path d="M2.5 12.5 L8 7 H13.5"/>
+  <circle cx="2.5" cy="12.5" r="1.1"/>
+</g>
+<line x1="1980" y1="1662" x2="2110" y2="1662" stroke="#111" stroke-width="26" stroke-linecap="round"/>
+<text x="2140" y="1656" font-size="24" >pero 26 px</text>
+<text x="2140" y="1686" font-size="20" >ve hře 15 px, čára 1,1 px</text>
+<rect class="g d thin" x="2406" y="1106" width="448" height="628" rx="10"/>
+<text x="2426" y="1188" font-size="34" font-weight="600">bend-straight</text>
+<text x="2426" y="1224" font-size="22" >ohyb čáry: napřed rovně, Tab</text>
+<rect class="g" x="2450" y="1250" width="360" height="360"/>
+<rect class="g d thin" x="2495" y="1295" width="270" height="270"/>
+<g class="ghost" style="--w:26px; --h:14px" transform="translate(2450 1250) scale(22.5) translate(0 0)">
+  
+  <path d="M2.5 12.5 H8 L13.5 7"/>
+  <circle cx="2.5" cy="12.5" r="1.1"/>
+</g>
+<line x1="2440" y1="1662" x2="2570" y2="1662" stroke="#111" stroke-width="26" stroke-linecap="round"/>
+<text x="2600" y="1656" font-size="24" >pero 26 px</text>
+<text x="2600" y="1686" font-size="20" >ve hře 15 px, čára 1,1 px</text>
+<rect class="g d thin" x="2866" y="1106" width="448" height="628" rx="10"/>
+<text x="2886" y="1188" font-size="34" font-weight="600">another-look</text>
+<text x="2886" y="1224" font-size="22" >jiná podoba, mezerník; i na kartě budovy</text>
+<rect class="g" x="2910" y="1250" width="360" height="360"/>
+<rect class="g d thin" x="2955" y="1295" width="270" height="270"/>
+<g class="ghost" style="--w:26px; --h:14px" transform="translate(2910 1250) scale(22.5) translate(0 0)">
+  
+  <path d="M2.5 2.5 H13.5 V13.5 H2.5 Z"/>
+  <circle cx="5.5" cy="5.5" r="0.9"/>
+  <circle cx="10.5" cy="10.5" r="0.9"/>
+  <circle cx="8" cy="8" r="0.9"/>
+</g>
+<line x1="2900" y1="1662" x2="3030" y2="1662" stroke="#111" stroke-width="26" stroke-linecap="round"/>
+<text x="3060" y="1656" font-size="24" >pero 26 px</text>
+<text x="3060" y="1686" font-size="20" >ve hře 15 px, čára 1,1 px</text>
+<rect class="g d thin" x="3326" y="1106" width="448" height="628" rx="10"/>
+<text x="3346" y="1188" font-size="34" font-weight="600">undo</text>
+<text x="3346" y="1224" font-size="22" >Zpět, ⌘Z</text>
+<rect class="g" x="3370" y="1250" width="360" height="360"/>
+<rect class="g d thin" x="3415" y="1295" width="270" height="270"/>
+<g class="ghost" style="--w:26px; --h:14px" transform="translate(3370 1250) scale(22.5) translate(0 0)">
+  
+  <path d="M5.8 3.6 L2.9 6.7 L6 9.6 M3 6.7 H9.4 C11.9 6.7 13.4 8.4 13.2 10.6 C13 12.2 11.9 13.1 10.4 13.2"/>
+</g>
+<line x1="3360" y1="1662" x2="3490" y2="1662" stroke="#111" stroke-width="26" stroke-linecap="round"/>
+<text x="3520" y="1656" font-size="24" >pero 26 px</text>
+<text x="3520" y="1686" font-size="20" >ve hře 15 px, čára 1,1 px</text>
+<rect class="g d thin" x="106" y="1746" width="448" height="628" rx="10"/>
+<text x="126" y="1828" font-size="34" font-weight="600">redo</text>
+<text x="126" y="1864" font-size="22" >Znovu</text>
+<rect class="g" x="150" y="1890" width="360" height="360"/>
+<rect class="g d thin" x="195" y="1935" width="270" height="270"/>
+<g class="ghost" style="--w:26px; --h:14px" transform="translate(150 1890) scale(22.5) translate(0 0)">
+  
+  <path d="M10.2 3.6 L13.1 6.7 L10 9.6 M13 6.7 H6.6 C4.1 6.7 2.6 8.4 2.8 10.6 C3 12.2 4.1 13.1 5.6 13.2"/>
+</g>
+<line x1="140" y1="2302" x2="270" y2="2302" stroke="#111" stroke-width="26" stroke-linecap="round"/>
+<text x="300" y="2296" font-size="24" >pero 26 px</text>
+<text x="300" y="2326" font-size="20" >ve hře 15 px, čára 1,1 px</text>
+<rect class="g d thin" x="566" y="1746" width="448" height="628" rx="10"/>
+<text x="586" y="1828" font-size="34" font-weight="600">terrain</text>
+<text x="586" y="1864" font-size="22" >Terén (hřbet hor)</text>
+<rect class="g" x="610" y="1890" width="360" height="360"/>
+<rect class="g d thin" x="655" y="1935" width="270" height="270"/>
+<g class="ghost" style="--w:25px; --h:14px" transform="translate(610 1890) scale(22.5) translate(0 0)">
+  
+  <path d="M1.2 12.6 L4.1 8.6 L5.6 10.5 M4.6 9.3 L8.2 3.5 L10.7 7.7 L12.3 5.8 L15 12.6 M6.9 5.7 L7.7 6.5 L8.6 5.8 L9.6 6.1 M0.8 12.7 C5.2 12.5 10.6 12.8 15.2 12.6"/>
+</g>
+<line x1="600" y1="2302" x2="730" y2="2302" stroke="#111" stroke-width="25" stroke-linecap="round"/>
+<text x="760" y="2296" font-size="24" >pero 25 px</text>
+<text x="760" y="2326" font-size="20" >ve hře 16 px, čára 1,1 px</text>
+<rect class="g d thin" x="1026" y="1746" width="448" height="628" rx="10"/>
+<text x="1046" y="1786" font-size="24" font-weight="600" letter-spacing="1">Karta budovy</text>
+<text x="1046" y="1828" font-size="34" font-weight="600">erase</text>
+<text x="1046" y="1864" font-size="22" >Zbourat (guma)</text>
+<rect class="g" x="1070" y="1890" width="360" height="360"/>
+<rect class="g d thin" x="1115" y="1935" width="270" height="270"/>
+<g class="ghost" style="--w:18px; --h:10px" transform="translate(1070 1890) scale(15) translate(0 0)">
+  
+  <path d="M4.38 15.39Q9.12 10.91 13.51 6.07Q14.61 5.12 15.71 6.31Q17.51 8.25 19.42 10.08Q20.54 10.89 19.34 12.09Q14.78 16.31 10.49 20.8Q9.39 22.19 8.54 20.83Q6.64 19.04 4.61 17.39Q3.66 16.23 4.78 15.38Q4.55 15.33 4.32 15.31l-0.53 -0.31"/>
+  <path d="M9.17 10.51Q11.95 13.5 14.99 16.23"/>
+  <path d="M14.17 21.01Q15.9 20.23 18 21.17Q19.86 22.38 21.8 20.94"/>
+</g>
+<line x1="1060" y1="2302" x2="1190" y2="2302" stroke="#111" stroke-width="18" stroke-linecap="round"/>
+<text x="1220" y="2296" font-size="24" >pero 18 px</text>
+<text x="1220" y="2326" font-size="20" >ve hře 22 px, čára 1,1 px</text>
+<rect class="g d thin" x="1486" y="1746" width="448" height="628" rx="10"/>
+<text x="1506" y="1828" font-size="34" font-weight="600">person</text>
+<text x="1506" y="1864" font-size="22" >u počtu obyvatel (jeden z lidí)</text>
+<rect class="g" x="1530" y="1890" width="360" height="360"/>
+<rect class="g d thin" x="1575" y="1935" width="270" height="270"/>
+<g class="ghost" style="--w:25px; --h:14px" transform="translate(1530 1890) scale(22.5) translate(0 0)">
+  
+  <circle cx="8.1" cy="3.9" r="1.9"/>
+  <path d="M5.3 6.9 L10.9 6.7 L11.5 12.4 L4.8 12.5 Z"/>
+  <path d="M6.6 12.5 V14.6 M9.7 12.4 V14.5"/>
+</g>
+<line x1="1520" y1="2302" x2="1650" y2="2302" stroke="#111" stroke-width="25" stroke-linecap="round"/>
+<text x="1680" y="2296" font-size="24" >pero 25 px</text>
+<text x="1680" y="2326" font-size="20" >ve hře 16 px, čára 1,1 px</text>
+<rect class="g d thin" x="1946" y="1746" width="448" height="628" rx="10"/>
+<text x="1966" y="1828" font-size="34" font-weight="600">yard</text>
+<text x="1966" y="1864" font-size="22" >Okolí (plot a keř)</text>
+<rect class="g" x="1990" y="1890" width="360" height="360"/>
+<rect class="g d thin" x="2035" y="1935" width="270" height="270"/>
+<g class="ghost" style="--w:18px; --h:10px" transform="translate(1990 1890) scale(22.5) translate(0 0)">
+  
+  <path d="M1.5 13.6 C5 13.3 10 13.8 14.6 13.4"/>
+  <path d="M2.6 13.5 V8.6 L3.3 7.6 L4 8.6 V13.5 M6.2 13.5 V8.6 L6.9 7.6 L7.6 8.6 V13.5 M1.6 10 H8.8 M1.6 12 H8.8"/>
+  <path d="M9.6 13.4 C8.9 12 9.5 10.2 11 10.1 C11.2 8.4 13.6 8.2 14 9.9 C15.2 10.4 15.1 12.6 13.9 13.4"/>
+</g>
+<line x1="1980" y1="2302" x2="2110" y2="2302" stroke="#111" stroke-width="18" stroke-linecap="round"/>
+<text x="2140" y="2296" font-size="24" >pero 18 px</text>
+<text x="2140" y="2326" font-size="20" >ve hře 22 px, čára 1,1 px</text>
+<rect class="g d thin" x="2406" y="1746" width="448" height="628" rx="10"/>
+<text x="2426" y="1828" font-size="34" font-weight="600">no-road</text>
+<text x="2426" y="1864" font-size="22" >nevede k ní cesta</text>
+<rect class="g" x="2450" y="1890" width="360" height="360"/>
+<rect class="g d thin" x="2495" y="1935" width="270" height="270"/>
+<g class="ghost" style="--w:25px; --h:14px" transform="translate(2450 1890) scale(22.5) translate(0 0)">
+  
+  <path d="M1.5 12.5 L5.5 8.5 M10.5 7.5 L14.5 3.5 M7 5.5 L7.6 3.2 M9 10.5 L8.4 12.8 M5.4 5.6 L3.6 4.6 M10.6 10.4 L12.4 11.4"/>
+</g>
+<line x1="2440" y1="2302" x2="2570" y2="2302" stroke="#111" stroke-width="25" stroke-linecap="round"/>
+<text x="2600" y="2296" font-size="24" >pero 25 px</text>
+<text x="2600" y="2326" font-size="20" >ve hře 16 px, čára 1,1 px</text>
+<rect class="g d thin" x="2866" y="1746" width="448" height="628" rx="10"/>
+<text x="2886" y="1786" font-size="24" font-weight="600" letter-spacing="1">Nová mapa</text>
+<text x="2886" y="1828" font-size="34" font-weight="600">dice</text>
+<text x="2886" y="1864" font-size="22" >Jiné jméno (kostka, pět ok)</text>
+<rect class="g" x="2910" y="1890" width="360" height="360"/>
+<rect class="g d thin" x="2955" y="1935" width="270" height="270"/>
+<g class="ghost" style="--w:26px; --h:12px" transform="translate(2910 1890) scale(22.5) translate(0 0)">
+  
+  <rect x="2" y="2" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/>
+  <circle cx="5" cy="5" r="1.1" fill="currentColor"/>
+  <circle cx="11" cy="5" r="1.1" fill="currentColor"/>
+  <circle cx="8" cy="8" r="1.1" fill="currentColor"/>
+  <circle cx="5" cy="11" r="1.1" fill="currentColor"/>
+  <circle cx="11" cy="11" r="1.1" fill="currentColor"/>
+</g>
+<line x1="2900" y1="2302" x2="3030" y2="2302" stroke="#111" stroke-width="26" stroke-linecap="round"/>
+<text x="3060" y="2296" font-size="24" >pero 26 px</text>
+<text x="3060" y="2326" font-size="20" >ve hře 18 px, čára 1,3 px</text>
+<rect class="g d thin" x="3326" y="1746" width="448" height="628" rx="10"/>
+<text x="3346" y="1828" font-size="34" font-weight="600">hills</text>
+<text x="3346" y="1864" font-size="22" >Krajina (kopce)</text>
+<rect class="g" x="3370" y="1890" width="360" height="360"/>
+<rect class="g d thin" x="3415" y="1935" width="270" height="270"/>
+<g class="ghost" style="--w:25px; --h:14px" transform="translate(3370 1890) scale(22.5) translate(0 0)">
+  
+  <path d="M5 12.5 C7 5.5 10.5 4 13.8 12.5 M1.8 12.5 C3.4 8.6 6.4 8.2 8.6 12.5 M1 12.5 H15"/>
+</g>
+<line x1="3360" y1="2302" x2="3490" y2="2302" stroke="#111" stroke-width="25" stroke-linecap="round"/>
+<text x="3520" y="2296" font-size="24" >pero 25 px</text>
+<text x="3520" y="2326" font-size="20" >ve hře 16 px, čára 1,1 px</text>
+<rect class="g d thin" x="106" y="2386" width="448" height="628" rx="10"/>
+<text x="126" y="2468" font-size="34" font-weight="600">lakes</text>
+<text x="126" y="2504" font-size="22" >Jezera</text>
+<rect class="g" x="150" y="2530" width="360" height="360"/>
+<rect class="g d thin" x="195" y="2575" width="270" height="270"/>
+<g class="ghost" style="--w:25px; --h:14px" transform="translate(150 2530) scale(22.5) translate(0 0)">
+  
+  <path d="M1.8 9.6 C1.8 6.2 14.2 6.2 14.2 9.6 C14.2 13 1.8 13 1.8 9.6 Z M5.2 9.4 H7.8 M9.4 10.6 H11.2"/>
+</g>
+<line x1="140" y1="2942" x2="270" y2="2942" stroke="#111" stroke-width="25" stroke-linecap="round"/>
+<text x="300" y="2936" font-size="24" >pero 25 px</text>
+<text x="300" y="2966" font-size="20" >ve hře 16 px, čára 1,1 px</text>
+<rect class="g d thin" x="566" y="2386" width="448" height="628" rx="10"/>
+<text x="586" y="2468" font-size="34" font-weight="600">forest</text>
+<text x="586" y="2504" font-size="22" >Lesy</text>
+<rect class="g" x="610" y="2530" width="360" height="360"/>
+<rect class="g d thin" x="655" y="2575" width="270" height="270"/>
+<g class="ghost" style="--w:25px; --h:14px" transform="translate(610 2530) scale(22.5) translate(0 0)">
+  
+  <path d="M8 1.8 L4.4 7 H6.4 L3.4 11.2 H12.6 L9.6 7 H11.6 Z M8 11.2 V14.2"/>
+</g>
+<line x1="600" y1="2942" x2="730" y2="2942" stroke="#111" stroke-width="25" stroke-linecap="round"/>
+<text x="760" y="2936" font-size="24" >pero 25 px</text>
+<text x="760" y="2966" font-size="20" >ve hře 16 px, čára 1,1 px</text>
+<rect class="g d thin" x="1026" y="2386" width="448" height="628" rx="10"/>
+<text x="1046" y="2468" font-size="34" font-weight="600">river</text>
+<text x="1046" y="2504" font-size="22" >Řeka</text>
+<rect class="g" x="1070" y="2530" width="360" height="360"/>
+<rect class="g d thin" x="1115" y="2575" width="270" height="270"/>
+<g class="ghost" style="--w:25px; --h:14px" transform="translate(1070 2530) scale(22.5) translate(0 0)">
+  
+  <path d="M1.5 5.2 C4 3.6 6 6.8 8.5 5.2 C11 3.6 12.5 6.4 14.5 5.2 M1.5 10.2 C4 8.6 6 11.8 8.5 10.2 C11 8.6 12.5 11.4 14.5 10.2"/>
+</g>
+<line x1="1060" y1="2942" x2="1190" y2="2942" stroke="#111" stroke-width="25" stroke-linecap="round"/>
+<text x="1220" y="2936" font-size="24" >pero 25 px</text>
+<text x="1220" y="2966" font-size="20" >ve hře 16 px, čára 1,1 px</text>
+<rect class="g d thin" x="1486" y="2386" width="448" height="628" rx="10"/>
+<text x="1506" y="2426" font-size="24" font-weight="600" letter-spacing="1">Rozhovor</text>
+<text x="1506" y="2468" font-size="34" font-weight="600">more</text>
+<text x="1506" y="2504" font-size="22" >› dál, když je věta dopsaná</text>
+<rect class="g" x="1597.5" y="2530" width="225" height="360"/>
+<rect class="g d thin" x="1625.625" y="2558.125" width="168.75" height="303.75"/>
+<g class="ghost" style="--w:29px; --h:14px" transform="translate(1597.5 2530) scale(22.5) translate(0 0)">
+  
+  <path d="M1.97 2.16Q5.03 5.47 8.3 8.55M8.48 8.16Q5.55 11.29 2.42 14.2"/>
+</g>
+<line x1="1520" y1="2942" x2="1650" y2="2942" stroke="#111" stroke-width="29" stroke-linecap="round"/>
+<text x="1680" y="2936" font-size="24" >pero 29 px</text>
+<text x="1680" y="2966" font-size="20" >ve hře 16 px, čára 1,3 px</text>
+<rect class="g d thin" x="1946" y="2386" width="448" height="628" rx="10"/>
+<text x="1966" y="2426" font-size="24" font-weight="600" letter-spacing="1">Teď jen v Nastavení</text>
+<text x="1966" y="2468" font-size="34" font-weight="600">fullscreen</text>
+<text x="1966" y="2504" font-size="22" >celá obrazovka: dovnitř</text>
+<rect class="g" x="1990" y="2530" width="360" height="360"/>
+<rect class="g d thin" x="2035" y="2575" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(1990 2530) scale(15) translate(0 0)">
+  
+  <path d="M3.7 8.53Q3.65 6.84 3.8 5.17Q3.52 3.81 5.42 3.66Q7.1 3.65 8.76 3.84M15.46 3.44Q17.13 3.54 18.8 3.46Q20.6 3.59 20.26 5.18Q20.18 6.92 20.12 8.67M20.43 15.4Q20.4 17.07 20.54 18.74Q20.19 20.31 18.82 20.27Q17.16 20.31 15.5 20.18M8.67 20.37Q6.84 20.31 5.01 20.49Q3.78 20.58 3.68 19Q3.61 17.26 3.47 15.52"/>
+</g>
+<line x1="1980" y1="2942" x2="2110" y2="2942" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="2140" y="2936" font-size="24" >pero 21 px</text>
+<text x="2140" y="2966" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="2406" y="2386" width="448" height="628" rx="10"/>
+<text x="2426" y="2468" font-size="34" font-weight="600">fullscreen-exit</text>
+<text x="2426" y="2504" font-size="22" >celá obrazovka: zpátky</text>
+<rect class="g" x="2450" y="2530" width="360" height="360"/>
+<rect class="g d thin" x="2495" y="2575" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(2450 2530) scale(15) translate(0 0)">
+  
+  <path d="M8.7 3.78Q8.73 5.32 8.49 6.84Q8.43 8.42 6.78 8.65Q5.29 8.69 3.8 8.51M20.27 8.68Q18.58 8.5 16.89 8.66Q15.37 8.68 15.52 6.95Q15.41 5.18 15.48 3.41M15.54 20.61Q15.46 18.9 15.38 17.19Q15.23 15.27 17.05 15.26Q18.63 15.25 20.21 15.16M3.62 15.39Q5.42 15.27 7.22 15.2Q8.52 15.18 8.38 16.96Q8.15 18.61 8.2 20.28"/>
+</g>
+<line x1="2440" y1="2942" x2="2570" y2="2942" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="2600" y="2936" font-size="24" >pero 21 px</text>
+<text x="2600" y="2966" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="2866" y="2386" width="448" height="628" rx="10"/>
+<text x="2886" y="2468" font-size="34" font-weight="600">sound</text>
+<text x="2886" y="2504" font-size="22" >zvuk zapnutý (obecní amplion)</text>
+<rect class="g" x="2910" y="2530" width="360" height="360"/>
+<rect class="g d thin" x="2955" y="2575" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(2910 2530) scale(15) translate(0 0)">
+  
+  <path d="M3.72 9.92Q4.94 10.11 6.17 10.07Q9.89 7.62 13.53 5.07Q14.93 11.96 13.4 19Q9.89 16.53 6.23 14.3Q4.94 14.25 3.66 14.4Q3.74 12.26 3.87 10.13l0.77 0.8"/>
+  <path d="M16.94 9.01Q18.33 12.17 17.09 14.9M19.8 6.93Q22.07 11.88 19.73 17.03"/>
+</g>
+<line x1="2900" y1="2942" x2="3030" y2="2942" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="3060" y="2936" font-size="24" >pero 21 px</text>
+<text x="3060" y="2966" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="3326" y="2386" width="448" height="628" rx="10"/>
+<text x="3346" y="2468" font-size="34" font-weight="600">sound-off</text>
+<text x="3346" y="2504" font-size="22" >zvuk vypnutý</text>
+<rect class="g" x="3370" y="2530" width="360" height="360"/>
+<rect class="g d thin" x="3415" y="2575" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(3370 2530) scale(15) translate(0 0)">
+  
+  <path d="M3.78 9.93Q5.02 9.99 6.26 10.03Q9.85 7.64 13.37 5.16Q15.16 11.9 13.48 18.97Q9.86 16.45 6.15 14.06Q4.81 14.06 3.48 14.24Q3.76 12.13 3.71 10.01l-0.25 0.55"/>
+  <path d="M17.18 9.64Q18.98 11.89 20.95 13.99M21.18 9.66Q19.13 11.95 17.27 14.4"/>
+</g>
+<line x1="3360" y1="2942" x2="3490" y2="2942" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="3520" y="2936" font-size="24" >pero 21 px</text>
+<text x="3520" y="2966" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="106" y="3026" width="448" height="628" rx="10"/>
+<text x="126" y="3108" font-size="34" font-weight="600">lang-cs</text>
+<text x="126" y="3144" font-size="22" >Čeština (vlajka)</text>
+<rect class="g" x="150" y="3170" width="360" height="360"/>
+<rect class="g d thin" x="195" y="3215" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(150 3170) scale(15) translate(0 0)">
+  
+  <path d="M4.18 21.19Q4.39 12.23 4.09 3.27"/>
+  <path d="M4.41 4.52Q8.31 3.51 12.02 4.68Q15.86 5.94 19.49 4.54Q19.98 9.61 19.58 14.69Q15.88 15.79 12.19 14.74Q8.03 13.41 4.59 14.68"/>
+  <path d="M4.66 4.83Q7.99 7.22 11.18 9.78Q7.93 12.28 4.53 14.55M10.85 9.51Q15.17 10.71 19.59 9.63"/>
+</g>
+<line x1="140" y1="3582" x2="270" y2="3582" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="300" y="3576" font-size="24" >pero 21 px</text>
+<text x="300" y="3606" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="566" y="3026" width="448" height="628" rx="10"/>
+<text x="586" y="3108" font-size="34" font-weight="600">lang-en</text>
+<text x="586" y="3144" font-size="22" >English (vlajka)</text>
+<rect class="g" x="610" y="3170" width="360" height="360"/>
+<rect class="g d thin" x="655" y="3215" width="270" height="270"/>
+<g class="ghost" style="--w:21px; --h:10px" transform="translate(610 3170) scale(15) translate(0 0)">
+  
+  <path d="M4.5 21.17Q4.47 12.23 4.31 3.3"/>
+  <path d="M4.4 4.57Q8.06 3.58 11.8 4.54Q15.73 5.87 19.79 4.61Q19.93 9.59 19.64 14.56Q15.74 15.77 11.93 14.61Q8.25 13.28 4.58 14.58"/>
+  <path d="M12.16 4.86Q12.18 9.63 12.22 14.41M4.68 9.79Q12.02 9.57 19.35 9.89M4.84 4.93Q11.81 9.81 19.13 14.15M19.37 4.83Q12.21 9.51 4.94 14.01"/>
+</g>
+<line x1="600" y1="3582" x2="730" y2="3582" stroke="#111" stroke-width="21" stroke-linecap="round"/>
+<text x="760" y="3576" font-size="24" >pero 21 px</text>
+<text x="760" y="3606" font-size="20" >ve hře 22 px, čára 1,3 px</text>
+<rect class="g d thin" x="1026" y="3026" width="448" height="628" rx="10"/>
+<text x="1046" y="3066" font-size="24" font-weight="600" letter-spacing="1">Záložky Stavby (země na čárkované čáře)</text>
+<text x="1046" y="3108" font-size="34" font-weight="600">tab-transport</text>
+<text x="1046" y="3144" font-size="22" >Cesty (pěšina do trávy)</text>
+<rect class="g" x="1070" y="3170" width="360" height="360"/>
+<rect class="g d thin" x="1115" y="3215" width="270" height="270"/>
+<line class="g d thin" x1="1070" y1="3485" x2="1430" y2="3485"/>
+<g class="ghost" style="--w:17px; --h:8px" transform="translate(1070 3170) scale(15) translate(0 0)">
+  
+  <path d="M2.6 21C5.6 18.7 10.5 17.3 9.7 14.4C9 12 6.5 10.7 8.9 8.5C10.3 7.2 12.7 6.5 14.6 5.4"/>
+  <path d="M14.3 21.1C15.7 18.5 15.5 15.7 13.7 13.9C12.1 12.4 11.6 10.7 12.7 9.4C13.5 8.5 14.7 7.6 15.6 6.1"/>
+  <path class="h" d="M18.4 20.7Q18 19.4 17.3 18.5M19.5 20.7Q19.7 19.3 20.1 18.3M20.6 20.8Q21.2 19.8 22 19.3"/>
+  <path class="h" d="M4 15.2Q3.9 14.2 3.4 13.5M5 15.2Q5.2 14.1 5.7 13.4"/>
+  <path class="h" d="M18.3 12.2Q18.5 11.4 18.9 10.8M17.5 12.2Q17.3 11.5 16.8 11"/>
+</g>
+<line x1="1060" y1="3582" x2="1190" y2="3582" stroke="#111" stroke-width="17" stroke-linecap="round"/>
+<text x="1220" y="3576" font-size="24" >pero 17 px</text>
+<text x="1220" y="3606" font-size="20" >ve hře 28 px, čára 1,3 px</text>
+<rect class="g d thin" x="1486" y="3026" width="448" height="628" rx="10"/>
+<text x="1506" y="3108" font-size="34" font-weight="600">tab-housing</text>
+<text x="1506" y="3144" font-size="22" >Bydlení (dům kostka)</text>
+<rect class="g" x="1530" y="3170" width="360" height="360"/>
+<rect class="g d thin" x="1575" y="3215" width="270" height="270"/>
+<line class="g d thin" x1="1530" y1="3485" x2="1890" y2="3485"/>
+<g class="ghost" style="--w:17px; --h:8px" transform="translate(1530 3170) scale(15) translate(0 0)">
+  
+  <path d="M6.25 11.7Q5.91 16.28 6.43 20.84M17.71 11.82Q17.78 16.23 17.5 20.63"/>
+  <path d="M4.56 12.58Q8.08 8.6 12 5.02Q16.04 8.48 19.62 12.42"/>
+  <path d="M15.54 7.88Q15.5 6.49 15.57 5.1Q16.28 5.15 16.99 5.2Q16.94 7.39 17.04 9.58"/>
+  <path d="M10.4 20.89Q10.57 19.13 10.61 17.35Q12.03 15.78 13.46 17.23Q13.32 18.91 13.43 20.59"/>
+  <path d="M8.67 14.41l0.01 0M15.32 14.31l0.01 0"/>
+  <path d="M2.79 20.93Q12.05 21.37 21.29 20.68"/>
+</g>
+<line x1="1520" y1="3582" x2="1650" y2="3582" stroke="#111" stroke-width="17" stroke-linecap="round"/>
+<text x="1680" y="3576" font-size="24" >pero 17 px</text>
+<text x="1680" y="3606" font-size="20" >ve hře 28 px, čára 1,3 px</text>
+<rect class="g d thin" x="1946" y="3026" width="448" height="628" rx="10"/>
+<text x="1966" y="3108" font-size="34" font-weight="600">tab-amenities</text>
+<text x="1966" y="3144" font-size="22" >Občanská vybavenost (Jednota)</text>
+<rect class="g" x="1990" y="3170" width="360" height="360"/>
+<rect class="g d thin" x="2035" y="3215" width="270" height="270"/>
+<line class="g d thin" x1="1990" y1="3485" x2="2350" y2="3485"/>
+<g class="ghost" style="--w:17px; --h:8px" transform="translate(1990 3170) scale(15) translate(0 0)">
+  
+  <path d="M4.86 10.03Q4.56 15.31 4.91 20.59M19.04 10.31Q18.73 15.51 18.88 20.73M3.8 10.02Q12.12 10.31 20.44 10.14"/>
+  <path d="M8.1 9.84Q8.05 8.12 7.93 6.4Q7.88 5.84 8.69 5.68Q11.97 5.91 15.25 5.74Q15.89 5.98 15.8 6.68Q15.73 8.31 15.76 9.93"/>
+  <path d="M5.13 10.03Q6.38 12.4 7.44 10.17Q8.66 12.53 9.8 10.38Q10.96 12.26 12.1 10.05Q13.04 12.6 14.5 10Q15.31 12.3 16.89 10.36Q18 12.3 18.87 9.99"/>
+  <path d="M13.59 20.83Q13.5 18.37 13.43 15.92Q14.85 15.69 16.28 15.73Q16.21 18.29 16.1 20.86M7.34 15.5Q9.07 15.51 10.8 15.59Q10.75 17.1 10.85 18.6Q9.13 18.62 7.4 18.7Q7.29 17.02 7.47 15.36l0.28 -0.13"/>
+  <path d="M2.62 20.85Q12 21.33 21.21 20.51"/>
+</g>
+<line x1="1980" y1="3582" x2="2110" y2="3582" stroke="#111" stroke-width="17" stroke-linecap="round"/>
+<text x="2140" y="3576" font-size="24" >pero 17 px</text>
+<text x="2140" y="3606" font-size="20" >ve hře 28 px, čára 1,3 px</text>
+<rect class="g d thin" x="2406" y="3026" width="448" height="628" rx="10"/>
+<text x="2426" y="3108" font-size="34" font-weight="600">tab-work</text>
+<text x="2426" y="3144" font-size="22" >Výroba (pilová střecha)</text>
+<rect class="g" x="2450" y="3170" width="360" height="360"/>
+<rect class="g d thin" x="2495" y="3215" width="270" height="270"/>
+<line class="g d thin" x1="2450" y1="3485" x2="2810" y2="3485"/>
+<g class="ghost" style="--w:17px; --h:8px" transform="translate(2450 3170) scale(15) translate(0 0)">
+  
+  <path d="M3.75 20.7Q3.24 15.14 3.83 9.58Q5.75 10.74 7.43 12.22Q7.36 10.83 7.44 9.43Q9.57 10.85 11.54 12.47Q11.55 11.08 11.43 9.7Q13.54 11 15.48 12.56Q15.51 16.69 15.38 20.82"/>
+  <path d="M16.84 20.76Q17.24 13.66 16.86 6.57Q17.96 5.74 19.61 6.51Q19.2 13.6 19.8 20.69"/>
+  <path d="M18.59 3.89C17.63 2.47 19.57 1.06 20.39 2.17C21.32 1.31 22.88 2.05 21.98 3.31"/>
+  <path d="M6.51 16.23l0.01 0M9.39 16.22l0.01 0M12.99 15.98l0.01 0"/>
+  <path d="M2.8 20.97Q12.02 21.66 21.58 20.88"/>
+</g>
+<line x1="2440" y1="3582" x2="2570" y2="3582" stroke="#111" stroke-width="17" stroke-linecap="round"/>
+<text x="2600" y="3576" font-size="24" >pero 17 px</text>
+<text x="2600" y="3606" font-size="20" >ve hře 28 px, čára 1,3 px</text>
+<rect class="g d thin" x="2866" y="3026" width="448" height="628" rx="10"/>
+<text x="2886" y="3108" font-size="34" font-weight="600">tab-farming</text>
+<text x="2886" y="3144" font-size="22" >Zemědělství (kravín a silo)</text>
+<rect class="g" x="2910" y="3170" width="360" height="360"/>
+<rect class="g d thin" x="2955" y="3215" width="270" height="270"/>
+<line class="g d thin" x1="2910" y1="3485" x2="3270" y2="3485"/>
+<g class="ghost" style="--w:17px; --h:8px" transform="translate(2910 3170) scale(15) translate(0 0)">
+  
+  <path d="M3.74 20.73Q3.35 16.5 3.6 12.26Q6.32 9.89 8.7 7.18Q11.3 9.74 14.16 12Q13.77 16.38 14.08 20.76"/>
+  <path d="M7.13 20.59Q7.31 18.13 7.35 15.67Q9.05 15.46 10.77 15.47Q10.96 18.19 10.88 20.91"/>
+  <circle cx="8.9" cy="11.6" r="0.9"/>
+  <path d="M15.96 20.94Q15.7 14.16 15.88 7.38Q15.69 4.37 18.46 4.28Q20.8 4.36 20.94 7.54Q20.78 14.27 21.06 21.01M15.71 10.69Q18.22 11.56 20.65 10.75"/>
+  <path d="M2.67 21.04Q11.99 21.63 21.54 20.5"/>
+</g>
+<line x1="2900" y1="3582" x2="3030" y2="3582" stroke="#111" stroke-width="17" stroke-linecap="round"/>
+<text x="3060" y="3576" font-size="24" >pero 17 px</text>
+<text x="3060" y="3606" font-size="20" >ve hře 28 px, čára 1,3 px</text>
+<rect class="g d thin" x="3326" y="3026" width="448" height="628" rx="10"/>
+<text x="3346" y="3108" font-size="34" font-weight="600">tab-fields</text>
+<text x="3346" y="3144" font-size="22" >Pole a pastviny (klasy)</text>
+<rect class="g" x="3370" y="3170" width="360" height="360"/>
+<rect class="g d thin" x="3415" y="3215" width="270" height="270"/>
+<line class="g d thin" x1="3370" y1="3485" x2="3730" y2="3485"/>
+<g class="ghost" style="--w:17px; --h:8px" transform="translate(3370 3170) scale(15) translate(0 0)">
+  
+  <path d="M6.6 21Q6.8 15.6 8.6 10.4M12 21Q12.1 14.6 13.6 8.6M17.3 21Q17.6 16.2 19.1 11.6"/>
+  <path d="M8.6 10.4Q9.2 8.2 10.6 6.6Q10.9 8.9 8.6 10.4M13.6 8.6Q14 6.2 15.4 4.4Q15.9 7 13.6 8.6M19.1 11.6Q19.6 9.6 20.8 8.2Q21.1 10.3 19.1 11.6"/>
+  <path class="h" d="M7.7 13.5Q6.4 12.9 5.4 12.9M12.6 12.6Q11.2 11.8 10.1 11.8M18.3 14.3Q17.2 13.8 16.2 13.9"/>
+  <path d="M2.8 21.1Q12 20.6 21.3 21"/>
+</g>
+<line x1="3360" y1="3582" x2="3490" y2="3582" stroke="#111" stroke-width="17" stroke-linecap="round"/>
+<text x="3520" y="3576" font-size="24" >pero 17 px</text>
+<text x="3520" y="3606" font-size="20" >ve hře 28 px, čára 1,3 px</text>
+<rect class="g d thin" x="106" y="3666" width="448" height="628" rx="10"/>
+<text x="126" y="3748" font-size="34" font-weight="600">tab-spaces</text>
+<text x="126" y="3784" font-size="22" >Prostranství (strom, keř)</text>
+<rect class="g" x="150" y="3810" width="360" height="360"/>
+<rect class="g d thin" x="195" y="3855" width="270" height="270"/>
+<line class="g d thin" x1="150" y1="4125" x2="510" y2="4125"/>
+<g class="ghost" style="--w:17px; --h:8px" transform="translate(150 3810) scale(15) translate(0 0)">
+  
+  <path d="M8.77 13.4C5.03 14.12 3.95 9.62 6.51 8.65C6.17 5.12 10.31 3.81 11.94 6.37C14.86 5.2 17.42 7.97 15.65 10.78C17.2 13.18 14.35 15.01 12.27 13.56"/>
+  <path d="M10.46 13.2Q10.16 16.89 10.36 20.59M10.23 16.89Q11.21 16.03 12.27 15.28"/>
+  <path d="M14.84 20.91C14.12 18.65 15.91 16.59 17.74 17.98C18.72 16.4 21.21 16.66 20.6 19.21C21.59 19.5 21.41 20.75 21.09 20.93"/>
+  <path d="M3.38 20.43Q3.16 19.78 3.05 19.11M4.91 20.56Q5.14 19.62 5.32 18.68"/>
+  <path d="M2.45 21.09Q12.22 21.55 21.5 20.55"/>
+</g>
+<line x1="140" y1="4222" x2="270" y2="4222" stroke="#111" stroke-width="17" stroke-linecap="round"/>
+<text x="300" y="4216" font-size="24" >pero 17 px</text>
+<text x="300" y="4246" font-size="20" >ve hře 28 px, čára 1,3 px</text>
+<rect class="g d thin" x="566" y="3666" width="448" height="628" rx="10"/>
+<text x="586" y="3748" font-size="34" font-weight="600">tab-heritage</text>
+<text x="586" y="3784" font-size="22" >Památky (kaple)</text>
+<rect class="g" x="610" y="3810" width="360" height="360"/>
+<rect class="g d thin" x="655" y="3855" width="270" height="270"/>
+<line class="g d thin" x1="610" y1="4125" x2="970" y2="4125"/>
+<g class="ghost" style="--w:17px; --h:8px" transform="translate(610 3810) scale(15) translate(0 0)">
+  
+  <path d="M5.68 13.47Q8.9 11.04 11.79 8.23Q14.82 11.23 18.26 13.76M7.34 12.47Q7.45 16.63 7.37 20.78M16.82 12.71Q16.82 16.73 16.82 20.75"/>
+  <path d="M10.69 9.49Q10.67 8 10.81 6.51Q12.03 6.63 13.25 6.53Q13.24 7.93 13.28 9.32M10.43 6.86Q11.16 5.61 12.03 4.45Q12.7 5.61 13.43 6.73M12.16 4.66Q12.11 3.2 12.12 1.73M10.84 2.65Q11.82 2.62 12.8 2.64"/>
+  <path d="M10.42 20.86Q10.28 19.42 10.38 17.98Q12.15 15.7 13.31 17.83Q13.34 19.31 13.18 20.77"/>
+  <path d="M12.05 12.23l0.01 0"/>
+  <path d="M2.71 21.03Q12 21.66 21.48 20.53"/>
+</g>
+<line x1="600" y1="4222" x2="730" y2="4222" stroke="#111" stroke-width="17" stroke-linecap="round"/>
+<text x="760" y="4216" font-size="24" >pero 17 px</text>
+<text x="760" y="4246" font-size="20" >ve hře 28 px, čára 1,3 px</text>
+<rect class="g d thin" x="1026" y="3666" width="448" height="628" rx="10"/>
+<text x="1046" y="3706" font-size="24" font-weight="600" letter-spacing="1">Dlaždice Stavby</text>
+<text x="1046" y="3748" font-size="34" font-weight="600">tool-street</text>
+<text x="1046" y="3784" font-size="22" >Ulice</text>
+<rect class="g" x="1070" y="3810" width="360" height="360"/>
+<rect class="g d thin" x="1115" y="3855" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(1070 3810) scale(15) translate(0 0)">
+  
+  <path d="M1.08 15.72C6.95 12.56 12.81 9.48 19.14 6.81M4.85 18.99C11 15.63 16.87 12.85 22.86 9.61"/>
+  <path d="M1.2 12.9Q8.6 8.7 16.9 5.1M6.9 21.6Q14.4 17.3 23.1 12.6" stroke-width="1.3"/>
+  <path d="M6.2 11.2Q6.1 6.4 6.3 2.4Q7.6 1.7 8.9 2.6" stroke-width="1.5"/>
+  <path d="M8.4 2.9Q8.9 3.7 9.5 3.5" stroke-width="1.5"/>
+</g>
+<line x1="1060" y1="4222" x2="1190" y2="4222" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="1220" y="4216" font-size="24" >pero 12 px</text>
+<text x="1220" y="4246" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="1486" y="3666" width="448" height="628" rx="10"/>
+<text x="1506" y="3748" font-size="34" font-weight="600">tool-road</text>
+<text x="1506" y="3784" font-size="22" >Silnice</text>
+<rect class="g" x="1530" y="3810" width="360" height="360"/>
+<rect class="g d thin" x="1575" y="3855" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(1530 3810) scale(15) translate(0 0)">
+  
+  <path d="M1.08 13.72C6.95 10.56 12.81 7.48 19.14 4.81M4.85 16.99C11 13.63 16.87 10.85 22.86 7.61"/>
+  <path d="M3.5 15.66Q4.62 15.23 5.62 14.59M8.21 13.16Q9.21 12.47 10.32 11.98M13.16 10.62Q14.14 10.36 15.08 9.99M18.12 8.37Q19.16 8.05 20.16 7.6"/>
+  <path d="M6.07 21.43Q5.8 20.7 5.53 19.96M7.2 21.43Q7.37 20.66 7.5 19.87M8.5 21.57Q8.82 21.09 9.15 20.61"/>
+</g>
+<line x1="1520" y1="4222" x2="1650" y2="4222" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="1680" y="4216" font-size="24" >pero 12 px</text>
+<text x="1680" y="4246" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="1946" y="3666" width="448" height="628" rx="10"/>
+<text x="1966" y="3748" font-size="34" font-weight="600">tool-lane</text>
+<text x="1966" y="3784" font-size="22" >Úzká silnice</text>
+<rect class="g" x="1990" y="3810" width="360" height="360"/>
+<rect class="g d thin" x="2035" y="3855" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(1990 3810) scale(15) translate(0 0)">
+  
+  <path d="M1.9 14.18C7.89 11.21 13.78 8.45 19.88 5.51M4.6 16.68C10.48 13.77 16.48 10.54 22.77 7.43"/>
+  <path d="M9.4 12.38l0.01 0M14.78 10.26l0.01 0"/>
+  <path d="M7.19 20.79Q7.04 20.11 6.78 19.46M8.23 21.08Q8.21 20.18 8.3 19.28M9.43 20.8Q9.79 20.46 10.12 20.09"/>
+</g>
+<line x1="1980" y1="4222" x2="2110" y2="4222" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="2140" y="4216" font-size="24" >pero 12 px</text>
+<text x="2140" y="4246" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="2406" y="3666" width="448" height="628" rx="10"/>
+<text x="2426" y="3748" font-size="34" font-weight="600">tool-path</text>
+<text x="2426" y="3784" font-size="22" >Pěšina</text>
+<rect class="g" x="2450" y="3810" width="360" height="360"/>
+<rect class="g d thin" x="2495" y="3855" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(2450 3810) scale(15) translate(0 0)">
+  
+  <path d="M2.4 18.39Q3.43 17.58 4.84 17.28M7.57 16.6Q9.17 16.76 10.22 15.6M11.52 13.36Q11.89 12.1 13.77 11.56M15.68 10.96Q17.77 10.63 18.33 9.25M19.7 7.33Q20.3 6.17 21.47 5.52"/>
+  <path d="M4.21 22.22Q4 21.47 3.66 20.76M5.07 22.06Q5.16 21.23 5.24 20.4M6.52 22.2Q6.75 21.53 6.99 20.86M16.45 16.47Q16.33 15.75 16.21 15.03M17.91 16.34Q17.98 15.46 18.11 14.59"/>
+</g>
+<line x1="2440" y1="4222" x2="2570" y2="4222" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="2600" y="4216" font-size="24" >pero 12 px</text>
+<text x="2600" y="4246" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="2866" y="3666" width="448" height="628" rx="10"/>
+<text x="2886" y="3748" font-size="34" font-weight="600">tool-rail</text>
+<text x="2886" y="3784" font-size="22" >Železnice</text>
+<rect class="g" x="2910" y="3810" width="360" height="360"/>
+<rect class="g d thin" x="2955" y="3855" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(2910 3810) scale(15) translate(0 0)">
+  
+  <path d="M1.42 13.47Q10.43 8.73 19.7 4.51M4.47 15.37Q13.6 11.26 22.41 6.52"/>
+  <path d="M2.18 15.38Q4.02 16.13 5.68 17.2M6.52 13.04Q8.4 13.84 10.1 14.98M10.64 10.62Q12.52 11.34 14.23 12.42M15.25 8.8Q17 9.42 18.66 10.24M19.68 6.29Q21.34 7.28 22.98 8.32"/>
+</g>
+<line x1="2900" y1="4222" x2="3030" y2="4222" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="3060" y="4216" font-size="24" >pero 12 px</text>
+<text x="3060" y="4246" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="3326" y="3666" width="448" height="628" rx="10"/>
+<text x="3346" y="3748" font-size="34" font-weight="600">tool-fence</text>
+<text x="3346" y="3784" font-size="22" >Ohrada</text>
+<rect class="g" x="3370" y="3810" width="360" height="360"/>
+<rect class="g d thin" x="3415" y="3855" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(3370 3810) scale(15) translate(0 0)">
+  
+  <path d="M2.93 19.67Q2.78 16.03 3.12 12.41M8.26 16.9Q8.11 13.34 8.2 9.77M13.61 14.45Q13.53 10.92 13.5 7.38M19.06 11.86Q19.09 8.23 19.12 4.61"/>
+  <path d="M2.08 14.59Q10.9 9.9 19.95 5.69M2.04 17.13Q11.12 13.03 19.93 8.35"/>
+  <path d="M5.17 21.23Q4.94 20.53 4.74 19.81M6.05 21.21Q6.35 20.45 6.62 19.68M15.04 16.98Q15.01 16.2 14.84 15.44M16.57 17.17Q16.71 16.38 16.77 15.58"/>
+</g>
+<line x1="3360" y1="4222" x2="3490" y2="4222" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="3520" y="4216" font-size="24" >pero 12 px</text>
+<text x="3520" y="4246" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="106" y="4306" width="448" height="628" rx="10"/>
+<text x="126" y="4388" font-size="34" font-weight="600">tool-wall</text>
+<text x="126" y="4424" font-size="22" >Zídka (u hřbitova)</text>
+<rect class="g" x="150" y="4450" width="360" height="360"/>
+<rect class="g d thin" x="195" y="4495" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(150 4450) scale(15) translate(0 0)">
+  
+  <path d="M2.2 15.1Q11.3 10.4 21.8 6.3M2.4 18.2Q11.2 14.1 21.7 9.8"/>
+  <path d="M2.3 20.9Q11.4 16.9 21.6 12.7M2.4 18.3Q2.31 19.6 2.3 20.9M21.7 9.8Q21.6 11.3 21.6 12.7"/>
+  <path d="M7.9 16.4Q8.4 17.2 9.6 16.9M14.2 13.4Q14.8 14.3 16.1 13.8"/>
+  <path d="M17.1 7.6Q16.95 4.4 17.05 1.3M15.3 3.1Q17.1 2.9 18.9 2.9"/>
+</g>
+<line x1="140" y1="4862" x2="270" y2="4862" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="300" y="4856" font-size="24" >pero 12 px</text>
+<text x="300" y="4886" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="566" y="4306" width="448" height="628" rx="10"/>
+<text x="586" y="4388" font-size="34" font-weight="600">tool-grain</text>
+<text x="586" y="4424" font-size="22" >Obilí</text>
+<rect class="g" x="610" y="4450" width="360" height="360"/>
+<rect class="g d thin" x="655" y="4495" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(610 4450) scale(15) translate(0 0)">
+  
+  <path d="M4.1 20.6Q4.5 17.8 5.6 15.4M8.3 19.2Q8.6 16.2 9.9 13.6M12.6 17.6Q12.9 14.6 14.2 12.1M16.9 15.9Q17.2 13.3 18.3 11.1M7.2 13.7Q7.4 11.9 8.2 10.4M11.3 12.2Q11.6 10.4 12.4 8.9M15.4 10.6Q15.7 8.9 16.5 7.5M19.4 9Q19.6 7.6 20.3 6.4"/>
+  <path d="M5.6 15.4Q6 14 6.9 12.9M9.9 13.6Q10.3 12.2 11.2 11.1M14.2 12.1Q14.6 10.7 15.5 9.6M18.3 11.1Q18.7 9.8 19.5 8.8"/>
+  <path d="M2.6 21.4Q11 18.9 20.9 15.1"/>
+</g>
+<line x1="600" y1="4862" x2="730" y2="4862" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="760" y="4856" font-size="24" >pero 12 px</text>
+<text x="760" y="4886" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="1026" y="4306" width="448" height="628" rx="10"/>
+<text x="1046" y="4388" font-size="34" font-weight="600">tool-potatoes</text>
+<text x="1046" y="4424" font-size="22" >Brambory</text>
+<rect class="g" x="1070" y="4450" width="360" height="360"/>
+<rect class="g d thin" x="1115" y="4495" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(1070 4450) scale(15) translate(0 0)">
+  
+  <path d="M2.8 20.9Q10.6 16.4 19.6 11.6M5.6 13.9Q12.4 10.1 21.3 5.4"/>
+  <path d="M5.8 18.2a1.5 1.3 0 1 0 3 0a1.5 1.3 0 1 0 -3 0M11.1 15.3a1.5 1.3 0 1 0 3 0a1.5 1.3 0 1 0 -3 0M16.2 12.6a1.4 1.2 0 1 0 2.8 0a1.4 1.2 0 1 0 -2.8 0"/>
+  <path d="M8.4 11.4a1.3 1.1 0 1 0 2.6 0a1.3 1.1 0 1 0 -2.6 0M13.3 8.8a1.3 1.1 0 1 0 2.6 0a1.3 1.1 0 1 0 -2.6 0"/>
+</g>
+<line x1="1060" y1="4862" x2="1190" y2="4862" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="1220" y="4856" font-size="24" >pero 12 px</text>
+<text x="1220" y="4886" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="1486" y="4306" width="448" height="628" rx="10"/>
+<text x="1506" y="4388" font-size="34" font-weight="600">tool-meadow</text>
+<text x="1506" y="4424" font-size="22" >Louka</text>
+<rect class="g" x="1530" y="4450" width="360" height="360"/>
+<rect class="g d thin" x="1575" y="4495" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(1530 4450) scale(15) translate(0 0)">
+  
+  <path d="M3.4 20.9Q3.9 18.6 3.1 16.7M5.2 20.7Q5.5 18.2 6.6 16.4M14.2 20.4Q14.1 18.3 13.2 16.9M16.1 20.3Q16.6 18 18.1 16.6M19.6 20.2Q19.5 18.6 20.4 17.3"/>
+  <path d="M8.3 20.6Q7.9 15.4 8.6 10.6M11.4 20.5Q12.1 16.2 14.9 12.8"/>
+  <circle cx="8.6" cy="8.3" r="1.1"/>
+  <path d="M8.6 5.2V6.1M11.2 7.2L10.4 7.6M10.9 10.1L10.1 9.6M6.3 10.1L7.1 9.6M6 7.2L6.8 7.6"/>
+  <path d="M14.1 12.1Q13.4 10.2 15 9.6Q16.2 8.6 17.2 10Q18.4 11.4 16.8 12.6Q15.3 13.4 14.1 12.1"/>
+  <path d="M2.4 21.3Q11.6 20.2 21.6 20.5"/>
+</g>
+<line x1="1520" y1="4862" x2="1650" y2="4862" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="1680" y="4856" font-size="24" >pero 12 px</text>
+<text x="1680" y="4886" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+<rect class="g d thin" x="1946" y="4306" width="448" height="628" rx="10"/>
+<text x="1966" y="4388" font-size="34" font-weight="600">tool-erase</text>
+<text x="1966" y="4424" font-size="22" >Vymazat (guma)</text>
+<rect class="g" x="1990" y="4450" width="360" height="360"/>
+<rect class="g d thin" x="2035" y="4495" width="270" height="270"/>
+<g class="ghost" style="--w:12px; --h:6px" transform="translate(1990 4450) scale(15) translate(0 0)">
+  
+  <path d="M4.38 15.39Q9.12 10.91 13.51 6.07Q14.61 5.12 15.71 6.31Q17.51 8.25 19.42 10.08Q20.54 10.89 19.34 12.09Q14.78 16.31 10.49 20.8Q9.39 22.19 8.54 20.83Q6.64 19.04 4.61 17.39Q3.66 16.23 4.78 15.38Q4.55 15.33 4.32 15.31l-0.53 -0.31"/>
+  <path d="M9.17 10.51Q11.95 13.5 14.99 16.23"/>
+  <path d="M14.17 21.01Q15.9 20.23 18 21.17Q19.86 22.38 21.8 20.94"/>
+</g>
+<line x1="1980" y1="4862" x2="2110" y2="4862" stroke="#111" stroke-width="12" stroke-linecap="round"/>
+<text x="2140" y="4856" font-size="24" >pero 12 px</text>
+<text x="2140" y="4886" font-size="20" >ve hře 38 px, čára 1,3 px</text>
+</svg>
