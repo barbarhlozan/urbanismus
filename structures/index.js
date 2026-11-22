@@ -110,7 +110,7 @@ export const BUILD_FAMILIES = [
   [industry.cukrovar],
   // Prostranství
   [park.green, park.meadow], [park.playgroundSmall, park.playgroundLarge], [park.pitchSmall, park.sportsGround],
-  [park.gardenPark], [park.forestPark], [park.pondPark], [park.well], [park.summerCinema],
+  [park.gardenPark], [park.forestPark], [park.pondPark], [park.well], [park.lavicka], [park.summerCinema],
   [square.plaza, square.marketSquare], [square.precinctLarge],
   // Památky
   [heritage.chapel], [wayside], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
@@ -121,7 +121,7 @@ export const BUILD_FAMILIES = [
 // for now. The rest stay registered (saves still load and draw them) but
 // can't be picked up until their turn comes.
 export const REVIEWED = new Set(['bus-stop', 'house', 'house-wide', 'family-house', 'family-house-wide', 'vymenek', 'chapel', 'wayside-cross', 'church',
-  'green', 'meadow', 'playground', 'playground-large', 'pitch', 'sports-ground', 'garden-park', 'forest-park', 'pond-park', 'well', 'summer-cinema',
+  'green', 'meadow', 'playground', 'playground-large', 'pitch', 'sports-ground', 'garden-park', 'forest-park', 'pond-park', 'well', 'bench', 'summer-cinema',
   'plaza', 'market-square',
   'hospoda', 'hospoda-wide', 'penzion']);
 

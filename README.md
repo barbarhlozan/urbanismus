@@ -64,7 +64,7 @@ camera sit along its bottom. On a phone, tap once to preview and again to confir
   or `'cross'` switches to the other hands tried (`src/render/roadMarks.js`).
 - Neighbouring apartments and shops facing the same road often share a wall and form a
   street front; panel blocks join into one long block built in sections.
-- **Small things** – the boží muka and crosses, the well and the bus stop – have no plot or
+- **Small things** – the boží muka and crosses, the well, the bench and the bus stop – have no plot or
   garden: each takes only the ground it's drawn on, so it goes right up to a house, a wall or
   a road's edge (facing the road), and gets no house number. Lime trees, a bench round it are
   the player's to add.
@@ -84,7 +84,9 @@ camera sit along its bottom. On a phone, tap once to preview and again to confir
   each kind of park and square as its own tool, in its sizes (**Shift**) and looks (**Space**):
   greenery, a playground, a sports ground, a garden, a forest park with a lookout, a park by a
   pond, a village well (a small thing: a rumpál, or a pump on a concrete ring or a stone slab;
-  people stop by it a moment), a summer cinema; a plaza, a fountain square, a monument square, a market square, a
+  people stop by it a moment), a bench (a small thing: the park one with cast-iron sides, the
+  concrete one of the 70s náves, a plank on two stumps by a chalupa; people sit on it a while),
+  a summer cinema; a plaza, a fountain square, a monument square, a market square, a
   shopping precinct, a parade square. The ČSAD bus station is in **Doprava**.
 - A park only gets walkways where people can come in: a footpath reaching it, a street
   (sidewalks) or lane along it, or a neighbouring park that has a way in. One way in runs to

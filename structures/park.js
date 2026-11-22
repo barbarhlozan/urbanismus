@@ -643,6 +643,72 @@ function slabPump(g, x, y) {
   pump(g, x, y + 0.01, 0.012, 0.11);
 }
 
+// ----- the bench -----
+
+// Lavička: a bench to sit on a while, facing -y (the road, the pond, the
+// view), about two metres long and knee high. Stepped with Space:
+//   park      the park bench of the towns and the bigger villages: cast-iron
+//             sides, a seat of two slats and a back of two
+//   concrete  the 70s náves one, from the Akce Z: two concrete blocks for
+//             legs and three slats laid across, no back
+//   village   the bench before a chalupa: a thick plank on two log stumps
+function parkBench(g) {
+  const L = 0.13, D = 0.036, S = 0.03, B = 0.06, t = 0.004, slat = 0.008;
+  g.detailed(1, () => {
+    // the cast-iron sides: a leg in front, the back post running up behind
+    for (const x of [-L / 2 + 0.008, L / 2 - 0.008 - t]) {
+      g.box(x, -D / 2 + 0.002, 0, t, 0.005, S);
+      g.box(x, D / 2 - 0.006, 0, t, 0.005, B);
+      g.box(x, -D / 2 + 0.002, S - 0.004, t, D - 0.004, 0.004);
+    }
+  });
+  g.detailed(1, () => wooden(g, () => {
+    for (const y of [-D / 2, -D / 2 + slat + 0.004]) g.box(-L / 2, y, S, L, slat, 0.004).onTop();
+    for (const z of [S + 0.012, S + 0.024]) g.box(-L / 2, D / 2 - 0.004, z, L, 0.004, 0.008);
+  }));
+}
+
+function concreteBench(g) {
+  const L = 0.13, D = 0.034, S = 0.028, slat = 0.008;
+  g.detailed(1, () => {
+    for (const x of [-L / 2 + 0.012, L / 2 - 0.012 - 0.014]) g.box(x, -D / 2 + 0.002, 0, 0.014, D - 0.004, S - 0.005);
+  });
+  g.detailed(1, () => wooden(g, () => {
+    for (const k of [0, 1, 2]) g.box(-L / 2, -D / 2 + k * (slat + 0.0045), S - 0.005, L, slat, 0.005).onTop();
+  }));
+}
+
+function villageBench(g) {
+  const L = 0.11, D = 0.026, S = 0.027;
+  g.detailed(1, () => wooden(g, () => {
+    for (const x of [-L / 2 + 0.02, L / 2 - 0.02]) g.cylinder(x, 0, 0, 0.009, S - 0.007, 7);
+    g.box(-L / 2, -D / 2, S - 0.007, L, D, 0.007).onTop();
+  }));
+}
+
+// A bench is a small thing (def.small) to set where people would sit: by
+// a well, a chapel, a door, the pond. People going out stop at it a while.
+export const lavicka = {
+  id: 'bench',
+  name: 'Bench',
+  blurb: 'To sit on a while',
+  category: 'spaces',
+  tags: ['park'], // somewhere to go (agents/trips.js)
+  access: 'any',
+  small: true,
+  numbered: false,
+  yards: [],
+  sim: { destinations: [], stop: { time: [15, 40], reach: 0.05 } }, // a while on it (agents/leisure.js)
+  footprint: [[0, 0]],
+  stats: {},
+  agents: 0,
+  kinds: ['park', 'concrete', 'village'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    ({ park: parkBench, concrete: concreteBench, village: villageBench })[kind](g);
+  },
+};
+
 // Studna: the well where the cottages round it draw their water, people
 // stopping by it a moment. A rumpál, a concrete ring with a pump on it, or
 // a pump over the shaft with a trough – stepped with Space, on a trodden

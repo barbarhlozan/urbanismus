@@ -614,6 +614,14 @@ well.blurb
   cs: Voda pro chalupy kolem
   en: Water for the cottages round it
 
+bench
+  cs: Lavička
+  en: Bench
+
+bench.blurb
+  cs: Posedět si
+  en: To sit on a while
+
 summer_cinema
   cs: Letní kino
   en: Summer cinema

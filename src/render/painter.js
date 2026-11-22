@@ -28,6 +28,7 @@
 //   g.strokes(x, y, z, [[[u,v]…]…], opts)    screen-facing polylines (one <path>), e.g. tree glyphs
 //   g.strokeGroups([{x, y, z, lines}…], opts) the same for several anchors, still one <path>
 //   g.solid(x, y, z)                         start a new depth-sorted group manually
+//   g.onTop()                                the solid just drawn rests on the ones before it
 //   g.stand([[x,y]…])                        what follows stands at the highest ground under
 //                                            these points (on uneven ground, see `relief`)
 //   g.cylinder(x, y, z, r, h, sides, opts)   upright polygonal cylinder (chimneys, silos)
@@ -770,6 +771,16 @@ export class Painter {
       : this._viewBox([[x, y]]);
     this.current = { depth: this.camera.depth(wx, wy) + wz * 1e-3, parts: [], at: [wx, wy, wz], box, fixed: !!foot, bend };
     this.solids.push(this.current);
+    return this;
+  }
+
+  // The solid just drawn rests on those drawn before it (a bench's seat on
+  // its legs, a plank on two stumps): drawn after them, though a leg at the
+  // near end has its centre nearer the eye than the seat's.
+  onTop() {
+    const c = this.current;
+    if (!c) return this;
+    for (const s of this.solids) if (s !== c && s.depth >= c.depth) c.depth = s.depth + 1e-4;
     return this;
   }
 
