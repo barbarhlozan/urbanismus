@@ -81,7 +81,7 @@ a Czech or German layout.
   its track. Trains
   stop at every station they pass, and turn round at the last one when there's no other way off the
   map. With a road behind, a station gets a forecourt (or parking) towards it.
-- **Bus stop** (**1 Y**), set by a road like a house, facing it: a shelter, the stop sign, a bench. Buses only
+- **Bus stop** (**1 Y**), a small thing set right at a road's edge, facing it: a shelter, the stop sign, a bench. Buses only
   come when a road leads off the map: in through an exit, a few stops (nearest next), out again.
 - **Bydlení** (**2**): house / apartments / block, each also wide (**Shift**)
 - **Občanská vybavenost** (**3**): Jednota, hospoda, penzion, obchodní dům, Tuzex, národní výbor, pošta,

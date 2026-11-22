@@ -64,10 +64,13 @@ camera sit along its bottom. On a phone, tap once to preview and again to confir
   or `'cross'` switches to the other hands tried (`src/render/roadMarks.js`).
 - Neighbouring apartments and shops facing the same road often share a wall and form a
   street front; panel blocks join into one long block built in sections.
-- **Boží muka a křížek** (Památky, beside the chapel) stands wherever it's put, facing a road it's set by:
-  **Space** steps through a granite boží muka with its niches, a cast-iron cross on a stone plinth
-  and a wooden cross under a little tin roof, with a lime tree behind or two either side. It
-  gets no house number.
+- **Small things** – the boží muka and crosses, the well and the bus stop – have no plot or
+  garden: each takes only the ground it's drawn on, so it goes right up to a house, a wall or
+  a road's edge (facing the road), and gets no house number. Lime trees, a bench round it are
+  the player's to add.
+- **Boží muka a křížek** (Památky, beside the chapel): **Space** steps through a granite boží
+  muka with its niches, a cast-iron cross on a stone plinth and a wooden cross under a little
+  tin roof.
 - The **Landmarks** group has the old town (a chapel, a church, a town hall in three sizes, a
   war memorial, a castle) and the new one (a stadium or Sokol hall, and a TV
   tower or lookout, which only goes on a hilltop). A church sometimes appears by itself in a
@@ -80,8 +83,8 @@ camera sit along its bottom. On a phone, tap once to preview and again to confir
 - **Občanská vybavenost** also has a house of culture and a cemetery. **Prostranství** has
   each kind of park and square as its own tool, in its sizes (**Shift**) and looks (**Space**):
   greenery, a playground, a sports ground, a garden, a forest park with a lookout, a park by a
-  pond, a village well (a rumpál, or a pump on a concrete ring or a stone slab: people stop by
-  it a moment), a summer cinema; a plaza, a fountain square, a monument square, a market square, a
+  pond, a village well (a small thing: a rumpál, or a pump on a concrete ring or a stone slab;
+  people stop by it a moment), a summer cinema; a plaza, a fountain square, a monument square, a market square, a
   shopping precinct, a parade square. The ČSAD bus station is in **Doprava**.
 - A park only gets walkways where people can come in: a footpath reaching it, a street
   (sidewalks) or lane along it, or a neighbouring park that has a way in. One way in runs to
@@ -153,7 +156,8 @@ unit = a house's plot); terrain (water, height, rock, slope) stays a raster read
 
 - A building is `{ id, no, type, x, y, angle, seed, data }`; its outline is the footprint
   rectangle turned by `angle`. Near a road it snaps: front to the road's direction, set back by
-  the type's setback plus a little seeded variation. Tab turns a quarter, Alt turns freely.
+  the type's setback plus a little seeded variation; a small thing (`small`) has no plot, its
+  outline is its body, and it stands right at the road's edge. Tab turns a quarter, Alt turns freely.
 - Valid when its plot touches no other plot, way corridor or water, and the ground under its
   body isn't too steep; a bus stop (`needsRoad`) only where a road takes it. Only types with a
   `canPlace` rule of their own (stations, the TV tower) still stand on the dots. Access is the road point nearest

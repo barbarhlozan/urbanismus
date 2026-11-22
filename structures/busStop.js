@@ -1,13 +1,11 @@
-// Bus stop: a 1×1 dot beside a road, turned to face it (single-dot
-// buildings face their road, World.facingRotation) and square to it, round
-// a bend too (tiltOf in structures/index.js). A sheet-metal shelter
-// open towards the road, the round ZASTÁVKA sign in its hoop at the kerb
-// (on one pole or two legs, by seed), a bin, and a tree behind.
+// Bus stop: a small thing (def.small) set right at a road's edge, facing
+// it. A sheet-metal shelter open towards the road, the round ZASTÁVKA sign
+// in its hoop at the kerb (on one pole or two legs, by seed), a bin.
 // Buses come in from off the map through road exits and call at a few stops
 // before leaving again (src/sim/agents.js, updateBuses) – no road to the
 // map edge, no buses.
 
-import { bench, tree, flowerBed, outward } from './kit.js';
+import { bench, outward } from './kit.js';
 
 // Size of the shelter, sign and bin relative to their first drawing, which
 // stood as tall as a house (the plates keep their thickness).
@@ -19,6 +17,7 @@ function plate(g, pts, off) {
   const back = pts.map(([x, y, z]) => [x + off[0], y + off[1], z + off[2]]);
   const all = [...pts, ...back];
   const c = [0, 1, 2].map((k) => all.reduce((a, p) => a + p[k], 0) / all.length);
+  g._grow(all); // (as Painter's own primitives: its ground counts for the body)
   g.solid(...c);
   g.face(outward(pts, c));
   g.face(outward(back, c));
@@ -75,7 +74,9 @@ export const busStop = {
   blurb: 'Beside a road',
   category: 'transport',
   code: 'BS',
+  small: true,
   numbered: false,
+  yards: [],
   busStop: true,
   facesRoad: true, // can't be turned away from its road
   sim: { destinations: [] },
@@ -84,14 +85,10 @@ export const busStop = {
   stats: {},
   agents: 0,
   draw(g) {
-    // the road runs along y = -1 (or nearer beside a diagonal: g.roadGap,
-    // then everything moves back by the difference): the shelter just
-    // back from it, the sign at the kerb
-    const k = 1 - (g.roadGap ?? 1);
-    shelter(g, -0.2, 0.12, -0.58 + k);
-    sign(g, 0.3, -0.7 + k, g.chance(0.5));
-    g.detailed(2, () => g.box(-0.34, -0.72 + k, 0, 0.03, 0.03, 0.035)); // a bin
-    tree(g, 0.14, 0.2 + k, 0.8);
-    flowerBed(g, -0.24, 0.08 + k, 0.06);
+    // the road along its front (-y): the shelter open to it, the sign and
+    // the bin at the kerb
+    shelter(g, -0.2, 0.12, 0.07);
+    sign(g, 0.3, -0.05, g.chance(0.5));
+    g.detailed(2, () => g.box(-0.34, -0.07, 0, 0.03, 0.03, 0.035)); // a bin
   },
 };

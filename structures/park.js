@@ -645,29 +645,29 @@ function slabPump(g, x, y) {
 
 // Studna: the well where the cottages round it draw their water, people
 // stopping by it a moment. A rumpál, a concrete ring with a pump on it, or
-// a pump over the shaft with a trough – stepped with Space. A trodden patch
-// round it, a linden and a bench.
+// a pump over the shaft with a trough – stepped with Space, on a trodden
+// patch. A small thing (def.small), not a park: it goes right by a house
+// or a road; the linden and the bench round it are the player's to add.
 export const well = {
   id: 'well',
   name: 'Well',
   blurb: 'Water for the cottages round it',
-  ...common,
-  sim: { destinations: [], stop: { time: [8, 20], reach: 0.1 } }, // a moment by it (agents/leisure.js)
+  category: 'spaces',
+  tags: ['park'], // somewhere to go (agents/trips.js)
+  access: 'any',
+  small: true,
+  numbered: false,
+  yards: [],
+  sim: { destinations: [], stop: { time: [8, 20], reach: 0.14 } }, // a moment by it (agents/leisure.js)
   footprint: [[0, 0]],
   stats: {},
   agents: 0,
   kinds: ['rumpal', 'ring-pump', 'slab-pump'],
   draw(g, s) {
     const kind = kindOf(g, s, this.kinds);
-    walkways(g);
-    const [cx, cy] = g.site.paths.centre;
-    g.groundCircle(cx, cy, 0.1, { dash: '1 2', lod: 1 });
-    if (kind === 'rumpal') rumpal(g, cx, cy);
-    else if (kind === 'ring-pump') ringPump(g, cx, cy);
-    else slabPump(g, cx, cy);
-    const [tx, ty] = freeSpot(g, quadrants(g, 0.26), 0.1);
-    tree(g, tx, ty, 1.05, 'spreading');
-    benches(g, 1);
-    grass(g, 8);
+    g.groundCircle(0, 0, 0.1, { dash: '1 2', lod: 1 });
+    if (kind === 'rumpal') rumpal(g, 0, 0);
+    else if (kind === 'ring-pump') ringPump(g, 0, 0);
+    else slabPump(g, 0, 0);
   },
 };

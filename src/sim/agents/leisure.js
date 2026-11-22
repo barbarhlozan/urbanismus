@@ -436,9 +436,10 @@ export class AgentLeisure {
   // A place with a `stop` (def.sim.stop: { time, reach }, a well) is
   // stood round, a step or two from its middle, not walked through.
   parkSpots(place, anchor) {
-    if (!place || !STRUCTURE_TYPES[place.type]?.site) return around(...anchor, 0.25);
-    const { lines, centre } = siteWalks(this.world.sitePaths(place));
-    const stop = STRUCTURE_TYPES[place.type].sim?.stop;
+    const def = place && STRUCTURE_TYPES[place.type];
+    const stop = def?.sim?.stop;
+    if (!def?.site && !stop) return around(...anchor, 0.25);
+    const { lines, centre } = def.site ? siteWalks(this.world.sitePaths(place)) : { lines: [], centre: this.world.centerOf(place) };
     if (stop) {
       return () => {
         const a = Math.random() * Math.PI * 2, d = stop.reach * (0.8 + Math.random() * 0.4);

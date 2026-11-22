@@ -33,6 +33,8 @@ const ROAD_REACH = 1.6;
 // (else it stands where pointed, as the player turned it)
 const SNAP_REACH = 0.55;
 const SETBACK = 0.1;
+// a small thing (def.small: a cross, a well) stands right at the road's edge
+const SMALL_SETBACK = 0.02;
 const SETBACK_VARY = 0.22;
 // joinSnap(): a house this near the place beside a neighbour it could share
 // a wall with goes there, if they face within JOIN_FACE of each other
@@ -167,8 +169,11 @@ export class WorldPlacement {
   }
 
   // The size of a type's outline in its own coordinates: [across its
-  // front, front to back] – the footprint's dots, a unit each.
+  // front, front to back] – the footprint's dots, a unit each; a small
+  // thing's only what it's drawn on (its body), having no plot.
   outlineSize(type) {
+    const b = STRUCTURE_TYPES[type]?.small && BODIES[type];
+    if (b) return [b[2] - b[0], b[3] - b[1]];
     const offs = STRUCTURE_TYPES[type]?.footprint ?? [[0, 0]];
     const span = (k) => Math.max(...offs.map((o) => o[k])) - Math.min(...offs.map((o) => o[k])) + 1;
     return [span(0), span(1)];
@@ -293,9 +298,11 @@ export class WorldPlacement {
       const d = Math.hypot(nx, ny);
       if (d < 1e-6) [nx, ny] = [-road.dir[1], road.dir[0]];
       else [nx, ny] = [nx / d, ny / d];
-      const [, depth] = this.outlineSize(type);
-      const back = SETBACK + SETBACK_VARY * mulberry32((seed ^ 0x5e7b4c) >>> 0)();
-      const out = road.half + WAY_CLEAR + back + depth / 2;
+      const small = STRUCTURE_TYPES[type]?.small;
+      // (from its middle to its front: half the plot, or a small thing's body)
+      const front = small ? -this.bodyBox(type)[1] : this.outlineSize(type)[1] / 2;
+      const back = small ? SMALL_SETBACK : SETBACK + SETBACK_VARY * mulberry32((seed ^ 0x5e7b4c) >>> 0)();
+      const out = road.half + WAY_CLEAR + back + front;
       [x, y] = [px + nx * out, py + ny * out];
       // front (sin a, -cos a) looking back at the road: -n
       angle = Math.atan2(-nx, ny) + twist;

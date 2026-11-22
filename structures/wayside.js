@@ -1,7 +1,8 @@
 // Boží muka and křížky u cest: the little stone and iron things set by a
 // road or a path out of the village, as the Germans of the Chodsko and
-// Tachov borderland left them in hundreds – a 1×1 dot beside a road or a
-// footpath, facing it (World.facingRotation), with a lime tree or two.
+// Tachov borderland left them in hundreds. A small thing (def.small): it
+// stands where it's put, right at a road's edge facing it, by a house, out
+// in a field; the lime trees round it the player plants as trees.
 // Space steps through its kinds:
 //   muka    boží muka: a granite pillar on a step, a head with an arched
 //           niche on each face (a picture behind glass once), under a
@@ -13,8 +14,6 @@
 //   wooden  a tall wooden cross with a little tin roof over its head
 //           (a stříška) and a tin Christ under it, a board for the name
 // No house number: it is not a building. Nobody goes there on purpose.
-
-import { tree } from './kit.js';
 
 // An arch on a face: posts from zb up to where the arch starts, a half
 // circle over them. P(u, z) gives the face's points, n its normal.
@@ -144,29 +143,17 @@ export const wayside = {
   code: 'K',
   tags: ['heritage'],
   access: 'any', // a footpath will do
+  small: true,
   numbered: false,
   footprint: [[0, 0]],
   stats: {},
   agents: 0,
   sim: { destinations: [] },
-  plot: { props: 'green', boundary: 0, density: 0 }, // grass, no benches or beds
   yards: [],
   kinds: ['muka', 'iron', 'wooden'],
   draw(g, s) {
     const pick = g.pick(this.kinds);
     const kind = this.kinds.includes(s?.data?.kind) ? s.data.kind : pick;
-    // the road runs along y = -1 (nearer beside a diagonal: g.roadGap)
-    const k = 1 - (g.roadGap ?? 1);
-    const y = -0.42 + k;
-    // a lime tree beside it, or two, one either side (the way a cross was
-    // set between two limes planted the same day) – beside, not behind, or
-    // seen from the back the crown hides it
-    if (g.chance(0.5)) {
-      tree(g, -0.32, y + 0.06, 0.85, 'spreading');
-      tree(g, 0.32, y + 0.06, 0.85, 'spreading');
-    } else {
-      tree(g, g.chance(0.5) ? 0.36 : -0.36, y + 0.1, 0.9, 'spreading');
-    }
-    ({ muka, iron, wooden })[kind](g, y);
+    ({ muka, iron, wooden })[kind](g, 0);
   },
 };

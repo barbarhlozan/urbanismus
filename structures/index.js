@@ -23,6 +23,10 @@
 //              return { ok, lay } – something placing will build (a
 //              station's own track); the other way round is preferred if it
 //              needs no `lay`.
+//   small      true = a small thing to set anywhere as a decoration (a wayside
+//              cross, a well, a bus stop): no plot, yard or garden, drawn
+//              round its middle, taking only the ground it's drawn on, so it
+//              goes right up to a house or a road's edge
 //   needsRoad  true = placed freely only where a road takes it (a bus stop)
 //   placed(world, s)  called once a new structure stands (a station lays its track)
 //   railStop   true = trains stop here (stations, src/sim/trains.js)
