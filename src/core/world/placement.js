@@ -172,7 +172,8 @@ export class WorldPlacement {
   // front, front to back] – the footprint's dots, a unit each; a small
   // thing's only what it's drawn on (its body), having no plot.
   outlineSize(type) {
-    const b = STRUCTURE_TYPES[type]?.small && BODIES[type];
+    const def = STRUCTURE_TYPES[type];
+    const b = def?.small && (def.body ?? BODIES[type]);
     if (b) return [b[2] - b[0], b[3] - b[1]];
     const offs = STRUCTURE_TYPES[type]?.footprint ?? [[0, 0]];
     const span = (k) => Math.max(...offs.map((o) => o[k])) - Math.min(...offs.map((o) => o[k])) + 1;
@@ -190,7 +191,7 @@ export class WorldPlacement {
   // – its walls as drawn plus a little margin (structures/bodies.js), or
   // its whole outline for a type without one (parks, squares).
   bodyBox(type) {
-    const b = BODIES[type];
+    const b = STRUCTURE_TYPES[type]?.body ?? BODIES[type];
     if (b) return b;
     const [w, h] = this.outlineSize(type);
     return [-w / 2, -h / 2, w / 2, h / 2];

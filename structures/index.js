@@ -27,6 +27,10 @@
 //              cross, a well, a bus stop): no plot, yard or garden, drawn
 //              round its middle, taking only the ground it's drawn on, so it
 //              goes right up to a house or a road's edge
+//   body       [x0, y0, x1, y1]: its body given, not measured from its drawing
+//              (tools/bodies.mjs) – for what's drawn on the ground (a pond)
+//   lies       true = lies on the ground and follows it, as a park does, not
+//              standing level on its highest point (a pond)
 //   needsRoad  true = placed freely only where a road takes it (a bus stop)
 //   placed(world, s)  called once a new structure stands (a station lays its track)
 //   railStop   true = trains stop here (stations, src/sim/trains.js)
@@ -110,7 +114,7 @@ export const BUILD_FAMILIES = [
   [industry.cukrovar],
   // Prostranství
   [park.green, park.meadow], [park.playgroundSmall, park.playgroundLarge], [park.pitchSmall, park.sportsGround],
-  [park.gardenPark], [park.forestPark], [park.pondPark], [park.well], [park.lavicka], [park.summerCinema],
+  [park.gardenPark], [park.forestPark], [park.pondPark], [park.pond, park.pondLarge], [park.well], [park.lavicka], [park.plantedTree], [park.summerCinema],
   [square.plaza, square.marketSquare], [square.precinctLarge],
   // Památky
   [heritage.chapel], [wayside], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
@@ -121,7 +125,7 @@ export const BUILD_FAMILIES = [
 // for now. The rest stay registered (saves still load and draw them) but
 // can't be picked up until their turn comes.
 export const REVIEWED = new Set(['bus-stop', 'house', 'house-wide', 'family-house', 'family-house-wide', 'vymenek', 'chapel', 'wayside-cross', 'church',
-  'green', 'meadow', 'playground', 'playground-large', 'pitch', 'sports-ground', 'garden-park', 'forest-park', 'pond-park', 'well', 'bench', 'summer-cinema',
+  'green', 'meadow', 'playground', 'playground-large', 'pitch', 'sports-ground', 'garden-park', 'forest-park', 'pond', 'pond-large', 'well', 'bench', 'planted-tree', 'summer-cinema',
   'plaza', 'market-square',
   'hospoda', 'hospoda-wide', 'penzion']);
 

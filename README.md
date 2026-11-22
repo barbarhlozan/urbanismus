@@ -64,10 +64,17 @@ camera sit along its bottom. On a phone, tap once to preview and again to confir
   or `'cross'` switches to the other hands tried (`src/render/roadMarks.js`).
 - Neighbouring apartments and shops facing the same road often share a wall and form a
   street front; panel blocks join into one long block built in sections.
-- **Small things** – the boží muka and crosses, the well, the bench and the bus stop – have no plot or
-  garden: each takes only the ground it's drawn on, so it goes right up to a house, a wall or
-  a road's edge (facing the road), and gets no house number. Lime trees, a bench round it are
-  the player's to add.
+- **Small things** – the boží muka and crosses, the well, the bench, the tree, the pond and the
+  bus stop – have no plot or garden: each takes only the ground it's drawn on, so it goes right
+  up to a house, a wall or a road's edge (facing the road), turns any way (scroll, **Tab**) and
+  gets no house number. A park is made of them: trees, benches, a pond, and the footpaths the
+  player draws through.
+- **Strom** (Prostranství) plants one tree where it's put, its trunk all it takes, so trees go
+  in a row along a road or right by a wall: **Space** steps through a linden, a poplar, a
+  spruce and a young tree.
+- **Návesní rybník** (Prostranství) is the water alone, lying on the ground: **Space** steps
+  between the concrete požární nádrž with its railing and ramp and the rybník with its rushes,
+  **Shift** between a small and a big one.
 - **Boží muka a křížek** (Památky, beside the chapel): **Space** steps through a granite boží
   muka with its niches, a cast-iron cross on a stone plinth and a wooden cross under a little
   tin roof.

@@ -120,7 +120,8 @@
 #     sports_ground      pitch, sports_ground
 #     flower_beds        garden_park
 #     forest_park        forest_park
-#     village_pond       pond_park
+#     village_pond       pond_park, pond, pond_large
+#     tree               planted_tree
 #     well               well
 #     bench              bench
 #     summer_cinema      summer_cinema

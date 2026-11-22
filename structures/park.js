@@ -23,6 +23,7 @@ import {
   playground, bandstand, flowerBed, kiosk, pitch, swings, sandpit, FRAME, kindOf, wooden,
 } from './kit.js';
 import { segmentDistance } from '../src/core/geom2d.js';
+import { drawTree } from '../features/trees.js';
 import { offsetPolyline, keepRuns, measurePolyline, pointAt } from '../src/roads/geometry.js';
 import { CONFIG } from '../src/config.js';
 
@@ -549,6 +550,62 @@ export const pondPark = {
     benches(g, 2);
     grove(g, g.int(3, 4), -0.3, -0.3, 1.3, 1.3, [[px, py, room + 0.15], [...g.site.paths.centre, 0.15]], 'spreading');
     grass(g, 20);
+  },
+};
+
+// The pond on its own, a small thing (def.small) lying on the ground:
+// just the water and its bank, set anywhere and turned any way, the
+// lindens and benches round it the player's. Space steps between the
+// concrete požární nádrž and the návesní rybník with its rushes, Shift
+// between a small one and a big one.
+const pondOf = (id, size, hw, hd) => ({
+  id,
+  name: 'Village pond',
+  blurb: 'Water for the firemen',
+  size,
+  category: 'spaces',
+  access: 'any',
+  small: true,
+  lies: true,
+  numbered: false,
+  yards: [],
+  sim: { destinations: [] },
+  footprint: [[0, 0]],
+  // (the water and the railing round the tank: drawn on the ground, so given)
+  body: [-(hw + 0.05), -(hd + 0.05), hw + 0.05, hd + 0.05],
+  stats: {},
+  agents: 0,
+  kinds: ['fire-pond', 'village-pond'],
+  draw(g, s) {
+    if (kindOf(g, s, this.kinds) === 'fire-pond') firePond(g, 0, 0, hw * 0.9, hd * 0.9);
+    else villagePond(g, 0, 0, hw * 0.95, hd * 0.95);
+  },
+});
+export const pond = pondOf('pond', 'Small', 0.3, 0.22);
+export const pondLarge = pondOf('pond-large', 'Large', 0.55, 0.38);
+
+// A tree planted where the player wants it, one at a time: a small thing
+// (def.small) taking only the ground by its trunk, so it goes right by a
+// wall or a path, in a row along a road, round a pond. Space steps through
+// a linden, a poplar, a spruce and a young tree.
+export const plantedTree = {
+  id: 'planted-tree',
+  name: 'Tree',
+  blurb: 'Planted one by one',
+  category: 'spaces',
+  access: 'any',
+  small: true,
+  numbered: false,
+  yards: [],
+  sim: { destinations: [] },
+  footprint: [[0, 0]],
+  body: [-0.05, -0.05, 0.05, 0.05], // (its trunk: the crown may reach over)
+  stats: {},
+  agents: 0,
+  kinds: ['spreading', 'poplar', 'spruce', 'sapling'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    drawTree(g, 0, 0, kind, (kind === 'spruce' ? 0.56 : 0.5) * g.range(0.9, 1.15));
   },
 };
 

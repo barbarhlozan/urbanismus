@@ -603,8 +603,16 @@ village_pond
   en: Village pond
 
 village_pond.blurb
-  cs: Voda pro hasiče, lípy kolem
-  en: Water for the firemen, lindens round it
+  cs: Voda pro hasiče
+  en: Water for the firemen
+
+tree
+  cs: Strom
+  en: Tree
+
+tree.blurb
+  cs: Sázený jeden po druhém
+  en: Planted one by one
 
 well
   cs: Studna

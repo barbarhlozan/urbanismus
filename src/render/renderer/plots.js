@@ -55,7 +55,7 @@ export class PlotDrawing {
     // On uneven ground it stands level at the highest ground under it –
     // the whole row, so shared walls still meet – and its walls run on down
     // to the ground (Painter.relief). Not parks and squares (they follow it).
-    const relief = camera.lift && !def.site ? (wx, wy) => camera.lift(wx, wy) - camera.lift(...rigid) : null;
+    const relief = camera.lift && !def.site && !def.lies ? (wx, wy) => camera.lift(wx, wy) - camera.lift(...rigid) : null;
     if (relief) {
       painter.relief = relief;
       painter.level = standLevel(world, joined, relief);
@@ -73,6 +73,7 @@ export class PlotDrawing {
     keep(painter);
     // (where it stands: placed freely, its outline's corners)
     const points = s.free ? world.outlineOf(s) : world.nodesOf(s).map((n) => world.grid.xy(n));
+    if (def.lies) painter.follow = true; // (a pond: on the ground, as it runs)
     if (def.site) {
       painter.follow = true; // parks and squares lie on the ground like yards
       const site = world.siteAreaOf(s);

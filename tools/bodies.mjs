@@ -21,7 +21,7 @@ const up = (v) => Math.ceil(v * 100 - 1e-6) / 100;
 
 const rows = [];
 for (const [id, def] of Object.entries(STRUCTURE_TYPES)) {
-  if (def.site) continue;
+  if (def.site || def.body) continue; // (a body of its own: drawn on the ground, a pond)
   const kinds = def.kinds?.length ? [...new Set(def.kinds)] : [undefined];
   let b = null;
   for (let k = 0; k < SEEDS; k++) {
