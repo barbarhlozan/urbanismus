@@ -88,13 +88,15 @@ camera sit along its bottom. On a phone, tap once to preview and again to confir
   place left empty here and there, kept off the footpaths, the church and the trees. A footpath
   through the wall gets an arched gateway; a road through it opens it, and the graves go.
 - **Občanská vybavenost** also has a house of culture and a cemetery. **Prostranství** has
-  each kind of park and square as its own tool, in its sizes (**Shift**) and looks (**Space**):
-  greenery, a playground, a sports ground, a garden, a forest park with a lookout, a park by a
-  pond, a village well (a small thing: a rumpál, or a pump on a concrete ring or a stone slab;
+  the pieces a park or a náves is made of, in their sizes (**Shift**) and looks (**Space**):
+  trees, a pond, a football pitch (the kids' one or a full one, lying on the ground, turned any
+  way; people come to stand about on it), a village well (a small thing: a rumpál, or a pump on a concrete ring or a stone slab;
   people stop by it a moment), a bench (a small thing: the park one with cast-iron sides, the
   concrete one of the 70s náves, a plank on two stumps by a chalupa; people sit on it a while),
-  a summer cinema; a plaza, a fountain square, a monument square, a market square, a
-  shopping precinct, a parade square. The ČSAD bus station is in **Doprava**.
+  and, locked for the story, the town's playground, garden, forest park and summer cinema on
+  their lots. The greens and the paved squares are no longer offered; **Socha a kašna**
+  (Památky) is what stood on a square, a small thing: St John of Nepomuk, a Marian column or a
+  kašna. The ČSAD bus station is in **Doprava**.
 - A park only gets walkways where people can come in: a footpath reaching it, a street
   (sidewalks) or lane along it, or a neighbouring park that has a way in. One way in runs to
   a loop, two curve into each other, more meet at a little plaza; with none it stays a plain

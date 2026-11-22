@@ -117,7 +117,7 @@
 #   Prostranství
 #     green              green, meadow
 #     playground         playground, playground_large
-#     sports_ground      pitch, sports_ground
+#     sports_ground      pitch, sports_ground, playing_field, playing_field_large
 #     flower_beds        garden_park
 #     forest_park        forest_park
 #     village_pond       pond_park, pond, pond_large
@@ -129,6 +129,7 @@
 #     shopping_precinct  precinct_large
 #   Památky
 #     chapel             chapel
+#     monument           monument
 #     wayside_cross      wayside_cross
 #     church             church
 #     town_hall          town_hall, town_hall_small, town_hall_large

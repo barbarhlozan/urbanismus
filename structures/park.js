@@ -584,6 +584,35 @@ const pondOf = (id, size, hw, hd) => ({
 export const pond = pondOf('pond', 'Small', 0.3, 0.22);
 export const pondLarge = pondOf('pond-large', 'Large', 0.55, 0.38);
 
+// The football pitch on its own, a small thing (def.small) lying on the
+// ground: its lines and goals, set anywhere and turned any way, the
+// benches and trees along it the player's. Shift: the kids' pitch behind
+// the school or a full one for the village's own team. People come to it
+// as to a park and stand about on it a while.
+const fieldOf = (id, size, hw, hd) => ({
+  id,
+  name: 'Sports ground',
+  blurb: 'A football pitch',
+  size,
+  category: 'spaces',
+  tags: ['park'], // somewhere to go (agents/trips.js)
+  access: 'any',
+  small: true,
+  lies: true,
+  numbered: false,
+  yards: [],
+  sim: { destinations: [], stop: { time: [20, 60], reach: Math.min(hw, hd) * 0.8 } },
+  footprint: [[0, 0]],
+  body: [-(hw + 0.03), -(hd + 0.03), hw + 0.03, hd + 0.03], // (drawn on the ground, so given)
+  stats: {},
+  agents: 0,
+  draw(g) {
+    pitch(g, -hw, -hd, hw, hd);
+  },
+});
+export const field = fieldOf('playing-field', 'Small', 0.33, 0.21);
+export const fieldLarge = fieldOf('playing-field-large', 'Large', 0.78, 0.48);
+
 // A tree planted where the player wants it, one at a time: a small thing
 // (def.small) taking only the ground by its trunk, so it goes right by a
 // wall or a path, in a row along a road, round a pond. Space steps through

@@ -97,6 +97,34 @@ function stalls(g, x0, x1, y, n) {
   }
 }
 
+// ----- what stands on a náves -----
+
+// The saint, the column or the kašna on its own, a small thing (def.small):
+// set anywhere on a náves and turned any way, the paving, lindens and
+// benches round it the player's. Space steps through them.
+export const monument = {
+  id: 'monument',
+  name: 'Monument',
+  blurb: 'A saint, a column or a fountain',
+  category: 'heritage',
+  tags: ['heritage'],
+  access: 'any',
+  small: true,
+  numbered: false,
+  yards: [],
+  sim: { destinations: [] },
+  footprint: [[0, 0]],
+  stats: {},
+  agents: 0,
+  kinds: ['nepomuk', 'column', 'fountain'],
+  draw(g, s) {
+    const kind = kindOf(g, s, this.kinds);
+    if (kind === 'nepomuk') nepomuk(g, 0, 0);
+    else if (kind === 'column') marianColumn(g, 0, 0);
+    else kasna(g, 0, 0, 0.11);
+  },
+};
+
 // ----- the náměstí -----
 
 // The plácek: a small paved square with a statue of St John of Nepomuk, a

@@ -606,6 +606,14 @@ village_pond.blurb
   cs: Voda pro hasiče
   en: Water for the firemen
 
+monument
+  cs: Socha a kašna
+  en: Monument
+
+monument.blurb
+  cs: Svatý, sloup nebo kašna
+  en: A saint, a column or a fountain
+
 tree
   cs: Strom
   en: Tree
