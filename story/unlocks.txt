@@ -116,7 +116,7 @@
 #     cukrovar           cukrovar
 #   Prostranství
 #     green              green, meadow
-#     playground         playground, playground_large
+#     playground         playground, playground_large, play, play_large
 #     sports_ground      pitch, sports_ground, playing_field, playing_field_large
 #     flower_beds        garden_park
 #     forest_park        forest_park

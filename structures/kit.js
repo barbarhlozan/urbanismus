@@ -724,7 +724,7 @@ export function slide(g, x, y, alongX = g.chance(0.5)) {
 }
 
 // Seesaw.
-function seesaw(g, x, y, alongX = g.chance(0.5)) {
+export function seesaw(g, x, y, alongX = g.chance(0.5)) {
   if (!g.isFree(x, y, 0.08)) return;
   const [dx, dy] = alongX ? [0.08, 0] : [0, 0.08];
   g.detailed(2, () => {

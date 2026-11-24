@@ -114,7 +114,7 @@ export const BUILD_FAMILIES = [
   [industry.cukrovar],
   // Prostranství
   [park.green, park.meadow], [park.playgroundSmall, park.playgroundLarge], [park.pitchSmall, park.sportsGround],
-  [park.gardenPark], [park.forestPark], [park.pondPark], [park.pond, park.pondLarge], [park.field, park.fieldLarge], [park.well], [park.lavicka], [park.plantedTree], [park.summerCinema],
+  [park.gardenPark], [park.forestPark], [park.pondPark], [park.pond, park.pondLarge], [park.field, park.fieldLarge], [park.play, park.playLarge], [park.well], [park.lavicka], [park.plantedTree], [park.summerCinema],
   [square.plaza, square.marketSquare], [square.precinctLarge],
   // Památky
   [heritage.chapel], [wayside], [square.monument], [heritage.church], [heritage.townHall, heritage.townHallSmall, heritage.townHallLarge], [heritage.memorial],
@@ -124,11 +124,11 @@ export const BUILD_FAMILIES = [
 // Buildings through the one-by-one review: only their tools are offered
 // for now. The rest stay registered (saves still load and draw them) but
 // can't be picked up until their turn comes.
-// The greens, the pitch on its lot and the paved squares are no longer
-// offered: a park or a náves is made of small things now (trees, benches,
+// The greens, the pitch and the playground on their lots, the paved
+// squares and the summer cinema are no longer offered: a park or a náves is made of small things now (trees, benches,
 // a pond, a pitch, a monument) and the footpaths the player draws.
 export const REVIEWED = new Set(['bus-stop', 'house', 'house-wide', 'family-house', 'family-house-wide', 'vymenek', 'chapel', 'wayside-cross', 'monument', 'church',
-  'playground', 'playground-large', 'garden-park', 'forest-park', 'pond', 'pond-large', 'playing-field', 'playing-field-large', 'well', 'bench', 'planted-tree', 'summer-cinema',
+  'garden-park', 'forest-park', 'pond', 'pond-large', 'playing-field', 'playing-field-large', 'play', 'play-large', 'well', 'bench', 'planted-tree',
   'hospoda', 'hospoda-wide', 'penzion']);
 
 export const STRUCTURES = BUILD_FAMILIES.flat();

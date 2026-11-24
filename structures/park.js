@@ -20,7 +20,7 @@
 
 import {
   tree, bush, bench, lamp, tufts,
-  playground, bandstand, flowerBed, kiosk, pitch, swings, sandpit, FRAME, kindOf, wooden,
+  playground, bandstand, flowerBed, kiosk, pitch, swings, sandpit, slide, seesaw, FRAME, kindOf, wooden,
 } from './kit.js';
 import { segmentDistance } from '../src/core/geom2d.js';
 import { drawTree } from '../features/trees.js';
@@ -612,6 +612,53 @@ const fieldOf = (id, size, hw, hd) => ({
 });
 export const field = fieldOf('playing-field', 'Small', 0.33, 0.21);
 export const fieldLarge = fieldOf('playing-field-large', 'Large', 0.78, 0.48);
+
+// The playground on its own, a small thing (def.small): its pieces set
+// round a sandpit, placed anywhere and turned any way, the benches and
+// trees round it the player's. Shift: the small one behind the school or
+// the pub – a sandpit, swings, a slide and a seesaw – or the sídliště one
+// of the 70s round the steel rocket, two swings, prolézačky and a big
+// sandpit. People come to it as to a park and stay a while.
+function smallPlayground(g) {
+  g.groundCircle(0, 0, 0.17, { dash: '1 2', lod: 1 });
+  sandpit(g, 0, 0);
+  swings(g, -0.12, -0.08, true);
+  slide(g, 0.12, -0.06, false);
+  seesaw(g, 0.02, 0.13);
+}
+
+function bigPlayground(g) {
+  // (the rocket and the big sandpit in opposite corners: the tall rocket
+  // never stands over the sandpit's edge, whichever way it's seen)
+  g.groundCircle(0.22, 0.22, 0.17, { dash: '1 2', lod: 1 });
+  rocket(g, 0.22, 0.22);
+  for (const k of [-1, 1]) swings(g, 0.22 + k * 0.1, -0.22, true);
+  for (const k of [-1, 1]) climbingArch(g, -0.22, 0.22 + k * 0.09, true);
+  g.detailed(1, () => g.box(-0.35, -0.35, 0, 0.26, 0.26, 0.02));
+  sandpit(g, -0.22, -0.22);
+}
+
+const playgroundOf = (id, size, half, draw) => ({
+  id,
+  name: 'Playground',
+  blurb: 'Swings and a sandpit',
+  size,
+  category: 'spaces',
+  tags: ['park'], // somewhere to go (agents/trips.js)
+  access: 'any',
+  small: true,
+  numbered: false,
+  yards: [],
+  sim: { destinations: [], stop: { time: [20, 60], reach: half * 0.7 } },
+  footprint: [[0, 0]],
+  // (the rocket and the arches are bars drawn as lines: not measured, given)
+  body: [-half, -half, half, half],
+  stats: {},
+  agents: 0,
+  draw,
+});
+export const play = playgroundOf('play', 'Small', 0.21, smallPlayground);
+export const playLarge = playgroundOf('play-large', 'Large', 0.42, bigPlayground);
 
 // A tree planted where the player wants it, one at a time: a small thing
 // (def.small) taking only the ground by its trunk, so it goes right by a
