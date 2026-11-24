@@ -22,8 +22,8 @@
 // a branch hanging out at each tier; a shrub as a small broadleaf crown on
 // the ground. A few short lines inside on the side away from the light
 // (the light the buildings' shadows come from) give the volume, hidden
-// when zoomed far out, and a short stroke on the ground at the foot
-// (footStroke) stands each tree on the map, as each building stands on one.
+// when zoomed far out. No stroke on the ground at the foot: under a crown
+// it read as a stray line.
 // Each leaves its crown's and trunk's shapes for the shadow it casts on
 // the ground (Painter.cast, render/shadows.js castShapes): a round one
 // from a broadleaf or a shrub, a pointed one from a spruce.
@@ -495,8 +495,9 @@ export function treeLightSector(camera) {
   return lightSector(ballLight(camera));
 }
 
-// A short stroke on the ground at a tree's foot, a little aslant, as each
-// building stands on one (LOOK.ground in painter.js); far out it goes.
+// What a tree has on the ground at its foot: in the watercolour scheme a
+// pool of its crown's colour, else nothing (the short stroke it once stood
+// on read as a stray line under it).
 function footStroke(g, x, y, H) {
   // (watercolour: a pool of the crown's colour on the ground under it)
   if (g.wash) {
@@ -510,8 +511,9 @@ function footStroke(g, x, y, H) {
     }
     g.shape(x, y, 0, pts, { smooth: true, cls: 'pool', lod: 1 });
   }
-  const w = H * g.range(0.1, 0.15);
-  g.strokes(x, y, 0, [[[-w * g.range(0.6, 1), H * 0.006], [w, -H * 0.008]]], { cls: 'tree-foot', lod: 1 });
+  // (its two draws still taken, so every tree keeps the shape it had)
+  g.range(0.1, 0.15);
+  g.range(0.6, 1);
 }
 
 // A crown outline as plain as the painter's `detail` asks (0: as is): its
