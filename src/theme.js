@@ -31,8 +31,8 @@
 // needs no redraw.
 
 export const SCHEMES = [
-  { name: 'Blue pencil', bg: '#ebe7dd', main: '#363eba', detail: '#555bb3' },
-  { name: 'Black pencil', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486' },
+  { name: 'Blue pen', bg: '#ebe7dd', main: '#363eba', detail: '#555bb3' },
+  { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486' },
   // the pen sketch coloured in: drawn as the Blue pen is, over colours
   // by what each thing is (html.tint in styles.css)
   { name: 'Countryside', bg: '#f3eee2', main: '#3a2c24', detail: '#8f8a6e', tint: true },

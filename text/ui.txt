@@ -228,8 +228,8 @@ scheme.black-pen
   en: Regular pencil
 
 scheme.countryside
-  cs: Venkov
-  en: Countryside
+  cs: Pastelky
+  en: Colorful pencils
 
 scheme.custom
   cs: Vlastní
