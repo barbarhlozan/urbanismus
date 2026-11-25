@@ -54,6 +54,8 @@ a Czech or German layout.
 - Drawn **over a river**, a way gets a bridge: it crosses straight, in the direction nearest to the
   stroke, and bends back to the line on the far bank. It only fails if the way ends in the water or the
   river is too wide.
+- Drag a way **off the map** and it stops where it crossed the edge: nothing is drawn beyond it,
+  and the way runs on off the map there (an exit for cars, buses and trains).
 - Draw a footpath **along a road** (on it or right beside it) to make it a street with sidewalks (kerb lines on both
   sides, street lamps, zebra crossings at junctions). People only walk along streets and footpaths; cyclists and
   cars use every road. Erasing a street removes its sidewalks first.

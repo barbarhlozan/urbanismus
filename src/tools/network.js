@@ -80,6 +80,17 @@ export function createNetworkTool(ctx, options) {
     return p;
   };
 
+  // Where the line from p (on the land) to q (off it) crosses the edge.
+  const edgeCrossing = (p, q) => {
+    let lo = 0, hi = 1;
+    const at = (t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (world.land.depth(...at(mid)) >= 0) lo = mid; else hi = mid;
+    }
+    return at(lo);
+  };
+
   const same = (p, q) => p && q && Math.hypot(p[0] - q[0], p[1] - q[1]) < SAME * Math.max(layer.scale, 0.5);
   // an end set on a way (snapPoint) stays there
   const onWay = (p) => !!(world.ways.nodeNear(...p, 1e-3) || world.ways.edgeNear(...p, 1e-3));
@@ -161,9 +172,17 @@ export function createNetworkTool(ctx, options) {
       stroke = [snapPoint(x, y)];
     },
     move(x, y) {
-      if (!stroke) return;
+      if (!stroke || stroke.offMap) return;
       const last = stroke.at(-1);
-      if (Math.hypot(x - last[0], y - last[1]) >= 0.04 * unit) stroke.push(world.land.inside(x, y) ? [x, y] : toEdge(x, y));
+      if (Math.hypot(x - last[0], y - last[1]) < 0.04 * unit) return;
+      if (world.land.inside(x, y)) { stroke.push([x, y]); return; }
+      // Off the map: the way ends where the hand crossed the edge, so it
+      // runs out there (an exit, World.roadExits) and nothing is drawn
+      // beyond, however far the drag goes on. A stroke begun on the edge
+      // waits until the hand comes onto the land.
+      if (world.land.depth(...last) <= 1e-3) return;
+      stroke.push(edgeCrossing(last, [x, y]));
+      stroke.offMap = true;
     },
     end() {
       if (!stroke) return;
