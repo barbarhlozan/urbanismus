@@ -243,11 +243,15 @@ export function pathJoins(world, curve, lane, pathCurve) {
 // edges pushed out to the kerb (roadEdges), so where two sidewalks meet
 // at a junction they round the corner like the road does, and a street's
 // dead end is walked round. Next to a road side without one they stop
-// short, clear of the other road.
-// Returns [{ key, line, a, b }] (keys as roadEdges', for the pen).
+// short, clear of the other road. Where a street runs off the map its
+// kerbs run on past the edge with the road, rather than walking round a
+// dead end that isn't one.
+// Returns [{ key, kind, line, a, b }] (keys as roadEdges', for the pen;
+// kind 'fade' the stretch fading out past a map exit).
 // `joins` (pathJoins): dead ends a footpath carries on from stay open.
 export function streetKerbs(world, curve, lane, joins = new Map()) {
   const layer = world.networks.road;
+  const exits = new Map(world.roadExits().map((e) => [e.way, e.dir]));
   // (from the ways' own curves: wayOutline.js; a lane's `walks` bit 1 is
   // its side 0, offset + from a to b)
   const width = (e) => (e.street ? curve.kerb : !e.lane ? curve.edge : e.walks ? lane.kerb : lane.edge);
@@ -256,8 +260,9 @@ export function streetKerbs(world, curve, lane, joins = new Map()) {
   const out = [];
   for (const { key, kind, line, a, b, on } of wayOutlines(world.ways, {
     keep: (e) => e.kind === 'road', width, sides, dot, capAt: (n) => !joins.has(dot(n)),
+    exitDir: (n) => exits.get(n) ?? null,
   })) {
-    if (on && kind !== 'exit' && kind !== 'fade') out.push({ key, line, a, b });
+    if (on) out.push({ key, kind, line, a, b });
   }
   return out;
 }

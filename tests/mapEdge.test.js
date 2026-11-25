@@ -32,3 +32,17 @@ for (const land of ['square', 'round']) {
     assert.equal(w.roadExits().length, 1, 'it runs off the map');
   });
 }
+
+// A street run off the map: its kerbs carry on past the edge with the road,
+// not round in a half circle across the sidewalk as at a dead end.
+test("a street's kerbs run on off the map at an exit", async () => {
+  const { streetKerbs } = await import('../src/roads/geometry.js');
+  const { CONFIG } = await import('../src/config.js');
+  const w = new World({ width: 24, height: 24, seed: 3, name: 'Testov', rockiness: 0, hilliness: 0 });
+  const tool = createNetworkTool({ world: w, config: {} }, { kind: 'road', street: true });
+  drag(tool, [[11.5, 11.5], [30, 11.5]]);
+  assert.equal(w.roadExits().length, 1);
+  const kinds = streetKerbs(w, CONFIG.road, CONFIG.lane).map((k) => k.kind);
+  assert.ok(kinds.includes('exit') && kinds.includes('fade'), 'kerbs carry on off the map');
+  assert.equal(kinds.filter((k) => k === 'end').length, 1, 'only the inner dead end is walked round');
+});

@@ -1,5 +1,5 @@
-// Removes whatever is under the pointer: building, then footpath, then a
-// street's sidewalks, then road, then railway, then fence, then a field (the
+// Removes whatever is under the pointer: building, then footpath, then road
+// (a street with its sidewalks), then railway, then fence, then a field (the
 // whole of it), then trees. Snaps to the dense grid so footpaths between buildings can be hit.
 // It has no options of its own; it stands in the Build menu's box of loose
 // things, with Terrain and Zpět beside it (ui/buildMenu.js).

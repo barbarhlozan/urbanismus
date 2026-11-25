@@ -58,7 +58,7 @@ a Czech or German layout.
   and the way runs on off the map there (an exit for cars, buses and trains).
 - Draw a footpath **along a road** (on it or right beside it) to make it a street with sidewalks (kerb lines on both
   sides, street lamps, zebra crossings at junctions). People only walk along streets and footpaths; cyclists and
-  cars use every road. Erasing a street removes its sidewalks first.
+  cars use every road. Erasing a street takes it whole, sidewalks and all.
 - Roads are drawn by hand, as footpaths are, only with a steadier pen: each edge (and a street's kerb) in
   long strokes that overlap where the pen was set down again, now and then gone over twice. Footpaths
   are lighter, broken and wander in and out.

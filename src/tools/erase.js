@@ -1,5 +1,5 @@
 // What the eraser takes at a point (x, y in main-dot units): building, then
-// footpath, then a street's sidewalks, then road, then railway, then fence or
+// footpath, then road (a street with its sidewalks, all at once), then railway, then fence or
 // churchyard wall,
 // then a field (the whole of it, and the crop sinks back into the ground
 // from where it was touched), then trees. null if there is nothing. Used by the eraser tool and by cmd.erase.
@@ -22,9 +22,6 @@ export function eraseTarget(world, point) {
   const path = way('path', 0.25);
   if (path) return { run: () => world.removeWay(path.edge.id) };
   const road = way('road', 0.45);
-  // a street's sidewalks first (a lane's kerbs too), then the road
-  if (road?.edge.street) return { run: () => world.setWayAttrs(road.edge.id, { street: false }) };
-  if (road?.edge.walks) return { run: () => world.setWayAttrs(road.edge.id, { walks: 0 }) };
   if (road) return { run: () => world.removeWay(road.edge.id) };
   const rail = way('rail', 0.3);
   if (rail) return { run: () => world.removeWay(rail.edge.id) };

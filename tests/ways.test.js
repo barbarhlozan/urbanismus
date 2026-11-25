@@ -182,7 +182,7 @@ test('in the world: the eraser takes a way between junctions, and a junction lef
   assert.equal(w.ways.edges.size, 3);
 });
 
-test("in the world: the eraser takes a street's sidewalks before the street", async () => {
+test('in the world: the eraser takes a street whole, sidewalks and all', async () => {
   const { flatWorld } = await import('./helpers.js');
   const { eraseTarget } = await import('../src/tools/erase.js');
   const w = flatWorld();
@@ -190,8 +190,6 @@ test("in the world: the eraser takes a street's sidewalks before the street", as
   assert.ok(w.sidewalks.size > 0);
   eraseTarget(w, [6, 6.2]).run();
   assert.equal(w.sidewalks.size, 0);
-  assert.equal(w.ways.edges.size, 1);
-  eraseTarget(w, [6, 6.2]).run();
   assert.equal(w.ways.edges.size, 0);
   assert.equal(w.roads.edgeCount, 0);
 });

@@ -777,10 +777,12 @@ export class NetworkDrawing {
         add(`rwx${node}`, 'road-wash-exit', [[x, y], [x + dir[0] * 1.9, y + dir[1] * 1.9]], node, node);
       }
 
-      // kerbs, rounding the corners, open where a footpath comes in
+      // kerbs, rounding the corners, open where a footpath comes in, and
+      // faded out with the road past a map exit
       const paths = pathIndex(world, this.config);
       const open = (q) => paths.distance(q, this.config.path.edge + PATH_OPENING) === Infinity;
-      for (const { key, line, a, b } of streetKerbs(world, curve, lane, joins)) {
+      for (const { key, kind, line, a, b } of streetKerbs(world, curve, lane, joins)) {
+        if (kind === 'fade') { add(`k${key}`, 'road-exit', line, a, b); continue; }
         keepRuns(line, open).forEach((run, j) => { const k = `k${key}${j ? `:${j}` : ''}`; addRuns(k, 'kerb', trodden(run, hashKey(k), ROAD), a, b); });
       }
       // zebra crossings where streets meet a junction
