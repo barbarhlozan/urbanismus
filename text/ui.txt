@@ -220,12 +220,12 @@ color.green
   en: Greenery
 
 scheme.blue-pen
-  cs: Modré pero
-  en: Blue pen
+  cs: Modrá tužka
+  en: Blue pencil
 
 scheme.black-pen
-  cs: Černé pero
-  en: Black pen
+  cs: Obyčejná tužka
+  en: Regular pencil
 
 scheme.countryside
   cs: Venkov

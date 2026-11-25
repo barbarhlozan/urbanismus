@@ -55,3 +55,41 @@ export function shape(cls, d) {
 }
 
 export { STYLES as AGENT_STYLES };
+
+// The same figure in another hand (0…hands-1), for those drawn in only one
+// (people, cyclists, canoes, animals): every point moved a little, as one
+// drawing of a cartoon differs from the next. Moved by one smooth sway over
+// the whole figure, so a point shared by two parts stays shared and a curve
+// stays a curve; `share` of the figure's size at most. Cached per figure.
+const boiledOf = new WeakMap();
+export function boiled(shapes, hand, share = 0.03) {
+  let hands = boiledOf.get(shapes);
+  if (!hands) boiledOf.set(shapes, hands = []);
+  if (hands[hand]) return hands[hand];
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const s of shapes) eachPoint(s.d, (x, y) => {
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    return [x, y];
+  });
+  const size = Math.max(x1 - x0, y1 - y0, 1e-6), amp = size * share, f = (Math.PI * 3) / size;
+  const p = [1.3, 4.1, 2.7, 5.9].map((k) => k * (hand + 1));
+  const sway = (x, y) => [
+    x + amp * 0.5 * (Math.sin(x * f + p[0]) + Math.sin(y * f * 1.3 + p[1])),
+    y + amp * 0.5 * (Math.sin(y * f + p[2]) + Math.sin(x * f * 1.3 + p[3])),
+  ];
+  return (hands[hand] = shapes.map((s) => ({ style: s.style, d: eachPoint(s.d, sway) })));
+}
+
+// A path with each of its points through `fn` (an arc's radii left alone).
+function eachPoint(d, fn) {
+  const r = (n) => Math.round(n * 100) / 100;
+  return d.replace(/([MLCQA])([^MLCQAZz]*)/g, (all, cmd, args) => {
+    const n = args.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+    const step = cmd === 'A' ? 7 : 2;
+    for (let i = 0; i + step <= n.length; i += step) {
+      const k = cmd === 'A' ? i + 5 : i;
+      [n[k], n[k + 1]] = fn(n[k], n[k + 1]);
+    }
+    return cmd + n.map(r).join(' ');
+  });
+}

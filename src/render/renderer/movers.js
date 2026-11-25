@@ -10,7 +10,7 @@ import { PEOPLE, bodyFor, walkerSVG, cyclistSVG, canoeSVG, canoeMarkSVG } from '
 import { DEER, deerSVG, deerMark } from '../deer.js';
 import { LIVESTOCK, livestockSVG, livestockMark } from '../livestock.js';
 import { drawEnabled, growScale, shrinkScale } from '../draw.js';
-import { AGENT_STYLES, shapesOf, shape } from '../agentCanvas.js';
+import { AGENT_STYLES, shapesOf, shape, boiled } from '../agentCanvas.js';
 import { signsAt, signSVG, flashSVG, litLight } from '../crossings.js';
 import { carMark, personMark } from '../marks.js';
 import { r2 } from './shared.js';
@@ -53,7 +53,7 @@ export class MoverDrawing {
     for (const t of this.trains.visible()) {
       seen.add(t.id);
       let el = this.trainEls.get(t.id);
-      if (!el) this.trainEls.set(t.id, el = {});
+      if (!el) this.trainEls.set(t.id, el = { id: t.id });
       this.placeTrain(el, t.points.map((p, i) => ({ i, p })).filter(({ p }) => onMap(p)));
     }
     for (const id of this.trainEls.keys()) if (!seen.has(id)) this.trainEls.delete(id);
@@ -76,7 +76,8 @@ export class MoverDrawing {
       if (!this.pen.onScreen(sx, sy)) continue;
       const heading = headingIndex(b.angle);
       const svg = close ? canoeSVG(cam, heading, b.crew.map((v) => v % PEOPLE.bodies), b.stroke) : canoeMarkSVG(cam, heading);
-      this.pen.draw(shapesOf(svg), sx, sy, growScale(now - this.boatBorn.get(b.id)));
+      const shapes = close ? boiled(shapesOf(svg), this.boil({}, modelFor(b.id), true)) : shapesOf(svg); // (always under way)
+      this.pen.draw(shapes, sx, sy, growScale(now - this.boatBorn.get(b.id)));
     }
     for (const id of this.boatBorn.keys()) if (!seen.has(id)) this.boatBorn.delete(id);
   }
@@ -99,10 +100,11 @@ export class MoverDrawing {
       const [sx, sy] = this.project(d.x, d.y);
       const stride = farm ? LIVESTOCK.stride : DEER.stride;
       const pose = d.pose !== 'walk' ? d.pose : Math.floor(d.walked / stride) % 2 ? 'step' : 'stand';
-      const key = close ? `${d.kind}|${pose}|${d.variant}` : `m${d.kind}`;
+      const hand = close ? this.boil(el, (el.model ??= modelFor(d.id)), d.pose === 'walk') : 0;
+      const key = close ? `${d.kind}|${pose}|${d.variant}|${hand}` : `m${d.kind}`;
       if (el.key !== key) {
         el.key = key;
-        el.shapes = close ? shapesOf(farm ? livestockSVG(d.kind, pose, d.variant) : deerSVG(d.kind, pose, d.variant))
+        el.shapes = close ? boiled(shapesOf(farm ? livestockSVG(d.kind, pose, d.variant) : deerSVG(d.kind, pose, d.variant)), hand)
           : [shape('walker', farm ? livestockMark(d.kind) : deerMark(d.kind))];
       }
       const [fx] = this.project(d.x + Math.cos(d.facing) * 0.1, d.y + Math.sin(d.facing) * 0.1);
@@ -334,10 +336,14 @@ export class MoverDrawing {
     const order = cars
       .map(({ i, p: [x, y, dx, dy] }) => ({ i, x, y, a: Math.atan2(dy, dx), h: headingIndex(Math.atan2(dy, dx)), depth: cam.depth(x, y) }))
       .sort((a, b) => a.depth - b.depth);
-    const key = `${cam.angle}|${order.map((c) => `${c.i}:${c.h}`).join(',')}`;
+    // boiling as it runs, held at a stop (by where its first car is)
+    const [fx, fy] = cars[0].p, moving = !el.at || Math.hypot(fx - el.at[0], fy - el.at[1]) > 1e-4;
+    el.at = [fx, fy];
+    const hand = this.boil(el, (el.model ??= modelFor(`train${el.id}`)), moving);
+    const key = `${cam.angle}|${hand}|${order.map((c) => `${c.i}:${c.h}`).join(',')}`;
     if (el.key !== key) {
       el.key = key;
-      el.shapes = order.map((c) => shapesOf(vehicleSVG(cam, `railcar:${len}`, c.h, c.i % VEHICLES.hands)));
+      el.shapes = order.map((c) => shapesOf(vehicleSVG(cam, `railcar:${len}`, c.h, (c.i + hand) % VEHICLES.hands)));
     }
     const half = len / 2;
     order.forEach((c, k) => {
@@ -409,8 +415,10 @@ export class MoverDrawing {
   placePerson(el, a, kind, sx) {
     const cam = this.camera;
     const body = (el.body ??= bodyFor(a.id));
+    let moving = false;
     if (el.at) {
       const dx = a.x - el.at[0], dy = a.y - el.at[1];
+      moving = dx * dx + dy * dy > 1e-8;
       if (dx * dx + dy * dy > 1e-8) el.heading = headingIndex(Math.atan2(dy, dx));
       if (Math.abs(sx - el.sx) > 1e-3) el.left = sx < el.sx;
       // steps by the way walked, so one standing still stands still; each
@@ -428,11 +436,12 @@ export class MoverDrawing {
     const share = this.umbrellas;
     const brolly = kind === 'walker' && share > 0 && ((el.brolly ??= bodyFor(`${a.id}u`)) + 0.5) / PEOPLE.bodies <= share;
     const carry = kind === 'walker' ? a.carry : null; // (at a fire: a bucket, the hose)
-    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.angle}` : `w${body}${brolly ? 'u' : ''}${carry ?? ''}`;
+    const hand = close ? this.boil(el, (el.model ??= modelFor(a.id)), moving) : 0;
+    const key = !close ? 'dot' : kind === 'cyclist' ? `c${body}|${heading}|${cam.angle}|${hand}` : `w${body}${brolly ? 'u' : ''}${carry ?? ''}|${hand}`;
     if (el.key !== key) {
       el.key = key;
       el.shapes = !close ? [shape(kind, personMark(kind, a.id))]
-        : shapesOf(kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body, brolly, carry));
+        : boiled(shapesOf(kind === 'cyclist' ? cyclistSVG(cam, heading, body) : walkerSVG(body, brolly, carry)), hand);
     }
     // at a fire, facing it (or whoever they pass the bucket to)
     if (a.watch) el.left = this.projectDeck(a.watch[0], a.watch[1], 0.04)[0] < sx;
@@ -470,11 +479,13 @@ export class MoverDrawing {
     el.shapes = close ? shapesOf(vehicleSVG(this.camera, model.name, heading, hand)) : (CAR_MARK ??= [shape('car', carMark())]);
   }
 
-  // The hand a vehicle is drawn in this frame: while it moves the next of
-  // its hands every 1 / VEHICLES.boil s, so its outline boils as a drawn
-  // cartoon's does from drawing to drawing; standing, the last one held.
-  // Each from its own hand and at its own moment (model.seed), so a queue
-  // doesn't boil in step.
+  // The hand anything that moves is drawn in this frame – a vehicle, a
+  // walker, a cyclist, a canoe, an animal: while it moves the next of
+  // VEHICLES.hands every 1 / VEHICLES.boil s, so its outline boils as a
+  // drawn cartoon's does from drawing to drawing; standing, the last one
+  // held. Each from its own hand and at its own moment (model: modelFor of
+  // its id), so a queue or a crowd doesn't boil in step. Those drawn in
+  // one hand only get the others from agentCanvas.js boiled.
   boil(el, model, moving) {
     if (moving || el.hand === undefined) el.hand = (model.hand + Math.floor((performance.now() / 1000) * VEHICLES.boil + model.seed)) % VEHICLES.hands;
     return el.hand;
