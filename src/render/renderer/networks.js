@@ -14,7 +14,7 @@ import { STRUCTURE_TYPES } from '../../../structures/index.js';
 import { wander } from '../../../structures/plots.js';
 import { pathIndex } from '../lots.js';
 import { zebraCrossings } from '../../roads/furniture.js';
-import { wayOutlines } from '../../roads/wayOutline.js';
+import { wayOutlines, EXIT_RUN } from '../../roads/wayOutline.js';
 import { trodden, ROAD } from '../dirtPath.js';
 import { findBridges, makeDeck, bridgeLines } from '../bridges.js';
 import { hashKey, COS30, STRUCTURE_PAD } from './shared.js';
@@ -765,16 +765,17 @@ export class NetworkDrawing {
         exitDir: exits, capAt: (n) => !joins.has(dot(n)), taper: lane.taper, dot,
       })) {
         // the edges in the road's hand (dirtPath.js ROAD), the rounded
-        // dead ends in one stroke, the fade at a map exit dashed
+        // dead ends in one stroke, and past a map exit one stroke more
+        // that fades out, as a pen lifted off the paper mid-line
         if (kind === 'edge' || kind === 'corner') addRuns(`r${key}`, 'road', trodden(line, hashKey(`r${key}`), ROAD), a, b);
-        else add(`r${key}`, kind === 'fade' ? 'road-exit' : 'road', line, a, b);
+        else add(`r${key}`, kind === 'exit' ? 'road-exit' : 'road', line, a, b);
       }
       for (const [n, { line }] of joins) line.forEach((pts, i) => addRuns(`rj${n}:${i}`, 'road', trodden(pts, hashKey(`rj${n}:${i}`), ROAD), n, n));
       // its centre lines, for the painted schemes' wash (gl/lines.js)
       for (const e of world.ways.edges.values()) if (e.kind === 'road') add(`rw${e.id}`, 'road-wash', e.pts);
       // …carried on off the map at its exits, fading out (as the edges' 'road-exit')
       for (const { node, pos: [x, y], dir } of world.roadExits()) {
-        add(`rwx${node}`, 'road-wash-exit', [[x, y], [x + dir[0] * 1.9, y + dir[1] * 1.9]], node, node);
+        add(`rwx${node}`, 'road-wash-exit', [[x, y], [x + dir[0] * EXIT_RUN, y + dir[1] * EXIT_RUN]], node, node);
       }
 
       // kerbs, rounding the corners, open where a footpath comes in, and
@@ -782,7 +783,7 @@ export class NetworkDrawing {
       const paths = pathIndex(world, this.config);
       const open = (q) => paths.distance(q, this.config.path.edge + PATH_OPENING) === Infinity;
       for (const { key, kind, line, a, b } of streetKerbs(world, curve, lane, joins)) {
-        if (kind === 'fade') { add(`k${key}`, 'road-exit', line, a, b); continue; }
+        if (kind === 'exit') { add(`k${key}`, 'road-exit', line, a, b); continue; }
         keepRuns(line, open).forEach((run, j) => { const k = `k${key}${j ? `:${j}` : ''}`; addRuns(k, 'kerb', trodden(run, hashKey(k), ROAD), a, b); });
       }
       // zebra crossings where streets meet a junction

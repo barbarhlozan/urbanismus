@@ -43,6 +43,10 @@ test("a street's kerbs run on off the map at an exit", async () => {
   drag(tool, [[11.5, 11.5], [30, 11.5]]);
   assert.equal(w.roadExits().length, 1);
   const kinds = streetKerbs(w, CONFIG.road, CONFIG.lane).map((k) => k.kind);
-  assert.ok(kinds.includes('exit') && kinds.includes('fade'), 'kerbs carry on off the map');
+  assert.ok(kinds.includes('exit'), 'kerbs carry on off the map');
+  // …each as one stroke, from the edge out to where it has faded
+  for (const k of streetKerbs(w, CONFIG.road, CONFIG.lane).filter((k) => k.kind === 'exit')) {
+    assert.ok(w.land.depth(...k.line[0]) > -0.3 && w.land.depth(...k.line.at(-1)) < -1.5);
+  }
   assert.equal(kinds.filter((k) => k === 'end').length, 1, 'only the inner dead end is walked round');
 });

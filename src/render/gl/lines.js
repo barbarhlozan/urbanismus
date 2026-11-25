@@ -41,7 +41,9 @@ const STYLES = {
   road: { colour: 'fg', width: 1, cap: 'round' },
   kerb: { colour: 'fg', width: 0.8, cap: 'round' },
   zebra: { colour: 'detail', width: 2, cap: 'butt' },
-  'road-exit': { colour: 'fg', width: 1, cap: 'butt', dash: [3, 4] },
+  // (past a map exit: the road's sides run on and fade out, as a stroke
+  // does where the pen lifts off the paper)
+  'road-exit': { colour: 'fg', width: 1, cap: 'round', fade: [0.2, 1.9] },
   footpath: { colour: 'fg', width: 0.7, cap: 'round' },
   bridge: { colour: 'fg', width: 1, cap: 'round' },
   'bridge-post': { colour: 'fg', width: 0.7, cap: 'round' },

@@ -82,13 +82,18 @@ function head(line, len) {
   return poly.total <= len ? line : subPolyline(poly, 0, len);
 }
 
+// How far a way's sides carry on past the map's edge before they have
+// faded out (world units; gl/lines.js 'road-exit' fades them over it).
+export const EXIT_RUN = 1.9;
+
 // The outlines of the ways `keep(edge)` picks:
 //   width(edge)    half the way's width
 //   sides(edge)    [side 0, side 1] – which sides count (kerbs: only the
 //                  sides with a sidewalk); side 0 is +width (offsetLine)
 //                  going from the edge's a to b. Default both.
 //   exitDir(node)  [dx, dy] where a way end runs off the map, else null:
-//                  its sides carry on 0.8, then fade
+//                  its sides carry on past the edge (EXIT_RUN) as strokes
+//                  the pen lets fade out
 //   capAt(node)    false leaves a dead end open (a footpath carrying on)
 //   taper          where a narrower way runs on into a wider one, its sides
 //                  widen into the wider one's over this length
@@ -100,8 +105,8 @@ function head(line, len) {
 // Returns [{ key, kind, line, a, b, on }]: kind 'edge' (a side of a run,
 // `on` true where that side counts), 'corner' (between two arms at a
 // junction; `on` when both sides it joins count), 'end' (round a dead
-// end; `on` when both sides count), 'exit' / 'fade' (off the map; `on`
-// as the side). Keys stay while the ways do (the pen, ink.js).
+// end; `on` when both sides count), 'exit' (off the map, from the edge
+// out to where it has faded; `on` as the side). Keys stay while the ways do (the pen, ink.js).
 export function wayOutlines(ways, opts) {
   const {
     keep = () => true, width, sides = () => [true, true], exitDir = () => null, capAt = () => true,
@@ -192,9 +197,11 @@ export function wayOutlines(ways, opts) {
       const away = exitDir(n);
       if (away) {
         const [ox, oy] = away;
+        // (in short steps, so the pen's width and the fade follow along it)
+        const steps = Math.ceil(EXIT_RUN / 0.2);
         ends.forEach(([ex, ey], k) => {
-          out.push({ key: `x${n}:${k}`, kind: 'exit', line: [[ex, ey], [ex + ox * 0.8, ey + oy * 0.8]], a: dot(n), b: dot(n), on: run.on[k] });
-          out.push({ key: `f${n}:${k}`, kind: 'fade', line: [[ex + ox * 0.8, ey + oy * 0.8], [ex + ox * 1.9, ey + oy * 1.9]], a: dot(n), b: dot(n), on: run.on[k] });
+          const line = Array.from({ length: steps + 1 }, (_, i) => [ex + (ox * EXIT_RUN * i) / steps, ey + (oy * EXIT_RUN * i) / steps]);
+          out.push({ key: `x${n}:${k}`, kind: 'exit', line, a: dot(n), b: dot(n), on: run.on[k] });
         });
       } else if (capAt(n)) {
         // a half circle round the end, from one side to the other

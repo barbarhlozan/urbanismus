@@ -247,7 +247,7 @@ export function pathJoins(world, curve, lane, pathCurve) {
 // kerbs run on past the edge with the road, rather than walking round a
 // dead end that isn't one.
 // Returns [{ key, kind, line, a, b }] (keys as roadEdges', for the pen;
-// kind 'fade' the stretch fading out past a map exit).
+// kind 'exit' the stroke fading out past a map exit).
 // `joins` (pathJoins): dead ends a footpath carries on from stay open.
 export function streetKerbs(world, curve, lane, joins = new Map()) {
   const layer = world.networks.road;
