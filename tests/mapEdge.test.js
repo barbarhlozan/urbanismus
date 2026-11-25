@@ -50,3 +50,19 @@ test("a street's kerbs run on off the map at an exit", async () => {
   }
   assert.equal(kinds.filter((k) => k === 'end').length, 1, 'only the inner dead end is walked round');
 });
+
+// A railway run off the map: its track carries on past the edge and then
+// on in one stroke that fades, picking up where the track stops.
+test("a railway's exit runs on in one fading stroke", async () => {
+  const { railParts } = await import('../src/roads/geometry.js');
+  const { CONFIG } = await import('../src/config.js');
+  const w = new World({ width: 24, height: 24, seed: 3, name: 'Testov', rockiness: 0, hilliness: 0 });
+  const tool = createNetworkTool({ world: w, config: {} }, { kind: 'rail' });
+  drag(tool, [[11.5, 11.5], [30, 11.5]]);
+  const exits = w.railExits();
+  assert.equal(exits.length, 1);
+  const [{ line, fade }] = railParts(w.networks.rail, CONFIG.rail, exits).exits;
+  assert.deepEqual(fade[0], line.at(-1));
+  assert.ok(fade.length > 2);
+  assert.ok(Math.abs(Math.hypot(fade.at(-1)[0] - fade[0][0], fade.at(-1)[1] - fade[0][1]) - 1.1) < 1e-6);
+});

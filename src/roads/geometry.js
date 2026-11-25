@@ -506,7 +506,7 @@ function networkChains(graph, breakAt = () => false) {
 //   edges    [{ a, b, line }] every segment, run by run (chainEdges), with
 //            the same curves as the other networks
 //   exits    [{ node, line, fade }] the track carried on 0.8 past a map
-//            exit, then its faint continuation off the map
+//            exit, then on as far again, a stroke the pen lets fade out
 //   buffers  [{ node, line }] a stop across each dead end that isn't a map exit
 export function railParts(layer, curve, exits) {
   const { graph } = layer;
@@ -518,7 +518,8 @@ export function railParts(layer, curve, exits) {
   const exitParts = exits.map(({ node, dir }) => ({
     node,
     line: [layer.pos(node), beyond(node, dir, 0.8)],
-    fade: [beyond(node, dir, 0.8), beyond(node, dir, 1.9)],
+    // (in short steps, so the pen's width and the fade follow along it)
+    fade: Array.from({ length: 7 }, (_, i) => beyond(node, dir, 0.8 + (1.1 * i) / 6)),
   }));
   const exitAt = new Set(exits.map((e) => e.node));
   const buffers = [];
