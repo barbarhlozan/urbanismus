@@ -173,8 +173,8 @@ void main() {
     return;
   }
   if (cover <= 0.0) discard;
-  // (the watercolour scheme: a see-through wash instead of the strokes,
-  // thicker in places as a wash dries)
+  // (a tone scheme: a see-through wash instead of the strokes, thicker in
+  // places as a wash dries)
   if (mode == 2) {
     vec2 c = floor(scene * 0.06), f = fract(scene * 0.06);
     f = f * f * (3.0 - 2.0 * f);

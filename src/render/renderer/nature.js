@@ -1,14 +1,10 @@
-// Woods and weather on the map (Renderer methods; see renderer.js): the
-// forest and its hatching, trees swaying in the wind, smoke and fire, and
-// the mist lying in the valleys.
+// Trees and weather on the map (Renderer methods; see renderer.js): trees
+// swaying in the wind, smoke and fire, and the mist lying in the valleys.
 
 import { MIST, mistLevel, mistSurface, mistSVG, mistHatch, coverSVG, mistIn, mistOut } from '../mist.js';
 import { drawEnabled } from '../draw.js';
-import { networkPolylines } from '../../roads/geometry.js';
-import { SegmentIndex } from '../../core/geom2d.js';
 import { SUN } from '../shadows.js';
-import { findForests, forestSVG } from '../forest.js';
-import { SVGNS, VIEW_SETTLE, BAND_HOLD, r2, detailRank, TREE_SWAY } from './shared.js';
+import { SVGNS, VIEW_SETTLE, r2, detailRank, TREE_SWAY } from './shared.js';
 
 export class NatureDrawing {
   // Hide the objects (and their ground drawing) that lie outside the drawn
@@ -76,77 +72,6 @@ export class NatureDrawing {
     } else if (e.key[0] === 's') {
       for (const el of e.g.querySelectorAll('g.sway')) unit(el, el.dataset.foot.split(' ').map(Number));
     }
-  }
-
-  // Is it a tree in a wood that is drawn as one shape?
-  inWoods(e) {
-    return this.farWoods?.size > 0 && e.key?.[0] === 'f' && this.farWoods.has(this.forestState().woodOf.get(Number(e.key.slice(1))));
-  }
-
-  // Which woods are drawn as one shape (forest.js) at zoom z: those it is
-  // further out than config.render.forest.zoom for, each by its own share
-  // of it (lod.spread, as the buildings' detail, bandOf), so the woods
-  // don't all turn at once; and each only once the zoom is BAND_HOLD past.
-  updateWoods(z) {
-    const { forest, lod } = this.config.render;
-    this.farWoods ??= new Set();
-    if (z >= forest.zoom * (1 + BAND_HOLD) && !this.farWoods.size) return; // (not even found while close)
-    const state = this.forestState();
-    if (z === this.woodsZoom && state === this.woodsFor) return;
-    this.woodsZoom = z;
-    this.woodsFor = state;
-    const far = new Set();
-    for (const w of state.woods) {
-      const at = forest.zoom * (1 - lod.spread * detailRank(`w${w.id}`));
-      const was = this.farWoods.has(w.id);
-      if (z < at * (was ? 1 + BAND_HOLD : 1 - BAND_HOLD)) far.add(w.id);
-    }
-    if (far.size === this.farWoods.size && [...far].every((id) => this.farWoods.has(id))) return;
-    this.farWoods = far;
-    this.dirty.add('forest');
-    this.cull();
-  }
-
-  // The woods (forest.js), found again after trees come or go.
-  forestState() {
-    if (!this.forests) {
-      const { world, config } = this;
-      const ways = new SegmentIndex([...networkPolylines(world.networks.road, config.road), ...networkPolylines(world.networks.rail, config.rail)]);
-      this.forests = findForests(world, config.render.forest, ways);
-      if (this.farWoods?.size) queueMicrotask(() => { this.woodsZoom = null; this.updateWoods(this.drawn.zoom); this.cull(); }); // trees that joined or left a wood
-    }
-    return this.forests;
-  }
-
-  renderForest() {
-    const state = this.farWoods?.size ? this.forestState() : null;
-    const woods = state ? state.woods.filter((w) => this.farWoods.has(w.id)) : [];
-    this.forestHatchAt = this.hatchScale(this.drawn.zoom);
-    const svg = woods.length ? forestSVG({ woods, cover: state.cover }, (x, y) => this.project(x, y), this.config.render.forest, this.camera, this.config.render.forest.hatch / this.forestHatchAt) : '';
-    if (svg !== this.forestDrawn) this.layers.forest.innerHTML = this.forestDrawn = svg;
-  }
-
-  // The woods' hatching keeps its spacing on screen (config.render.forest
-  // .hatch px): the zoom in the steps the line widths go by (strokeStep),
-  // and the pattern set again when it moves a step.
-  hatchScale(z) {
-    const step = this.config.render.strokeStep;
-    return step ** Math.round(Math.log(z) / Math.log(step));
-  }
-
-  forestHatch(z) {
-    const k = this.hatchScale(z);
-    if (k === this.forestHatchAt) return;
-    this.forestHatchAt = k;
-    const pattern = this.layers.forest.querySelector('#forest-hatch');
-    if (!pattern) return;
-    const s = r2(this.config.render.forest.hatch / k);
-    pattern.setAttribute('width', s);
-    pattern.setAttribute('height', s);
-    const line = pattern.firstElementChild;
-    line.setAttribute('y1', s / 2);
-    line.setAttribute('x2', s);
-    line.setAttribute('y2', s / 2);
   }
 
   // Chimney smoke (particles.js) from the buildings in sight: `time`

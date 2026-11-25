@@ -52,7 +52,7 @@ const SHADE_SWEEP = 1600;
 // ms between the sun's moves between the day's steps (followSun)
 const SUN_EVERY = 100;
 // While the view turns the map is drawn in draft (goDraft): it leaves out
-// the meadow's tufts, the parked cars and the buildings' and gardens' fine
+// the meadow's tufts and the buildings' and gardens' fine
 // detail (styles.css, svg.draft), and the objects' shadows (cast for the
 // view as it was, they would point the wrong way; the hills' stay, read
 // again as it turns). Panning and zooming leave everything as it is:
@@ -286,7 +286,7 @@ export class LightDrawing {
     const sun = this.svg.style.getPropertyValue('--sun');
     if (sun !== this.shadeSun) {
       this.shadeSun = sun;
-      for (const el of [this.glShadows.canvas, this.parkedSvg]) el.style.setProperty('--sun', sun);
+      this.glShadows.canvas.style.setProperty('--sun', sun);
     }
     const look = {
       view: { zoom: d.zoom, panX: d.panX, panY: d.panY, angle: d.angle, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH },

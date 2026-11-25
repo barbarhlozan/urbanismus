@@ -8,7 +8,6 @@
 //   terrain:changed ()
 //
 // Emitted by other systems:
-//   parking:changed (s)   – a car parked at / left structure s (sim/parking.js)
 
 export class EventBus {
   constructor() {

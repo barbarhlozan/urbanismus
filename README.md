@@ -197,7 +197,7 @@ bridges, the chronicle and its ledger, numbers in words, on small made-up towns 
 - `src/render/` – drawing (`painter.js` has the drawing API at the top)
   - `renderer.js` – the map's set-up and frame loop; its methods by topic in `renderer/`
     (terrain, networks, objects, plots, light, nature, movers, view)
-- `src/sim/` – people, parking, the chronicle, the church that builds itself
+- `src/sim/` – people, the chronicle, the church that builds itself
   - `agents.js` – the people and vehicles; its methods by topic in `agents/`
     (leisure, transit, trips, movement)
 - `src/core/world.js` – the town itself; its methods by topic in `world/` (networks,

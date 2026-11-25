@@ -275,7 +275,6 @@ export class AgentMovement {
   begin(a, plan, destId) {
     a.trip = this.buildTrip(plan, destId);
     this.beginLeg(a, a.trip.out);
-    if (plan.mode === 'drive' && !plan.truck) this.parking?.take(this.world.structures.get(a.home));
     return true;
   }
 

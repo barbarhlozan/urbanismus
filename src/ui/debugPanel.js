@@ -35,9 +35,8 @@ export class DebugPanel {
       ['Buildings', kind('s')],
       // the trees on their own, and (by their classes, features/trees.js)
       // those drawn in yards and parks as part of a building
-      ['Trees', (on) => { kind('f')(on); show(layer('forest'), on); document.body.classList.toggle('debug-no-trees', !on); }],
+      ['Trees', (on) => { kind('f')(on); document.body.classList.toggle('debug-no-trees', !on); }],
       ['Street lamps', kind('k')],
-      ['Parked cars', (on) => show(layer('parked'), on)],
       ['Roads, paths, rails, fences', (on) => { if (renderer.glLines) show(renderer.glLines.canvas, on); }],
       ['Meadow grass', (on) => show(layer('meadow'), on)],
       ['Grid dots', (on) => show(layer('grid'), on)],

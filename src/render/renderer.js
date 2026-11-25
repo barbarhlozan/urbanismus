@@ -10,7 +10,7 @@
 //   meadow   – grass and wild flowers on open ground (meadow.js), in
 //              chunks rebuilt near a change and culled with the view
 //   lots     – flat ground drawing of structures and their surroundings
-//              (lawns, paving, parking lines); built together with objects
+//              (lawns, paving, parking stalls); built together with objects
 //   paths    – footpaths
 //   rails    – railways: the map symbol, a solid line with dashes inside;
 //              close up the track itself (trackItems)
@@ -19,7 +19,6 @@
 //   shadows  – the hatched shadows buildings cast on the ground
 //              (shadows.js); built together with objects, over the roads
 //              so a shadow runs on across the street
-//   parked   – parked cars (hollow squares) in parking lots
 //   trains   – one railcar each (an oblong)
 //   agents   – moving dots; sit under objects so buildings hide them correctly
 //   mist     – mist lying in the valleys (mist.js): paper over everything
@@ -83,20 +82,17 @@ import { MoverDrawing } from './renderer/movers.js';
 export { agentShape } from './marks.js';
 export { mergeRuns } from './order.js';
 
-const LAYERS = ['terrain', 'meadow', 'lots', 'forest', 'hillshade', 'shadows', 'parked', 'trains', 'agents', 'mist', 'objects', 'overlay'];
+const LAYERS = ['terrain', 'meadow', 'lots', 'hillshade', 'shadows', 'trains', 'agents', 'mist', 'objects', 'overlay'];
 const TOP = ['mist', 'objects', 'overlay']; // in the #objects <svg>, see the constructor
 
 export class Renderer {
-  constructor(svg, ground, { world, camera, agents, trains, boats, deer, livestock, parking, config }) {
+  constructor(svg, ground, { world, camera, agents, trains, boats, deer, livestock, config }) {
     this.svg = svg;
     this.ground = ground;
     // Buildings, trees and the overlay sit in their own <svg> on top, in
     // their own wrapper (#view-top), over the canvas with the moving people
     // and trains (gl/movers.js). See styles.css.
     this.top = document.getElementById('objects');
-    // the parked cars in an <svg> of their own over the shadows' canvas
-    // (gl/shadows.js), in the map's wrapper
-    this.parkedSvg = document.getElementById('parked');
     this.wrappers = [svg.parentNode, this.top.parentNode];
     this.pen = GLMovers.make(document.getElementById('agents'));
     // over the buildings: carriages nothing nearer could hide (see screened)
@@ -105,7 +101,6 @@ export class Renderer {
     this.smoke = new ParticleCanvas(document.getElementById('smoke'));
     // and over them a building on fire (fire.js, fireFrame)
     this.fire = new FireCanvas(document.getElementById('fire'), world);
-    this.parking = parking;
     this.world = world;
     this.camera = camera;
     this.agents = agents;
@@ -148,12 +143,11 @@ export class Renderer {
     ground.innerHTML = '<g class="scene"><g class="layer-terrain"></g></g>';
     svg.innerHTML = `
       <defs>${MAP_PATTERNS}</defs>
-      <g class="scene">${LAYERS.filter((l) => !TOP.includes(l) && l !== 'terrain' && l !== 'parked').map((l) => `<g class="layer-${l}"></g>`).join('')}</g>`;
-    this.parkedSvg.innerHTML = '<g class="scene"><g class="layer-parked"></g></g>';
+      <g class="scene">${LAYERS.filter((l) => !TOP.includes(l) && l !== 'terrain').map((l) => `<g class="layer-${l}"></g>`).join('')}</g>`;
     this.top.innerHTML = `<g class="scene">${TOP.map((l) => `<g class="layer-${l}${l === 'overlay' ? ' overlay' : ''}"></g>`).join('')}</g>`;
-    const svgOf = (l) => (l === 'terrain' ? ground : l === 'parked' ? this.parkedSvg : TOP.includes(l) ? this.top : svg);
-    this.svgs = [svg, ground, this.top, this.parkedSvg];
-    this.scenes = [ground, svg, this.parkedSvg, this.top].map((s) => s.querySelector('.scene'));
+    const svgOf = (l) => (l === 'terrain' ? ground : TOP.includes(l) ? this.top : svg);
+    this.svgs = [svg, ground, this.top];
+    this.scenes = [ground, svg, this.top].map((s) => s.querySelector('.scene'));
     this.layers = Object.fromEntries(LAYERS.map((l) => [l, svgOf(l).querySelector(`.layer-${l}`)]));
     // the shadows: the hills' shapes (hillShadows.js) and the lamps' pools
     // left out of them, kept in a mask the browser never paints, and a
@@ -215,8 +209,6 @@ export class Renderer {
 
     this.dirty = new Set();
     this.viewOnly = new Set(); // objects to redraw only for a new view of the same town (land)
-    this.parkedEls = new Map(); // structure id -> { g, html }, its parked cars
-    this.parkedDirty = new Set(); // structure ids whose cars changed
     this.invalidate();
 
     const on = (type, ...layers) => world.events.on(type, () => layers.forEach((l) => this.dirty.add(l)));
@@ -237,8 +229,6 @@ export class Renderer {
       world.events.on(type, (f) => {
         this.objsDirty.add(`f${f.id}`);
         this.touchAround([[f.x, f.y]], 2, true); // gardens spreading round it
-        this.forests = null; // found again (forestState)
-        this.dirty.add('forest');
         this.touchMeadow([[f.x, f.y]]);
       });
     }
@@ -270,13 +260,6 @@ export class Renderer {
     // pathItems): level crossings, stations' tracks, parks and squares
     for (const type of ['rails:changed', 'roads:changed', 'paths:changed', 'fences:changed', 'terrain:changed', 'structure:added', 'structure:removed', 'structure:changed']) {
       world.events.on(type, () => (this.railLines = this.pathLines = null));
-    }
-    // the woods stop at roads and railways (forest.js)
-    for (const type of ['roads:changed', 'rails:changed']) {
-      world.events.on(type, () => {
-        this.forests = null;
-        this.dirty.add('forest');
-      });
     }
     // bridges come and go with the networks; the water breaks under them
     for (const type of ['roads:changed', 'paths:changed', 'rails:changed']) {
@@ -319,8 +302,6 @@ export class Renderer {
     });
     // (what's built across a field cuts it: the crop there again)
     for (const type of ['roads:changed', 'rails:changed', 'paths:changed', 'fences:changed', 'walls:changed', 'structure:added', 'structure:removed', 'structure:changed']) world.events.on(type, () => { if (world.crops.some((v) => v)) this.dirty.add('meadow'); });
-    // a car parking redraws only its own lot (renderParked)
-    world.events.on('parking:changed', (s) => this.parkedDirty.add(s.id));
     on('terrain:changed', 'terrain', 'meadow', 'paths', 'rails', 'roads', 'fences', 'walls');
     world.events.on('terrain:changed', () => {
       this.worldStamp = null; // (the lines on the ground in world space, worldLine)
@@ -434,7 +415,6 @@ export class Renderer {
       this.dirty.clear();
       if (this.meadowDirty.size) this.renderMeadow(this.meadowDirty);
       this.growFields(); // (a field just closed coming up)
-      if (this.parkedDirty.size) this.renderParked(this.parkedDirty);
       // a new level of detail: the objects in sight, as many as fit in
       // config.render.rebuildBudget ms by what they took so far (rebandObjects),
       // once the view has settled – each batch repaints the whole objects layer

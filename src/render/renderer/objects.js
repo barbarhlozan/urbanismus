@@ -63,14 +63,12 @@ export class ObjectDrawing {
   // The ground's and the world's layers drawn with WebGL as the objects
   // are (gl/objects.js), so their lines take the brush (brush.js): the
   // terrain (brows, rocks, steep slopes, shores, waves, ponds), the
-  // meadow, the lots and the forest – each on a canvas just under its
-  // <svg>, which stays in the page as their source with what is drawn
-  // hidden (styles.css .gl-mirror), but for what WebGL can't draw: the
-  // forest's hatched band, with its pattern and clip, over the rest as it
-  // was (the forest the last of the world's layers).
+  // meadow and the lots – each on a canvas just under its <svg>, which
+  // stays in the page as their source with what is drawn hidden
+  // (styles.css .gl-mirror).
   makeGlMirrors() {
     this.glMirrors = [];
-    for (const [svg, names] of [[this.ground, ['terrain']], [this.svg, ['meadow', 'lots', 'forest']]]) {
+    for (const [svg, names] of [[this.ground, ['terrain']], [this.svg, ['meadow', 'lots']]]) {
       const canvas = document.createElement('canvas');
       canvas.className = 'map-canvas';
       svg.before(canvas);
@@ -268,7 +266,6 @@ export class ObjectDrawing {
           }
         }
         this.born.delete(key);
-        if (key[0] === 's') this.parking.spots.delete(id);
         continue;
       }
       if (!entry) {
@@ -375,7 +372,6 @@ export class ObjectDrawing {
         if (left > 0) setTimeout(() => { sg.style.display = ''; }, left);
       }
     }
-    this.renderParked();
   }
 
   // The opening (main.js): the buildings and trees nearest the middle of
@@ -455,7 +451,7 @@ export class ObjectDrawing {
 
   // The painters behind buildStreet / buildFeature / buildStructure, for any
   // camera (the photo camera too, see photo.js). `live`: the map's own
-  // drawing, which also updates the parking spots.
+  // drawing.
   paintStreet(key, camera = this.camera) {
     const { world, config } = this;
     if (!world.sidewalks.has(key)) return null;
@@ -529,7 +525,7 @@ export class ObjectDrawing {
   cull(entries = [...this.objs.values(), ...this.ghosts.values()]) {
     if (!this.viewBox) return;
     for (const e of entries) {
-      const show = !this.hiddenKinds.has(e.key?.[0]) && !this.inWoods(e) && (!e.box || !this.cullOn || this.inView(e.box));
+      const show = !this.hiddenKinds.has(e.key?.[0]) && (!e.box || !this.cullOn || this.inView(e.box));
       if (show === e.shown) continue;
       e.shown = show;
       this.preparedAt = null; // (another in sight to make ready for a turn)

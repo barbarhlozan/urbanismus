@@ -1,10 +1,8 @@
 // A building with its ground (Renderer methods; see renderer.js): its
 // drawing, the plot and garden round it and what they may claim, its yard,
-// where its front faces, and the cars parked on its lot.
+// and where its front faces.
 
-import { THEME } from '../../theme.js';
 import { Painter } from '../painter.js';
-import { VEHICLES, vehicleSVG, modelFor, headingIndex } from '../vehicles.js';
 import { STRUCTURE_TYPES, drawSeed, yardOf, joinSides, joinedRow, tiltOf, roadFront, courtSides, freeTilt, footprintOffsets } from '../../../structures/index.js';
 import { drawCourt } from '../../../structures/courts.js';
 import { drawRuin } from '../../../structures/ruin.js';
@@ -14,7 +12,7 @@ import { rotateQuarter } from '../../core/grid.js';
 import { pointInPolygon } from '../../core/geom2d.js';
 import { fitYard, fitSite, siteEdges, plotClaim } from '../lots.js';
 import { SUN } from '../shadows.js';
-import { SVGNS, NEAR, bareOf, COS30, r2, STRUCTURE_PAD, quarterOf, centerOf } from './shared.js';
+import { NEAR, bareOf, COS30, STRUCTURE_PAD, quarterOf, centerOf } from './shared.js';
 
 const SHORE_GAP = 0.06; // plots (props, fences) keep this clear of the drawn shore
 // Objects' box corners lifted and warped, per their points (sceneBox).
@@ -120,13 +118,9 @@ export class PlotDrawing {
       yp.lod = 1;
       keep(yp);
       YARDS[yard.style].draw(yp, yard, s);
-      if (live && yp.spots.length) this.parking.setSpots(s, yp.spots);
-      else if (live) this.parking.spots.delete(s.id);
       painter.merge(yp, { aside: true });
       yardWorld = yard.outline.map(([lx, ly]) => yp.toWorld(lx, ly));
       for (const [lx, ly] of [[yard.x0, yard.y0], [yard.x1, yard.y0]]) points.push(yp.toWorld(lx, ly));
-    } else if (live) {
-      this.parking.spots.delete(s.id);
     }
 
     // Plot: sides and back.
@@ -372,45 +366,6 @@ export class PlotDrawing {
       return c.dots.some(([x, y]) => Math.round(cx) === x && Math.round(cy) === y);
     };
     return { ...claim, draws };
-  }
-
-  // Parked cars, a group per lot. `ids`: only these lots (a car came or
-  // went), else all of them.
-  renderParked(ids = null) {
-    const { world, parking } = this;
-    const r = THEME.agentRadius;
-    // close up car models (src/render/vehicles.js) nosed into their stalls,
-    // further out square dots
-    const close = this.camera.zoom >= VEHICLES.minZoom;
-    const lots = ids ? [...ids].filter((id) => parking.spots.has(id)) : [...parking.spots.keys()];
-    for (const id of ids ?? this.parkedEls.keys()) {
-      if (parking.spots.has(id)) continue;
-      this.parkedEls.get(id)?.g.remove();
-      this.parkedEls.delete(id);
-    }
-    for (const id of lots) {
-      const s = world.structures.get(id);
-      const spots = parking.spots.get(id);
-      let out = '';
-      if (s) {
-        for (const [x, y, angle = 0] of spots.slice(0, parking.count(s))) {
-          const [sx, sy] = this.project(x, y, close ? 0 : 0.02);
-          if (close) {
-            const { name, hand } = modelFor(`${id}:${r2(x)}:${r2(y)}`);
-            out += `<g class="parked-car" transform="translate(${r2(sx)} ${r2(sy)})">${vehicleSVG(this.camera, name, headingIndex(angle), hand)}</g>`;
-          } else {
-            out += `<rect class="parked" x="${r2(sx - r)}" y="${r2(sy - r)}" width="${2 * r}" height="${2 * r}"/>`;
-          }
-        }
-      }
-      let el = this.parkedEls.get(id);
-      if (!el) {
-        el = { g: this.layers.parked.appendChild(document.createElementNS(SVGNS, 'g')), html: '' };
-        this.parkedEls.set(id, el);
-      }
-      if (el.html !== out) el.g.innerHTML = el.html = out;
-    }
-    this.parkedDirty.clear();
   }
 
   // Where and how a structure's surroundings are drawn, or null.

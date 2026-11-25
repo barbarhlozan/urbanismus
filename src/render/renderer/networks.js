@@ -589,15 +589,14 @@ export class NetworkDrawing {
     };
   }
 
-  // The painted schemes' roads and paths (watercolour, Painted): a wash of
-  // colour as wide as the way between its edges – sandy in the watercolour,
-  // a pale tone of the shade in the Painted ones; null in the others.
+  // The Painted schemes' roads and paths: a wash of colour as wide as the
+  // way between its edges, a pale tone of the shade; null in the others.
   lineWash() {
     const { palette } = THEME;
-    if (!palette.wash && !palette.painted) return null;
+    if (!palette.painted) return null;
     return {
       road: this.config.road.edge * 1.15, path: this.config.path.edge * 1.3,
-      colour: palette.wash ? '#cdb489' : mixColour(palette.bg, palette.shade, 0.3), alpha: palette.wash ? 0.55 : 0.6,
+      colour: mixColour(palette.bg, palette.shade, 0.3), alpha: 0.6,
     };
   }
 

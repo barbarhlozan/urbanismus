@@ -116,7 +116,7 @@ test('the colour scheme line', () => {
   assert.deepEqual(resolveScheme('custom'), { choice: 'custom' });
   assert.deepEqual(resolveScheme('#000 #fff #888'), { bg: '#000000', main: '#ffffff', detail: '#888888' });
   assert.equal(resolveScheme('Sepia'), null);
-  const { scheme, errors } = parseUnlocks('scheme Watercolour\nlock debug\nscheme Countryside');
+  const { scheme, errors } = parseUnlocks('scheme Black pen\nlock debug\nscheme Countryside');
   assert.deepEqual(errors, []);
   assert.equal(scheme.value, 'Countryside');
   assert.equal(parseUnlocks('scheme Sepia').errors.length, 1);
@@ -132,29 +132,23 @@ test('traffic: cars, trucks and buses, each on its own, not with `all`', () => {
   assert.equal(UNLOCKS.known('lorries'), true);
 });
 
-test('no cars: nobody drives, car parks stand empty; no trucks: industry keeps none', async () => {
+test('no cars: nobody drives; no trucks: industry keeps none', async () => {
   const { AgentSystem } = await import('../src/sim/agents.js');
-  const { ParkingSystem } = await import('../src/sim/parking.js');
   const w = flatWorld(30, 30);
   UNLOCKS.setWorld(w);
-  const parking = new ParkingSystem(w);
-  const agents = new AgentSystem(w, CONFIG, parking);
+  const agents = new AgentSystem(w, CONFIG);
   road(w, [1, 5], [28, 5]);
   const home = w.placeStructure('house', w.grid.index(2, 6));
   const shop = w.placeStructure('jednota', w.grid.index(26, 6));
   const works = w.placeStructure('pila', w.grid.index(12, 6));
   assert.ok(home && shop && works);
   for (const s of [home, shop, works]) agents.sync(s);
-  parking.spots.set(shop.id, [[26, 6], [26.2, 6]]);
-  shop.data.parked = 2;
   const trucks = () => [...agents.agents.values()].filter((a) => a.truck).length;
   assert.ok(trucks() > 0);
-  assert.equal(parking.count(shop), 2);
 
   rules('lock cars\nlock trucks');
   agents.followVehicles();
   assert.equal(trucks(), 0);
-  assert.equal(parking.count(shop), 0);
   for (let i = 0; i < 40; i++) {
     const plan = agents.planCommute(home, shop);
     assert.notEqual(plan?.mode, 'drive');
@@ -164,5 +158,4 @@ test('no cars: nobody drives, car parks stand empty; no trucks: industry keeps n
   rules('');
   agents.followVehicles();
   assert.ok(trucks() > 0);
-  assert.equal(parking.count(shop), 2); // the lot's count was kept
 });

@@ -423,12 +423,12 @@ export class TerrainDrawing {
     return this.washWater(shore) + path(open(shore), 'shore') + path(open(bank), 'bank');
   }
 
-  // The watercolour scheme (html.wc) and the tone schemes (html.tone): the
+  // The coloured sketch (html.tint) and the tone schemes (html.tone): the
   // water painted in under its lines – a lake filled turquoise inside its
   // shore, a river a turquoise wash along its course as wide as its banks
   // are apart where it is narrowest (styles.css .pond, .river-wash).
   washWater(shore) {
-    if (!/\b(wc|tone|tint)\b/.test(document.documentElement.className)) return '';
+    if (!/\b(tone|tint)\b/.test(document.documentElement.className)) return '';
     let out = '';
     if (shore.length) {
       const d = this.pathData(shore, false);

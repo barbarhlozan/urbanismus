@@ -905,10 +905,9 @@ const pairs = (v, closed) => {
 // Vehicles as they are at the moment of the photo, the same models as on
 // the map (vehicles.js) drawn through the photo camera: cars driving
 // (turned the way the map last drew them), buses and trucks (between their
-// front and back), cars parked in the lots, trains, carriage by
-// carriage, and the signs at level crossings.
+// front and back), trains, carriage by carriage, and the signs at level crossings.
 function vehicles(renderer, cam, seen) {
-  const { world, agents, parking, trains } = renderer;
+  const { world, agents, trains } = renderer;
   const { terrain } = world;
   const deck = renderer.bridgeState().deck;
   const out = [];
@@ -954,16 +953,6 @@ function vehicles(renderer, cam, seen) {
     const closed = c.kind === 'road' && trains.closed.has(c.id);
     for (const sign of signsAt(c)) {
       place(sign.x, sign.y, 0.05, '', (view) => signSVGIn(view, sign.heading, sign.kind) + (closed ? flashSVGIn(view, sign.heading, lit) : ''));
-    }
-  }
-  // (the model is picked by the stall, as in Renderer.renderParked)
-  const r2s = (n) => Math.round(n * 100) / 100;
-  for (const [id, spots] of parking.spots) {
-    const s = world.structures.get(id);
-    if (!s) continue;
-    for (const [x, y, angle = 0] of spots.slice(0, parking.count(s))) {
-      const { name, hand } = modelFor(`${id}:${r2s(x)}:${r2s(y)}`);
-      add(x, y, angle, name, hand, 'parked-car');
     }
   }
   return out;

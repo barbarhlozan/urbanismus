@@ -209,8 +209,8 @@ export class GLShadows {
     // (watercolour: a cool grey wash, see Hatching.pieces; the tone schemes
     // a wash of their shade)
     const { palette } = THEME;
-    const wash = palette.wash || palette.tone;
-    const colour = palette.wash ? '#6f6a8c' : palette.tone ? palette.shade : palette.detail;
+    const wash = palette.tone;
+    const colour = palette.tone ? palette.shade : palette.detail;
     const key = `${view.zoom}|${view.panX}|${view.panY}|${view.ox}|${view.oy}|${w}|${hgt}|${tier}|${JSON.stringify(hatch)}|${px}|${stroke}|${q}|${colour}|${shown}|${sun?.cast}|${sun?.iso}`;
     if (!changed && key === this.drawnKey) return;
     this.drawnKey = key;

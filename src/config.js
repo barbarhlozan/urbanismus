@@ -19,7 +19,7 @@ export const CONFIG = {
 
   render: {
     // Detail levels by zoom: below `medium` small details hide (facade lines,
-    // fences, props, paving patterns); below `far` lots and parked cars hide too.
+    // fences, props, paving patterns); below `far` lots hide too.
     // Each building, tree and lamp changes a little further out than that,
     // by up to `spread` of it (seeded per object, Renderer.bandOf), so the
     // detail goes a few at a time as you zoom out, not all at once.
@@ -63,22 +63,6 @@ export const CONFIG = {
     // them. Half a step of the turn (Camera.STEP): one let go short of it
     // comes back to the step it left, with nothing to draw anew.
     turnBare: 1,
-    // Further out than `zoom` a wood is drawn as one shape (render/forest.js;
-    // 0: never – the trees stay trees however far out, drawn on the GPU):
-    // trees within `link` of one another, at least `minTrees` of them. Its
-    // outline runs about reach / 2 out from the outer trees, found in
-    // samples `step` apart, and is straightened, wandering at most
-    // `straighten` from that line, then drawn in bumps about `scallop`
-    // grid steps across (a tree crown). It stays `clear` from the middle
-    // of roads and railways. A band `band` grid steps wide inside the edge
-    // is hatched, the strokes `hatch` px apart on screen. A
-    // small tree sign stands about every `signs` grid steps where the cover
-    // is at least `signCover` (deep enough inside), one of the game's trees
-    // `signSize` grid steps tall; `spruces`: the share of them spruces.
-    forest: {
-      zoom: 0, link: 1.6, minTrees: 10, reach: 1.5, step: 0.25, straighten: 0.35, clear: 0.3, hatch: 4,
-      scallop: 0.4, band: 0.5, signs: 2, signCover: 0.6, signSize: 0.6, spruces: 0.4,
-    },
   },
 
   road: {

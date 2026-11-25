@@ -43,7 +43,7 @@
 // (def.trucks, default 1) that export goods off the map – out through an exit, away a
 // while, back – or make service runs to businesses and other industry.
 // Delivery trucks also arrive from outside like visitors (updateDeliveries).
-// They don't use parking lots, and drive a bit slower than cars.
+// They drive a bit slower than cars.
 //
 // Buses (config.buses, agent.bus): come in through a road exit, call at a
 // few bus stops (structures with def.busStop) – nearest next – and leave
@@ -57,9 +57,6 @@
 // each leg (pace). Vehicles and cyclists keep behind whoever is in front of
 // them in their lane and queue (config.traffic, see follow). Pedestrians
 // always move at their own pace.
-//
-// Drivers use parking lots without owning cars: leaving by car takes a parked
-// car from the lot there (if any), arriving parks one (see sim/parking.js).
 //
 // Cars, trucks and buses can be locked (src/story/unlocks.js): then nobody
 // drives (walking, cycling or the bus / train instead, where they can), no
@@ -103,10 +100,9 @@ import { AgentMovement } from './agents/movement.js';
 import { AgentWays } from './agents/ways.js';
 
 export class AgentSystem {
-  constructor(world, config, parking = null) {
+  constructor(world, config) {
     this.world = world;
     this.config = config;
-    this.parking = parking;
     this.agents = new Map();
     this.walk = new WalkNetwork(world, config); // registers its listeners first
     this.ride = new WalkNetwork(world, config, { allRoads: true }); // cyclists
@@ -280,7 +276,6 @@ export class AgentSystem {
           }
           this.beginLeg(a, a.trip.back);
           a.state = 'back';
-          if (a.trip.mode === 'drive' && !a.truck) this.parking?.take(this.world.structures.get(a.trip.dest));
           if (a.trip.outside && !a.truck) {
             const home = this.world.structures.get(a.home);
             if (home) this.log(`${codeOf(home)} resident returns · exit ${compass(a.trip.exit.dir)}`, a.trip.exit.pos);
@@ -325,9 +320,6 @@ export class AgentSystem {
           if (a.truck) [a.tx, a.ty] = backPoint(leg, a.s, this.config.trucks.trailer);
           if (a.s < leg.total) break;
           const arrived = a.trip.mode === 'stroll' && !a.trip.dest || a.trip.outside || this.world.structures.has(a.trip.dest);
-          if (a.trip.mode === 'drive' && !a.truck) {
-            this.parking?.park(this.world.structures.get(a.state === 'out' ? a.trip.dest : a.home));
-          }
           if (a.state === 'out' && arrived) this.arrive(a);
           else if (a.trip.transit?.inbound && this.world.structures.has(a.trip.transit.work)) { // off the bus, at work
             a.state = 'away';

@@ -21,8 +21,7 @@
 // `painted` as well, without outlines, each face a tone of shade by what
 // it is; `clean`: drawn with only a share of the hand's wobble,
 // overshoots and tilt (Painter, CLEAN) – the pen schemes all keep it;
-// one with `wash` is the watercolour experiment; `tint`: the pen sketch
-// coloured in with the watercolour's colours. (No scheme has `tone` or
+// `tint`: the pen sketch coloured in. (No scheme has `tone` or
 // `painted` for now: Pencil and the Painted ones were set aside.)
 //
 // The Colors menu (ui/colorMenu.js) picks one of SCHEMES or the custom
@@ -34,12 +33,9 @@
 export const SCHEMES = [
   { name: 'Blue pen', bg: '#ebe7dd', main: '#3e12b6', detail: '#9b9486' },
   { name: 'Black pen', bg: '#ebe7dd', main: '#23211d', detail: '#9b9486' },
-  // the pen sketch coloured in: drawn as the Blue pen is, over the
-  // watercolour's colours (html.tint in styles.css)
+  // the pen sketch coloured in: drawn as the Blue pen is, over colours
+  // by what each thing is (html.tint in styles.css)
   { name: 'Countryside', bg: '#f3eee2', main: '#3a2c24', detail: '#8f8a6e', tint: true },
-  // painted in watercolour on cream paper: the faces washed in colour by
-  // what they are (html.wc in styles.css, Painter._wash), no pen round them
-  { name: 'Watercolour', bg: '#f6f0e3', main: '#4b3324', detail: '#8d8a5e', wash: true, clean: true },
 ];
 
 export const COLOR_NAMES = ['bg', 'main', 'detail', 'shade', 'green'];
@@ -79,7 +75,7 @@ export const THEME = {
   palette: withAll(SCHEMES[0]),
   gridDotRadius: 0.8,  // scene px
   fineDotRadius: 0.45, // footpath grid
-  agentRadius: 1.1,    // scene px, cars (moving and parked): half the square's side
+  agentRadius: 1.1,    // scene px, cars: half the square's side
   cyclistRadius: 0.75, // cyclists (round dots)
   walkerRadius: 0.63,  // pedestrians (half this wide, twice this tall)
   carriageRadius: 2,    // trains far out: half the oblong's width
@@ -97,8 +93,7 @@ export function applyTheme(choice = load(SCHEME_KEY) ?? 0, root = document.docum
   schemeChoice = choice;
   const scheme = withAll(choice === 'custom' ? CUSTOM : SCHEMES[choice]);
   Object.assign(THEME.palette, scheme);
-  for (const flag of ['wash', 'tone', 'painted', 'clean', 'tint']) THEME.palette[flag] = !!scheme[flag];
-  root.classList.toggle('wc', THEME.palette.wash);
+  for (const flag of ['tone', 'painted', 'clean', 'tint']) THEME.palette[flag] = !!scheme[flag];
   root.classList.toggle('tone', THEME.palette.tone);
   root.classList.toggle('painted', THEME.palette.painted);
   root.classList.toggle('clean', THEME.palette.clean);

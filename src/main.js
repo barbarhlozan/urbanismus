@@ -30,7 +30,6 @@ import { RainCanvas } from './render/rain.js';
 import { CloudShadows } from './render/cloudShadows.js';
 import { CloudsAbove } from './render/cloudsAbove.js';
 import { Paper } from './render/paper.js';
-import { ParkingSystem } from './sim/parking.js';
 import { TrainSystem } from './sim/trains.js';
 import { BoatSystem } from './sim/boats.js';
 import { DeerSystem } from './sim/deer.js';
@@ -291,8 +290,7 @@ window.addEventListener('resize', () => {
 const clock = new SimClock(CONFIG);
 clock.elapsed = world.time; // (the town's own time carries on from the save)
 DAY.shift = DAY.start - hourAt(world.time, { ...DAY, shift: 0 }); // (but each visit opens in the morning)
-const parking = new ParkingSystem(world);
-const agents = new AgentSystem(world, CONFIG, parking);
+const agents = new AgentSystem(world, CONFIG);
 const fires = new FireSystem(world, agents, CONFIG);
 const growth = new GrowthSystem(world, CONFIG);
 new Families(world); // who lives where and runs what (kept on the buildings)
@@ -335,7 +333,7 @@ const showSun = ({ sun, gloom }) => {
 };
 agents.trains = trains;
 trains.onCall = (id) => agents.transitCall(id); // passengers get on and off
-const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, boats, deer, livestock, parking, config: CONFIG });
+const renderer = new Renderer(svg, document.getElementById('ground'), { world, camera, agents, trains, boats, deer, livestock, config: CONFIG });
 renderer.setSun(sunAt(world.time)); // (the sun as the day has it, before the map is first drawn)
 const overlayKit = new OverlayKit(world, camera, CONFIG);
 const popup = new Popup(uiRoot);
@@ -553,9 +551,8 @@ const chronicleBook = new ChronicleBook(uiRoot, { world, chronicle });
 const followUnlocks = () => {
   hud.buildMenu.refreshLocks();
   if (tools.active && !tools.allowed(tools.active)) tools.use(tools.defaultId);
-  // cars, trucks and buses: off the map if locked, and the car parks follow
+  // cars, trucks and buses: off the map if locked
   agents.followVehicles();
-  renderer.dirty.add('parked');
   for (const btn of uiRoot.querySelectorAll('.controls [data-act], .bm-loose [data-act="terrain"], .hud .hud-photo')) {
     btn.classList.toggle('locked', !UNLOCKS.allowsControl(btn.dataset.act ?? 'chronicle'));
   }

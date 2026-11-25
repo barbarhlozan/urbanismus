@@ -146,7 +146,6 @@ flat in float penVis;
 in vec2 scene;
 uniform sampler2D tile;               // the mist's strokes (setTile)
 uniform vec3 tileAt;                  // cos, sin of their angle, the tile's size (scene px)
-uniform int wash;                     // the watercolour scheme: paint laid unevenly (washTone)
 flat in float shadeF;
 flat in vec2 brushW;
 flat in vec2 dirF;
@@ -157,14 +156,6 @@ float noise(vec2 p) {
   vec2 i = floor(p), f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
-}
-// how much pigment a wash left here (1 as laid): blooms where it pooled
-// and dried darker, paler where it ran thin, and the paper's tooth – all
-// fixed to the map (scene px), so the paint stays put as the view moves
-float washTone(vec2 s) {
-  float bloom = noise(s * 0.06) * 0.5 + noise(s * 0.16 + 7.3) * 0.32 + noise(s * 0.45 + 3.1) * 0.18;
-  float tooth = noise(s * 1.9) - 0.5;
-  return 0.84 + 0.32 * bloom + 0.07 * tooth;
 }
 void main() {
   if (kindF.x < -0.5) {
@@ -187,7 +178,6 @@ void main() {
       return;
     }
     outColour = colourF;
-    if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene), vec3(outColour.a));
     return;
   }
   if (joins.x < 0.0 || joins.y < 0.0 || alongF > penVis) discard;
@@ -203,7 +193,6 @@ void main() {
   float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge * graphite(d, hw, scene, dirF, share);
   if (cover <= 0.0) discard;
   outColour = colourF * cover;
-  if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene + 40.0), vec3(outColour.a));
 }`;
 
 // A computed colour as premultiplied [r, g, b, a] 0 … 1 (null: none).
@@ -274,7 +263,7 @@ export class GLObjects {
     this.canvas = canvas;
     this.gl = gl;
     this.layer = layer;
-    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'wash', 'penScale', ...GRAPHITE_UNIFORMS]));
+    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'penScale', ...GRAPHITE_UNIFORMS]));
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -871,7 +860,6 @@ export class GLObjects {
     gl.uniform2f(this.u.size, w, h);
     setGraphite(gl, this.u);
     gl.uniform1f(this.u.penScale, penScale(view.zoom));
-    gl.uniform1i(this.u.wash, document.documentElement.classList.contains('wc') ? 1 : 0);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.styleTex);
     gl.uniform1i(this.u.styles, 1);

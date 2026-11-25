@@ -82,13 +82,10 @@ test('a look, a yard and turning into something else come back', () => {
     () => w.convertStructure(s.id, 'apartments'),
   );
   assert.equal(s.type, 'apartments');
-  s.data.parked = 3; // (cars come and go by themselves: not undone)
   w.history.undo();
   w.history.undo();
   w.history.undo();
   assert.equal(w.structures.get(s.id), s, 'changed in place');
-  assert.equal(s.data.parked, 3);
-  delete s.data.parked;
   assert.equal(JSON.stringify(s), was);
 });
 

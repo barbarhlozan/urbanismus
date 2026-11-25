@@ -1,5 +1,6 @@
 // The paper's tooth as a picture, for what the shaders don't draw: the
-// photos (ui/photoBrush.js) and the UI's drawings (ui/sketchFrame.js). The
+// photos (ui/photoBrush.js), the UI's drawings (ui/sketchFrame.js) and the
+// fire (fire.js). The
 // specks are laid as the map's shader lays them (brush.js GRAPHITE_GLSL),
 // in a tile that meets itself, so it repeats without a seam.
 //
@@ -8,6 +9,8 @@
 //   toothMaskURL()     the same in white, as a data URL, for a mask – with
 //                      UI_GRAIN of the grain: the UI's lines are thin, a
 //                      pixel or so, and the full grain would break them up
+//   paperSpecks()      the tile's specks of bare paper alone (white), to rub
+//                      out of a drawing on a canvas ('destination-out')
 
 import { GRAPHITE } from './brush.js';
 
@@ -52,6 +55,8 @@ function tooth(share = 1) {
   return toothAlpha;
 }
 
+export const TOOTH_RES = RES;
+
 export function toothCanvas(ink, share = 1) {
   const n = TOOTH * RES, c = document.createElement('canvas');
   c.width = c.height = n;
@@ -63,6 +68,20 @@ export function toothCanvas(ink, share = 1) {
   for (let i = 0; i < a.length; i++) img.data.set([r, g, b, Math.round(255 * a[i])], i * 4);
   ctx.putImageData(img, 0, 0);
   return c;
+}
+
+let specks = null, specksKey = '';
+export function paperSpecks() {
+  const key = `${GRAPHITE.grain},${GRAPHITE.size},${GRAPHITE.tone}`;
+  if (specks && key === specksKey) return specks;
+  specksKey = key;
+  const n = TOOTH * RES, a = tooth();
+  specks = document.createElement('canvas');
+  specks.width = specks.height = n;
+  const ctx = specks.getContext('2d'), img = ctx.createImageData(n, n);
+  for (let i = 0; i < a.length; i++) img.data.set([255, 255, 255, Math.round(255 * (1 - a[i]))], i * 4);
+  ctx.putImageData(img, 0, 0);
+  return specks;
 }
 
 let maskURL = null;

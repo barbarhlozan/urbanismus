@@ -8,6 +8,7 @@ import { drawEnabled } from '../draw.js';
 import { MEADOW, meadowGround } from '../meadow.js';
 import { isoSort } from '../order.js';
 import { Camera } from '../camera.js';
+import { BRUSH, penScale } from '../brush.js';
 import { SVGNS, VIEW_SETTLE, GL_LINES, STEPS, GL_AHEAD, COS30, r2 } from './shared.js';
 
 // How far past each window edge the map is drawn while the camera moves
@@ -16,7 +17,7 @@ const OVERSCAN = 0.25;
 // While the view turns (Renderer.turnFrame): the layers turned as a sheet
 // of paper, drawn anew once it rests, and the lines on the ground drawn at
 // the turning angle every frame. Buildings, trees and lamps go their own way.
-const SHEET = ['forest', 'mist', 'hillshade'];
+const SHEET = ['mist', 'hillshade'];
 const LINES = ['roads', 'paths', 'rails', 'fences', 'walls'];
 const VIEWS = 12;
 const PREPARE_REST = 1500;
@@ -139,7 +140,7 @@ export class ViewMotion {
 
   // One frame of a turn, at the angle the camera has reached. The ground
   // (SHEET) turns as a sheet of paper, exact on flat ground; the roads,
-  // paths, railways, fences and parked cars on it are drawn at this angle.
+  // paths, railways and fences on it are drawn at this angle.
   // Buildings, trees and lamps are drawn at the step of the turn (Camera.STEP)
   // nearest it, each with its garden and shadow: from the drawings each
   // keeps for the steps it has been drawn at (views, made ready while the
@@ -172,7 +173,6 @@ export class ViewMotion {
         this.ink[l]?.clearErasing();
         this[`render${l[0].toUpperCase()}${l.slice(1)}`]();
       }
-      if (!this.drafting) this.renderParked(); // (left out of a draft, drawn once it rests: land)
       this.linesAngle = a;
     }
     // (changed meanwhile: its views are old, and it is drawn anew once at rest)
@@ -464,7 +464,6 @@ export class ViewMotion {
         this.ink[l]?.clearErasing();
         this.dirty.add(l);
       }
-      this.dirty.add('parked');
     }
     this.linesAngle = null;
     for (const [key, c] of this.meadow) {
@@ -539,17 +538,13 @@ export class ViewMotion {
       this.layers.meadow.classList.add(`mz${tier}`);
       this.meadowTier = tier;
     }
-    // parked cars switch between dots and models (src/render/vehicles.js),
     // railways between the map symbol and the track (trackItems)
-    const close = z >= VEHICLES.minZoom;
-    this.railsNear = close;
-    if (close !== this.carsClose) {
-      this.carsClose = close;
-      this.dirty.add('parked');
-    }
-    // far out the woods are one shape each (forest.js), their trees not drawn
-    this.updateWoods(z);
-    if (this.farWoods.size) this.forestHatch(z);
+    // the overlay (what is being built, the signs) in the pencil's weight,
+    // as the map's lines the GPU draws are (brush.js penScale) – its own
+    // --stroke, set at every zoom: the pencil grows with the zoom
+    const pen = (k * BRUSH.width * penScale(z)).toFixed(3);
+    if (pen !== this.overlayPen) this.layers.overlay?.style.setProperty('--stroke', (this.overlayPen = pen));
+    this.railsNear = z >= VEHICLES.minZoom;
     // each object's own detail (bandOf), redrawn where it changes
     if (z !== this.bandZoom) {
       this.bandZoom = z;

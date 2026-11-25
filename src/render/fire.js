@@ -32,6 +32,8 @@ import { THEME } from '../theme.js';
 import { PEN } from './agentCanvas.js';
 import { PARTICLES, eachParticle, drawn, hash } from './particles.js';
 import { canvasDpr } from './dpr.js';
+import { GRAPHITE } from './brush.js';
+import { paperSpecks, TOOTH_RES } from './tooth.js';
 
 const FPS = 10;     // drawn on tens
 const RAMP = 110;   // seconds a fire with no time of its own takes to be ablaze
@@ -465,6 +467,21 @@ export class FireCanvas {
       this.drawn = true;
       d.seed = (f.s.seed ?? f.s.id) % 997;
       this.paint(f, shape, t, lean, d);
+    }
+    // all of it in the pencil, as the map is: the paper's specks rubbed out
+    // of the flames and the smoke, fixed to the ground (scene px) as the
+    // map's lines' grain is (brush.js GRAPHITE)
+    if (this.drawn && GRAPHITE.grain > 0) {
+      const specks = paperSpecks();
+      if (this.specks !== specks) {
+        this.specks = specks;
+        this.grain = ctx.createPattern(specks, 'repeat');
+        this.grain.setTransform(new DOMMatrix().scale(1 / TOOTH_RES));
+      }
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = this.grain;
+      ctx.fillRect(-camera.panX / z, -camera.panY / z, W / z, H / z);
+      ctx.globalCompositeOperation = 'source-over';
     }
   }
 

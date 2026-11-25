@@ -44,9 +44,8 @@ import { traceLine } from '../roads/dotView.js';
 
 const LIMIT = 100;
 
-// A structure as recorded: everything about it but the cars parked at it
-// (s.data.parked, kept by sim/parking.js – the town's own business).
-const record = (s) => JSON.stringify({ ...s, data: { ...s.data, parked: undefined } });
+// A structure as recorded.
+const record = (s) => JSON.stringify(s);
 
 // The ways as recorded: nodes and edges by id (an edge without its cached
 // measurements).
@@ -286,13 +285,11 @@ export class History {
         if (!to) {
           if (s) { w.structures.delete(c.id); removed.push(s); }
         } else if (s) {
-          // changed in place, so whoever holds it sees the change (the cars
-          // parked there stay; and a building the story burnt since stays
-          // a ruin)
-          const parked = s.data.parked, ruin = s.ruin;
+          // changed in place, so whoever holds it sees the change (and a
+          // building the story burnt since stays a ruin)
+          const ruin = s.ruin;
           for (const k of Object.keys(s)) delete s[k];
           Object.assign(s, to);
-          if (parked !== undefined) s.data.parked = parked;
           if (ruin) s.ruin = true;
           w._insertStructure(s);
           changed.push(s);

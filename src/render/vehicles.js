@@ -220,7 +220,7 @@ function model(name) {
   return (MODELS[name] ??= railModel(+name.split(':')[1]));
 }
 
-// The car an agent drives, or one parked in a stall (by its id): which
+// The car an agent drives (by its id): which
 // hand it's drawn in.
 export function modelFor(id) {
   let h = 0;

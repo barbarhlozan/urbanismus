@@ -76,8 +76,8 @@
 // village house has a walled yard beside it (structures/courts.js), drawn
 // by the renderer; the house sets g.body to its walls for the court to meet.
 //
-// Spots – g.spot(x, y, dir) marks a parking stall (cars are drawn and simulated
-// separately, see src/sim/parking.js).
+// Spots – g.spot(x, y, dir) marks a parking stall (nothing parks there yet:
+// painter.spots, for when the cars that drive park too).
 //
 // Variation – seeded per building, so the same building always looks the same:
 //   g.random()          0..1
@@ -99,11 +99,9 @@ import { SUN, sunFor, tierOf, tierClass, penClass, awayFrom, strokeShare, wallSt
 import { SUN_FREE, wallDir, strokeLevel } from './sunFree.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
-// The watercolour scheme, a tone scheme or the coloured sketch (theme.js,
-// `wash` / `tone` / `tint`) is on: faces get classes for their paint (Painter._wash).
-const washOn = () => typeof document !== 'undefined' && /\b(wc|tone|tint)\b/.test(document.documentElement.className);
-// …and the watercolour one: no overshoots at corners (a wash has no pen line to run on)
-const wcOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('wc');
+// A tone scheme or the coloured sketch (theme.js, `tone` / `tint`) is on:
+// faces get classes for their paint (Painter._wash).
+const washOn = () => typeof document !== 'undefined' && /\b(tone|tint)\b/.test(document.documentElement.className);
 // A scheme drawn clean (theme.js `clean`): the hand's wobble, overshoots
 // and tilt cut to these shares.
 const cleanOn = () => typeof document !== 'undefined' && document.documentElement.classList.contains('clean');
@@ -290,7 +288,7 @@ export class Painter {
   constructor(camera, origin, rotation = 0, seed = 1) {
     this.camera = camera;
     this.random = mulberry32(seed);
-    // the watercolour scheme's colours for this drawing (wash()): which roof
+    // the coloured schemes' colours for this drawing (wash()): which roof
     // and which wall paint, seeded apart from the drawing's own randomness
     this.paint = Math.floor(mulberry32(seed ^ 0x51ed27)() * 12);
     // drawn to hold for any sun (sunFree.js): the map's, not a photo's
@@ -332,7 +330,7 @@ export class Painter {
     this.panes = [];      // its windows drawn: { pts: 4 scene points, n: 0–99, spill }, for the night (Renderer.renderLights)
     this.casts = [];      // other shapes that cast a shadow (trees), world, see Painter.cast
     this.casting = true;  // false: draw no shadows (icons)
-    this.wood = false;    // watercolour: what is drawn now is of wood (boards, a shingle roof; _wash)
+    this.wood = false;    // coloured: what is drawn now is of wood (boards, a shingle roof; _wash)
     this.stone = false;   // …or whitewashed masonry under slate, whatever its building (_wash)
     // Uneven ground (set by the renderer for buildings): world (x, y) ->
     // the ground's lift there above that at `rigid`. The building's floor
@@ -345,7 +343,7 @@ export class Painter {
     this.cellars = true;      // false: no cellar openings in what follows (a gateway)
   }
 
-  // The watercolour scheme is on (drawings that paint differently in it)
+  // A coloured scheme is on (drawings that paint differently in it)
   get wash() {
     return washOn();
   }
@@ -417,7 +415,7 @@ export class Painter {
     // the overshoots go in the same path: open strokes have no area, so the
     // fill ignores them, and it saves an element per face
     let ticks = '';
-    const os = wcOn() ? 0 : LOOK.overshoot * (cleanOn() ? CLEAN.overshoot : 1) * this.camera.tile / 32;
+    const os = LOOK.overshoot * (cleanOn() ? CLEAN.overshoot : 1) * this.camera.tile / 32;
     if (closed && os && size > os * 5) {
       for (let i = 1; i < pts.length; i++) {
         const a = pts[i - 1], b = pts[i];
@@ -861,7 +859,7 @@ export class Painter {
     return this;
   }
 
-  // The watercolour scheme's classes for a face (styles.css, html.wc): what
+  // A coloured scheme's classes for a face (styles.css, html.tint): what
   // it is – a wall (ww), a pitched roof (wp) or a flat top (wt) –, dark (wd)
   // when it is turned to the right on screen, as the light falls from the
   // left in a painted view, and the paint of this drawing's walls (v0–2)
@@ -894,8 +892,8 @@ export class Painter {
     return ((Math.round(ang / (Math.PI / 6)) % 6) + 6) % 6;
   }
 
-  // What a wall standing on the ground is built of, in the watercolour
-  // scheme: timber boards under a brown roof (barns, sheds), logs on some
+  // What a wall standing on the ground is built of, in the coloured
+  // schemes: timber boards under a brown roof (barns, sheds), logs on some
   // one-storey cottages under tiles (roubenky, their gables plastered), else plaster
   // ('').
   _wallMat(points) {
@@ -908,7 +906,7 @@ export class Painter {
     return level <= 0.22 && this.paint % 5 < 2 && ROOF_OF[this.paint] !== 2 ? 'wlogs' : '';
   }
 
-  // The painted detail on a wall in the watercolour scheme (`paint` its
+  // The painted detail on a wall in the coloured schemes (`paint` its
   // classes from _wash): a stone plinth along its foot, and logs or boards
   // up to its eaves (a gable above stays plastered).
   _washDetail(points, n, paint) {
@@ -1871,7 +1869,7 @@ export class Painter {
     const [sx, sy, t] = a;
     const p = points.map(([u, v]) => [r2(sx + u * t), r2(sy - v * t)]);
     this._cover(p);
-    // (watercolour: a crown's paint, by where the tree stands, see _wash)
+    // (coloured: a crown's paint, by where the tree stands, see _wash)
     if (washOn() && /\b(crown|pool)\b/.test(opts.cls ?? '')) {
       const [wx, wy] = this._world(x, y, z);
       opts = { ...opts, cls: `${opts.cls} t${Math.floor((hash2(wx, wy, 11) + 1) * 2.5) % 5}` };

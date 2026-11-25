@@ -227,10 +227,6 @@ scheme.black-pen
   cs: Černé pero
   en: Black pen
 
-scheme.watercolour
-  cs: Akvarel
-  en: Watercolour
-
 scheme.countryside
   cs: Venkov
   en: Countryside

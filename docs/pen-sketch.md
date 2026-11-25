@@ -24,8 +24,8 @@ A steady hand, between loose and ruled (rebased 2026-10-26):
   a chimney's side) the rounding shrinks to as little as a third, so they
   stay rounded oblongs, not pills.
 - All three pen schemes (Blue pen, Black pen, Countryside) draw with this
-  hand. Only Watercolour is `clean`: it keeps 0.15 of the wobble and
-  tilt and no overshoot (`CLEAN` in painter.js).
+  hand. A scheme marked `clean` would keep only 0.15 of the wobble and
+  tilt (`CLEAN` in painter.js); none is now.
 
 ## The pen's line (`BRUSH` in src/render/brush.js)
 
@@ -46,18 +46,17 @@ A stroke is not even from end to end, as with a pencil:
 - Strokes are 1.2× the pen's width overall (`width`).
 
 The terrain (contours, hill brows, rocks, steep slopes, shores, waves,
-ponds), the meadow, the lots and the forest are drawn with WebGL from their
-SVG too (`Renderer.makeGlMirrors`), so they take the brush as well. Not yet
-brushed: the forest's hatched edge band (a clipped pattern, left to the
-SVG), road marks and the build overlay, photos, the flames and the UI's
-frames and icons.
+ponds), the meadow and the lots are drawn with WebGL from their SVG too
+(`Renderer.makeGlMirrors`), so they take the brush as well. Woods stay
+trees however far out: the woods drawn as one map shape far out are gone.
 
 The pencil (`GRAPHITE` beside `BRUSH`): the paper's tooth, a ragged and
 softer edge, pressure along the stroke, a lighter lead – set in
 labs/pencil-lab.html over the running game: fine dense grain, a ragged
 soft edge, strong pressure, pens 2× as wide and growing with the zoom.
 What moves (people, vehicles, smoke) and the hatching of shadows and night
-take it too, and photos (their ribbons filled with a tile of the tooth,
+take it too, the build overlay and its signs and the fire (the paper's
+specks of render/tooth.js over them), and photos (their ribbons filled with a tile of the tooth,
 ui/photoBrush.js), and the UI's lines (one SVG mask of the tooth,
 ui/sketchFrame.js), its pens as wide as the map's at the opening zoom –
 an icon's as the map's further out, so its small drawing doesn't clot. A house's smoke is one
@@ -113,7 +112,6 @@ The colour is carried by the lines; the faces stay paper.
 
 How common each roof is (`ROOF_OF` in painter.js, by a drawing's paint
 number, 0–11): clay tiles 5 in 12, eternit 4, weathered tiles 2, tar paper 1.
-Tar paper goes with timber walls, so wooden houses are rare. This applies to
-Watercolour too.
+Tar paper goes with timber walls, so wooden houses are rare.
 
-No yellow or blue roofs. The watercolour scheme keeps its own colours.
+No yellow or blue roofs.
