@@ -83,13 +83,14 @@ export function hillShade(height, [x0, y0, x1, y1], sun, opts = HILL_SHADOWS) {
 }
 
 // The shade's outlines over the box, where it is deeper than `deep` and
-// not on water (`wet(x, y)`): closed rings of world points, traced every
+// on the land (`dry(x, y)` above 0: off the water and the land's edge,
+// smoothly, so the rings follow the shore): closed rings of world points, traced every
 // `cell` grid units, the lit places inside the shade rings of their own
 // (to be filled even-odd). Outside the box it is lit, so every ring
 // closes.
-export function hillShadeRings(shade, [x0, y0, x1, y1], wet = () => false, opts = HILL_SHADOWS) {
+export function hillShadeRings(shade, [x0, y0, x1, y1], dry = () => Infinity, opts = HILL_SHADOWS) {
   const g = opts.cell;
-  const f = (x, y) => (x < x0 || x > x1 || y < y0 || y > y1 || wet(x, y) ? -1 : shade(x, y) - opts.deep);
+  const f = (x, y) => (x < x0 || x > x1 || y < y0 || y > y1 ? -1 : Math.min(shade(x, y) - opts.deep, dry(x, y)));
   return contours(f, [x0 - g, y0 - g, x1 + g, y1 + g], { step: g, interval: 1, index: 1, only: 0 }).map((c) => c.points);
 }
 

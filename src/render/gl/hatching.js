@@ -29,7 +29,7 @@
 import { program, rgb } from './common.js';
 import { flattenPath, triangulate } from './geometry.js';
 import { hatchTileLines, TILE } from '../hatch.js';
-import { brushPath2D } from '../brush.js';
+import { brushPath2D, GRAPHITE, GRAPHITE_GLSL, GRAPHITE_UNIFORMS, setGraphite } from '../brush.js';
 
 // The ragged edge of a shadow or a light, as the masks have it (styles.css
 // .shade-mask .shade): a dashed line round it (its own units); the width of
@@ -139,6 +139,7 @@ uniform sampler2D tile;
 uniform vec3 tileAt;                  // cos, sin of the lines' angle, the tile's size (scene px)
 uniform vec4 colour;
 out vec4 outColour;
+${GRAPHITE_GLSL}
 const float DASH[${EDGE.dash.length}] = float[](${EDGE.dash.map((v) => v.toFixed(2)).join(', ')});
 void main() {
   float cover = 1.0;
@@ -184,7 +185,9 @@ void main() {
     return;
   }
   vec2 t = vec2(scene.x * tileAt.x + scene.y * tileAt.y, -scene.x * tileAt.y + scene.y * tileAt.x) / tileAt.z;
-  outColour = colour * (texture(tile, t).a * cover * alpha);
+  // (the strokes in the pencil too, their grain fixed to the ground as the map's lines' is)
+  float lead = graphite(0.0, 2.0, scene, tileAt.xy, graphiteW);
+  outColour = colour * (texture(tile, t).a * lead * cover * alpha);
 }`;
 
 // The night: a grey and up to three sets of the strokes over the whole
@@ -209,6 +212,7 @@ uniform vec4 sets[3];                 // cos, sin of each set's angle, along and
 uniform vec3 reveal;
 uniform float band;                   // device px
 out vec4 outColour;
+${GRAPHITE_GLSL}
 float hash(float a, float b) { return fract(sin(a * 127.1 + b * 311.7) * 43758.5453); }
 // how much of set i is laid here (sweep: bands across its lines, each laid along them so far)
 float laid(int i, vec2 d) {
@@ -235,7 +239,7 @@ void main() {
     if (reveal[i] <= 0.0) continue;
     float c = sets[i].x, s = sets[i].y;
     vec2 t = (vec2(p.x * c + p.y * s, -p.x * s + p.y * c) - sets[i].zw) / tileSize;
-    float a = texture(tile, t).a * laid(i, d);
+    float a = texture(tile, t).a * laid(i, d) * graphite(0.0, 2.0, p, vec2(c, s), graphiteW);
     o = colour * a + o * (1.0 - a);
   }
   outColour = o;
@@ -421,8 +425,8 @@ export class Hatching {
   constructor(canvas, gl) {
     this.canvas = canvas;
     this.gl = gl;
-    this.prog = program(gl, VS, FS, ['base', 'pre', 'size', 'alphas', 'mode', 'tile', 'tileAt', 'colour', 'sun', 'iso', 'rise']);
-    this.sheetProg = program(gl, SHEET_VS, SHEET_FS, ['base', 'size', 'tile', 'mask', 'masked', 'tileSize', 'grey', 'colour', 'sets', 'reveal', 'band']);
+    this.prog = program(gl, VS, FS, ['base', 'pre', 'size', 'alphas', 'mode', 'tile', 'tileAt', 'colour', 'sun', 'iso', 'rise', ...GRAPHITE_UNIFORMS]);
+    this.sheetProg = program(gl, SHEET_VS, SHEET_FS, ['base', 'size', 'tile', 'mask', 'masked', 'tileSize', 'grey', 'colour', 'sets', 'reveal', 'band', ...GRAPHITE_UNIFORMS]);
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -494,6 +498,7 @@ export class Hatching {
   // pen `width` scene px wide at `q` device px to a scene px (the callers
   // step `q` by a quarter of a doubling, so zooming draws it only now and then).
   tile(tier, hatch, px, width, q) {
+    width *= GRAPHITE.shade; // (in the pencil's weight, brush.js)
     const key = `${tier}|${JSON.stringify(hatch)}|${px}|${width}|${q}`;
     let t = this.tiles.get(key);
     if (t) {
@@ -551,6 +556,7 @@ export class Hatching {
     gl.uniform2f(u.sun, sun?.cast[0] ?? 0, sun?.cast[1] ?? 0);
     gl.uniformMatrix2fv(u.iso, false, sun?.iso ?? [1, 0, 0, 1]);
     gl.uniform2f(u.rise, rise?.[0] ?? 0, rise?.[1] ?? 0);
+    setGraphite(gl, u);
     gl.uniform3fv(u.base, base);
     const m = pre ?? [1, 0, 0, 1, 0, 0];
     gl.uniformMatrix3fv(u.pre, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
@@ -636,6 +642,7 @@ export class Hatching {
   sheet({ base, tile, grey, greyColour, colour, sets, reveal, band, masked }) {
     const { gl } = this, { p, u } = this.sheetProg;
     gl.useProgram(p);
+    setGraphite(gl, u);
     gl.uniform3fv(u.base, base);
     gl.uniform2f(u.size, this.w, this.h);
     const g = rgb(greyColour);

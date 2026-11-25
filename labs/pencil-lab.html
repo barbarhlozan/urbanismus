@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dědina – pencil lab</title>
+  <link rel="icon" type="image/svg+xml" href="../icons/favicon.svg">
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body { font: 13px/1.4 system-ui, sans-serif; color: #222; background: #fafaf7; }
+    .lab { display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
+    .knobs { overflow: auto; padding: 12px 14px 40px; border-right: 1px solid #ccc; box-sizing: border-box; }
+    .knobs h1 { font: 500 16px system-ui; margin: 0 0 4px; }
+    .knobs p { margin: 0 0 8px; color: #666; font-size: 12px; }
+    .knobs h3 { font: 600 11px system-ui; text-transform: uppercase; letter-spacing: .05em; color: #888; margin: 14px 0 4px; }
+    .knobs label { display: grid; grid-template-columns: 92px 1fr 40px; gap: 6px; align-items: center; margin: 2px 0; }
+    .knobs label.check { grid-template-columns: 18px 1fr; }
+    .knobs label small { display: block; color: #999; font-size: 10px; }
+    .knobs label span:last-child { text-align: right; font-variant-numeric: tabular-nums; color: #555; }
+    .knobs label.changed span:first-child { color: #b3261e; }
+    .knobs input[type=range] { width: 100%; }
+    .knobs button { margin: 4px 4px 0 0; }
+    .knobs textarea { width: 100%; height: 120px; font: 11px ui-monospace, monospace; margin-top: 6px; box-sizing: border-box; }
+    iframe { width: 100%; height: 100%; border: 0; display: block; }
+  </style>
+</head>
+<body>
+  <div class="lab">
+    <div class="knobs" id="knobs"></div>
+    <iframe id="game" src="../?testing"></iframe>
+  </div>
+  <script type="module">
+    // Dev page, apart from the game: the game itself on the right, its
+    // pencil (GRAPHITE in src/render/brush.js) set live from the knobs on
+    // the left – every line on the map that the GPU draws takes it: houses,
+    // trees, roads, fences, the terrain. Zoom and pan in the game as usual.
+    // Below them the shadows' hatching (SUN.hatch in src/render/shadows.js):
+    // how the strokes of the buildings', trees' and hills' shadows, and the
+    // night's, are laid.
+    // The knobs are kept in the address (#…), so a setting can be passed on;
+    // "Copy" gives it as code for brush.js.
+    const BASE = { grain: 0, size: 1.6, streak: 2, rough: 0, soft: 0, press: 0, wave: 14, tone: 0, width: 1, grow: 0, shade: 1 };
+    // pencils to start from
+    const PRESETS = {
+      'pero (vypnuto)': { ...BASE },
+      // the game's (brush.js)
+      've hře': { grain: 0.71, size: 0.3, streak: 1, rough: 0.55, soft: 0.42, press: 0.83, wave: 12, tone: 0, width: 2.05, grow: 0.7, shade: 2 },
+      // what the user picked first (24. 11.), the pens widened since
+      'jemné zrno': { grain: 1, size: 0.3, streak: 3.9, rough: 0, soft: 0.42, press: 0.83, wave: 12, tone: 0, width: 1.6, grow: 0.3 },
+      'tvrdá 2H': { width: 1, grow: 0, grain: 0.45, size: 1.1, streak: 3, rough: 0.15, soft: 0.2, press: 0.3, wave: 18, tone: 0.25 },
+      'HB': { width: 1, grow: 0, grain: 0.4, size: 1.6, streak: 2.5, rough: 0.3, soft: 0.35, press: 0.5, wave: 14, tone: 0.1 },
+      'měkká 4B': { width: 1, grow: 0, grain: 0.3, size: 2.4, streak: 1.6, rough: 0.45, soft: 0.5, press: 0.7, wave: 10, tone: 0 },
+    };
+    const KNOBS = [
+      ['Papír', [
+        ['grain', 'zrno', 'kolik papíru zůstane bílého', 0, 1, 0.01],
+        ['size', 'velikost zrna', 'scene px', 0.3, 6, 0.05],
+        ['streak', 'protažení', 'zrno podél tahu ×', 1, 6, 0.1],
+      ]],
+      ['Šířka', [
+        ['width', 'šířka tahu', 'všechna pera ×', 0.5, 4, 0.05],
+        ['grow', 'růst se zoomem', '0 stejná na obrazovce, 1 roste s kresbou', 0, 1, 0.01],
+        ['shade', 'šrafy stínů', 'stíny, mraky, noc × (po pohnutí mapou)', 0.5, 5, 0.05],
+      ]],
+      ['Okraj', [
+        ['rough', 'roztřepení', 'podíl šířky', 0, 1, 0.01],
+        ['soft', 'měkkost', 'méně tuhy k okrajům', 0, 1, 0.01],
+      ]],
+      ['Ruka', [
+        ['press', 'přítlak', 'sytost se šířkou a podél', 0, 1.5, 0.01],
+        ['wave', 'vlna přítlaku', 'scene px', 2, 60, 1],
+        ['tone', 'světlost', 'tuha světlejší než inkoust', 0, 0.8, 0.01],
+      ]],
+    ];
+
+    // the game's SUN.hatch (shadows.js), stroke and join as from … to apart
+    const HATCH_GAME = { angle: 120, gap: 0.04, s0: 0.9, s1: 1.8, j0: -0.08, j1: 0.06, bow: 0.01, drift: 0.016, ragged: 0.02, pen: 2 };
+    const HATCH_KNOBS = [
+      ['angle', 'směr', 'stupně na obrazovce', 0, 180, 1],
+      ['gap', 'rozestup', 'mezi řádky šraf (políčka)', 0.015, 0.12, 0.001],
+      ['s0', 'tah od', 'nejkratší tah (políčka)', 0.05, 3, 0.05],
+      ['s1', 'tah do', 'nejdelší tah', 0.05, 4, 0.05],
+      ['j0', 'navázání od', 'mezera mezi tahy, − přesah', -0.4, 0.4, 0.01],
+      ['j1', 'navázání do', '', -0.4, 0.4, 0.01],
+      ['bow', 'prohnutí', 'tah do oblouku', 0, 0.08, 0.001],
+      ['drift', 'uhnutí', 'konce tahu mimo řádek', 0, 0.06, 0.001],
+      ['ragged', 'okraj stínu', 'jak nerovně řádky končí', 0, 0.12, 0.001],
+      ['pen', 'pero', '1 nejtenčí … 5', 1, 5, 1],
+    ];
+
+    let state = { ...BASE, ...PRESETS['ve hře'] }, hatch = { ...HATCH_GAME };
+    try {
+      if (location.hash.length > 1) {
+        const { hatch: h, ...g } = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+        state = { ...BASE, ...PRESETS['ve hře'], ...g };
+        hatch = { ...HATCH_GAME, ...h };
+      }
+    } catch {}
+    let off = false;
+
+    const knobs = document.getElementById('knobs'), frame = document.getElementById('game');
+    const html = ['<h1>Pencil lab</h1><p>Tah tužky na všech čarách mapy. Ve hře se přibližuje kolečkem jako obvykle.</p>'];
+    html.push(`<label><span>tužka</span><select id="preset"><option value="">—</option>${Object.keys(PRESETS).map((k) => `<option>${k}</option>`).join('')}</select><span></span></label>`);
+    html.push('<label class="check"><input type="checkbox" id="off"><span>pero bez tužky (porovnat; T, když jsou knoflíky aktivní)</span></label>');
+    for (const [title, list] of KNOBS) {
+      html.push(`<h3>${title}</h3>`);
+      for (const [k, name, hint, min, max, step] of list) html.push(`<label data-k="${k}"><span>${name}<small>${hint}</small></span><input type="range" min="${min}" max="${max}" step="${step}"><span></span></label>`);
+    }
+    html.push('<h3>Šrafy stínů</h3>');
+    for (const [k, name, hint, min, max, step] of HATCH_KNOBS) html.push(`<label data-h="${k}"><span>${name}<small>${hint}</small></span><input type="range" min="${min}" max="${max}" step="${step}"><span></span></label>`);
+    html.push('<button id="hatch-reset">Šrafy jako ve hře</button>');
+    html.push('<h3>Postavičky</h3>');
+    html.push(`<label data-p="1"><span>velikost<small>× dnešní, pero stejné</small></span><input type="range" min="1" max="3" step="0.05"><span></span></label>`);
+    html.push('<h3>Nastavení</h3><button id="copy">Kopírovat</button><button id="reset">Zpět na hru</button><textarea id="out" readonly></textarea>');
+    knobs.innerHTML = html.join('');
+    const out = knobs.querySelector('#out');
+
+    // the game's own GRAPHITE (the same module the game drew with)
+    let graphite = null, people = null;
+    let figure = +(new URLSearchParams(location.search).get('people') ?? 1);
+    const hook = async () => {
+      try {
+        const url = new URL('../src/render/brush.js', location.href).href;
+        const load = (u) => frame.contentWindow.Function(`return import(${JSON.stringify(new URL(u, location.href).href)})`)();
+        graphite = (await load(url)).GRAPHITE;
+        people = (await load('../src/render/people.js')).PEOPLE;
+        // (cmd comes once the town is up)
+        for (let i = 0; i < 100 && !frame.contentWindow.cmd; i++) await new Promise((r) => setTimeout(r, 100));
+        hatchSent = '';
+        apply();
+      } catch (e) { out.value = `Hra se nenačetla: ${e.message}`; }
+    };
+    frame.addEventListener('load', hook);
+
+    const sunHatch = () => {
+      const lo = (a, b) => [Math.min(a, b), Math.max(a, b)];
+      const { angle, gap, bow, drift, ragged, pen } = hatch;
+      return { angle, gap, stroke: lo(hatch.s0, hatch.s1), join: lo(hatch.j0, hatch.j1), bow, drift, wave: 0.008, ragged, pen };
+    };
+    const hatchCode = () => `  hatch: ${JSON.stringify(sunHatch()).replace(/"(\w+)":/g, '$1: ').replace(/,(?=\w)/g, ', ').replace(/^\{/, '{ ').replace(/\}$/, ' }')},`;
+    let hatchSent = '';
+    const code = () => `export const GRAPHITE = { ${Object.keys(BASE).map((k) => `${k}: ${+state[k].toFixed(3)}`).join(', ')} };`;
+    function apply() {
+      for (const l of knobs.querySelectorAll('label[data-k]')) {
+        const k = l.dataset.k, input = l.querySelector('input');
+        input.value = state[k];
+        l.lastElementChild.textContent = (+state[k]).toFixed(2);
+        l.classList.toggle('changed', state[k] !== BASE[k]);
+      }
+      knobs.querySelector('#off').checked = off;
+      for (const l of knobs.querySelectorAll('label[data-h]')) {
+        const k = l.dataset.h;
+        l.querySelector('input').value = hatch[k];
+        l.lastElementChild.textContent = (+hatch[k]).toFixed(k === 'angle' || k === 'pen' ? 0 : 3);
+        l.classList.toggle('changed', hatch[k] !== HATCH_GAME[k]);
+      }
+      history.replaceState(null, '', `#${encodeURIComponent(JSON.stringify({ ...state, hatch }))}`);
+      if (graphite) for (const k of Object.keys(BASE)) graphite[k] = (off ? BASE : state)[k];
+      // (the game's own command: it draws the shadows again)
+      const sent = JSON.stringify(hatch), cmd = frame.contentWindow?.cmd;
+      if (cmd && sent !== hatchSent) { cmd.sun({ hatch: sunHatch() }); hatchSent = sent; }
+      const p = knobs.querySelector('label[data-p]');
+      p.querySelector('input').value = figure;
+      p.lastElementChild.textContent = figure.toFixed(2);
+      p.classList.toggle('changed', figure !== 1);
+      history.replaceState(null, '', `?people=${figure}${location.hash}`);
+      out.value = code()
+        + (JSON.stringify(hatch) !== JSON.stringify(HATCH_GAME) ? `\n// shadows.js SUN:\n${hatchCode()}` : '')
+        + (figure !== 1 ? `\n// people.js PEOPLE.scale: ${figure}` : '');
+      if (people) people.scale = figure;
+    }
+
+    knobs.addEventListener('input', (e) => {
+      const l = e.target.closest('label[data-k]');
+      if (e.target.closest('label[data-p]')) figure = +e.target.value;
+      const h = e.target.closest('label[data-h]');
+      if (h) hatch[h.dataset.h] = +e.target.value;
+      if (l) { state[l.dataset.k] = +e.target.value; knobs.querySelector('#preset').value = ''; }
+      if (e.target.id === 'off') off = e.target.checked;
+      if (e.target.id === 'preset' && e.target.value) state = { ...BASE, ...PRESETS[e.target.value] };
+      apply();
+    });
+    knobs.querySelector('#copy').onclick = () => { out.select(); navigator.clipboard?.writeText(out.value); };
+    knobs.querySelector('#hatch-reset').onclick = () => { hatch = { ...HATCH_GAME }; apply(); };
+    knobs.querySelector('#reset').onclick = () => { state = { ...PRESETS['ve hře'] }; apply(); };
+    // T on the knobs (the game keeps its own T): the pen and the pencil, one after the other
+    const toggle = (e) => {
+      if (e.key !== 't' && e.key !== 'T') return;
+      if (e.target.closest?.('input, textarea, select') && e.target.type !== 'range') return;
+      off = !off;
+      apply();
+    };
+    addEventListener('keydown', toggle);
+    apply();
+  </script>
+</body>
+</html>

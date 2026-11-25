@@ -21,6 +21,82 @@ import { flattenPath } from './gl/geometry.js';
 
 export const BRUSH = { on: true, width: 1.2, taper: 0.25, fade: 3, swell: 0.2, wave: 4.5, weight: 0.2, corner: 0.7 };
 
+// What makes the line a pencil's rather than a ruling pen's, worked out in
+// labs/pencil-lab.html: the paper's tooth (`grain` of it left bare, in specks
+// `size` scene px across, drawn out `streak` times along the stroke, as a
+// lead does), its edge worn ragged by `rough` (a share of the width), the
+// lead laid thinner towards the edges (`soft`), pressed harder where the
+// stroke swells and lighter where it thins, wandering every `wave` scene px
+// (`press`), and the whole of it `tone` lighter than ink; every pen `width`
+// times as wide, and wider as the view zooms in by `grow` (0: the same on
+// the screen at any zoom, as the pens are; 1: as wide on the paper, growing
+// with the drawing from zoom 2); the paper's strokes of the shadows, the
+// clouds' shadows and the night `shade` times as wide as their pen. The specks are
+// fixed to the ground, as the paper is, and come back to an even grey
+// where they would be smaller than a pixel, so a zoom out doesn't shimmer.
+// grain, rough, soft, press and tone 0, width 1, grow 0: the even ink line.
+export const GRAPHITE = { grain: 0.71, size: 0.3, streak: 1, rough: 0.55, soft: 0.42, press: 0.83, wave: 12, tone: 0, width: 2.05, grow: 0.7, shade: 2 };
+
+// How many times its pen a line is drawn at `zoom`.
+export const penScale = (zoom) => GRAPHITE.width * (zoom / 2) ** GRAPHITE.grow;
+
+// For the shaders' draw keys: changed, drawn again.
+export const graphiteKey = () => Object.values(GRAPHITE).join(',') + (BRUSH.on ? '' : '-');
+
+// The uniforms GRAPHITE_GLSL reads, set on a program's `u` (its locations).
+export function setGraphite(gl, u) {
+  const g = GRAPHITE;
+  gl.uniform4f(u.graphiteA, g.grain, Math.max(0.05, g.size), Math.max(0.2, g.streak), g.rough);
+  gl.uniform4f(u.graphiteB, g.soft, g.press, Math.max(1, g.wave), g.tone);
+  gl.uniform1f(u.graphiteW, BRUSH.on ? BRUSH.width : 1);
+}
+export const GRAPHITE_UNIFORMS = ['graphiteA', 'graphiteB', 'graphiteW'];
+
+// In a fragment shader, for a stroke's pixel `d` device px from its middle,
+// the half width `hw` (device px), at `s` (scene px), the stroke running
+// along `dir` (unit, on the screen), `share` its pen's width there (brushW):
+//   hw = graphiteEdge(hw, s)              the edge worn ragged
+//   cover *= graphite(d, hw, s, dir, share)   how much lead it left
+export const GRAPHITE_GLSL = `
+uniform vec4 graphiteA;   // grain, speck size (scene px), drawn out along, ragged edge
+uniform vec4 graphiteB;   // soft edge, press, its wave (scene px), tone
+uniform float graphiteW;  // a stroke's even share of its pen (BRUSH.width)
+float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float gNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x), mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+float graphiteEdge(float hw, vec2 s) {
+  if (graphiteA.w <= 0.0) return hw;
+  float n = gNoise(s / (graphiteA.y * 3.0) + 11.7) * 0.6 + gNoise(s / graphiteA.y + 4.2) * 0.4;
+  return hw * (1.0 - graphiteA.w * 0.8 * n);
+}
+float graphite(float d, float hw, vec2 s, vec2 dir, float share) {
+  if (graphiteA.x + graphiteB.x + graphiteB.y + graphiteB.w <= 0.0) return 1.0;
+  // device px to a scene px here (the drawing is only scaled onto the screen)
+  float px = 0.7071 / max(length(fwidth(s)), 1e-5);
+  // the lead: thinner towards the edges, heavier where the stroke is pressed
+  float t = clamp(d / max(hw, 1e-3), 0.0, 1.0);
+  float lead = 1.0 - graphiteB.x * t * t;
+  float p = clamp(share / graphiteW, 0.5, 1.5) - 1.0;
+  lead *= 1.0 + graphiteB.y * (1.5 * p + gNoise(s / graphiteB.z + 2.7) - 0.5);
+  lead = clamp(lead, 0.0, 1.0);
+  // the tooth: the lead catches on its peaks, and fills the hollows only
+  // where it is pressed hard
+  float tooth = 1.0;
+  if (graphiteA.x > 0.0) {
+    vec2 q = vec2(dot(s, dir) / graphiteA.z, dot(s, vec2(-dir.y, dir.x))) / graphiteA.y;
+    float g = gNoise(q) * 0.65 + gNoise(q * 2.3 + 5.1) * 0.35;
+    float th = graphiteA.x * (1.05 - 0.55 * lead);
+    tooth = smoothstep(th - 0.1, th + 0.1, g);
+    // (specks under a pixel, or on a line too thin to hold them: their grey)
+    float seen = smoothstep(0.7, 1.8, graphiteA.y * px) * smoothstep(0.8, 2.0, 2.0 * hw);
+    tooth = mix(1.0 - 0.5 * graphiteA.x, tooth, seen);
+  }
+  return lead * tooth * (1.0 - graphiteB.w);
+}`;
+
 // A polyline's strokes (segment i from point i - 1 to point i, for
 // i = 1 … count - 1, the points taken round again where it closes, `scale`
 // scene px to one of its units): each segment's width at its two ends, as

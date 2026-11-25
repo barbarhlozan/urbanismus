@@ -19,6 +19,35 @@
 // otherwise a frame keeps its strokes and is only refitted to a new size.
 
 import { sketchRoundBox, seedOf } from '../render/sketch.js';
+import { toothMaskURL } from '../render/tooth.js';
+import { BRUSH, penScale } from '../render/brush.js';
+import { canvasDpr } from '../render/dpr.js';
+import { CONFIG } from '../config.js';
+
+// The UI's pens as wide on the screen as the map's at the zoom a town
+// opens at: the map's are device px times the brush and the pencil
+// (brush.js), the UI's css px times --stroke – so a frame (1.3) is drawn as
+// a house's outline (1.4) is. An icon is a building drawn small, as the map
+// draws one further out (ICON_ZOOM of the opening zoom), with the pens the
+// map has there: the full weight would run its lines together.
+const ICON_ZOOM = 0.7;
+function uiPens() {
+  const k = (z) => ((BRUSH.width * penScale(CONFIG.camera.zoom * z)) / canvasDpr()).toFixed(3);
+  const ui = document.getElementById('ui');
+  ui?.style.setProperty('--stroke', k(1));
+  ui?.style.setProperty('--icon-stroke', k(ICON_ZOOM));
+}
+uiPens();
+matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener?.('change', uiPens);
+
+// The paper's tooth for the UI's lines, once (styles.css #ui svg): a mask
+// of the tooth tile repeated, TOOTH_PX of a drawing's own units across (px
+// for the frames and marks; an icon's units are a little bigger).
+const TOOTH_PX = 96;
+document.body.insertAdjacentHTML('beforeend', `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <pattern id="ui-tooth-tile" patternUnits="userSpaceOnUse" width="${TOOTH_PX}" height="${TOOTH_PX}"><image href="${toothMaskURL()}" width="${TOOTH_PX}" height="${TOOTH_PX}"/></pattern>
+  <mask id="ui-tooth" maskUnits="userSpaceOnUse" x="-5000" y="-5000" width="10000" height="10000" style="mask-type:alpha"><rect x="-5000" y="-5000" width="10000" height="10000" fill="url(#ui-tooth-tile)"/></mask>
+</defs></svg>`);
 
 const INSET = 1.5;
 const RADIUS = 7; // px, the corners of a big box (small ones round less)

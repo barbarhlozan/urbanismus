@@ -25,7 +25,7 @@ import { program } from './common.js';
 import { flattenPath, triangulate } from './geometry.js';
 import { penWatch, penLength } from '../draw.js';
 import { hatchTileLines } from '../hatch.js';
-import { brushWidths, brushPath2D, BRUSH_GLSL } from '../brush.js';
+import { brushWidths, brushPath2D, BRUSH_GLSL, GRAPHITE_GLSL, GRAPHITE_UNIFORMS, setGraphite, graphiteKey, penScale } from '../brush.js';
 import { canvasDpr } from '../dpr.js';
 
 // Curves flattened to within this of the true line (scene px).
@@ -52,6 +52,7 @@ uniform highp sampler2D styles;       // per kind: fill, stroke (premultiplied),
 uniform float alpha;                  // the object's whole drawing faded (its group's opacity)
 uniform int penOn;                    // the pen drawing this object in or out (draw.js)…
 uniform float penT;                   // …this many ms into its drawing (erasing: counted back)
+uniform float penScale;               // every pen this many times as wide (brush.js penScale)
 out vec2 local;
 out vec2 joins;
 out float len;
@@ -62,6 +63,7 @@ flat out float penVis;                // the pen has got this far along it
 out vec2 scene;                       // where it is (scene px: a hatched fill's strokes)
 flat out float shadeF;                // a fill laid on in brush strokes at (n - 10) sixths of a half turn (--fill-hatch 10–15, tone schemes)
 flat out vec2 brushW;                 // a stroke's width at a and at b, as shares of its pen's
+flat out vec2 dirF;                   // which way a stroke runs on the screen
 // (an end before its start: taken back, from all there to none)
 float span(float a, float b) { float d = b - a; return abs(d) < 1e-3 ? 1e-3 : d; }
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
@@ -76,6 +78,7 @@ mat3 matAt(float s) {
 void main() {
   mat3 m = matAt(slots.x) * matAt(slots.y);
   brushW = vec2(1.0);
+  dirF = vec2(1.0, 0.0);
   mat3 M = mat3(base.x, 0.0, 0.0, 0.0, base.x, 0.0, base.y, base.z, 1.0) * m;
   vec2 A = (M * vec3(ab.xy, 1.0)).xy, B = (M * vec3(ab.zw, 1.0)).xy;
   int sid = int(style.x) * 3;
@@ -83,7 +86,7 @@ void main() {
   colourF = texelFetch(styles, ivec2(sid + int(style.y), 0), 0) * alpha;
   shadeF = look.w;
   float det = sqrt(abs(m[0][0] * m[1][1] - m[0][1] * m[1][0]));
-  kindF = vec4(kind.x < 0.5 ? -look.z : kind.x, kind.y * look.x * 0.5 * base.x * det, kind.zw);
+  kindF = vec4(kind.x < 0.5 ? -look.z : kind.x, kind.y * look.x * 0.5 * base.x * det * penScale, kind.zw);
   if (look.y < 0.5 || colourF.a <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   // the pen: an outline revealed along its length (eased in and out, as the
   // dash slid in), a fill fading in as it closes, a mark without an
@@ -113,6 +116,7 @@ void main() {
     float r = kindF.y * max(brushW.x, brushW.y) + 1.0;
     len = length(pb - pa);
     vec2 dir = unit(pb - pa, vec2(1.0, 0.0)), nrm = vec2(-dir.y, dir.x);
+    dirF = dir;
     vec2 tA = unit(dir + unit(pa - pp, dir), dir), tB = unit(dir + unit(pn - pb, dir), dir);
     if (corner.x < 0.5) {
       if (kind.z < 0.5) { vec2 n = vec2(-tA.y, tA.x); p = pa + n * corner.y * r / max(dot(n, nrm), 0.3); }
@@ -145,7 +149,9 @@ uniform vec3 tileAt;                  // cos, sin of their angle, the tile's siz
 uniform int wash;                     // the watercolour scheme: paint laid unevenly (washTone)
 flat in float shadeF;
 flat in vec2 brushW;
+flat in vec2 dirF;
 out vec4 outColour;
+${GRAPHITE_GLSL}
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
   vec2 i = floor(p), f = fract(p);
@@ -186,14 +192,15 @@ void main() {
   }
   if (joins.x < 0.0 || joins.y < 0.0 || alongF > penVis) discard;
   float u = local.x, v = local.y;
-  float hw = kindF.y * mix(brushW.x, brushW.y, clamp(u / max(len, 1e-4), 0.0, 1.0)), d, edge = 1.0;
+  float share = mix(brushW.x, brushW.y, clamp(u / max(len, 1e-4), 0.0, 1.0));
+  float hw = graphiteEdge(kindF.y * share, scene), d, edge = 1.0;
   float e = u < 0.0 ? -u : u - len;
   float end = u < 0.0 ? kindF.z : kindF.w;
   if (e > 0.0 && end > 0.5) {
     if (end < 1.5) d = length(vec2(e, v));
     else { d = abs(v); edge = clamp(0.5 - e, 0.0, 1.0); }
   } else d = abs(v);
-  float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
+  float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge * graphite(d, hw, scene, dirF, share);
   if (cover <= 0.0) discard;
   outColour = colourF * cover;
   if (wash == 1) outColour.rgb = min(outColour.rgb * washTone(scene + 40.0), vec3(outColour.a));
@@ -267,7 +274,7 @@ export class GLObjects {
     this.canvas = canvas;
     this.gl = gl;
     this.layer = layer;
-    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'wash']));
+    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['base', 'size', 'mats', 'styles', 'penOn', 'penT', 'alpha', 'tile', 'tileAt', 'wash', 'penScale', ...GRAPHITE_UNIFORMS]));
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -794,7 +801,7 @@ export class GLObjects {
     const { gl, canvas } = this;
     const dpr = canvasDpr();
     const w = Math.round((view.W + 2 * view.ox) * dpr), h = Math.round((view.H + 2 * view.oy) * dpr);
-    const key = `${view.zoom}|${view.panX}|${view.panY}|${view.ox}|${view.oy}|${w}|${h}`;
+    const key = `${view.zoom}|${view.panX}|${view.panY}|${view.ox}|${view.oy}|${w}|${h}|${graphiteKey()}`;
     if (order !== this.lastOrder) this.changed = true;
     if (!this.changed && key === this.key) return;
     this.key = key;
@@ -862,6 +869,8 @@ export class GLObjects {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.uniform3f(this.u.base, dpr * view.zoom, dpr * (view.panX + view.ox), dpr * (view.panY + view.oy));
     gl.uniform2f(this.u.size, w, h);
+    setGraphite(gl, this.u);
+    gl.uniform1f(this.u.penScale, penScale(view.zoom));
     gl.uniform1i(this.u.wash, document.documentElement.classList.contains('wc') ? 1 : 0);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.styleTex);

@@ -1887,6 +1887,15 @@ body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
 }
 .sk-frame path { fill: none; stroke: var(--main); stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; }
 
+/* In the pencil, as the map is: every line the UI draws (frames, pen marks,
+   icons, sliders) grained by the paper's tooth (#ui-tooth, an SVG mask made
+   by sketchFrame.js from render/tooth.js – a CSS mask on each <svg> would
+   be a layer each, hundreds of them) – its specks show the paper it lies
+   on. Not the photos: they are grained in their own lines (ui/photoBrush.js). */
+#ui svg:not(.photo-frame svg) :is(path, line, polyline, polygon, circle, ellipse) { mask: url(#ui-tooth); }
+/* (the pens: --stroke set on #ui by sketchFrame.js uiPens, an icon's lighter) */
+#ui .icon { --stroke: var(--icon-stroke, 1); }
+
 /* ---------- Touch ---------- */
 
 /* no keyboard: hide the key labels, give buttons finger-sized hit areas */

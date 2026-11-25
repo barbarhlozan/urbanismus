@@ -19,6 +19,7 @@ import { STEEP_LINES, steepLines } from '../steep.js';
 import { SUN, sunFor } from '../shadows.js';
 import { HILL_SHADOWS, hillShade, hillShadeRings } from '../hillShadows.js';
 import { SVGNS, TERRAIN_LINES, COS30, r2 } from './shared.js';
+import { LAND } from '../../core/land.js';
 
 // Lakes (Renderer.renderWater): the furthest the shore reaches from a water
 // dot (under 1, so dry dots stay dry) and how softly neighbouring dots'
@@ -252,7 +253,7 @@ export class TerrainDrawing {
     const relief = world.relief();
     if (this.hills?.key !== key || this.hills.relief !== relief || this.hills.lift !== camera.lift) {
       const shade = hillShade(this.groundHeight(), box, sunFor(camera));
-      this.hills = { key, relief, lift: camera.lift, rings: hillShadeRings(shade, box, this.breakAt()), views: new Map() };
+      this.hills = { key, relief, lift: camera.lift, rings: hillShadeRings(shade, box, this.dryAt()), views: new Map() };
     }
     let view = this.hills.views.get(camera.angle);
     if (view == null) {
@@ -363,6 +364,29 @@ export class TerrainDrawing {
     return (x, y) => wet(x, y) || !land.drawn(x, y);
   }
 
+  // How far a world point lies onto the land, from the water's edge as it
+  // is drawn (the lakes' shores, the rivers' banks) and from the land's own
+  // frayed edge: below 0 on water and off the land. It runs smoothly, so a
+  // hill's shadow cut by it ends along the shore – a yes/no test (wetAt)
+  // cut it in steps and in the arcs round the water dots.
+  dryAt() {
+    const land = this.world.land, river = this.world.riverField;
+    const lakes = this.traceWater().lakes;
+    const square = land.kind === 'square';
+    return (x, y) => {
+      let d = square ? Infinity : land.depth(x, y) + LAND.fray * land.fray(x, y);
+      if (river) d = Math.min(d, -river.depth(x, y));
+      for (const l of lakes) {
+        const fi = (x - l.x0) / l.step, fj = (y - l.y0) / l.step;
+        if (fi < 0 || fj < 0 || fi >= l.nx - 1 || fj >= l.ny - 1) continue;
+        const i = Math.floor(fi), j = Math.floor(fj), u = fi - i, v = fj - j, k = j * l.nx + i, w = l.wet;
+        const wet = (w[k] * (1 - u) + w[k + 1] * u) * (1 - v) + (w[k + l.nx] * (1 - u) + w[k + l.nx + 1] * u) * v;
+        d = Math.min(d, -wet);
+      }
+      return d;
+    };
+  }
+
   // Is a world point on water (where the terrain's lines break)?
   wetAt() {
     const { grid, terrain } = this.world;
@@ -425,7 +449,7 @@ export class TerrainDrawing {
   traceWater() {
     const { world } = this;
     if (!this.waterLines) {
-      this.waterLines = { shore: [], bank: [] };
+      this.waterLines = { shore: [], bank: [], lakes: [] };
       const elev = world.elevation, field = world.riverField;
       for (const cells of this.waterBodies()) {
         if (field && world.terrain.isRiver(world.grid.nodeAt(...cells[0]))) {
@@ -528,6 +552,7 @@ export class TerrainDrawing {
       return j * nx + i;
     };
     const field = (x, y) => Math.min(wet[sample(x, y)] / 0.06, 0.5);
+    if (!river) out.lakes.push({ x0, y0, nx, ny, step, wet }); // (for dryAt)
     for (const c of contours(field, box, { step, interval: 1, index: 99, only: 0 })) out[river ? 'bank' : 'shore'].push(c.points);
   }
 

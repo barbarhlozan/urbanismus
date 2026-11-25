@@ -18,7 +18,7 @@
 import { program, rgb } from './common.js';
 import { THEME } from '../../theme.js';
 import { flattenPath, triangulate } from './geometry.js';
-import { brushWidths, BRUSH_GLSL } from '../brush.js';
+import { brushWidths, BRUSH_GLSL, GRAPHITE_GLSL, GRAPHITE_UNIFORMS, setGraphite, penScale } from '../brush.js';
 import { canvasDpr, LIGHT } from '../dpr.js';
 
 // How far (css px) past the window edge something may stand and still show.
@@ -39,18 +39,22 @@ layout(location = 3) in vec4 kind;    // fill (0) or stroke (1), the stroke's ha
 layout(location = 4) in vec4 paint;   // colour index, alpha; a stroke's widths (brush.js)
 uniform vec2 size;
 uniform vec4 colours[8];
+uniform vec4 place;                   // zoom, pan x, pan y (css px), pixel ratio: back to scene px
 out vec2 local;
 out vec2 joins;
 out float len;
 flat out vec4 kindF;
 flat out vec4 colour;
 flat out vec2 brushW;
+out vec2 scene;                       // where it is (scene px: the pencil's grain)
+flat out vec2 dirF;                   // which way a stroke runs
 ${BRUSH_GLSL}
 vec2 unit(vec2 v, vec2 or) { float l = length(v); return l > 1e-4 ? v / l : or; }
 void main() {
   kindF = kind;
   colour = colours[int(paint.x)] * paint.y;
   brushW = brushUnpack(paint.z);
+  dirF = vec2(1.0, 0.0);
   vec2 p;
   if (kind.x < 0.5) {
     // a triangle: corners 0, 1, 2 its points, 3 the last again
@@ -62,6 +66,7 @@ void main() {
     float r = kind.y * max(brushW.x, brushW.y) + 1.0;
     len = length(pb - pa);
     vec2 dir = unit(pb - pa, vec2(1.0, 0.0)), nrm = vec2(-dir.y, dir.x);
+    dirF = dir;
     vec2 tA = unit(dir + unit(pa - cp.xy, dir), dir), tB = unit(dir + unit(cp.zw - pb, dir), dir);
     if (corner.x < 0.5) {
       if (kind.z < 0.5) { vec2 m = vec2(-tA.y, tA.x); p = pa + m * corner.y * r / max(dot(m, nrm), 0.3); }
@@ -73,6 +78,7 @@ void main() {
     local = vec2(dot(p - pa, dir), dot(p - pa, nrm));
     joins = vec2(kind.z < 0.5 ? dot(p - pa, tA) : 1e6, kind.w < 0.5 ? dot(pb - p, tB) : 1e6);
   }
+  scene = (p / place.w - place.yz) / place.x;
   gl_Position = vec4(p / size * 2.0 - 1.0, 0.0, 1.0);
   gl_Position.y = -gl_Position.y;
 }`;
@@ -85,19 +91,23 @@ in float len;
 flat in vec4 kindF;
 flat in vec4 colour;
 flat in vec2 brushW;
+in vec2 scene;
+flat in vec2 dirF;
 out vec4 outColour;
+${GRAPHITE_GLSL}
 void main() {
   if (kindF.x < 0.5) { outColour = colour; return; }
   if (joins.x < 0.0 || joins.y < 0.0) discard;
   float u = local.x, v = local.y;
-  float hw = kindF.y * mix(brushW.x, brushW.y, clamp(u / max(len, 1e-4), 0.0, 1.0)), d, edge = 1.0;
+  float share = mix(brushW.x, brushW.y, clamp(u / max(len, 1e-4), 0.0, 1.0));
+  float hw = graphiteEdge(kindF.y * share, scene), d, edge = 1.0;
   float e = u < 0.0 ? -u : u - len;
   float end = u < 0.0 ? kindF.z : kindF.w;
   if (e > 0.0 && end > 0.5) {
     if (end < 1.5) d = length(vec2(e, v));
     else { d = abs(v); edge = clamp(0.5 - e, 0.0, 1.0); }
   } else d = abs(v);
-  float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
+  float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge * graphite(d, hw, scene, dirF, share);
   if (cover <= 0.0) discard;
   outColour = colour * cover;
 }`;
@@ -138,7 +148,7 @@ export class GLMovers {
     this.gl = gl;
     this.empty = true;
     this.notes = [];
-    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['size', 'colours']));
+    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['size', 'colours', 'place', ...GRAPHITE_UNIFORMS]));
     this.vao = gl.createVertexArray();
     gl.bindVertexArray(this.vao);
     const quad = gl.createBuffer();
@@ -256,7 +266,7 @@ export class GLMovers {
     // the pens (agentCanvas.js PEN): a stroke's width on the screen is its
     // style's times --stroke, the zoom and the pixel ratio, at any size
     const colourIndex = { bg: 0, main: 1, detail: 2 };
-    const px = this.strokeK * this.zoom * dpr;
+    const px = this.strokeK * this.zoom * dpr * penScale(this.zoom);
     const P = new Float32Array(2 * 1024);
     for (const note of this.notes) {
       if (note.segs) {
@@ -334,6 +344,8 @@ export class GLMovers {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.uniform2f(this.u.size, w, h);
+    gl.uniform4f(this.u.place, this.zoom, this.panX, this.panY, dpr);
+    setGraphite(gl, this.u);
     const pal = this.pal ?? THEME.palette;
     const cols = new Float32Array(8 * 4);
     COLOURS.forEach((name, i) => cols.set([...rgb(pal[name]), 1], i * 4));

@@ -50,8 +50,24 @@ ponds), the meadow, the lots and the forest are drawn with WebGL from their
 SVG too (`Renderer.makeGlMirrors`), so they take the brush as well. Not yet
 brushed: the forest's hatched edge band (a clipped pattern, left to the
 SVG), road marks and the build overlay, photos, the flames and the UI's
-frames and icons. The lab also tried pencil grain and ragged
-edges: left off for now.
+frames and icons.
+
+The pencil (`GRAPHITE` beside `BRUSH`): the paper's tooth, a ragged and
+softer edge, pressure along the stroke, a lighter lead – set in
+labs/pencil-lab.html over the running game: fine dense grain, a ragged
+soft edge, strong pressure, pens 2× as wide and growing with the zoom.
+What moves (people, vehicles, smoke) and the hatching of shadows and night
+take it too, and photos (their ribbons filled with a tile of the tooth,
+ui/photoBrush.js), and the UI's lines (one SVG mask of the tooth,
+ui/sketchFrame.js), its pens as wide as the map's at the opening zoom –
+an icon's as the map's further out, so its small drawing doesn't clot. A house's smoke is one
+long line meandering up from the chimney (particles.js `wisp`).
+
+Shadows: their hatching in the pencil's weight (`GRAPHITE.shade`). A trunk
+casts none on the map: its shadow met the trunk in a hard corner at the
+tree's foot (gl/shadows.js). A hill's shadow ends along the shore as drawn,
+not round the water dots (renderer/terrain.js `dryAt`). The clouds cast no shadows for now (`CLOUD_SHADOWS.shown`):
+hatched, they read as any shadow.
 
 ## Detail
 

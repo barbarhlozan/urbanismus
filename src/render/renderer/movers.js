@@ -204,7 +204,8 @@ export class MoverDrawing {
   // is one path in scene coordinates and fades instead.
   drawAgent(el, k) {
     const pen = this.pen;
-    if (el.kind !== 'truck' && el.kind !== 'bus') return pen.draw(el.shapes, el.sx, el.sy, k, el.mirror, el.shear ?? 0, el.squash ?? 1);
+    // (a walker or a cyclist drawn PEOPLE.scale times as big, its pen as it is)
+    if (el.kind !== 'truck' && el.kind !== 'bus') return pen.draw(el.shapes, el.sx, el.sy, el.kind === 'car' ? k : k * PEOPLE.scale, el.mirror, el.shear ?? 0, el.squash ?? 1);
     if (el.key === 'dot') {
       if (el.path && pen.onScreen(el.dot[0], el.dot[1])) pen.drawScene(AGENT_STYLES.truck, el.path, k < 1 ? Math.max(0, k) : 1);
       return;

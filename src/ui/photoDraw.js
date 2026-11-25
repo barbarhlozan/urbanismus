@@ -58,7 +58,7 @@ export function drawPhoto(svg) {
   // the inks the lines are drawn in: a shape filled in anything else is
   // paper (a wall, the ground's bands), there from the start, hiding what
   // is behind it as in the finished photo
-  const inks = new Set([...svg.querySelectorAll('path[data-ribbon]')].map((r) => r.style.fill));
+  const inks = new Set([...svg.querySelectorAll('path[data-ribbon]')].map((r) => r.dataset.ink ?? r.style.fill));
   const parts = new Map(DRAW.phases.map(([k]) => [k, []]));
   const box = (el) => { try { return el.getBBox(); } catch { return { x: 0, y: 0, width: 0, height: 0 }; } };
 

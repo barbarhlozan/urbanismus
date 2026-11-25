@@ -22,6 +22,9 @@ import { Hatching, Pieces, meshOf } from './gl/hatching.js';
 import { canvasDpr } from './dpr.js';
 
 export const CLOUD_SHADOWS = {
+  // drawn on the map? (off for now: as hatching they read as any other
+  // shadow, not a cloud's; the clouds still drift, for those overhead)
+  shown: false,
   // grid units² of map per cloud under a cloudy sky (cover 1; config
   // .weather.cover); a cloud's width, grid units, from a thin sky's to a
   // cloudy one's
@@ -126,7 +129,7 @@ export class CloudShadows {
       changed = true;
     }
 
-    if (!this.clouds.length) return this.clear();
+    if (!this.clouds.length || !C.shown) return this.clear();
     if (!changed && !this.empty) return;
     if (this.gl && this.paper?.hatch) this.draw(camera); // (every frame: costs the GPU next to nothing)
   }

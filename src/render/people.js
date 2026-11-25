@@ -27,6 +27,7 @@ import { VEHICLES, headingIndex } from './vehicles.js';
 export const PEOPLE = {
   bodies: 24,    // body shapes to pick from (BUILD_ORDER round twice, each its own hand)
   height: 2.5,   // a walker's height to the top of the head, scene px
+  scale: 1,      // drawn this many times as big, its pen as it is (tried in labs/pencil-lab.html)
   legs: 0.22,    // share of the height that is legs, for a plain build
   wobble: 0.02,  // how far each point of an outline strays, a share of the height
   lumpy: 0.18,   // how far a head strays from round

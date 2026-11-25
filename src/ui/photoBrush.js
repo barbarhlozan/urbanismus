@@ -13,11 +13,16 @@
 // margin, as a sketch left unfinished there, not a picture cut out of a
 // bigger one.
 //
+// In the pencil as the map is (GRAPHITE): each pen GRAPHITE.width times as
+// wide, its ink a tile of the paper's tooth – specks of bare paper, fixed to
+// the picture – so the lines are grainy as the map's (grainFill).
+//
 // Left as they are: dashed lines, outlines in the paper's own colour (the
 // ground's bands, the decks), and what is drawn turned or scaled (deer,
 // cows, sheep and people, whose strokes keep the map's widths).
 
-import { BRUSH, brushPathData } from '../render/brush.js';
+import { BRUSH, GRAPHITE, brushPathData } from '../render/brush.js';
+import { toothCanvas, TOOTH } from '../render/tooth.js';
 
 export const PHOTO_BRUSH = { ...BRUSH, taper: 0.6, fade: 4, swell: 0.45, wave: 6, weight: 0.4 };
 // how far in from each edge the lines thin away (shares of the picture's
@@ -40,6 +45,31 @@ function edgeFade(w, h) {
 }
 
 const NS = 'http://www.w3.org/2000/svg';
+
+// A fill of `ink` with the paper's tooth in it, kept in the photo's <defs>
+// (one per ink); null without grain (the plain ink).
+function grainFill(svg, ink) {
+  if (!(GRAPHITE.grain > 0 || GRAPHITE.tone > 0)) return null;
+  const fills = (svg._grainFills ??= new Map());
+  if (fills.has(ink)) return fills.get(ink);
+  const c = toothCanvas(ink);
+  let defs = svg.querySelector('defs');
+  if (!defs) svg.prepend((defs = document.createElementNS(NS, 'defs')));
+  const id = `grain-${Math.random().toString(36).slice(2, 8)}`;
+  const pat = document.createElementNS(NS, 'pattern');
+  pat.setAttribute('id', id);
+  pat.setAttribute('patternUnits', 'userSpaceOnUse');
+  pat.setAttribute('width', TOOTH);
+  pat.setAttribute('height', TOOTH);
+  const im = document.createElementNS(NS, 'image');
+  im.setAttribute('href', c.toDataURL());
+  im.setAttribute('width', TOOTH);
+  im.setAttribute('height', TOOTH);
+  pat.append(im);
+  defs.append(pat);
+  fills.set(ink, `url(#${id})`);
+  return fills.get(ink);
+}
 
 // path data for a drawn element, or '' for one that isn't a line
 export function dataOf(el) {
@@ -66,16 +96,17 @@ export function brushPhoto(svg) {
     if (el.closest('[transform]')) continue;
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-    const ink = cs.stroke, width = parseFloat(cs.strokeWidth);
+    const ink = cs.stroke, width = parseFloat(cs.strokeWidth) * GRAPHITE.width;
     if (!ink || ink === 'none' || !(width > 0) || ink === cs.fill) continue;
     if (cs.strokeDasharray && cs.strokeDasharray !== 'none') continue;
     const d = brushPathData(dataOf(el), width, { brush: PHOTO_BRUSH, fade });
     if (!d) continue;
     const ribbon = document.createElementNS(NS, 'path');
     ribbon.setAttribute('d', d);
-    ribbon.setAttribute('style', `fill:${ink};fill-opacity:${cs.strokeOpacity};stroke:none;opacity:${cs.opacity}`);
+    ribbon.setAttribute('style', `fill:${grainFill(svg, ink) ?? ink};fill-opacity:${cs.strokeOpacity};stroke:none;opacity:${cs.opacity}`);
     // (what it was, for drawing the photo in: ui/photoDraw.js)
     ribbon.dataset.ribbon = width;
+    ribbon.dataset.ink = ink;
     el.style.stroke = 'none';
     el.after(ribbon);
   }

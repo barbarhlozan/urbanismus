@@ -23,7 +23,7 @@
 // browser's own for those classes, asked once (look.styles).
 
 import { program, rgb } from './common.js';
-import { brushWidths, BRUSH_GLSL } from '../brush.js';
+import { brushWidths, BRUSH_GLSL, GRAPHITE_GLSL, GRAPHITE_UNIFORMS, setGraphite, graphiteKey, penScale } from '../brush.js';
 import { canvasDpr } from '../dpr.js';
 
 // Line styles: the classes the ink layers draw (styles.css), their pen
@@ -113,6 +113,8 @@ flat out vec2 endsF;
 flat out vec2 brushW;                  // its width at a and at b, shares of its pen's
 out float along;                       // world units along the item
 out float dashAt;                      // scene px along it on the screen
+out vec2 scene;                        // where it is (scene px: the pencil's grain)
+flat out vec2 dirF;                    // which way it runs on the screen
 ${BRUSH_GLSL}
 vec2 project(vec3 p) {
   vec2 d = p.xy - centre;
@@ -146,6 +148,8 @@ void main() {
   float t = len > 1e-4 ? clamp(local.x / len, 0.0, 1.0) : corner.x;
   along = mix(meta.z, meta.w, t);
   dashAt = mix(dash.x, dash.y, t);
+  scene = (p / dpr - place.yz) / place.x;
+  dirF = dir;
   gl_Position = vec4(p / size * 2.0 - 1.0, 0.0, 1.0);
   gl_Position.y = -gl_Position.y;
 }`;
@@ -161,12 +165,15 @@ flat in vec2 endsF;
 flat in vec2 brushW;
 in float along;
 in float dashAt;
+in vec2 scene;
+flat in vec2 dirF;
 uniform vec4 width[${MAX_STYLES}];
 uniform vec4 colour[${MAX_STYLES}];               // premultiplied
 uniform vec4 dashes[${MAX_STYLES}];               // on, off (scene px), dashed?, shown?
 uniform sampler2D items;               // per item: shown up to (world units), from the end?, its length, shown at all
 uniform int washPass;                  // drawing the washes (1, under the lines) or the lines (0)
 out vec4 outColour;
+${GRAPHITE_GLSL}
 void main() {
   vec4 ds = dashes[styleId];
   if (ds.w < 0.5) discard;
@@ -179,7 +186,8 @@ void main() {
   if (joins.x < 0.0 || joins.y < 0.0) discard;
   vec4 w = width[styleId];
   float u = local.x, v = local.y;
-  float hw = w.x * mix(brushW.x, brushW.y, clamp(u / max(len, 1e-4), 0.0, 1.0)), d, edge = 1.0;
+  float share = mix(brushW.x, brushW.y, clamp(u / max(len, 1e-4), 0.0, 1.0));
+  float hw = w.y > 0.5 ? w.x * share : graphiteEdge(w.x * share, scene), d, edge = 1.0;
   float e = u < 0.0 ? -u : u - len;
   float kind = u < 0.0 ? endsF.x : endsF.y;
   if (e > 0.0 && kind > 0.5) {
@@ -192,6 +200,7 @@ void main() {
   // pen's width covers: exact across a straight edge, at any width – a
   // pen thinner than a pixel spreads faintly over one or two
   float cover = clamp(min(d + 0.5, hw) - max(d - 0.5, -hw), 0.0, 1.0) * edge;
+  if (w.y < 0.5) cover *= graphite(d, hw, scene, dirF, share);
   if (w.w > 0.0) cover *= 1.0 - smoothstep(w.z, w.w, along);
   if (ds.z > 0.5 && mod(dashAt, ds.x + ds.y) > ds.x) discard;
   if (cover <= 0.0) discard;
@@ -225,7 +234,7 @@ export class GLLines {
     this.layers = new Map(); // name -> { items, classes }
     this.order = [];         // layer names, back to front
     this.dirty = true;       // the geometry to build again
-    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['rot', 'centre', 'iso', 'place', 'size', 'dpr', 'width', 'colour', 'dashes', 'items', 'washPass']));
+    ({ p: this.program, u: this.u } = program(gl, VS, FS, ['rot', 'centre', 'iso', 'place', 'size', 'dpr', 'width', 'colour', 'dashes', 'items', 'washPass', ...GRAPHITE_UNIFORMS]));
     this.vao = gl.createVertexArray();
     gl.bindVertexArray(this.vao);
     const quad = gl.createBuffer();
@@ -425,7 +434,7 @@ export class GLLines {
     const dpr = canvasDpr();
     const w = Math.round(view.W * dpr), h = Math.round(view.H * dpr);
     const animating = [...this.layers.values()].some((l) => l.ink?.busy);
-    const key = `${w}|${h}|${view.zoom}|${view.panX}|${view.panY}|${view.angle}|${look.stroke}|${look.near}|${look.far}|${look.fg}|${look.palette.detail}|${look.palette.bg}|${JSON.stringify(look.wash ?? null)}|${look.stylesKey ?? ''}|${this.count}`;
+    const key = `${w}|${h}|${view.zoom}|${view.panX}|${view.panY}|${view.angle}|${look.stroke}|${look.near}|${look.far}|${look.fg}|${look.palette.detail}|${look.palette.bg}|${JSON.stringify(look.wash ?? null)}|${look.stylesKey ?? ''}|${this.count}|${graphiteKey()}`;
     if (!animating && !this.wasAnimating && key === this.drawnKey) return;
     this.drawnKey = key;
     this.wasAnimating = animating;
@@ -449,23 +458,24 @@ export class GLLines {
     gl.uniform3f(u.place, view.zoom, view.panX, view.panY);
     gl.uniform2f(u.size, w, h);
     gl.uniform1f(u.dpr, dpr);
+    setGraphite(gl, u);
     // the pens: a width in scene px (pen · --stroke, the line weight in it),
     // on the screen times the zoom, in device px times the pixel ratio
     const widths = new Float32Array(MAX_STYLES * 4), colours = new Float32Array(MAX_STYLES * 4), dashes = new Float32Array(MAX_STYLES * 4);
     const { wash } = look;
     const colourOf = { fg: rgb(look.fg), main: rgb(look.fg), detail: rgb(look.palette.detail), bg: rgb(look.palette.bg), wash: rgb(wash?.colour ?? '#000') };
-    const tile = view.iso[1] * 2;
+    const tile = view.iso[1] * 2, pen = penScale(view.zoom);
     this.names.forEach((n, i) => {
       const s = STYLES[n], own = look.styles?.[n];
       if (own) {
-        widths[i * 4] = (own.width * view.zoom * dpr) / 2;
+        widths[i * 4] = (own.width * view.zoom * dpr * pen) / 2;
         const [r, g, b, a] = own.rgba ??= cssColour(own.colour);
         colours.set([r * a, g * a, b * a, a], i * 4);
         dashes.set([0, 0, 0, own.shown ? 1 : 0], i * 4);
         return;
       }
       const px = s.wash ? (wash?.[s.wash] ?? 0) * 2 * tile * view.zoom * dpr : s.width * look.stroke * view.zoom * dpr;
-      widths[i * 4] = px / 2;
+      widths[i * 4] = s.wash ? px / 2 : (px * pen) / 2;
       widths[i * 4 + 1] = s.wash ? 1 : 0;
       if (s.fade) widths.set(s.fade, i * 4 + 2);
       const [r, g, b] = colourOf[s.colour];

@@ -37,7 +37,7 @@ import { GLMovers } from './gl/movers.js';
 export const PARTICLES = {
   house: {
     rate: 0.6, life: 10, rise: 1.5, drift: 1.1, wander: 0.05, size: [0.045, 0.13],
-    in: 0.12, out: 0.4, on: { every: 70, share: 0.45 }, pen: 2, ink: 'main',
+    in: 0.12, out: 0.4, on: { every: 70, share: 0.45 }, pen: 3, ink: 'main',
   },
   stack: {
     rate: 1.1, life: 20, rise: 3, drift: 2.2, wander: 0.08, size: [0.1, 0.34],
@@ -233,6 +233,21 @@ export const STYLES = {
     eachParticle(e, d.K, d.time, d.env, (x, y, s, u) => pts.push([x, y, s, u]), d.opts);
     if (lit(e, d.K, d.time)) pts.push([e.x, e.y, 0, 0]);
     if (pts.length < 2) return;
+    // (it meanders as it goes up, more the higher, a wave rising slowly
+    // along it: each stretch cut in four, set aside by the wave)
+    // (each puff's own height let go: the line only climbs, no zigzags)
+    for (let j = pts.length - 2; j >= 0; j--) pts[j][1] = Math.min(pts[j][1], pts[j + 1][1] - 0.5);
+    const wave = [pts[0]];
+    for (let j = 1; j < pts.length; j++) {
+      const [ax, ay, as, au] = pts[j - 1], [bx, by, bs, bu] = pts[j];
+      for (let k = 1; k <= 4; k++) {
+        const t = k / 4, s = as + (bs - as) * t, y = ay + (by - ay) * t;
+        const sway = 0.7 * s * Math.sin((e.y - y) / (6 + 0.08 * (e.seed % 40)) - d.time * 0.9 + e.seed);
+        wave.push([ax + (bx - ax) * t + sway, y, s, au + (bu - au) * t]);
+      }
+    }
+    pts.length = 0;
+    pts.push(...wave);
     const sides = e.kind === 'stack' ? [-0.5, 0.5] : [0];
     ctx.beginPath();
     for (const side of sides) {
@@ -315,7 +330,9 @@ const MARGIN = 40;
 //   fps       found again this often (smoke moves slowly); laid out for
 //             the camera every frame it moves
 const SMOKE_DRAW = {
-  style: { house: 'curl', stack: 'puff' },
+  // (a house's smoke one long line up from the chimney, as the pencil
+  // would draw it, not curls one by one)
+  style: { house: 'wisp', stack: 'puff' },
   most: 1500,
   minZoom: { house: 1, stack: 0 },
   fps: 12, // (on twos)

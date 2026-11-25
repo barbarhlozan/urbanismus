@@ -272,8 +272,10 @@ function clipOf(g) {
 // shader is given: each point where it stands on the ground (`project`,
 // then `m`) and its height, shifted along the sun on the GPU – so the sun
 // moving draws nothing anew. Each shape's edge dashed (EDGE), as the
-// masks' were; a trunk's a pen line.
-const HW = EDGE.width / 2, LINE_HW = 1.1, CROWN = 12, CONE = 10;
+// masks' were. A trunk casts nothing here: its shadow, a narrow band of
+// the strokes or a line, met the trunk in a hard corner at the tree's foot,
+// and the crown's shadow says enough.
+const HW = EDGE.width / 2, CROWN = 12, CONE = 10;
 export function castPieces(p, { feet = [], casts = [], project }, m, alpha) {
   const [a, b, c, d, e, f] = m;
   const P = (x, y) => {
@@ -289,9 +291,9 @@ export function castPieces(p, { feet = [], casts = [], project }, m, alpha) {
   // a filled triangle, each point with its height; `how` 1 cast, 2 a wall's (its normal n)
   const tri = (A, za, B, zb, C, zc, how = 1, n = [0, 0]) =>
     put([A[0], A[1], B[0], B[1], C[0], C[1], 0, 0, 0, 0, 0, 0, alpha, 1, 1, 0, za, zb, zc, 0, n[0], n[1], how, -1]);
-  // a dashed edge (or, with `hw` and round ends, a pen line)
-  const seg = (A, za, B, zb, how = 1, n = [0, 0], line = false) =>
-    put([A[0], A[1], B[0], B[1], A[0], A[1], B[0], B[1], 1, line ? LINE_HW : HW, line ? 1 : 2, line ? 1 : 2, alpha, 1, 1, 0, za, zb, za, zb, n[0], n[1], how, line ? -1 : next()]);
+  // a dashed edge
+  const seg = (A, za, B, zb, how = 1, n = [0, 0]) =>
+    put([A[0], A[1], B[0], B[1], A[0], A[1], B[0], B[1], 1, HW, 2, 2, alpha, 1, 1, 0, za, zb, za, zb, n[0], n[1], how, next()]);
   for (const ft of feet) {
     if (ft.h < SUN.low) continue;
     const z = ft.level ?? ft.h, A = P(...ft.a), B = P(...ft.b);
@@ -323,9 +325,6 @@ export function castPieces(p, { feet = [], casts = [], project }, m, alpha) {
       const pts = s.pts.map(([x, y, z]) => [P(x, y), z]);
       for (let i = 1; i + 1 < pts.length; i++) tri(pts[0][0], pts[0][1], pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]);
       pts.forEach(([A, za], i) => seg(A, za, ...pts[(i + 1) % pts.length]));
-    } else if (s.kind === 'stem' && s.z > 0) {
-      const A = P(...s.at);
-      seg(A, 0, A, s.z, 1, [0, 0], true);
     }
   }
 }
