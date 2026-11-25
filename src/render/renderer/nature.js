@@ -1,9 +1,8 @@
 // Trees and weather on the map (Renderer methods; see renderer.js): trees
 // swaying in the wind, smoke and fire, and the mist lying in the valleys.
 
-import { MIST, mistLevel, mistSurface, mistSVG, mistHatch, coverSVG, mistIn, mistOut } from '../mist.js';
+import { MIST, mistLevel, mistSurface, mistSVG, coverSVG, mistIn, mistOut } from '../mist.js';
 import { drawEnabled } from '../draw.js';
-import { SUN } from '../shadows.js';
 import { SVGNS, VIEW_SETTLE, r2, detailRank, TREE_SWAY } from './shared.js';
 
 export class NatureDrawing {
@@ -133,11 +132,6 @@ export class NatureDrawing {
     const animate = drawEnabled() && level !== this.mistLevel && this.mistLevel !== undefined;
     const seed = Math.round((level ?? 0) * 1000) ^ world.seed;
     let svg = '';
-    // the paper's strokes it is filled with, as are its covers (gl/objects.js)
-    if (level != null && SUN.hatch) {
-      const { hatch, width } = mistHatch(SUN.hatch);
-      this.glObjects?.setTile(hatch, camera.tile, width * camera.tile);
-    }
     if (level != null) {
       const { grid } = world;
       const m = 1.2; // (as the contours: the ground is drawn a little past the map)

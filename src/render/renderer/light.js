@@ -11,6 +11,7 @@ import { lampPool, headBeam } from '../lights.js';
 import { sunStyle } from '../sunFree.js';
 import { treeLightSector } from '../../../features/trees.js';
 import { hashKey, NO_COVER, COS30, r2 } from './shared.js';
+import { elKeyOf } from './movers.js';
 
 // An object's light shapes as path data, for the night's mask
 // (renderLights), worked out once per drawing: its outline (Painter.covers)
@@ -259,7 +260,7 @@ export class LightDrawing {
         if (l < 1e-4) continue;
         [dx, dy] = [(a.x - a.tx) / l, (a.y - a.ty) / l];
       } else {
-        const h = this.agentEls.get(a.id)?.heading;
+        const h = this.agentEls.get(elKeyOf(a))?.heading;
         if (h == null) continue;
         const t = (h / VEHICLES.headings) * Math.PI * 2;
         [dx, dy] = [Math.cos(t), Math.sin(t)];
@@ -277,8 +278,8 @@ export class LightDrawing {
     return out;
   }
 
-  // The shadows (gl/shadows.js), for the view the SVGs were last drawn
-  // at, fading with the weather as they do (--sun, main.js); the objects'
+  // The shadows (gl/shadows.js), for the camera as it is (glView),
+  // fading with the weather as they do (--sun, main.js); the objects'
   // hidden while the view turns (hideShadows), hatched in once it rests.
   renderShadeCanvas() {
     const d = this.drawn;
@@ -289,7 +290,7 @@ export class LightDrawing {
       this.glShadows.canvas.style.setProperty('--sun', sun);
     }
     const look = {
-      view: { zoom: d.zoom, panX: d.panX, panY: d.panY, angle: d.angle, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH },
+      view: this.glView(),
       hatch: SUN.hatch, tier: SHADE_TIERS[this.lodLevel ?? 0] ?? 1, px: this.camera.tile, stroke: this.strokeK,
     };
     // the sun the objects' shadows are cast by (gl/shadows.js castPieces):
@@ -440,7 +441,7 @@ export class LightDrawing {
     };
     const d = this.drawn;
     if (!this.glNight || !d) return;
-    const view = { zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH };
+    const view = this.glView();
     this.glNight[0].draw(view, { ...look, lights: this.glGround, sheet: this.nightSheet, beams: this.headlights() });
     // (while the view turns the objects' night can't follow them: they go
     // without, bare paper, as they are drawn bare – the lights on the ground stay)

@@ -32,6 +32,8 @@
 import { sketchLine, seedOf } from '../render/sketch.js';
 import { smooth } from '../render/people.js';
 import { mulberry32 } from '../core/random.js';
+import { brushPathData } from '../render/brush.js';
+import { toothMaskURL } from '../render/tooth.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -46,13 +48,17 @@ const SIDES = [[0], [-1, 1], [-1, 1, 0], [-2, 2, -1, 1]];
 const GAP = 7;   // px between the line and a bubble beside it
 const STEP = 64; // px further out for the outer pair of four
 
-// The bubble, drawn once per scheme: a rounded box in one pen line whose
-// ends overlap where it closes, paper inside. 120×72, sliced 26 in.
+// The bubble, drawn once per scheme: a rounded box in one pencil line
+// whose ends overlap where it closes – brushed (brush.js) and grained by
+// the paper's tooth as the UI's other lines are, in the UI's frame pen
+// (1.3 × --stroke) – paper inside. 120×72, sliced 26 in.
+const TOOTH_PX = 96; // (the tooth's tile, as ui/sketchFrame.js lays it)
 let sprite = null;
 function chatSprite() {
   const css = getComputedStyle(document.documentElement);
   const ink = css.getPropertyValue('--main').trim() || '#3a2c24', paper = css.getPropertyValue('--bg').trim() || '#f3eee2';
-  if (sprite?.ink === ink && sprite.paper === paper) return sprite.url;
+  const pen = 1.3 * (parseFloat(getComputedStyle(document.getElementById('ui') ?? document.documentElement).getPropertyValue('--stroke')) || 1);
+  if (sprite?.ink === ink && sprite.paper === paper && sprite.pen === pen) return sprite.url;
   const shape = (open) => {
     const rnd = mulberry32(11), N = 34, a0 = Math.PI * 0.62, e = 3.6, pts = [];
     for (let i = 0; i <= (open ? N + 3 : N - 1); i++) {
@@ -62,9 +68,12 @@ function chatSprite() {
     }
     return smooth(pts, !open);
   };
-  const svg = `<svg xmlns="${NS}" width="120" height="72" viewBox="0 0 120 72"><path d="${shape(false)}" fill="${paper}"/>`
-    + `<path d="${shape(true)}" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
-  sprite = { ink, paper, url: `url("data:image/svg+xml,${encodeURIComponent(svg)}")` };
+  const line = shape(true), ribbon = brushPathData(line, pen);
+  const tooth = `<defs><pattern id="t" patternUnits="userSpaceOnUse" width="${TOOTH_PX}" height="${TOOTH_PX}"><image href="${toothMaskURL()}" width="${TOOTH_PX}" height="${TOOTH_PX}"/></pattern>`
+    + `<mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="120" height="72" style="mask-type:alpha"><rect width="120" height="72" fill="url(#t)"/></mask></defs>`;
+  const svg = `<svg xmlns="${NS}" width="120" height="72" viewBox="0 0 120 72">${tooth}<path d="${shape(false)}" fill="${paper}"/>`
+    + (ribbon ? `<path d="${ribbon}" fill="${ink}" mask="url(#m)"/>` : `<path d="${line}" fill="none" stroke="${ink}" stroke-width="${pen}" stroke-linecap="round" mask="url(#m)"/>`) + '</svg>';
+  sprite = { ink, paper, pen, url: `url("data:image/svg+xml,${encodeURIComponent(svg)}")` };
   return sprite.url;
 }
 

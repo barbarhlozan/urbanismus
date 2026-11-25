@@ -203,3 +203,24 @@ export function sketchEllipse(cx, cy, rx, ry, seed, { k = 1, turns = 1.12, lump 
   }
   return d;
 }
+
+// A sheet of paper's edge, w × h at (x, y): not ruled but softly wavy, as a
+// leaf torn along a fold – every `step` px or so the edge moves in or out
+// by up to `amp` px, the points joined by smooth curves. A closed path, to
+// fill with the paper and draw round with the pen (the photo's print,
+// ui/photoPrint.js).
+export function sketchSheet(x, y, w, h, seed, { amp = 1.1, step = 9 } = {}) {
+  const rnd = mulberry32(seed);
+  const off = () => (rnd() - 0.5) * 2 * amp;
+  const pts = [];
+  const n = (len) => Math.max(1, Math.round(len / step));
+  for (let i = 0, k = n(w); i < k; i++) pts.push([x + (w * i) / k, y + off()]);
+  for (let i = 0, k = n(h); i < k; i++) pts.push([x + w - off(), y + (h * i) / k]);
+  for (let i = 0, k = n(w); i < k; i++) pts.push([x + w - (w * i) / k, y + h - off()]);
+  for (let i = 0, k = n(h); i < k; i++) pts.push([x + off(), y + h - (h * i) / k]);
+  const p = (q) => `${r2(q[0])} ${r2(q[1])}`;
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  let d = `M${p(mid(pts[pts.length - 1], pts[0]))}`;
+  for (let i = 0; i < pts.length; i++) d += `Q${p(pts[i])} ${p(mid(pts[i], pts[(i + 1) % pts.length]))}`;
+  return `${d}Z`;
+}

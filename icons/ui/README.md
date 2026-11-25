@@ -58,7 +58,7 @@ drawing written in the code, the one each file was first exported from.
 | `lang-en.svg` | Menu: English (the Union Jack), shown while the game is in Czech |
 | `rename.svg` | Top left: the pencil beside the town's name, to rename it |
 | `chronicle.svg` | Top left: the chronicle book, beside the town's name |
-| `camera.svg` | Build menu, last in the row under the rail (on a phone, the panel's bottom row), and top left beside the town's name: photo mode, **P**; and the dock while it's on (a sketchbook with a pencil drawing a hill on its page – a photo is drawn as an illustration) |
+| `camera.svg` | Build menu, last in the row under the rail (on a phone, the panel's bottom row), and top left beside the town's name: photo mode, **P**; and the dock while it's on, and on the map where the photographer stands (a sketchbook with a pencil drawing a hill on its page – a photo is drawn as an illustration) |
 | `rotate.svg` | Tool dock: rotate option, **Tab** |
 | `bend-diagonal.svg` | Tool dock: a line's bend, diagonal first, **Tab** |
 | `bend-straight.svg` | Tool dock: a line's bend, straight first, **Tab** |
@@ -100,7 +100,7 @@ it's added there.
 - **The Build menu's tiles for buildings**: each is drawn from the building's own draw code
   (`src/ui/icons.js` structureIcon), so it always matches what gets built, in a looser, rounder
   hand than the map's (`DOODLE` there, `.icon.doodle` in styles.css).
-- **The map's own marks**: the photographer's mark on the map, a drawing in its frame (`PHOTO_SPOT` in `src/render/overlay.js`), the cursor's crosses and
+- **The map's own marks**: the photographer's mark on the map (`PHOTO_SPOT` in `src/render/overlay.js`; it draws `camera.svg` too), the cursor's crosses and
   signs, the road marks (`src/render/`).
 - **Pen frames and marks drawn to size**: the boxes round the panels (`sketchFrame.js`), what
   a button is doing (`penMarks.js`), the chronicle book's tabs, ribbon, corners and rules,

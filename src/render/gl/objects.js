@@ -144,7 +144,7 @@ flat in vec4 colourF;
 in float alongF;
 flat in float penVis;
 in vec2 scene;
-uniform sampler2D tile;               // the mist's strokes (setTile)
+uniform sampler2D tile;               // the hatched water's strokes (setTile)
 uniform vec3 tileAt;                  // cos, sin of their angle, the tile's size (scene px)
 flat in float shadeF;
 flat in vec2 brushW;
@@ -363,7 +363,7 @@ export class GLObjects {
     }).observe(layer, { subtree: true, childList: true, attributes: true, characterData: true });
   }
 
-  // The tile the hatched fills (the mist's paper, `fill: url(…)`) are
+  // The tile the hatched fills (water in a pool, `fill: url(…)`) are
   // filled with: the strokes of `hatch` (hatch.js, all tiers) at `px` a
   // grid unit, `width` scene px wide.
   setTile(hatch, px, width) {
@@ -507,7 +507,7 @@ export class GLObjects {
     const cs = getComputedStyle(s.el);
     const alpha = parseFloat(cs.opacity) || 0;
     s.shown = cs.display !== 'none';
-    // (filled with a pattern: the mist's paper, in its strokes, setTile)
+    // (filled with a pattern: hatched water, setTile)
     s.hatched = cs.fill.startsWith('url(');
     let fill = cs.fill;
     if (s.hatched) {
@@ -783,7 +783,7 @@ export class GLObjects {
     this.draw(view, this.layerOrder);
   }
 
-  // Each frame. `view`: the SVGs' drawn view and wrapper ({ zoom, panX,
+  // Each frame. `view`: the camera's view and the wrapper ({ zoom, panX,
   // panY, ox, oy, W, H }); `order`: the objects from the furthest (entries
   // with g, shown) – after the groups of the layer under them (watch).
   draw(view, order) {
@@ -863,7 +863,7 @@ export class GLObjects {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.styleTex);
     gl.uniform1i(this.u.styles, 1);
-    this.tileFor(2 ** (Math.round(Math.log2(dpr * view.zoom) * 4) / 4));
+    this.tileFor(2 ** (Math.round(Math.log2(dpr * (view.tileZoom ?? view.zoom)) * 4) / 4));
     if (this.tileTex) {
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, this.tileTex);

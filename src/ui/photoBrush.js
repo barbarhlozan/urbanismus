@@ -92,6 +92,8 @@ export function brushPhoto(svg) {
   svg.dataset.brushed = '1';
   const box = svg.viewBox?.baseVal;
   const fade = box?.width ? edgeFade(box.width, box.height) : null;
+  // (a little past the picture: lines beyond it are faded out anyway)
+  const clip = box?.width ? [box.x - 8, box.y - 8, box.x + box.width + 8, box.y + box.height + 8] : null;
   for (const el of [...svg.querySelectorAll('path, line, polyline, polygon')]) {
     if (el.closest('[transform]')) continue;
     const cs = getComputedStyle(el);
@@ -99,7 +101,8 @@ export function brushPhoto(svg) {
     const ink = cs.stroke, width = parseFloat(cs.strokeWidth) * GRAPHITE.width;
     if (!ink || ink === 'none' || !(width > 0) || ink === cs.fill) continue;
     if (cs.strokeDasharray && cs.strokeDasharray !== 'none') continue;
-    const d = brushPathData(dataOf(el), width, { brush: PHOTO_BRUSH, fade });
+    const measure = { length: 0 };
+    const d = brushPathData(dataOf(el), width, { brush: PHOTO_BRUSH, fade, box: clip, measure });
     if (!d) continue;
     const ribbon = document.createElementNS(NS, 'path');
     ribbon.setAttribute('d', d);
@@ -107,6 +110,7 @@ export function brushPhoto(svg) {
     // (what it was, for drawing the photo in: ui/photoDraw.js)
     ribbon.dataset.ribbon = width;
     ribbon.dataset.ink = ink;
+    ribbon.dataset.length = Math.round(measure.length);
     el.style.stroke = 'none';
     el.after(ribbon);
   }

@@ -8,7 +8,7 @@ import { drawEnabled } from '../draw.js';
 import { MEADOW, meadowGround } from '../meadow.js';
 import { isoSort } from '../order.js';
 import { Camera } from '../camera.js';
-import { BRUSH, penScale } from '../brush.js';
+import { BRUSH } from '../brush.js';
 import { SVGNS, VIEW_SETTLE, GL_LINES, STEPS, GL_AHEAD, COS30, r2 } from './shared.js';
 
 // How far past each window edge the map is drawn while the camera moves
@@ -31,8 +31,11 @@ export class ViewMotion {
   // when the camera rests –
   // or early, when the moved drawing would no longer cover the window. It
   // reaches OVERSCAN of the window past each edge, so there is picture to
-  // slide into. (Mid-zoom the stretched lines look a little soft; they
-  // sharpen when the zoom rests.)
+  // slide into. The WebGL canvases in the wrappers – nearly all of the map –
+  // aren't stretched with them: each is moved back by as much (glCss) and
+  // drawn for the camera as it is (glView), so it stays sharp and nothing
+  // of it waits for the rest; only the overlay and what culling left out
+  // wait for the redraw.
   placeView() {
     const cam = this.camera, now = performance.now();
     const W = innerWidth, H = innerHeight;
@@ -40,6 +43,8 @@ export class ViewMotion {
       [this.winW, this.winH] = [W, H];
       [this.ox, this.oy] = [Math.round(W * OVERSCAN), Math.round(H * OVERSCAN)];
       for (const w of this.wrappers) Object.assign(w.style, { left: `${-this.ox}px`, top: `${-this.oy}px`, width: `${W + 2 * this.ox}px`, height: `${H + 2 * this.oy}px`, transformOrigin: `${this.ox}px ${this.oy}px` });
+      this.glCanvases = this.wrappers.flatMap((w) => [...w.querySelectorAll('canvas')]);
+      for (const c of this.glCanvases) c.style.transformOrigin = `${this.ox}px ${this.oy}px`;
       this.drawn = null;
     }
     const view = `${cam.zoom} ${cam.panX} ${cam.panY} ${cam.angle}`;
@@ -48,7 +53,7 @@ export class ViewMotion {
       this.movedAt = now;
     }
     const d = this.drawn;
-    let css = '';
+    let css = '', glCss = '';
     if (!d || d.view !== view) {
       const k = d ? cam.zoom / d.zoom : 1;
       const tx = d ? cam.panX - k * d.panX : 0, ty = d ? cam.panY - k * d.panY : 0;
@@ -61,6 +66,7 @@ export class ViewMotion {
       const turned = d && d.angle !== cam.angle;
       if (d && (covered || turned) && this.deferView && now - this.movedAt < VIEW_SETTLE) {
         css = `translate(${tx}px, ${ty}px) scale(${k})`;
+        glCss = `scale(${1 / k}) translate(${-tx}px, ${-ty}px)`;
         if (turned) this.goDraft();
         if (turned && !this.turning) this.startTurn();
       } else {
@@ -80,7 +86,18 @@ export class ViewMotion {
       // on the wrappers, not the SVGs: a transform on an <svg> itself
       // makes the browser lay it out again
       for (const w of this.wrappers) w.style.transform = css;
+      for (const c of this.glCanvases) c.style.transform = glCss;
     }
+  }
+
+  // The view the WebGL canvases are drawn for (placeView): the camera's as
+  // it is, in a wrapper's px (the window and its overscan); the angle the
+  // SVGs were drawn at. The tiles of hatching are drawn for the zoom the
+  // view last rested at (tileZoom), stretched until it rests again: drawing
+  // one takes a good part of a second.
+  glView() {
+    const cam = this.camera, d = this.drawn;
+    return { zoom: cam.zoom, panX: cam.panX, panY: cam.panY, angle: d.angle, tileZoom: d.zoom, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH };
   }
 
   // The ground drawn at angle `from` turned to angle `to`, in scene px:
@@ -523,6 +540,11 @@ export class ViewMotion {
   updateStroke(z) {
     const { strokeStep: step, lineWeight } = this.config.render;
     const k = this.constantStrokes ? (lineWeight * step ** -Math.round(Math.log(z) / Math.log(step))) / (devicePixelRatio || 1) : 1;
+    // the overlay (what is being built, the signs) as wide as the map's
+    // lines the GPU draws with the brush (brush.js BRUSH.width), so a
+    // building's preview is drawn as it will stand
+    const pen = (k * BRUSH.width).toFixed(3);
+    if (pen !== this.overlayPen) this.layers.overlay?.style.setProperty('--stroke', (this.overlayPen = pen));
     if (k === this.strokeK) return;
     this.strokeK = k;
     for (const s of this.svgs) s.style.setProperty('--stroke', k);
@@ -539,11 +561,6 @@ export class ViewMotion {
       this.meadowTier = tier;
     }
     // railways between the map symbol and the track (trackItems)
-    // the overlay (what is being built, the signs) in the pencil's weight,
-    // as the map's lines the GPU draws are (brush.js penScale) – its own
-    // --stroke, set at every zoom: the pencil grows with the zoom
-    const pen = (k * BRUSH.width * penScale(z)).toFixed(3);
-    if (pen !== this.overlayPen) this.layers.overlay?.style.setProperty('--stroke', (this.overlayPen = pen));
     this.railsNear = z >= VEHICLES.minZoom;
     // each object's own detail (bandOf), redrawn where it changes
     if (z !== this.bandZoom) {

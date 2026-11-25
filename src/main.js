@@ -356,6 +356,7 @@ const dialogue = new Bubbles(uiRoot, {
     return [x * camera.zoom + camera.panX, y * camera.zoom + camera.panY];
   },
 });
+paper.follow(dialogue.layer); // (the bubbles' paper as the map's)
 const story = new Storyteller({ world, agents, fires, trains, dialogue, chronicle, config: CONFIG });
 // now and then three dots over a house: clicked, two talk there (story/kecy.md)
 const kecy = new Kecy({ world, dialogue, config: CONFIG });
@@ -394,9 +395,10 @@ tools.register(createPhotoTool(ctx, {
   shoot: (shot) => {
     // captioned with the town's name
     const caption = world.name;
-    photoPrint.show(takePhoto(renderer, shot), caption);
+    // (pasted into the chronicle once it's drawn: the print is of the
+    // finished drawing, and making it doesn't hold up the drawing's start)
+    photoPrint.show(takePhoto(renderer, shot), caption, (photo) => pasteIn(photo, caption));
     world.story.vars.photos_taken = (world.story.vars.photos_taken ?? 0) + 1;
-    pasteIn(photoPrint.photo, caption);
   },
 }));
 
@@ -1026,7 +1028,7 @@ function loop(now) {
     const sky = weather.sky();
     // (no sun at night, so no cloud shadows: they fade away)
     cloudShadows.frame(simDt, camera, renderer.dark ? 0 : sky.cover, { hatch: SUN.hatch, stroke: renderer.strokeK });
-    cloudsAbove.frame(dt, camera, renderer.dark ? 0 : sky.cover, renderer.strokeK);
+    cloudsAbove.frame(dt, camera, renderer.dark ? 0 : sky.cover, renderer.strokeK, renderer.dark ? 0 : sky.rain);
     rain.frame(simDt, camera, sky.rain);
     paper.frame(camera);
     ambience.frame(dt, sky, DAY.held ?? hourAt(world.time)); // (the birds keep the hour too)

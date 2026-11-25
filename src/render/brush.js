@@ -190,16 +190,38 @@ export function brushPath2D(d, width) {
 // (ui/photoBrush.js): `width` units wide, `scale` scene px to one of its
 // units. `brush`: the brush's settings (BRUSH, or a photo's own, heavier
 // handed); `fade(x, y)`: a share of the width there (1: as is), for a
-// drawing that fades out towards its edges. '' with the brush off.
-export function brushPathData(d, width, { scale = 1, brush = BRUSH, fade = null, step = 3 } = {}) {
+// drawing that fades out towards its edges; `box` ([x0, y0, x1, y1]): only
+// what is inside it is drawn – a line running far out of the picture (a
+// photo looking up has some, thrown out to millions of px) is cut at its
+// edge, not cut up into pieces all the way. `measure` ({ length }): the
+// length drawn is added to it. '' with the brush off.
+export function brushPathData(d, width, { scale = 1, brush = BRUSH, fade = null, step = 3, box = null, measure = null } = {}) {
   if (!BRUSH.on) return '';
   const f = (v) => Math.round(v * 100) / 100;
   let out = '';
+  const runs = [];
   for (const { pts, closed } of flattenPath(d, 0.1)) {
+    const line = closed ? [...pts, pts[0]] : pts;
+    if (!box) { runs.push(line); continue; }
+    // the parts of it inside the box
+    let run = [];
+    for (let i = 1; i < line.length; i++) {
+      const seg = clipSegment(line[i - 1], line[i], box);
+      if (!seg) { if (run.length > 1) runs.push(run); run = []; continue; }
+      const [a, b] = seg, last = run[run.length - 1];
+      if (!last || Math.abs(last[0] - a[0]) > 1e-6 || Math.abs(last[1] - a[1]) > 1e-6) {
+        if (run.length > 1) runs.push(run);
+        run = [a];
+      }
+      run.push(b);
+    }
+    if (run.length > 1) runs.push(run);
+  }
+  for (const line of runs) {
     // (long straight runs cut into pieces `step` long, so the width can
     // swell and thin along them, and fade where they near an edge)
     const ring = [];
-    for (const p of closed ? [...pts, pts[0]] : pts) {
+    for (const p of line) {
       const q = ring[ring.length - 1];
       if (q) {
         const n = Math.floor(Math.hypot(p[0] - q[0], p[1] - q[1]) / step);
@@ -208,6 +230,7 @@ export function brushPathData(d, width, { scale = 1, brush = BRUSH, fade = null,
       ring.push(p);
     }
     if (ring.length < 2) continue;
+    if (measure) for (let i = 1; i < ring.length; i++) measure.length += Math.hypot(ring[i][0] - ring[i - 1][0], ring[i][1] - ring[i - 1][1]);
     const w = widthsAlong(ring, ring.length, scale, brush);
     const dot = (x, y, r) => (r > 0.02 ? `M${f(x - r)} ${f(y)}a${f(r)} ${f(r)} 0 1 0 ${f(2 * r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2 * r)} 0` : '');
     for (let i = 1; i < ring.length; i++) {
@@ -225,6 +248,19 @@ export function brushPathData(d, width, { scale = 1, brush = BRUSH, fade = null,
     }
   }
   return out;
+}
+
+// The part of the segment a–b inside box [x0, y0, x1, y1] (Liang–Barsky),
+// or null.
+function clipSegment(a, b, [x0, y0, x1, y1]) {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  let t0 = 0, t1 = 1;
+  for (const [p, q] of [[-dx, a[0] - x0], [dx, x1 - a[0]], [-dy, a[1] - y0], [dy, y1 - a[1]]]) {
+    if (p === 0) { if (q < 0) return null; continue; }
+    const r = q / p;
+    if (p < 0) { if (r > t1) return null; if (r > t0) t0 = r; } else { if (r < t0) return null; if (r < t1) t1 = r; }
+  }
+  return [[a[0] + dx * t0, a[1] + dy * t0], [a[0] + dx * t1, a[1] + dy * t1]];
 }
 
 function rnd(x) {

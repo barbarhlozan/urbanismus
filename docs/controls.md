@@ -114,7 +114,8 @@ a Czech or German layout.
   nearest ones are, the more of the village it takes in and the wider it goes, till from out
   in the fields it is the whole village in its landscape. Anything else the picture's sides
   or top would cut through is left out, paper there instead of half a house. It opens as a
-  print you can save as a PNG, drawn in before your eyes as an illustrator would: the line of the
+  sheet of paper with a softly wavy edge, as if torn from a sketchbook, with no name on it; under
+  it the Menu's save drawing saves it as a PNG and × puts it away. It is drawn in before your eyes as an illustrator would: the line of the
   land first, then the houses, then their roofs and windows, the trees, the land, and last the sky.
   The photo is drawn in one pen, with the map's own brushed line (thinner at the ends,
   swelling along it): the landscape in the same ink as the houses, only lighter, lines a

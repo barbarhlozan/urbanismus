@@ -118,9 +118,12 @@ export class PlotDrawing {
       yp.lod = 1;
       keep(yp);
       YARDS[yard.style].draw(yp, yard, s);
+      if (live) this.agents.cars?.setSpots(s, yp.spots); // (the stalls cars park in, sim/cars.js)
       painter.merge(yp, { aside: true });
       yardWorld = yard.outline.map(([lx, ly]) => yp.toWorld(lx, ly));
       for (const [lx, ly] of [[yard.x0, yard.y0], [yard.x1, yard.y0]]) points.push(yp.toWorld(lx, ly));
+    } else if (live) {
+      this.agents.cars?.setSpots(s, []);
     }
 
     // Plot: sides and back.

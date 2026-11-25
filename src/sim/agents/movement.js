@@ -457,11 +457,42 @@ export class AgentMovement {
       a.chat.group.people.splice(a.chat.group.people.indexOf(a), 1);
       a.chat = null;
     }
+    if (a.trip?.mode === 'drive' && !a.truck && !a.bus && !a.engine) leg = this.carLeg(a, leg);
+    else if (a.car != null) this.cars.release(a); // (on foot now: the car stays where it is)
     a.s = 0;
     a.followK = 1;
     a.room = Infinity;
     [a.x, a.y] = leg.points[0];
     [a.tx, a.ty] = [a.x, a.y];
+  }
+
+  // A drive's leg setting off: the car taken where it starts (sim/cars.js)
+  // and bound for where it ends, the leg made to start in the stall it
+  // stands in and end in a free one there, if either has one. Returns the
+  // leg to follow (put in the trip in place of `leg`).
+  carLeg(a, leg) {
+    const { trip } = a;
+    const slot = trip.out === leg ? 'out' : trip.back === leg ? 'back' : null;
+    if (!slot) return leg;
+    const [startId, endId] = slot === 'out' ? [a.home, trip.dest] : [trip.dest, a.home];
+    const from = leg.doorStart ? this.world.structures.get(startId) ?? null : null;
+    const { stall } = this.cars.take(a, from);
+    const end = this.cars.bound(a, leg.doorEnd ? endId : null);
+    if (!(stall && leg.doorStart) && !(end && leg.doorEnd)) return leg;
+    const pts = leg.points.slice();
+    if (stall && leg.doorStart) pts[0] = [stall[0], stall[1]];
+    if (end && leg.doorEnd) pts[pts.length - 1] = [end[0], end[1]];
+    return (trip[slot] = this.leg(pts, leg.doorStart, leg.doorEnd, true));
+  }
+
+  // At the end of a drive's leg: the car parked there (kept by its driver
+  // on the way out, to drive back), unless where it was going is gone.
+  carArrives(a, leg) {
+    const c = this.cars.get(a.car);
+    if (!c || (c.at != null && !this.world.structures.has(c.at))) return;
+    const n = leg.points.length;
+    const [x0, y0] = leg.points[Math.max(0, n - 2)], [x1, y1] = leg.points[n - 1];
+    this.cars.park(a, x1, y1, Math.atan2(y1 - y0, x1 - x0), a.state === 'out');
   }
 
   tripIntact(trip) {

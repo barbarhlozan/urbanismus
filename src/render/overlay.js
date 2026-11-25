@@ -8,6 +8,7 @@ import { drawSeed, tiltOf, roadFront, freeTilt, freeAnchor } from '../../structu
 import { fitSite, siteEdges } from './lots.js';
 import { sketchEllipse, sketchLine, seedOf } from './sketch.js';
 import { mulberry32 } from '../core/random.js';
+import { cameraArt } from '../ui/icons.js';
 import { THEME } from '../theme.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -20,13 +21,10 @@ function pathLength(d) {
   return len;
 }
 
-// the photographer's mark on the map: a drawing in its frame, `size` times
-// its 32×32 box, standing with the middle of its foot (`tip`) on the spot
-const PHOTO_SPOT = {
-  size: 0.3,
-  tip: [16, 25.3],
-  art: '<path d="M4.2 7.4Q16.1 7.1 28 7.3M27.7 7Q27.85 16.2 27.75 25.3M28.1 25.05Q16 25.2 3.9 25.1M4.3 25.45Q4.15 16.4 4.4 6.95"/><path d="M7 21.8Q11.7 15.4 16.8 18.9Q20.4 16.6 25 20.5"/><path d="M11 17.8L11.1 14.6L12.8 13.1L14.4 14.6L14.3 16.6M10.8 14.8L12.8 12.9L14.6 14.8"/><path d="M20.5 17.6L20.55 15.4M20.5 15.5C18.7 15.6 18.6 12.4 20.6 12.2C22.4 12.3 22.3 15.4 20.6 15.5"/>',
-};
+// the photographer's mark on the map: photo mode's own drawing (the
+// sketchbook, ui/icons.js cameraArt), `size` times its 32×32 box, standing
+// with the pencil's point (`tip`) on the spot
+const PHOTO_SPOT = { size: 0.3, tip: [15.2, 22.3] };
 
 // the photo arrow: from `from` to `to` grid steps out from the photographer,
 // its head's two wings about `head` long, `spread` radians off the shaft;
@@ -336,10 +334,10 @@ export class OverlayKit {
       out += `<path class="photo-aim" d="${d}"/>`;
     }
     const [sx, sy] = this.project(x, y);
-    // a drawing in its frame, standing on the spot: the picture will be
-    // drawn from here
+    // photo mode's sketchbook, its pencil's point on the spot: the picture
+    // will be drawn from here
     const s = PHOTO_SPOT.size * (this.camera.tile / 32);
     const [px, py] = PHOTO_SPOT.tip;
-    return out + `<g class="photo-cam" style="--k: ${r2(s)}" transform="translate(${r2(sx - px * s)} ${r2(sy - py * s)}) scale(${r2(s)})">${PHOTO_SPOT.art}</g>`;
+    return out + `<g class="photo-cam" style="--k: ${r2(s)}" transform="translate(${r2(sx - px * s)} ${r2(sy - py * s)}) scale(${r2(s)})">${cameraArt()}</g>`;
   }
 }

@@ -2,14 +2,15 @@
 // on old Japanese screens of a town seen from above (the kasumi bands,
 // mist.html option E): a flat top at one height, that hides whatever is
 // below it – the ground and its drawing, roads, people, the
-// lower part of every house standing in it. It is laid as every shadow
-// and the night are, in the paper's strokes (hatch.js), only in the
-// paper's own colour and broad: they rub out what is under them, a sliver
-// of it showing between each two (mistHatch). Its far shore, where it lies
-// against a hillside, stands up in long shallow lobes drawn in the pen with
-// one line inside along it; its near edge, where the ground in front comes
-// out of it, is a plain pen line; and where it closes round a roof or a
-// tree that stands out of it, it lumps up a little.
+// lower part of every house standing in it – under plain paper. On it lie
+// heaps, drawn as the rain clouds seen from above (heaps), only their
+// tops, so it reads as cloud come down and not as a piece of the map gone
+// missing. Its far shore, where it lies against a hillside, stands up in
+// long shallow bulges drawn in the pen with one line inside along it; its
+// near edge, where the ground in front comes out of it, is left to the
+// paper, as the heaps' undersides are; and where it closes round a roof or
+// a tree that stands out of it, it bulges up a little – all in the
+// clouds' pen (cloudPen.js).
 //
 //   mistLevel(lo, hi, opts, risen)   the height of its top (grid units of
 //                     height, as the ground's: lift + terrain)
@@ -18,9 +19,6 @@
 //                     column from the front back, the mist shows where it
 //                     is above all the nearer ground and mist seen so far
 //   mistSVG(surface, camera, seed)   the paper, the lobes and the lines
-//   mistHatch(h)      the paper's strokes it is filled with (h: SUN.hatch):
-//                     their settings and width (grid units), for the tile
-//                     of gl/objects.js (setTile)
 //   coverSVG(camera, at, base, height, level, seed)   what an object standing in it
 //                     gets drawn over itself: paper over its front below
 //                     the top, lumps along where it is cut; or 'under' when
@@ -34,8 +32,8 @@
 // followed (STYLE.warp is 0).
 
 import { mulberry32 } from '../core/random.js';
-import { hatchFrame } from './hatch.js';
 import { penWatch, penLength } from './draw.js';
+import { bulge } from './cloudPen.js';
 
 const COS30 = Math.cos(Math.PI / 6);
 
@@ -51,9 +49,15 @@ const COS30 = Math.cos(Math.PI / 6);
 //   fade       ms a step of it takes to come or go (mistIn, mistOut)
 //   paper      how much it hides an object sunk in it altogether (opacity;
 //              styles.css .mist-under, keep the two alike)
-//   gap        its strokes: the paper's (hatch.js), this far apart (grid
-//              units; made to fit its repeat)…
-//   broad      …each as broad as this share of the space between two
+//   heap       the heaps lying on it, as the rain clouds seen from above
+//              (cloudsAbove.js): each this wide across, half of it (tiles)…
+//   heapGap    …one every so far across and down (tiles), staggered…
+//   squash     …lying flat (height per width)…
+//   scallop    …its edge in bulges this long (tiles)…
+//   crest      …drawn over this share of the way round it, from the top
+//              (a third: ten o'clock to two), so it lies flat…
+//   strokes    …and a few short strokes in its lower half
+
 export const MIST = {
   du: 0.08,
   dt: 0.04,
@@ -66,8 +70,12 @@ export const MIST = {
   lumpRise: [2.4, 3.6],
   fade: 7000,
   paper: 0.9,
-  gap: 0.11,
-  broad: 0.72,
+  heap: [1.3, 2.1],
+  heapGap: [2.3, 1.05],
+  squash: 0.58,
+  scallop: [0.7, 1.15],
+  crest: 1 / 3,
+  strokes: [1, 3],
 };
 
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -77,8 +85,8 @@ export function mistLevel(lo, hi, { share, least }, risen) {
 }
 
 // `height(x, y)`: the ground's height as drawn (lift + terrain), `box`
-// world [x0, y0, x1, y1]. Returns { runs: [[u, tBack, tFront]…], far, near }:
-// the stretches of each column where the mist shows, and its shores, as
+// world [x0, y0, x1, y1]. Returns { runs: [[u, tBack, tFront]…], far }:
+// the stretches of each column where the mist shows, and its far shore, as
 // lines of [scene x, scene y, t] (t = depth, growing towards the viewer).
 export function mistSurface(camera, height, [x0, y0, x1, y1], level, opts = MIST) {
   const { du, dt } = opts;
@@ -94,7 +102,7 @@ export function mistSurface(camera, height, [x0, y0, x1, y1], level, opts = MIST
     return [x + camera.cx, y + camera.cy];
   };
   const sy = (t) => (t / 2 - level * Z) * T;
-  const runs = [], far = [], near = [];
+  const runs = [], far = [];
   // a shore point joins the line it carries on from (the last column's)
   const chain = (lines, open, [x, y, t]) => {
     let l = open.find((l) => Math.abs(l[l.length - 1][1] - y) < link);
@@ -102,36 +110,31 @@ export function mistSurface(camera, height, [x0, y0, x1, y1], level, opts = MIST
     else lines.push(l = [[x, y, t]]);
     return l;
   };
-  let farOpen = [], nearOpen = [];
+  let farOpen = [];
   for (let u = uMin + du / 2; u < uMax; u += du) {
     const sx = u * COS30 * T;
-    const farNow = [], nearNow = [];
-    let horizon = Infinity, front = null, before = 'out';
+    const farNow = [];
+    let horizon = Infinity, front = null;
     for (let t = tMax; t >= tMin - dt; t -= dt) {
       const [x, y] = at(u, t);
       const inside = t >= tMin && x >= x0 && x <= x1 && y >= y0 && y <= y1;
       const h = inside ? height(x, y) : 0;
       const fog = inside && h < level;
       const shows = fog && t / 2 - level * Z < horizon;
-      if (shows && front == null) {
-        front = t;
-        if (before === 'ground') nearNow.push([sx, sy(t), t]);
-      }
+      if (shows && front == null) front = t;
       if (!shows && front != null) {
         runs.push([u, t + dt, front]);
         if (inside && !fog) farNow.push([sx, sy(t + dt), t + dt]);
         front = null;
       }
       if (inside) horizon = Math.min(horizon, t / 2 - (fog ? level : h) * Z);
-      before = !inside ? 'out' : fog ? 'fog' : 'ground';
     }
     farOpen = farNow.map((p) => chain(far, farOpen, p));
-    nearOpen = nearNow.map((p) => chain(near, nearOpen, p));
   }
-  return { runs, far, near, level, du };
+  return { runs, far, level, du };
 }
 
-export function mistSVG({ runs, far, near, level, du }, camera, seed = 1) {
+export function mistSVG({ runs, far, level, du }, camera, seed = 1) {
   if (!runs.length) return '';
   const T = camera.tile, Z = camera.zScale, k = T / 32;
   const rnd = mulberry32(seed);
@@ -160,8 +163,7 @@ export function mistSVG({ runs, far, near, level, du }, camera, seed = 1) {
       const j = Math.min(line.length - 1, i + Math.max(2, Math.round((range(MIST.lobe) * k) / step)));
       const [ax, ay] = line[i], [bx, by] = line[j];
       const len = Math.hypot(bx - ax, by - ay);
-      const turn = (Math.atan2(by - ay, bx - ax) * 180) / Math.PI; // (the lobe stands off the shore however it runs)
-      const arc = `A${r2(len / 2)} ${r2(len / range(MIST.lobeRise))} ${r2(turn)} 0 1 ${P(bx, by)}`;
+      const arc = hump(rnd, [ax, ay], [bx, by], len / range(MIST.lobeRise));
       lobeFill += `M${P(ax, ay)}${arc}${line.slice(i, j).reverse().map(([x, y]) => `L${P(x, y)}`).join('')}Z`;
       lobeLine += arc;
       i = j;
@@ -176,22 +178,78 @@ export function mistSVG({ runs, far, near, level, du }, camera, seed = 1) {
       }
     }
   }
-  // the near edge: a plain pen line, in a few long strokes
-  for (const line of near) {
-    if (line.length < 3) continue;
-    const step = Math.abs(line[1][0] - line[0][0]) || 1;
-    for (let a = 0; a < line.length - 1;) {
-      const b = Math.min(line.length - 1, a + Math.max(3, Math.round((range([20, 60]) * k) / step)));
-      lines += stroke('mist-line', line.slice(a, b + 1).map(([x, y], m) => `${m ? 'L' : 'M'}${P(x, y)}`).join(''));
-      a = b + (rnd() < 0.3 ? 1 : 0);
-    }
-  }
-  return `<path class="mist" d="${fill}"/><path class="mist" d="${lobeFill}"/>${lines}`;
+  return `<path class="mist" d="${fill}"/><path class="mist" d="${lobeFill}"/>${lines}${heaps({ runs, du }, T, level * Z * T, rnd)}`;
 }
 
-export function mistHatch(h) {
-  const hatch = { ...h, gap: MIST.gap };
-  return { hatch, width: MIST.broad * hatchFrame(hatch).gap };
+// Heaps lying on the mist, so it reads as cloud come down into the valley
+// and not as a piece of the map gone missing: drawn as the rain clouds seen
+// from above (cloudPen.js bulges, a few strokes underneath), the far ones
+// first, each in plain paper over those behind. Only where all of a heap is
+// in the mist, so none spills over the ground in front of it.
+function heaps({ runs, du }, T, top, rnd) {
+  const w = du * COS30 * T;
+  const cols = new Map();
+  for (const [u, tb, tf] of runs) {
+    const k = Math.round(u / du - 0.5);
+    if (!cols.has(k)) cols.set(k, []);
+    cols.get(k).push([tb * T / 2 - top, tf * T / 2 - top]);
+  }
+  const inMist = (x, y) => (cols.get(Math.round(x / w - 0.5)) ?? []).some(([a, b]) => y >= a && y <= b);
+  const range = ([a, b]) => a + rnd() * (b - a);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [u, tb, tf] of runs) {
+    x0 = Math.min(x0, u * COS30 * T); x1 = Math.max(x1, u * COS30 * T);
+    y0 = Math.min(y0, tb * T / 2 - top); y1 = Math.max(y1, tf * T / 2 - top);
+  }
+  const gx = MIST.heapGap[0] * T, gy = MIST.heapGap[1] * T, found = [];
+  for (let r = 0, y = y0 + gy / 2; y < y1; r++, y += gy) {
+    for (let x = x0 + (r % 2 ? gx / 2 : 0); x < x1; x += gx) {
+      const cx = x + (rnd() - 0.5) * gx * 0.5, cy = y + (rnd() - 0.5) * gy * 0.5;
+      for (const s of [1, 0.7, 0.45]) {
+        const rx = range(MIST.heap) * T * s, ry = rx * MIST.squash;
+        let all = inMist(cx, cy);
+        for (let i = 0; all && i < 16; i++) {
+          const a = (i / 16) * Math.PI * 2;
+          all = inMist(cx + Math.cos(a) * rx * 1.12, cy + Math.sin(a) * ry * 1.12);
+        }
+        if (all) { found.push([cx, cy, rx, ry]); break; }
+      }
+    }
+  }
+  found.sort((a, b) => a[1] - b[1]);
+  const P = (x, y) => `${r2(x)} ${r2(y)}`;
+  let out = '';
+  for (const [cx, cy, rx, ry] of found) {
+    // knots round it from the start of its crest, over the top and back
+    // under: the crest drawn, the rest left to the paper
+    const mean = ((MIST.scallop[0] + MIST.scallop[1]) / 2) * T, part = Math.round(1 / MIST.crest);
+    const n = part * Math.max(2, Math.round((Math.PI * (rx + ry)) / mean / part));
+    const from = Math.PI * (1.5 - MIST.crest);
+    const knots = [];
+    for (let i = 0; i < n; i++) {
+      const a = from + ((i + (i % (n / part) ? (rnd() - 0.5) * 0.4 : 0)) / n) * Math.PI * 2;
+      knots.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]);
+    }
+    const segs = knots.map((a, i) => {
+      const b = knots[(i + 1) % n];
+      const dx = b[0] - a[0], dy = b[1] - a[1], c = Math.hypot(dx, dy) || 1;
+      const up = (dy / c) * ((a[0] + b[0]) / 2 - cx) + (-dx / c) * ((a[1] + b[1]) / 2 - cy) > 0;
+      return bulge(rnd, a, b, (c / 2) * (1.05 + rnd() * 0.4), up);
+    });
+    out += `<path class="mist" d="M${P(...knots[0])}${segs.join('')}Z"/><path class="mist-inner" d="M${P(...knots[0])}${segs.slice(0, n / part).join('')}"/>`;
+    for (let i = Math.round(range(MIST.strokes)); i > 0; i--) {
+      const sx = cx + (rnd() - 0.5) * rx * 1.1, sy = cy + ry * (0.15 + rnd() * 0.45), l = T * (0.25 + rnd() * 0.3);
+      out += `<path class="mist-inner" d="M${P(sx, sy)}L${P(sx + l * 0.7, sy - l * 0.35)}"/>`;
+    }
+  }
+  return out;
+}
+
+// A bulge `h` high up off the line from a to b (left to right on the
+// screen), in the pen the clouds are drawn in (cloudPen.js).
+function hump(rnd, a, b, h) {
+  const c = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  return bulge(rnd, a, b, (c * c / 4 + h * h) / (2 * h || 1), true);
 }
 
 // An object's cover. `at`: its place (Renderer.placeOf: world `points`,
@@ -242,8 +300,7 @@ export function coverSVG(camera, at, base, height, level, seed = 1) {
       const want = (MIST.lump[0] + rnd() * (MIST.lump[1] - MIST.lump[0])) * k;
       while (b < run.length - 1 && (len = Math.hypot(run[b][0] - run[a][0], run[b][1] - run[a][1])) < want) b++;
       len = Math.hypot(run[b][0] - run[a][0], run[b][1] - run[a][1]);
-      const turn = (Math.atan2(run[b][1] - run[a][1], run[b][0] - run[a][0]) * 180) / Math.PI;
-      lumps += `A${r2(len / 2)} ${r2(len / (MIST.lumpRise[0] + rnd() * (MIST.lumpRise[1] - MIST.lumpRise[0])))} ${r2(turn)} 0 1 ${P(run[b][0], run[b][1])}`;
+      lumps += hump(rnd, run[a], run[b], len / (MIST.lumpRise[0] + rnd() * (MIST.lumpRise[1] - MIST.lumpRise[0])));
       a = b;
     }
     fill += `${lumps}${run.slice().reverse().map(([x, , y]) => `L${P(x, y)}`).join('')}Z`;

@@ -99,7 +99,7 @@ export const YARDS = {
       // stalls only where the lot is deep enough and no footpath runs through
       const ok = (x) => yard.frontAt(x) + 0.03 < back - stall - 0.02 && g.isFree(x, back - stall / 2, 0.04);
       for (const x of xs) if (ok(x)) g.groundLine([[x, back], [x, back - stall]], { lod: 2 });
-      // stall spots: parked cars are shown and simulated by src/sim/parking.js
+      // stall spots: the cars that drive in park there (src/sim/cars.js)
       for (let i = 0; i < xs.length - 1; i++) {
         const mx = (xs[i] + xs[i + 1]) / 2;
         if (ok(xs[i]) && ok(xs[i + 1]) && g.isFree(mx, back - stall / 2, 0.05)) g.spot(mx, back - stall / 2);

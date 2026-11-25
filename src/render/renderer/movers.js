@@ -21,6 +21,11 @@ const outline = (pts) => ({ pts });
 // The plain mark for a car far out: a square dot.
 let CAR_MARK = null;
 
+// What an agent's drawing is kept by: a car by the car (sim/cars.js), so
+// the one that drives into a stall is the one standing there after, and
+// the one driven off again; everyone else by themselves.
+export const elKeyOf = (a) => (a.car != null && a.trip?.mode === 'drive' && !a.truck && !a.bus ? `c${a.car}` : a.id);
+
 // What renderAgents keeps about one agent, with every field it may get set
 // up front in one order (all undefined until then): read for thousands of
 // agents every frame, records that grew their fields in different orders
@@ -28,7 +33,7 @@ let CAR_MARK = null;
 function agentEl(kind, born) {
   return {
     kind, born, seen: 0, gone: undefined, key: undefined, shapes: undefined, parts: undefined, body: undefined,
-    model: undefined, brolly: undefined, at: undefined, heading: undefined, walked: undefined, left: undefined,
+    model: undefined, brolly: undefined, at: undefined, heading: undefined, angle: undefined, hand: undefined, walked: undefined, left: undefined,
     squash: undefined, mirror: undefined, shear: undefined, sx: 0, sy: 0, dot: undefined, path: undefined,
     puffs: undefined, puffAt: undefined, puffN: undefined,
   };
@@ -122,9 +127,10 @@ export class MoverDrawing {
   }
 
   // People and vehicles grow out of the building they leave and shrink back
-  // into the one they reach (a car parking, a walker getting into a car…).
-  // Each agent keeps a little record (`el`) of what it looks like: its
-  // shapes, where it stands, which way it faces.
+  // into the one they reach (a car put away in a yard, a walker getting
+  // into a car…). Each agent keeps a little record (`el`) of what it looks
+  // like: its shapes, where it stands, which way it faces. Cars parked in a
+  // stall (sim/cars.js) first, under what moves.
   renderAgents() {
     const now = performance.now();
     const pop = drawEnabled() && this.agentsShown;
@@ -132,16 +138,18 @@ export class MoverDrawing {
     // same for everyone this frame
     this.umbrellas = this.config.weather?.people?.[this.world.weather?.kind]?.umbrellas ?? 0;
     const close = this.camera.zoom >= VEHICLES.minZoom;
+    this.renderParked(now, pop);
     for (const a of this.agents.visible()) {
       const kind = a.bus ? 'bus' : a.truck ? 'truck' : a.trip.mode === 'drive' ? 'car' : a.trip.mode === 'cycle' ? 'cyclist' : 'walker';
-      let el = this.agentEls.get(a.id);
+      const id = elKeyOf(a);
+      let el = this.agentEls.get(id);
       if (el && el.kind !== kind) {
         this.agentGone(el, now, pop);
         el = null;
       }
       if (!el) {
         el = agentEl(kind, pop ? now : -Infinity);
-        this.agentEls.set(a.id, el);
+        this.agentEls.set(id, el);
       }
       el.seen = now; // (gone: not seen this frame)
       const k = growScale(now - el.born);
@@ -161,7 +169,7 @@ export class MoverDrawing {
         continue;
       }
       if (kind === 'car') {
-        this.placeCar(el, a);
+        this.placeCar(el, a, id);
         // further out a car is a square dot: leaning it wouldn't show, and
         // finding the lean is four projections per car per frame
         if (close) {
@@ -192,6 +200,33 @@ export class MoverDrawing {
       else this.agentGhosts.delete(el);
     }
     this.agentsShown = true;
+  }
+
+  // Cars standing in stalls: as one driving would be drawn there, nosed
+  // the way the stall looks, still.
+  renderParked(now, pop) {
+    for (const c of this.agents.cars?.parked() ?? []) {
+      const id = `c${c.id}`;
+      let el = this.agentEls.get(id);
+      if (!el) this.agentEls.set(id, el = agentEl('car', pop ? now : -Infinity));
+      el.seen = now;
+      const [sx, sy] = this.projectDeck(c.x, c.y, 0.04);
+      el.sx = sx;
+      el.sy = sy;
+      if (!this.pen.onScreen(sx, sy)) continue;
+      el.angle = c.angle;
+      el.heading = headingIndex(c.angle);
+      el.at = [c.x, c.y];
+      this.placeCar(el, c, id);
+      el.mirror = false;
+      el.squash = 1;
+      if (this.camera.zoom >= VEHICLES.minZoom) {
+        const ux = Math.cos(c.angle) * 0.08, uy = Math.sin(c.angle) * 0.08;
+        el.shear = this.slopeShear([c.x - ux, c.y - uy], [c.x + ux, c.y + uy]);
+        if (el.puffs?.length) this.exhaust(el, c.x - ux, c.y - uy, now); // (the last of it, as it pulled in)
+      } else el.shear = 0;
+      this.drawAgent(el, growScale(now - el.born));
+    }
   }
 
   agentGone(el, now, pop) {
@@ -338,7 +373,8 @@ export class MoverDrawing {
     const cam = this.camera;
     const [wx, wy] = wobble(a.x, a.y), [vx, vy] = wobble(a.tx, a.ty); // on the swaying road
     const front = [a.x + wx, a.y + wy], back = [a.tx + vx, a.ty + vy];
-    if (el.at) el.walked = (el.walked ?? 0) + Math.hypot(a.x - el.at[0], a.y - el.at[1]); // (driven: it jolts by it)
+    const moved = el.at ? Math.hypot(a.x - el.at[0], a.y - el.at[1]) : 0;
+    el.walked = (el.walked ?? 0) + moved; // (driven: it jolts by it)
     el.at = [a.x, a.y];
     if (Math.hypot(front[0] - back[0], front[1] - back[1]) > 1e-4) el.heading = headingIndex(Math.atan2(front[1] - back[1], front[0] - back[0]));
     const [sx, sy] = this.projectDeck((front[0] + back[0]) / 2, (front[1] + back[1]) / 2, 0.04);
@@ -355,8 +391,8 @@ export class MoverDrawing {
       return;
     }
     const heading = el.heading ?? 0;
-    const hand = (el.model ??= modelFor(a.id)).hand;
-    const key = `${cam.angle}|${heading}|${name}`;
+    const hand = this.boil(el, (el.model ??= modelFor(a.id)), moved > 1e-4);
+    const key = `${cam.angle}|${heading}|${name}|${hand}`;
     if (el.key !== key) {
       el.key = key;
       el.body = { shapes: shapesOf(vehicleSVG(cam, name, heading, hand)) };
@@ -405,20 +441,42 @@ export class MoverDrawing {
   }
 
   // A car's shapes: close up a model (src/render/vehicles.js) facing the
-  // way it last moved, further out a square dot. Rebuilt only when that changes.
-  placeCar(el, a) {
+  // way it moves, further out a square dot. Rebuilt only when that
+  // changes. `id`: what it's drawn by (its hand). It comes round to a new
+  // way over VEHICLES.turn of driving, as a car's back follows its front,
+  // not in one step each frame (a frame's little sideways move would flick
+  // it to the next direction and back).
+  placeCar(el, a, id) {
+    let moving = false;
     if (el.at) {
-      const dx = a.x - el.at[0], dy = a.y - el.at[1];
-      if (dx * dx + dy * dy > 1e-8) el.heading = headingIndex(Math.atan2(dy, dx));
-      el.walked = (el.walked ?? 0) + Math.hypot(dx, dy); // (driven: it jolts by it)
+      const dx = a.x - el.at[0], dy = a.y - el.at[1], d = Math.hypot(dx, dy);
+      if (d > 1e-4) {
+        const to = Math.atan2(dy, dx);
+        if (el.angle === undefined) el.angle = to;
+        else el.angle += (Math.atan2(Math.sin(to - el.angle), Math.cos(to - el.angle))) * (1 - Math.exp(-d / VEHICLES.turn));
+        el.heading = headingIndex(el.angle);
+      }
+      el.walked = (el.walked ?? 0) + d; // (driven: it jolts by it)
+      moving = d > 1e-4;
     }
     el.at = [a.x, a.y];
     const close = this.camera.zoom >= VEHICLES.minZoom;
-    const model = (el.model ??= modelFor(a.id));
+    const model = (el.model ??= modelFor(id));
     const heading = el.heading ?? 0;
-    const key = close ? `${model.name}|${heading}|${this.camera.angle}` : 'dot';
+    const hand = this.boil(el, model, moving);
+    const key = close ? `${model.name}|${heading}|${this.camera.angle}|${hand}` : 'dot';
     if (el.key === key) return;
     el.key = key;
-    el.shapes = close ? shapesOf(vehicleSVG(this.camera, model.name, heading, model.hand)) : (CAR_MARK ??= [shape('car', carMark())]);
+    el.shapes = close ? shapesOf(vehicleSVG(this.camera, model.name, heading, hand)) : (CAR_MARK ??= [shape('car', carMark())]);
+  }
+
+  // The hand a vehicle is drawn in this frame: while it moves the next of
+  // its hands every 1 / VEHICLES.boil s, so its outline boils as a drawn
+  // cartoon's does from drawing to drawing; standing, the last one held.
+  // Each from its own hand and at its own moment (model.seed), so a queue
+  // doesn't boil in step.
+  boil(el, model, moving) {
+    if (moving || el.hand === undefined) el.hand = (model.hand + Math.floor((performance.now() / 1000) * VEHICLES.boil + model.seed)) % VEHICLES.hands;
+    return el.hand;
   }
 }

@@ -58,8 +58,10 @@ What moves (people, vehicles, smoke) and the hatching of shadows and night
 take it too, the build overlay and its signs and the fire (the paper's
 specks of render/tooth.js over them), and photos (their ribbons filled with a tile of the tooth,
 ui/photoBrush.js), and the UI's lines (one SVG mask of the tooth,
-ui/sketchFrame.js), its pens as wide as the map's at the opening zoom –
-an icon's as the map's further out, so its small drawing doesn't clot. A house's smoke is one
+ui/sketchFrame.js), its pens as wide on screen as the map's lines –
+an icon's 0.8 of that, so its small drawing doesn't clot. The overlay's
+pens are the map's too (a building's preview as it will stand), its grain
+one mask over the whole layer: a mask on each line made building crawl. A house's smoke is one
 long line meandering up from the chimney (particles.js `wisp`).
 
 Shadows: their hatching in the pencil's weight (`GRAPHITE.shade`). A trunk

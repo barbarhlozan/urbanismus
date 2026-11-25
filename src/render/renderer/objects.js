@@ -94,7 +94,7 @@ export class ObjectDrawing {
   renderGlMirrors() {
     const d = this.drawn;
     if (!d) return;
-    const view = { zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH };
+    const view = this.glView();
     for (const { gl, layers } of this.glMirrors ?? []) gl.drawLayers(view, layers);
   }
 
@@ -106,9 +106,8 @@ export class ObjectDrawing {
   }
 
   renderGlObjects() {
-    const d = this.drawn;
-    if (!this.glObjects || !d) return;
-    this.glObjects.draw({ zoom: d.zoom, panX: d.panX, panY: d.panY, ox: this.ox, oy: this.oy, W: this.winW, H: this.winH }, this.order);
+    if (!this.glObjects || !this.drawn) return;
+    this.glObjects.draw(this.glView(), this.order);
   }
 
   // An object's detail at zoom z, a number made of four parts: its level

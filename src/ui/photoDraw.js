@@ -52,9 +52,13 @@ const ORDER = {
 };
 const across = (a, b) => a.x - b.x;
 
-export function drawPhoto(svg) {
-  const none = { finish() {} };
-  if (!svg || still()) return none;
+// `onDone`: called once it's all drawn – or the moment finish() is called,
+// before anything else changes.
+export function drawPhoto(svg, { onDone = () => {} } = {}) {
+  if (!svg || still()) {
+    onDone();
+    return { finish() {} };
+  }
   // the inks the lines are drawn in: a shape filled in anything else is
   // paper (a wall, the ground's bands), there from the start, hiding what
   // is behind it as in the finished photo
@@ -94,7 +98,7 @@ export function drawPhoto(svg) {
         return;
       }
       const { line, ribbon } = it;
-      const d = Math.min(DRAW.line[1], Math.max(DRAW.line[0], line.getTotalLength() / DRAW.speed));
+      const d = Math.min(DRAW.line[1], Math.max(DRAW.line[0], (Number(ribbon.dataset.length) || 0) / DRAW.speed));
       const all = d + DRAW.settle, done = d / all;
       // the pen's line, drawn on along its length, then gone into the brushed one
       const pen = document.createElementNS(NS, 'path');
@@ -121,6 +125,7 @@ export function drawPhoto(svg) {
     clearTimeout(timer);
     for (const a of runs) a.finish();
     for (const p of pens) p.remove();
+    onDone();
   };
   const timer = setTimeout(finish, end + 50);
   return { finish, length: end };

@@ -36,6 +36,7 @@ import { WorldAccess } from './world/access.js';
 import { WorldStructures } from './world/structures.js';
 import { WorldCrops } from './world/crops.js';
 import { fieldEdgesToCrops } from '../sim/fields.js';
+import { carsToJSON, carsFromJSON } from '../sim/cars.js';
 
 // 11: positions and angles (free placement). Older saves aren't converted:
 // the game says so and starts a new map (OldSaveError).
@@ -80,6 +81,8 @@ export class World {
     this.featureAtNode = new Map();   // node -> feature id
     this.nextId = 1;
     this.nextNo = 1; // the next house number (numberStructure); a number gone with its building isn't given again
+    this.cars = new Map(); // id -> the town's cars, parked or driving (src/sim/cars.js)
+    this.nextCar = 1;
     this.time = 0; // simulated seconds the town has been running (the clock, kept in the save)
     this.weather = { kind: 'fair', from: 'fair', since: 0, until: 0, n: 0 }; // the weather now, the one before, since and until when (world.time), and how many changes so far (src/sim/weather.js)
     this.story = { seen: [], vars: {}, unlocks: [], places: {} }; // what the story has told, set, unlocked and picked (src/story/)
@@ -450,6 +453,7 @@ export class World {
       crops: this.cropsToJSON(),
       structures: [...this.structures.values()],
       features: [...this.features.values()],
+      cars: carsToJSON(this),
       time: Math.round(this.time),
       weather: this.weather,
       story: this.story,
@@ -486,6 +490,7 @@ export class World {
     // get the next ones)
     world.nextNo = Math.max(data.nextNo ?? 1, ...[...world.structures.values()].map((s) => (s.no ?? 0) + 1));
     for (const s of [...world.structures.values()].sort((a, b) => a.id - b.id)) world.numberStructure(s);
+    carsFromJSON(world, data.cars); // (older saves: none, each house gets its own as it drives)
     world.time = data.time ?? 0;
     if (data.weather) world.weather = { kind: data.weather.kind, from: data.weather.from, since: data.weather.since, until: data.weather.until, n: data.weather.n ?? 0 }; // (older saves start fair; without `from` or `since`, WeatherSystem works them out)
     world.story = { seen: data.story?.seen ?? [], vars: data.story?.vars ?? {}, unlocks: data.story?.unlocks ?? [], places: data.story?.places ?? {}, ...(data.story?.kecy && { kecy: data.story.kecy }) }; // (kecy: src/story/kecy.js, made when first told)

@@ -43,7 +43,7 @@ export function newAgent(fields) {
     visitor: false, commuter: false, truck: false, bus: false,
     followK: 1, room: Infinity, held: 0, creep: 0, stall: 0, fx: 0, fy: 0, bx: 0, by: 0, hx: 1, hy: 0, half: 0, next: -1,
     box: null, toBox: Infinity, claim: false, yieldTo: null, nose: 0, len: 0, px: 0, py: 0, v: 0, aside: false, leader: null, blocker: null, ahead: Infinity, across: Infinity,
-    waitKey: null, slot: 0, wander: null, retry: null, sentTo: null,
+    waitKey: null, slot: 0, wander: null, retry: null, sentTo: null, car: null,
     fire: null, carry: null, watch: null, engine: null, drop: false,
     legs: null, leg: 0, call: 0, pause: 0, left: 0,
   }, fields);

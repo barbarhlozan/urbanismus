@@ -180,6 +180,12 @@ export function toolIcon(tool) {
 // illustration, a sketchbook with the pencil drawing on it rather than a
 // camera. Its stand-in is the same lines.
 const FRAMED = '<path d="M3.9 9.3Q13.2 9.05 22.4 9.1M22.1 8.8Q22.25 18.1 22.2 27.3M22.5 27.05Q13.2 27.2 4 27.1M4.3 27.45Q4.15 18.2 4.4 8.85"/><path d="M7.2 10.6C6.4 9.5 6.8 7.3 8.3 7.7M10.8 10.6C10 9.5 10.4 7.3 11.9 7.7M14.4 10.6C13.6 9.5 14 7.3 15.5 7.7M18 10.6C17.2 9.5 17.6 7.3 19.1 7.7"/><path d="M6.6 23.4Q9.4 18.6 12.4 21.6Q13.6 20.6 15.1 21.5"/><path d="M16.4 19.3L25.3 4.6M18.6 20.6L27.5 5.9M25.2 4.5Q26.5 4.9 27.6 6M24 6.9Q25.2 7.3 26.3 8.2M16.45 19.25L15.2 22.3L18.65 20.6"/>';
+// The same lines alone (for the photographer's mark on the map,
+// render/overlay.js), from the file if there is one.
+export function cameraArt() {
+  return drawing('camera', FRAMED, '0 0 32 32').art;
+}
+
 export function cameraIcon() {
   return iconSvg('camera', 'class="icon camera-icon" aria-hidden="true"', FRAMED, '0 0 32 32');
 }

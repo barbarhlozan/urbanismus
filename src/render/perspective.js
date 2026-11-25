@@ -72,7 +72,10 @@ export class PerspectiveCamera {
   // The same for a point whose height already has the relief in it.
   projectRaw(x, y, z) {
     const a = this.ahead(x, y), up = z - this.ez;
-    const cz = Math.max(a * this.cp + up * this.sp, 1e-4);
+    // (looking up, what is close by below the camera falls behind the
+    // picture: held at the near distance, so it lands off the picture but
+    // not millions of px out)
+    const cz = Math.max(a * this.cp + up * this.sp, this.pitch ? this.near : 1e-4);
     const cx = (x - this.ex) * this.rx + (y - this.ey) * this.ry;
     const cy = up * this.cp - a * this.sp;
     return [this.width / 2 + (cx / cz) * this.focal, this.middleY - (cy / cz) * this.focal];

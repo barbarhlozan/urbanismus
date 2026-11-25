@@ -76,8 +76,8 @@
 // village house has a walled yard beside it (structures/courts.js), drawn
 // by the renderer; the house sets g.body to its walls for the court to meet.
 //
-// Spots – g.spot(x, y, dir) marks a parking stall (nothing parks there yet:
-// painter.spots, for when the cars that drive park too).
+// Spots – g.spot(x, y, dir) marks a parking stall (painter.spots, world
+// [x, y, angle]): the cars that drive in park there (src/sim/cars.js).
 //
 // Variation – seeded per building, so the same building always looks the same:
 //   g.random()          0..1

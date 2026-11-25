@@ -123,14 +123,11 @@ html, body {
   background: url("textures/paper.webp") 0 0 / 750px 750px repeat;
 }
 #gloom { position: fixed; inset: 0; pointer-events: none; background: var(--detail); opacity: 0; transition: opacity 4s; }
-/* mist in the valleys (src/render/mist.js): on the map the paper's strokes
-   in the paper's colour over what is under it (the url() only marks the
-   fill as hatched: gl/objects.js fills it with mistHatch's tile), in a
-   photo plain paper a little thin, so what
-   is under it shows faintly (MIST.paper); its shores and the cuts round what
-   stands in it drawn in the pen */
+/* mist in the valleys (src/render/mist.js): plain paper, on the map hiding
+   all that is under it, in a photo a little thin, so what is under it shows
+   faintly (MIST.paper); its heaps' tops, its far shore and the cuts round
+   what stands in it drawn in the pen */
 .mist { fill: var(--bg); stroke: none; }
-:is(.layer-mist, .mist-cover) .mist { fill: url(#mist-tile); }
 .mist-veil { opacity: 0.9; }
 .mist-line { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .mist-inner { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
@@ -287,13 +284,13 @@ html, body {
 /* hand-drawn marks (LOOK in src/render/painter.js): the stroke along a
    building's foot in the outline pen, roof hatching and
    ink windows as texture */
-.layer-objects .foot { stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
-.layer-objects .roof-hatch { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
-.layer-objects .ink { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
+:is(.layer-objects, .overlay .ghost) .foot { stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
+:is(.layer-objects, .overlay .ghost) .roof-hatch { stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
+:is(.layer-objects, .overlay .ghost) .ink { fill: var(--main); stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; }
 /* windows drawn open (LOOK.win, Painter._window): a frame, and close up its
    glazing bars in the finest pen */
-.layer-objects .pane { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
-.layer-objects .pane.bar { fill: none; stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
+:is(.layer-objects, .overlay .ghost) .pane { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linejoin: round; stroke-linecap: round; }
+:is(.layer-objects, .overlay .ghost) .pane.bar { fill: none; stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
 /* shadows (src/render/shadows.js): the shadow a building or a tree casts
    on the ground, hatched, and hatching on the walls turned from the sun –
    in the secondary ink, the cast shadow behind the drawing; each with the
@@ -310,11 +307,11 @@ html, body {
 .view { --main-day: var(--main); }
 #ground, #world, #objects { --main: color-mix(in srgb, var(--detail) var(--ink-night), var(--main-day)); --fg: var(--main); transition: --sun 4s; }
 .shadow { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; stroke-opacity: var(--sun); }
-.layer-objects .wall-shade { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-opacity: var(--sun); }
-:is(.shadow, .layer-objects .wall-shade).p1 { stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
-:is(.shadow, .layer-objects .wall-shade).p3 { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
-:is(.shadow, .layer-objects .wall-shade).p4 { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
-:is(.shadow, .layer-objects .wall-shade).p5 { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
+:is(.layer-objects, .overlay .ghost) .wall-shade { stroke: var(--detail); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); stroke-opacity: var(--sun); }
+:is(.shadow, .layer-objects .wall-shade, .overlay .ghost .wall-shade).p1 { stroke-width: calc(var(--pen-1) * var(--stroke, 1)); }
+:is(.shadow, .layer-objects .wall-shade, .overlay .ghost .wall-shade).p3 { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+:is(.shadow, .layer-objects .wall-shade, .overlay .ghost .wall-shade).p4 { stroke-width: calc(var(--pen-4) * var(--stroke, 1)); }
+:is(.shadow, .layer-objects .wall-shade, .overlay .ghost .wall-shade).p5 { stroke-width: calc(var(--pen-5) * var(--stroke, 1)); }
 /* the shadows' shapes (Renderer: the mask, never painted – gl/shadows.js
    draws the paper's strokes through them) */
 .shade-line { fill: none; stroke: var(--detail); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
@@ -339,7 +336,7 @@ mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3
 .glyph.crown-line { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 .glyph.tree-foot { stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* spruce outlines are trees too */
-.layer-objects .filled.tree { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
+:is(.layer-objects, .overlay .ghost) .filled.tree { stroke: var(--detail); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 /* grass and wild flowers on open ground (src/render/meadow.js); tiers
    t1 / t2 show from a zoom up (mz0/1/2 set on the layer by the renderer) */
 /* a hair under the crowns' hatching (.glyph.leaf): a tuft's blades double back on themselves, so it reads heavier */
@@ -360,12 +357,13 @@ mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3
 .layer-meadow .head { fill: var(--detail); stroke: var(--detail); }
 .layer-meadow .head.daisy { fill: var(--bg); }
 .ghost .gnd { fill: none; stroke-width: calc(var(--pen-2) * var(--stroke, 1)); }
-/* the build preview: all in the detail pen, solid lines (the dashed .ghost
-   look above is for buildings being erased); faded where it can't go */
-.overlay .ghost polygon, .overlay .ghost circle, .overlay .ghost .filled { stroke: var(--detail); }
+/* the build preview: drawn as it will stand, in the built house's own pens
+   (the rules above shared with .layer-objects), a little faded; solid lines
+   (the dashed .ghost look above is for buildings being erased); fainter
+   where it can't go */
+.overlay .ghost { opacity: 0.75; }
 .overlay .ghost polygon, .overlay .ghost polyline, .overlay .ghost .sk { stroke-dasharray: none; }
-.overlay .ghost .ink { fill: var(--detail); stroke: var(--detail); }
-.overlay .ghost.blocked { opacity: 0.5; }
+.overlay .ghost.blocked { opacity: 0.4; }
 
 .agent { fill: var(--fg); }
 .agent.truck { stroke: var(--fg); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linejoin: round; }
@@ -378,6 +376,8 @@ mask .light { fill: #000; stroke: #000; stroke-width: 2.5px; stroke-dasharray: 3
 .vo { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-4) * 2 * var(--stroke, 1)); stroke-linejoin: round; }
 .vf { fill: var(--bg); stroke: var(--bg); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linejoin: round; }
 .vr { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linejoin: round; }
+/* a car's glass hatched */
+.vh { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-1) * var(--stroke, 1)); stroke-linecap: round; }
 /* level crossing signs in photos (on the map: agentCanvas.js) */
 .sgl { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); }
 .flash { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-3) * var(--stroke, 1)); stroke-linecap: round; }
@@ -848,12 +848,23 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
   border: 11px solid transparent; border-image: var(--chat-sprite) 26 fill / 26px stretch;
   padding: 1px 6px 2px; transition: opacity .35s; pointer-events: auto; cursor: pointer; user-select: none;
 }
+/* its paper: the map's sheet (textures/paper.webp) multiplied over it, its
+   tile as large as the map's now (--paper-size, render/paper.js follow),
+   only inside the bubble's own shape (masked by the bubble itself) */
+.story-bubbles .bb { isolation: isolate; }
+.story-bubbles .bb::before {
+  content: ''; position: absolute; inset: -11px; z-index: -2; pointer-events: none;
+  background: url("textures/paper.webp") 0 0 / var(--paper-size, 440px 440px) repeat;
+  mix-blend-mode: multiply;
+  -webkit-mask-box-image: var(--chat-sprite) 26 fill / 26px stretch;
+  mask-border: var(--chat-sprite) 26 fill / 26px stretch;
+}
 .story-bubbles .bb-name { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--detail); white-space: nowrap; margin-bottom: 1px; }
 .story-bubbles .bb.noname .bb-name { display: none; }
 .story-bubbles .bb-text { font-size: 13.5px; line-height: 1.35; white-space: pre-line; color: var(--fg); }
 .story-bubbles .un, .story-cap .un { visibility: hidden; }
 .story-bubbles svg.ink { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; z-index: -1; pointer-events: none; }
-.story-bubbles .ink .pen { fill: none; stroke: var(--main); stroke-width: 1.2px; stroke-linecap: round; stroke-linejoin: round; }
+.story-bubbles .ink .pen { fill: none; stroke: var(--main); stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .story-bubbles .ink .paper { fill: var(--bg); stroke: none; }
 .story-bubbles .ink .fresh { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bb-draw .4s ease-out forwards; }
 @keyframes bb-draw { to { stroke-dashoffset: 0; } }
@@ -869,7 +880,7 @@ body.touch #ui .close { min-width: var(--bar-h); min-height: var(--bar-h); }
   position: absolute; left: 0; top: 0; pointer-events: none; transition: opacity .35s;
 }
 .story-bubbles .kec-dots svg { display: block; overflow: visible; }
-.story-bubbles .kec-dots .pen { fill: none; stroke: var(--main); stroke-width: 1.3px; stroke-linecap: round; stroke-linejoin: round; }
+.story-bubbles .kec-dots .pen { fill: none; stroke: var(--main); stroke-width: calc(1.3px * var(--stroke, 1)); stroke-linecap: round; stroke-linejoin: round; }
 .story-bubbles .kec-dots .paper { fill: var(--bg); stroke: none; }
 .story-bubbles .kec-dots .blots { fill: var(--main); }
 .story-bubbles .kec-dots .fresh { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bb-draw .5s ease-out forwards; }
@@ -1880,9 +1891,10 @@ body:not(.touch) .pm-host:hover:not(:disabled) > .pm .pm-u,
    on. Not the photos: they are grained in their own lines (ui/photoBrush.js). */
 #ui svg:not(.photo-frame svg) :is(path, line, polyline, polygon, circle, ellipse) { mask: url(#ui-tooth); }
 /* …and the map's overlay: what is being built, the hover rings, the signs
-   (their pens widened as the pencil's, renderer/view.js updateStroke). Not
-   the paper-coloured halos and bars: they only clear the ground under a sign. */
-.overlay :is(path, line, polyline, polygon, circle, ellipse):not(.cross-halo, .noentry-bar) { mask: url(#ui-tooth); }
+   (their pens as the map's, renderer/view.js updateStroke) – one mask over
+   the whole layer: one on each of a preview's lines redrew them all at
+   every move of the pointer, too slow to build with */
+g.layer-overlay { mask: url(#ui-tooth); }
 /* (the pens: --stroke set on #ui by sketchFrame.js uiPens, an icon's lighter) */
 #ui .icon { --stroke: var(--icon-stroke, 1); }
 
@@ -2049,22 +2061,27 @@ body.touch .popup button { padding-top: 12px; padding-bottom: 12px; }
   z-index: 12;
   box-sizing: border-box;
   width: min(760px, calc(100vw - 32px));
-  padding: 14px 14px 10px;
-  background: var(--bg);
-  border: var(--line) solid var(--fg);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
 }
-.photo-frame { border: var(--line) solid var(--fg); line-height: 0; }
+/* the sheet: the paper and its wavy edge drawn behind the picture (PhotoPrint.edge) */
+.photo-sheet { position: relative; width: 100%; box-sizing: border-box; padding: 14px; }
+.photo-sheet .sheet-edge { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); overflow: visible; }
+.photo-sheet .sheet-paper { fill: var(--bg); stroke: var(--main); stroke-width: calc(var(--pen-4) * var(--stroke, 1)); stroke-linejoin: round; }
+.photo-sheet .sheet-shadow { fill: none; stroke: var(--main); stroke-width: calc(var(--pen-2) * var(--stroke, 1)); opacity: 0.55; }
+.photo-frame { position: relative; line-height: 0; }
 /* while the print is out, photo mode rests: its dock goes, and the camera
    in the Build menu can't be pressed until the print is put away */
 body.print-open #ui .build-menu .bm-dock { visibility: hidden; }
 body.print-open #ui .hud-photo { pointer-events: none; opacity: 0.4; }
 .photo-print svg.photo { width: 100%; height: auto; display: block; }
-.photo-caption { font-size: 13px; text-align: center; padding: 2px 0; }
-.photo-buttons { display: flex; justify-content: center; gap: 8px; }
-.photo-buttons button { padding: 6px 14px; border: var(--line) solid var(--fg); }
+.photo-buttons { display: flex; justify-content: center; gap: 14px; }
+#ui .photo-buttons button { width: 34px; min-width: 0; height: 34px; padding: 0; border: 0; background: none; color: var(--main); display: grid; place-items: center; font-size: 26px; line-height: 1; }
+.photo-buttons .menu-art { width: 22px; height: 22px; }
+.photo-buttons .menu-art .from-file * { fill: none !important; stroke: currentColor; stroke-width: calc(1.3px * var(--stroke, 1)) !important; stroke-linecap: round; stroke-linejoin: round; }
+.photo-buttons .menu-art :not(.from-file) > :is(path, circle) { fill: none !important; stroke: currentColor; stroke-width: 1.1 !important; }
 
 svg.photo .photo-sky { fill: var(--bg); }
 svg.photo .photo-ground { fill: var(--bg); stroke: none; }

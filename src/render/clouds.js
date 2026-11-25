@@ -7,6 +7,8 @@
 // spread out; one near the horizon is far away, so small, flat and packed
 // closer. Everything is drawn far to near, i.e. from the horizon upwards.
 
+import { bulge, r2, P } from './cloudPen.js';
+
 const CLOUDS = {
   // heaps (fair, mist, cloudy): how many, and how wide at the horizon and overhead
   heaps: { fair: [2, 3], mist: [0, 1], cloudy: [8, 12] },
@@ -32,23 +34,8 @@ const CLOUDS = {
   drops: { count: 240, len: [3.5, 8], storm: 1.8, askew: 0.08 },
 };
 
-const r2 = (n) => Math.round(n * 100) / 100;
-const P = (x, y) => `${r2(x)} ${r2(y)}`;
 const lerp = (a, b, t) => a + (b - a) * t;
 const whole = (rnd, [a, b]) => a + Math.floor(rnd() * (b - a + 1));
-
-// A bulge from the current point a to b as a hand draws it, not a compass:
-// the arc of radius r (the minor one; up – on the left going from a to b –
-// with `up`, else down) as a curve whose two pulls are each a little off,
-// so no two bulges are the same and none is a true circle.
-function bulge(rnd, a, b, r, up) {
-  const dx = b[0] - a[0], dy = b[1] - a[1], c = Math.hypot(dx, dy) || 1e-6;
-  const sag = Math.max(0, r - Math.sqrt(Math.max(0, r * r - (c * c) / 4))) * (up ? 1 : -1);
-  const nx = dy / c, ny = -dx / c; // left of a → b, on the picture (y down)
-  const pull = (t, k) => [a[0] + dx * t + nx * sag * k, a[1] + dy * t + ny * sag * k];
-  const p1 = pull(0.04 + rnd() * 0.16, 1.15 + rnd() * 0.35), p2 = pull(0.8 + rnd() * 0.16, 1.15 + rnd() * 0.35);
-  return `C${P(...p1)} ${P(...p2)} ${P(...b)}`;
-}
 
 // A heap of cloud: a flat base at `by` from x0 to x1, a row of bulges over
 // it, tallest in the middle. Returns the outline path.

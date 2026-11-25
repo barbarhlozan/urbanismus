@@ -107,6 +107,10 @@ camera sit along its bottom. On a phone, tap once to preview and again to confir
 - People walk, cycle or drive, depending on distance. Cyclists use footpaths and roads and take
   about a third of the trips that would otherwise be by car (`bike` in `src/config.js`).
   Roads that hit the map edge let people leave and visitors come in.
+- Every car is one car for good: whoever drives to the shop parks in a free stall of its car
+  park (or, with none free or none there, puts it away in the yard) and later drives off in
+  that same car. A house's cars stand at home between drives; visitors bring theirs and take
+  them away again. Parked cars are kept with the town and show in photos (`src/sim/cars.js`).
 - Trucks (a cab and a trailer) belong to industrial buildings: most runs export goods off the
   map through a road exit and come back later, the rest are service runs to businesses and
   other industry. Delivery trucks also drive in from outside. See `trucks` in `src/config.js`.

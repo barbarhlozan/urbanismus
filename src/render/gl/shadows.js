@@ -2,7 +2,7 @@
 // shadows' mask in the map's SVG – the hills' shadows, the objects', the
 // lamps' pools left out, and mid-sweep (Renderer.sweepShadows) the sheet as the sun was
 // beside it, each clipped to its side of the front. One canvas in the
-// map's wrapper, drawn for the view the SVGs were last drawn at (as
+// map's wrapper, drawn for the camera as it is (Renderer.glView, as
 // gl/lines.js), at once: no worker, nothing copied to the GPU but the
 // shapes when they change.
 //
@@ -171,7 +171,7 @@ export class GLShadows {
     this.dirty.objects = true;
   }
 
-  // Each frame: `view` the SVGs' drawn view and wrapper ({ zoom, panX,
+  // Each frame: `view` the camera's view and the wrapper ({ zoom, panX,
   // panY, ox, oy, W, H }), the paper's strokes (`hatch`, `tier`, `px`,
   // `stroke`), the objects' held (`hold`), faded (`shown` 0 … 1, 0 hidden),
   // the `sun` they are cast by ({ cast, iso }, castPieces).
@@ -205,9 +205,8 @@ export class GLShadows {
       changed = true;
     }
     const pen = (this.pen ??= parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pen-2')) || 0.7);
-    const q = 2 ** (Math.round(Math.log2(dpr * view.zoom) * 4) / 4);
-    // (watercolour: a cool grey wash, see Hatching.pieces; the tone schemes
-    // a wash of their shade)
+    const q = 2 ** (Math.round(Math.log2(dpr * (view.tileZoom ?? view.zoom)) * 4) / 4);
+    // (the tone schemes: a wash of their shade, see Hatching.pieces)
     const { palette } = THEME;
     const wash = palette.tone;
     const colour = palette.tone ? palette.shade : palette.detail;

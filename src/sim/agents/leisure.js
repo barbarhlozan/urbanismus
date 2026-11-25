@@ -154,6 +154,7 @@ export class AgentLeisure {
 
   arriveHome(a) {
     if (a.engine || a.drop) return this.agents.delete(a.id); // (a fire engine back, a brigade on foot, or homeless: gone)
+    if (a.car != null) this.cars.release(a);
     a.state = 'home';
     a.trip = null;
     a.wander = null;

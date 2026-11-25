@@ -26,6 +26,7 @@ import { freeTest } from './lots.js';
 import { centerOf } from './renderer/shared.js';
 import { BRIDGE } from './bridges.js';
 import { VEHICLES, vehicleSVGIn, modelFor, truckFor } from './vehicles.js';
+import { elKeyOf } from './renderer/movers.js';
 import { signsAt, signSVGIn, flashSVGIn, litLight } from './crossings.js';
 import { wobble } from './painter.js';
 import { sunFor, shadowSVG } from './shadows.js';
@@ -323,11 +324,13 @@ export function takePhoto(renderer, shot) {
   // isn't left out: the horizon goes down (as a shifted lens takes in more
   // above, the walls still upright) till its top is in, by up to `lower`.
   const painted = new Map();
+  const wideOf = Math.tan(Math.min(89, fov / 2 + 8) * Math.PI / 180); // (the view, a little widened)
   {
     let need = 0;
     for (const s of world.structures.values()) {
       const [cx, cy] = centerOf(world, s);
-      if (cam.ahead(cx, cy) < PHOTO.clear || Math.hypot(cx - x, cy - y) > range) continue;
+      const ahead = cam.ahead(cx, cy), aside = (cx - x) * cam.rx + (cy - y) * cam.ry;
+      if (ahead < PHOTO.clear || Math.hypot(cx - x, cy - y) > range || Math.abs(aside) > ahead * wideOf + 2) continue;
       const out = renderer.paintStructure(s, cam);
       painted.set(s.id, out);
       if (!out) continue;
@@ -904,8 +907,9 @@ const pairs = (v, closed) => {
 
 // Vehicles as they are at the moment of the photo, the same models as on
 // the map (vehicles.js) drawn through the photo camera: cars driving
-// (turned the way the map last drew them), buses and trucks (between their
-// front and back), trains, carriage by carriage, and the signs at level crossings.
+// (turned the way the map last drew them) and parked in their stalls,
+// buses and trucks (between their front and back), trains, carriage by
+// carriage, and the signs at level crossings.
 function vehicles(renderer, cam, seen) {
   const { world, agents, trains } = renderer;
   const { terrain } = world;
@@ -937,9 +941,14 @@ function vehicles(renderer, cam, seen) {
     }
     if (a.trip?.mode !== 'drive') continue;
     const [wx, wy] = wobble(a.x, a.y); // on the swaying road, as on the map
-    const heading = renderer.agentEls.get(a.id)?.heading ?? 0;
-    const { name, hand } = modelFor(a.id);
+    const id = elKeyOf(a);
+    const heading = renderer.agentEls.get(id)?.heading ?? 0;
+    const { name, hand } = modelFor(id);
     add(a.x + wx, a.y + wy, (heading / VEHICLES.headings) * Math.PI * 2, name, hand);
+  }
+  for (const c of agents.cars?.parked() ?? []) {
+    const { name, hand } = modelFor(`c${c.id}`);
+    add(c.x, c.y, c.angle, name, hand);
   }
   // trains: the railcar's middle [x, y, dx, dy] (as in Renderer.placeTrain)
   const len = Math.round(renderer.config.trains.length * 100) / 100;

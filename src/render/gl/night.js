@@ -8,8 +8,8 @@
 // behind it. Which is which goes into a mask, drawn in that order, and the
 // night is drawn through it.
 //
-// A canvas in the map's wrapper (as gl/shadows.js), drawn for the view the
-// SVGs were last drawn at, every frame something changes – the beams move
+// A canvas in the map's wrapper (as gl/shadows.js), drawn for the camera
+// as it is, every frame something changes – the beams move
 // every frame – which costs the GPU a full-canvas pass and nothing more.
 //
 //   const n = GLNight.make(canvas)          (null without WebGL2)
@@ -43,7 +43,7 @@ export class GLNight {
     this.empty = true;
   }
 
-  // One frame. `view`: the SVGs' drawn view and wrapper ({ zoom, panX,
+  // One frame. `view`: the camera's view and the wrapper ({ zoom, panX,
   // panY, ox, oy, W, H }); `grey` how much of it in `colour`; `tier` the
   // densest of the paper's lines (-1: none); `reveal` how much of each set
   // is laid; `hatch`, `px`, `stroke` the paper's strokes. On the ground:
@@ -91,7 +91,7 @@ export class GLNight {
       h.mask([this.maskBuf, this.beamBuf], base, cover ? 0 : 1);
     }
     const pen = (this.pen ??= parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pen-1')) || 0.5);
-    const q = 2 ** (Math.round(Math.log2(dpr * view.zoom) * 4) / 4);
+    const q = 2 ** (Math.round(Math.log2(dpr * (view.tileZoom ?? view.zoom)) * 4) / 4);
     const ink = THEME.palette.detail;
     const look = `${base}|${w}|${hgt}|${grey}|${colour}|${ink}|${tier}|${reveal}|${JSON.stringify(hatch)}|${px}|${stroke}|${q}`;
     if (!maskChanged && look === this.drawnKey) return;

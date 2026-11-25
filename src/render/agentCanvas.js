@@ -21,6 +21,7 @@ const STYLES = {
   vo: { stroke: 'main', width: PEN[4] * 2 }, // a doodled part's outline, under…
   vf: { fill: 'bg', stroke: 'bg', width: PEN[1] }, // …its faces in paper
   vr: { fill: 'bg', stroke: 'main', width: PEN[4] }, // doodled wheels
+  vh: { stroke: 'main', width: PEN[1] }, // a car's glass hatched
   'fig-body': { fill: 'bg', stroke: 'main', width: PEN[3] },
   'fig-head': { stroke: 'main', width: PEN[2] },
   'fig-wheel': { stroke: 'main', width: PEN[2] },

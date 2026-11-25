@@ -14,6 +14,14 @@ export class Paper {
   constructor(el) {
     this.el = el;
     this.last = '';
+    this.sheets = [];
+  }
+
+  // Paper of the same grain for something drawn over the UI (the story's
+  // bubbles): its tile's size as --paper-size on `el`, as the map's is now.
+  follow(el) {
+    this.sheets.push(el);
+    this.last = '';
   }
 
   frame(camera) {
@@ -24,5 +32,6 @@ export class Paper {
     // (the scene's origin, where camera.panX/Y puts it, is a tile's corner)
     this.el.style.backgroundSize = `${s}px ${s}px`;
     this.el.style.backgroundPosition = `${camera.panX}px ${camera.panY}px`;
+    for (const el of this.sheets) el.style.setProperty('--paper-size', `${s}px ${s}px`);
   }
 }

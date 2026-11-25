@@ -579,12 +579,12 @@ export class NetworkDrawing {
     });
   }
 
-  // The view gl/lines.js draws for: the SVGs' (their wrapper with its
-  // overscan, placeView) at the angle the view has reached.
+  // The view gl/lines.js draws for: the camera's (in the SVGs' wrapper with
+  // its overscan, placeView) at the angle the view has reached.
   glLineView() {
-    const d = this.drawn, cam = this.camera;
+    const cam = this.camera;
     return {
-      zoom: d.zoom, panX: d.panX + this.ox, panY: d.panY + this.oy, cos: cam._cos, sin: cam._sin, angle: cam.angle, cx: cam.cx, cy: cam.cy,
+      zoom: cam.zoom, panX: cam.panX + this.ox, panY: cam.panY + this.oy, cos: cam._cos, sin: cam._sin, angle: cam.angle, cx: cam.cx, cy: cam.cy,
       iso: [cam.tile * COS30, cam.tile * 0.5, cam.tile * cam.zScale], W: this.winW + 2 * this.ox, H: this.winH + 2 * this.oy,
     };
   }

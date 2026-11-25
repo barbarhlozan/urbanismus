@@ -10,9 +10,8 @@
 //
 //   body     the main part (required); round: its profile's corners rounded
 //            off by up to this much
-//   cabin    a glasshouse on the body, its shape the windows: split, x of
-//            the pillars between them, side: [x0, x1] where the side glass
-//            ends – each drawn a line on its sides
+//   cabin    a glasshouse on the body, its shape the windows, the glass
+//            hatched as the walls of houses turned from the sun
 //   vault    { x: [x0, x1], z, rise, segs }, an arched roof across the body
 //   top      parts standing on the body (drawn back to front), each may
 //            stand off the middle (y, across) or stick out of an end (end)
@@ -33,7 +32,9 @@ import { mulberry32 } from '../core/random.js';
 
 export const VEHICLES = {
   minZoom: 1.6,  // closer than this vehicles are models, further out dots
-  headings: 32,  // directions a model can face
+  headings: 64,  // directions a model can face (fewer turn in visible jerks)
+  boil: 6,       // a moving one's outline drawn anew so many times a second (renderer boil)
+  turn: 0.05,    // grid units driven over which a car comes round to a new way (renderer placeCar)
   hands: 4,      // jitter variants per model
   jitter: 0.0025, // grid units a profile corner may stray
   // the hand on screen, as the buildings' (LOOK.sketch): each edge bowed by
@@ -83,7 +84,7 @@ MODELS.car = (() => {
   const L = 4.16, { at, x, y, z, h } = metres(L);
   return {
     body: { w: y(0.8), round: y(0.3), profile: [at(0.05, 0.3), at(4.1, 0.3), at(L, 0.42), at(L, 0.82), at(4.05, 0.9), at(3.53, 0.93), at(1.29, 0.95), at(0.14, 0.86), at(0, 0.78), at(0, 0.42)] },
-    cabin: { w: y(0.7), round: y(0.16), split: [x(2.2)], side: [x(2.95), Infinity], profile: [at(3.53, 0.93), at(1.29, 0.95), at(1.65, 1.4), at(3.06, 1.41)] },
+    cabin: { w: y(0.7), round: y(0.16), profile: [at(3.53, 0.93), at(1.29, 0.95), at(1.65, 1.4), at(3.06, 1.41)] },
     wheels: { x: [x(0.8), x(3.25)], r: h(0.3) },
     lamps: [
       ...[-1, 1].map((d) => ({ x: x(0) + 0.0005, y: d * y(0.56), z: z(0.62), r: y(0.08) })),
@@ -266,6 +267,27 @@ export function vehicleSVGIn(view, name, angle, hand) {
   return draw(view, model(name), angle, hand);
 }
 
+// Lines `gap` apart leaning `lean` (radians, rising to the right on the
+// screen) across the polygon `pts` (screen), as a path of strokes.
+function hatchIn(pts, gap, lean) {
+  const [dx, dy] = [Math.cos(lean), -Math.sin(lean)], [nx, ny] = [-dy, dx];
+  const at = pts.map(([x, y]) => x * nx + y * ny);
+  const lo = Math.min(...at), hi = Math.max(...at);
+  let d = '';
+  for (let t = lo + ((hi - lo) % gap) / 2 + gap / 2; t < hi; t += gap) {
+    const hits = [];
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length, a = at[i] - t, b = at[j] - t;
+      if (a * b >= 0) continue;
+      const u = a / (a - b);
+      hits.push([pts[i][0] + (pts[j][0] - pts[i][0]) * u, pts[i][1] + (pts[j][1] - pts[i][1]) * u]);
+    }
+    hits.sort((p, q) => p[0] * dx + p[1] * dy - (q[0] * dx + q[1] * dy));
+    for (let i = 0; i + 1 < hits.length; i += 2) d += `M${hits[i].map(r2).join(' ')}L${hits[i + 1].map(r2).join(' ')}`;
+  }
+  return d;
+}
+
 const COS30 = Math.cos(Math.PI / 6);
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -397,20 +419,8 @@ function draw(view, model, angle, hand) {
     return [wx + Math.cos(t) * r, side * (model.body.w + 0.002), r + Math.sin(t) * r];
   }))).join('');
   const wheels = wheelsOn(near);
-  // the glasshouse (cabin): its shape is its windows; only the pillars
-  // between them (split, and side: [x0, x1] where the side glass ends)
-  // drawn on its sides, each one line
-  const across = (f, x) => {
-    const hits = [];
-    f.pts.forEach((p, i) => {
-      const q = f.pts[(i + 1) % f.pts.length];
-      if ((p[0] - x) * (q[0] - x) <= 0 && p[0] !== q[0]) hits.push(p.map((v, k) => v + (q[k] - v) * ((x - p[0]) / (q[0] - p[0]))));
-    });
-    return hits.length > 1 ? [hits.reduce((a, b) => (b[2] < a[2] ? b : a)), hits.reduce((a, b) => (b[2] > a[2] ? b : a))] : null;
-  };
-  const lines = [...(model.cabin?.split ?? []), ...(model.cabin?.side ?? []).filter(Number.isFinite)];
   // the glass drawn round in a line (vw), lamps inked (vi)
-  let glazing = cabin.filter((f) => f.side).flatMap((f) => lines.map((x) => across(f, x)).filter(Boolean)).map(poly).join(''), inked = '';
+  let glazing = '', inked = '';
   // outlines: window and door shapes drawn round on the near side, at
   // their part's half width w (two points: a line)
   for (const { w, profile } of model.outlines ?? []) glazing += poly(profile.map(([x, z]) => [x, near * (w + 0.001), z]));
@@ -430,12 +440,17 @@ function draw(view, model, angle, hand) {
     const d = fs.map((f) => poly(f.pts, false)).join('');
     return `<path class="vo" d="${d}"/><path class="vf" d="${d}"/>`;
   };
+  // the glasshouse (cabin): its faces but its roof hatched, about as many
+  // strokes across a window as across a wall in the shade
+  const up = Math.hypot(...[0, 1].map((i) => project([0, 0, 1])[i] - project([0, 0, 0])[i])); // screen per grid unit up
+  const glass = cabin.filter((f) => f.n[2] < 0.8 * Math.hypot(...f.n)).map((f) => hatchIn(f.pts.map(project), 0.009 * up, 0.8)).join('');
   // the wheels paper rings (vr): the far side's under it all, the near
   // side's over the parts above them (a cab over its front wheels)
   return `<path class="vr" d="${wheelsOn(-near)}"/>`
     + behind.map(pathOf).join('')
     + pathOf(body)
     + pathOf([...roof, ...cabin])
+    + (glass ? `<path class="vh" d="${glass}"/>` : '')
     // each part on top its own path, so a nearer one hides the one behind
     + topParts.map(pathOf).join('')
     + `<path class="vr" d="${wheels}"/>`

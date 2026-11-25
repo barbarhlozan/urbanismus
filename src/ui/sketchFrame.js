@@ -20,22 +20,21 @@
 
 import { sketchRoundBox, seedOf } from '../render/sketch.js';
 import { toothMaskURL } from '../render/tooth.js';
-import { BRUSH, penScale } from '../render/brush.js';
+import { BRUSH } from '../render/brush.js';
 import { canvasDpr } from '../render/dpr.js';
 import { CONFIG } from '../config.js';
 
-// The UI's pens as wide on the screen as the map's at the zoom a town
-// opens at: the map's are device px times the brush and the pencil
-// (brush.js), the UI's css px times --stroke – so a frame (1.3) is drawn as
-// a house's outline (1.4) is. An icon is a building drawn small, as the map
-// draws one further out (ICON_ZOOM of the opening zoom), with the pens the
-// map has there: the full weight would run its lines together.
-const ICON_ZOOM = 0.7;
+// The UI's pens as wide on the screen as the map's: the map's lines are
+// device px – each pen times config.render.lineWeight and the brush
+// (brush.js BRUSH.width) – the UI's css px times --stroke, so a frame (1.3)
+// is drawn as a house's outline (1.4) is. An icon is a building drawn
+// small, its pens ICON of that: the full weight would run its lines together.
+const ICON = 0.8;
 function uiPens() {
-  const k = (z) => ((BRUSH.width * penScale(CONFIG.camera.zoom * z)) / canvasDpr()).toFixed(3);
+  const k = (CONFIG.render.lineWeight * BRUSH.width) / canvasDpr();
   const ui = document.getElementById('ui');
-  ui?.style.setProperty('--stroke', k(1));
-  ui?.style.setProperty('--icon-stroke', k(ICON_ZOOM));
+  ui?.style.setProperty('--stroke', k.toFixed(3));
+  ui?.style.setProperty('--icon-stroke', (k * ICON).toFixed(3));
 }
 uiPens();
 matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener?.('change', uiPens);

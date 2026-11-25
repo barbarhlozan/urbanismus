@@ -20,14 +20,21 @@ Závody jak je možné dát identifikátor, který dále určuje že kecy jsou s
 František: Já ti nevim, ta polívka je nějaká divná
 Anička: Nekecej a jez
 
-## Zpívání
+## Hudák a voda 
+[mirek_a_jarka]
 
-[singer]
-
-Postava 1: "Na kolejích stála a za uchem květ"
-Postava 1: "vlasy trávou zavázaný"
-Postava 1: "s kytarou na zádech, strun už jen pět"
-Postava 1: "hezký oči uplakaný."
+MIREK: ten Hudák je debil
+JARKA: nemluv o něm tak, má jen trochu jinej... temperament
+MIREK: ale o to mi nejde, dělá jako by mu to tu patřilo
+MIREK: ať si jede zpátky na Slovensko jestli chce ty pole takhle drancovat
+JARKA: ...
+MIREK: vždyť nám tu vyschne studna, už teď si pražáci vozej vodu v kanistrech, kdyby náhodou vyschla
+MIREK: my nemáme kam jít Jarko, vyschne to a co pak budeme dělat
+JARKA: však ona nevyschne Mirku
+JARKA: nevyschla tu celejch 50 let co tu bydlela mamka
+MIREK: protože tu nebyl ten debil Hudák
+JARKA: nech toho a pojď se najíst
+MIREK: ...
 
 ## Mařena spí s Karlem
 Jiřina: Není divný, že se Marie a Karel pořád tak bavěj?

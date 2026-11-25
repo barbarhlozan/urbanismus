@@ -58,6 +58,10 @@
 // them in their lane and queue (config.traffic, see follow). Pedestrians
 // always move at their own pace.
 //
+// Cars are things of their own (sim/cars.js, world.cars): a driver takes
+// one standing where they set off (a.car) and parks it where they get to –
+// in a stall of the lot there if one is free – and drives back in that one.
+//
 // Cars, trucks and buses can be locked (src/story/unlocks.js): then nobody
 // drives (walking, cycling or the bus / train instead, where they can), no
 // visitors or commuters come in by car, industry keeps no trucks and none
@@ -92,6 +96,7 @@ import { compass } from '../ui/annotations.js';
 import { pointAt } from '../roads/geometry.js';
 import { DAY, hourAt } from '../render/shadows.js';
 import { WalkNetwork } from './walking.js';
+import { CarSystem } from './cars.js';
 import { can, backPoint, paceAt, newAgent } from './agents/shared.js';
 import { AgentLeisure } from './agents/leisure.js';
 import { AgentTransit } from './agents/transit.js';
@@ -117,6 +122,8 @@ export class AgentSystem {
     this.trains = null;  // TrainSystem, set by main: closed level crossings
     this.fires = null;   // FireSystem, set by main: fire engines pulling up
     this.queues = new Map(); // closed crossing + heading + kind -> people queued there
+    this.cars = new CarSystem(world, this);
+    this.carTimer = 0;
 
     const rebalance = () => (this._balance = null);
     for (const type of ['structure:added', 'structure:changed', 'structure:removed', 'roads:changed']) world.events.on(type, rebalance);
@@ -175,6 +182,7 @@ export class AgentSystem {
       a.timer = home ? this.homeDwell(home) * Math.random() : 1;
     }
     for (const s of this.world.structures.values()) this.sync(s);
+    this.cars.tidy();
   }
 
   despawnFor(s) {
@@ -247,6 +255,10 @@ export class AgentSystem {
     this.updateBuses(dt);
     this.follow(dt);
     this.meet();
+    if ((this.carTimer -= dt) <= 0) {
+      this.carTimer = 1;
+      this.cars.tidy();
+    }
     const closed = this.trains?.closed;
     for (const k of this.queues.keys()) if (!closed?.has(k.split('|')[0])) this.queues.delete(k);
     for (const [id, a] of this.agents) {
@@ -319,6 +331,7 @@ export class AgentSystem {
           [a.x, a.y] = pointAt(leg, a.s);
           if (a.truck) [a.tx, a.ty] = backPoint(leg, a.s, this.config.trucks.trailer);
           if (a.s < leg.total) break;
+          if (a.car != null) this.carArrives(a, leg);
           const arrived = a.trip.mode === 'stroll' && !a.trip.dest || a.trip.outside || this.world.structures.has(a.trip.dest);
           if (a.state === 'out' && arrived) this.arrive(a);
           else if (a.trip.transit?.inbound && this.world.structures.has(a.trip.transit.work)) { // off the bus, at work
